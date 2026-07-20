@@ -1,0 +1,8 @@
+build/
+*.o
+*.a
+*.so
+.idea/
+.vscode/
+.superpowers/
+compile_commands.json

@@ -30,9 +30,10 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 3. **命令一致性**：所有故障支持 inject(注入)、clean(清除)、query(查询) 三个操作；造成机器等不可恢复的故障（如进程退出）除外，仅支持 inject；
 4. **故障隔离**：单个故障注入不影响其他操作；
 5. **开闭原则**：对扩展开放（新故障），对修改关闭（不动二进制）；
-6. **预检护栏**：注入前预检，对参数校验和环境预检；
+6. **预检护栏**：注入前预检，校验参数完整性与脚本可执行性；
 7. **可追溯**：每次注入记录日志，支持查询注入状态； 
 8. **可测**：通过 `mock_executor` 捕获实际下发的命令串与环境变量，做表驱动断言。
+9. **TDD 驱动开发**：每个模块先编写测试用例定义期望行为，再实现功能代码使测试通过；测试用例是行为的权威定义。
 
 ### 1.4 设计原则
 
@@ -46,43 +47,45 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 ## 2. 统一命令格式
 
 ```
-dcat "<command> <uid> [(param1,param2,...) values (value1,value2,...) | where k1=v1 k2=v2 ...]"
+dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
-- `command` ∈ `{ inject, clean, query, list }`
-- `uid`：故障唯一标识（如 `rCPU_overload`），在配置中声明
-- `inject` 用 `(p1,p2) values (v1,v2)` 传参
-- `clean` / `query` 用 `where k1=v1 k2=v2` 传参（可省略，表示作用于该 uid 全部活跃记录）
-- 两种参数语法在内部统一解析为同一个 `params_t` 结构
+- `subcommand` ∈ `{ inject, clean, query, list }`
+- `uid`：故障唯一标识（如 `rCPU_overload`），在配置中声明；`query` 和 `list` 可省略 uid
+- 所有参数以 `--key=value` 标志传入，可选参数不填即省略对应标志
+- 全局选项 `--config` / `--help` 与参数标志混合使用
 
 ### 2.1 命令集
 
 | 命令 | 语义 | 适用 supported_ops |
 |---|---|---|
-| `inject <uid> (p1,p2) values (v1,v2)` | 注入指定故障，按参数配置；**同步阻塞执行脚本，执行完返回** | `inject` 或 `inject,clean,query` |
-| `clean <uid> [where k=v ...]` | 清除该 uid（或匹配条件的）活跃注入；**需用户手动调用**；同步重跑脚本 `DCAT_OP=clean` | 仅 `inject,clean,query` |
-| `query [uid] [where k=v ...]` | 无 uid：查询 dcat 自身活跃注入记录；有 uid：调脚本 `query` 分支验证故障是否真的在系统上生效，用户参数与 inject 参数独立 | `inject,clean,query` |
+| `inject <uid> --p1=v1 --p2=v2 ...` | 注入指定故障，按参数配置；**同步阻塞执行脚本，执行完返回** | `inject` 或 `inject,clean,query` |
+| `clean <uid> [--k1=v1 ...]` | 清除该 uid 活跃注入；按参数匹配记录，逐条清理；同步重跑脚本 `DCAT_OP=clean` | 仅 `inject,clean,query` |
+| `query [uid] [--k1=v1 ...]` | 无 uid：查询 dcat 自身全部活跃注入记录；有 uid：调脚本 `query` 分支验证故障是否真的在系统上生效，用户参数与 inject 参数独立 | `inject,clean,query` |
 | `list` | 列出配置中声明的全部故障目录 | 所有 |
 
-
-> Notice：`inject`-only 故障（如 `rPROC_exit`）不支持 `clean` / `query`；注入即终结，无活跃记录。
+> `inject`-only 故障（如 `rPROC_exit`）不支持 `clean` / `query`；注入即终结，无活跃记录。
 > 本期不实现超时自动恢复；所有可恢复故障注入后需用户手动 `clean`。
 
 ### 2.2 示例
 
 ```
-
 # 可恢复故障：需手动 clean
-dcat "inject rNET_loss (iface,loss_pct) values (eth0,5)"
-dcat "clean rNET_loss where iface=eth0"
+dcat inject rNET_loss --iface=eth0 --loss_pct=5
+dcat clean rNET_loss --iface=eth0
+
+# 并发注入同 uid 不同参数
+dcat inject rNET_loss --iface=eth0 --loss_pct=5
+dcat inject rNET_loss --iface=eth1 --loss_pct=3
+dcat clean rNET_loss --iface=eth0    # 只清 eth0
 
 # 一次性故障：无法 clean
-dcat "inject rPROC_exit (pid) values (12345)"
+dcat inject rPROC_exit --pid=12345
 
 # 查询与列表
-dcat "query rCPU_overload"
-dcat "query"
-dcat "list"
+dcat query rCPU_overload
+dcat query
+dcat list
 ```
 
 ---
@@ -99,7 +102,7 @@ dcat "list"
 | `desc` | 否 | 一句话描述 |
 | `script` | 是 | 外部脚本路径（绝对或相对；相对路径基于项目根目录自动解析为绝对），须可执行 |
 | `supported_ops` | 是 | 支持的操作子集，逗号分隔：`inject` 或 `inject,clean,query` |
-| `required_params` | 是 | **必填**参数名（逗号分隔），预检校验完整性，缺失即拒 |
+| `required_params` | 否 | **必填**参数名（逗号分隔），预检校验完整性，缺失即拒；无必填参数时省略此字段 |
 | `optional_params` | 否 | **可选**参数名（逗号分隔），不填时脚本走自有默认值 |
 
 > 所有故障统一同步阻塞执行；需要长驻的故障由脚本自行管理子进程。
@@ -108,9 +111,9 @@ dcat "list"
 
 - **必填 vs 可选**：`required_params` 在 precheck 阶段校验非空；`optional_params` 缺省时不报错，由脚本解释默认值（目录表中以 `(默认X)` 标注）。
 
-### 3.3 目录清单（共 38 条：v0.1 已有 2 + v0.2 新增 16 + v0.3 新增 20）
+### 3.3 目录清单（共 38 条）
 
-> 标 `*` 为 v0.1 已实现示例；其余 16 条为 v0.2 新增；末 20 条 `rNPU_*` 为 v0.3 新增（需求"网络包延时"对应 `rNET_delay`，已在 v0.1 实现）。完整 cnf 声明见 §7。
+> 标 `*` 为示例故障（rCPU_overload / rNET_delay）。完整 cnf 声明见 §7。
 
 | UID | module | supported_ops | required_params | optional_params |
 |---|---|---|---|---|
@@ -155,7 +158,7 @@ dcat "list"
 
 ### 3.4 扩展约定
 
-- **新增模块**：在 `module` 字段取新值（如 `memory`），脚本放到 `config/scripts/<module>/`，cnf 加段即可。`npu` 模块已在 v0.3 落地（见 §3.3 末 20 条 `rNPU_*`）。
+- **新增模块**：在 `module` 字段取新值（如 `memory`），脚本放到 `config/scripts/<module>/`，cnf 加段即可。`npu` 模块已落地（见 §3.3 `rNPU_*`）。
 - **现有模块加故障**：同模块目录加脚本 + cnf 加段，UID 不重复即可。
 - 目录将持续扩充（预计 200+），不预设模块实现先后顺序，按发布批次推进（见 §8）。
 
@@ -165,9 +168,9 @@ dcat "list"
 
 ### 4.1 预检概述
 
-所有 `inject` 请求按固定顺序校验，任一失败即中止并返回错误 JSON（退出码 3 或对应码）。`clean` / `query` 请求走 §4.2 第 1、2、4 步子集（见下）。完整 5 步详述见 §4.2。
+所有 `inject` 请求按固定顺序校验，任一失败即中止并返回错误 JSON（退出码 3 或对应码）。`clean` / `query` 请求走 §4.2 第 1、2、4 步子集（见下）。完整 4 步详述见 §4.2。
 
-### 4.2 预检 5 步详述
+### 4.2 预检 4 步详述
 
 按以下顺序校验，任一失败即中止并返回错误 JSON（退出码 3 或对应码）：
 
@@ -175,10 +178,12 @@ dcat "list"
 2. 请求的 op 属于该故障 `supported_ops`（`inject`-only 故障拒绝 `clean`/`query`）
 3. `inject`：`required_params` 全部提供且非空
 4. 脚本路径存在且可执行（`access/X_OK`）
-5. **仅 `inject,clean,query` 故障**：该 uid 当前无活跃注入（同 uid 不允许并发，除非 clean 后再 inject）
 
-> `inject`-only 故障跳过第 5 步（不建 state 记录，无所谓并发）。
-> `clean` / `query` 请求校验第 1、2、4 步；`clean` 还需 `state_find` 命中活跃记录。
+> 允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
+> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。
+> 所有命令（inject / clean / query）均校验用户提供的参数是否在 `required_params` / `optional_params` 中声明，未声明的参数（`--foo=bar`）直接拒绝（退出码 3）。
+
+> **参数校验分层**：dcat 负责**结构校验**（`required_params` 是否齐全且非空，即第 3 步）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
 
 ---
 
@@ -199,11 +204,12 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 - **stderr**：失败时输出错误信息，dcat 纳入 `error.message`。
 - 可选参数未提供时，对应 `DCAT_PARAM_<KEY>` 环境变量不设置；脚本须自行处理默认值（目录表中以 `(默认X)` 标注期望默认）。
 - **同步阻塞**：dcat 用 `fork/exec + waitpid` 同步等待脚本执行完返回；脚本应自行管理长驻子进程（spawn + pidfile/sidecar），不要前台驻留阻塞 dcat。
+- **参数校验边界**：dcat 在 precheck 阶段校验 `required_params` 齐全且非空（结构校验）；参数值合法性（如 `cores` 是否在有效范围、`iface` 是否真实存在）由脚本自行校验（语义校验）。未在 `required_params` / `optional_params` 中声明的参数直接拒绝（报错退出码 3）。
 
 ### 5.2 可恢复故障（`inject,clean,query`）
 
 - **inject**：脚本执行完即返回。需要长驻的故障（如 CPU 过载、端口占用、僵尸生成、磁盘写压），脚本自行 spawn 子进程并写 pidfile/sidecar 到约定位置（如 `/tmp/dcat-<uid>.pid`）后立即返回。
-- **clean**：dcat 重跑同一脚本 `DCAT_OP=clean`，并回放原 `where` 参数（若有）。脚本读取 pidfile/sidecar，kill 子进程后清理资源（删 qdisc / 删 iptables 规则 / 起服务 / kill 子进程）。脚本退出码非 0 时 dcat 报错且**不 mark inactive**（故障可能仍在系统上）。
+- **clean**：dcat 按用户提供的参数匹配活跃记录。dcat 传记录存储的 inject 参数给脚本 `DCAT_OP=clean`，脚本据此清理资源（删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程）。多条记录匹配时，逐条执行 clean 脚本；某条失败时停止，剩余记录不清理。脚本退出码非 0 时 dcat 报错且**不 mark inactive**（故障可能仍在系统上）。
 - **`query`（无 uid）**：由 dcat 自身 state 回答（遍历活跃记录），**不调用脚本**。
 - **`query`（有 uid）**：调脚本 `DCAT_OP=query` 分支验证故障是否实际生效，详见 §5.4。
 
@@ -213,7 +219,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 - inject 脚本执行完即终结。
 - 典型：`rPROC_exit`（`kill -9`，进程已死不可逆）。
 - dcat 在 `inject` 成功后直接 `output_ok`，不写 state。
-- `dcat "query rPROC_exit"` 在 precheck 阶段拒绝（query 不在 supported_ops，退出码 3）。
+- `dcat query rPROC_exit` 在 precheck 阶段拒绝（query 不在 supported_ops，退出码 3）。
 
 ### 5.4 query 分支（有 uid，故障验证）
 
@@ -248,12 +254,12 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 
 **失败**：
 ```json
-{"status":"error","op":"inject","uid":"rCPU_overload","error":{"code":5,"message":"already active"}}
+{"status":"error","op":"inject","uid":"rCPU_overload","error":{"code":3,"message":"missing required param: cores"}}
 ```
 
 **`query`（无 uid，state 查询）**：
 ```json
-{"status":"ok","op":"query","data":[{"uid":"rCPU_overload","record_id":3,"started_at":1721000000,"active":true}]}
+{"status":"ok","op":"query","data":[{"uid":"rCPU_overload","record_id":3,"started_at":1721000000,"active":true,"params":{"cores":"4"}}]}
 ```
 
 **`query`（有 uid，故障验证 — 方案 A 输出）**：
@@ -321,13 +327,11 @@ required_params = pid
 
 ## 8. 发布批次
 
-DemonCAT 故障总量预计 200+，按需求增量推进，**不按模块预设先后顺序**。新增模块（如 `memory` / `npu`）或在现有模块内加故障均属正常扩充。
+DemonCAT 故障总量预计 200+，按需求增量推进，**不按模块预设先后顺序**。新增模块（如 `memory`）或在现有模块内加故障均属正常扩充。
 
 | 批次 | 范围 | 状态 |
 |---|---|---|
-| **v0.1** | 核心框架 + 2 条示例故障（rCPU_overload / rNET_delay）+ 测试 | 已完成 |
-| **v0.2** | 16 条故障（network 10 + process 4 + cpu 1 + storage 1）+ inject-only 模型 | 已完成 |
-| **v0.3** | 20 条 NPU 故障（hccn_tool 驱动）| 已完成 |
+| **v0.1** | 核心框架 + 38 条故障（cpu 2 / network 11 / process 4 / storage 1 / npu 20）+ 测试 | 待开发 |
 
 每批次的实现内容 = `config/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
@@ -337,9 +341,10 @@ DemonCAT 故障总量预计 200+，按需求增量推进，**不按模块预设�
 
 ### 9.1 测试流程要求
 
-1. **每增加一个故障，必须验证 inject / clean / query 三路径**（`inject`-only 故障仅验证 inject）。测试不通过则修改脚本/配置重新测试，直到通过。
-2. **每完成一个发布批次，做一次完整测试**，ctest 全绿。
-3. 测试过程中遇到的问题自行解决，不依赖外部协助。
+1. **TDD 流程**：每个功能模块按以下顺序开发——①编写测试用例（CTest + mock_executor，定义 inject/clean/query 的期望命令串、环境变量、退出码、JSON 输出）→ ②实现功能代码 → ③运行测试直到全绿。不允许先写实现再补测试。
+2. **每增加一个故障，必须验证 inject / clean / query 三路径**（`inject`-only 故障仅验证 inject）。测试不通过则修改脚本/配置重新测试，直到通过。
+3. **每完成一个发布批次，做一次完整测试**，ctest 全绿。
+4. 测试过程中遇到的问题自行解决，不依赖外部协助。
 
 ### 9.2 测试覆盖范围
 

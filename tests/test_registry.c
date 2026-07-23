@@ -6,7 +6,7 @@
 int main(void) {
     config_t cfg;
     if (config_load("config/demoncat.conf", &cfg)) return 1;
-    if (cfg.fault_count != 18) return 1; /* 2 cpu + 1 storage + 11 network + 4 process */
+    if (cfg.fault_count != 19) return 1; /* 3 cpu + 1 storage + 11 network + 4 process */
 
     if (registry_init(&cfg)) return 1;
 
@@ -33,7 +33,7 @@ int main(void) {
     /* list count */
     int cnt;
     (void)registry_list(&cnt);
-    if (cnt != 18) return 1;
+    if (cnt != 19) return 1;
 
     return 0;
 }

@@ -1,4 +1,4 @@
-/* tests/test_faults_cpu_storage.c — Tier 1: mock table-driven tests for CPU (3) + storage (1) */
+/* tests/test_faults_cpu_storage.c — Tier 1: mock table-driven tests for CPU (2) + storage (1) */
 #include "test_faults_common.h"
 
 int main(void) {
@@ -22,24 +22,6 @@ int main(void) {
         r = dispatch_clean("rCPU_overload", &p);
         CK(r && r->code == 0);
         MOCK_CALLED;
-        ENV_EQ("DCAT_OP", "clean");
-        result_free(r);
-    }
-
-    /* ---- rCPU_overload_yes ---- */
-    {
-        params_t p = mkparams("cores", "2", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        g_mock_called = 0;
-        result_t *r = dispatch_inject("rCPU_overload_yes", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("cpu_overload_yes.sh");
-        ENV_EQ("DCAT_UID", "rCPU_overload_yes");
-        check_param_env("cores", "2");
-        result_free(r);
-
-        g_mock_called = 0;
-        r = dispatch_clean("rCPU_overload_yes", &p);
-        CK(r && r->code == 0);
         ENV_EQ("DCAT_OP", "clean");
         result_free(r);
     }
@@ -84,6 +66,6 @@ int main(void) {
     }
 
     faults_teardown();
-    printf("test_faults_cpu_storage: all 4 faults passed\n");
+    printf("test_faults_cpu_storage: all 3 faults passed\n");
     return 0;
 }

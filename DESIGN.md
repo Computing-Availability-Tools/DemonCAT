@@ -278,9 +278,9 @@ INI 解析 `demoncat.conf`：
 
 ## 4. 故障详设（按模块分组）
 
-> 39 条目录。按模块分组详设，共享机制集中描述，差异以表呈现。
+> 38 条目录。按模块分组详设，共享机制集中描述，差异以表呈现。
 > 所有故障统一同步阻塞执行。需要长驻的故障（CPU 过载、端口占用、僵尸生成、磁盘写压等）由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取 pidfile 清理。
-> 本期 39 条故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
+> 本期 38 条故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
 
 ### 4.1 网络模块（network，11 条）
 
@@ -345,14 +345,13 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - dispatch 走 inject-only 分支：执行 → `output_ok(message)`，**不写 state**。
 - `dcat clean rPROC_exit` / `dcat query rPROC_exit` 在 precheck 阶段拒绝（op 不在 supported_ops，退出码 3）。
 
-### 4.3 CPU 模块（cpu，3 条）
+### 4.3 CPU 模块（cpu，2 条）
 
 #### 4.3.1 共享机制
 
 | UID | 机制 | 命令 | clean |
 |---|---|---|---|
 | `rCPU_overload` * | 多核 burn（纯用户态） | `perl -e '1 while 1'` 多实例 + taskset | kill 进程组（脚本读 pidfile） |
-| `rCPU_overload_yes` | 多核 burn（含系统调用开销） | `yes` 多实例 + taskset | kill 进程组（脚本读 pidfile） |
 | `rCPU_core_offline` | sysfs 离线 | `echo 0 > /sys/devices/system/cpu/cpu<N>/online` | `echo 1 > ...` |
 
 #### 4.3.2 rCPU_core_offline 详设
@@ -629,7 +628,7 @@ dispatch_route(uid, op, params):
 | list 输出 | 纳入 | 本期不纳入（注入器本期为空） |
 | 优先级 | `registry_find` 优先 | `injector_find` 回退 |
 
-> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有 39 条故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
+> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有 38 条故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
 
 ---
 
@@ -657,9 +656,8 @@ CAT/
 │   │   ├── injector.h          # 注入器接口 injector_t (§7.2)
 │   │   └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
 │   └── scripts/
-│       ├── cpu/                    # 3 脚本
+│       ├── cpu/                    # 2 脚本
 │       │   ├── cpu_overload.sh
-│       │   ├── cpu_overload_yes.sh
 │       │   └── cpu_core_offline.sh
 │       ├── network/                # 11 脚本
 │       │   ├── net_delay.sh
@@ -703,9 +701,9 @@ CAT/
 │           ├── pfc_change.sh
 │           └── roce_port_change.sh
 ├── config/
-│   └── demoncat.conf           # 故障目录配置(39 条)
+│   └── demoncat.conf           # 故障目录配置(38 条)
 ├── docs/
-│   ├── user_manual.md          # 用户手册 (39 条故障 × 7 字段)
+│   ├── user_manual.md          # 用户手册 (38 条故障 × 7 字段)
 │   └── manual_test_guide.md    # 高危故障手动测试指南 (10 条)
 └── tests/
     ├── test_output.c
@@ -857,7 +855,7 @@ dcat list                            # 故障目录
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
 - **决策5（必/选参数区分）**：`required_params` 预检校验；`optional_params` 缺省走脚本默认（§2 + §3.3 SPEC）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1 起步（核心框架 + 39 条故障），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1 起步（核心框架 + 38 条故障），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。

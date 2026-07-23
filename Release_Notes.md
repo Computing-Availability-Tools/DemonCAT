@@ -18,7 +18,7 @@
 
 **P0 关键修复：**
 - **[CRITICAL] state_add 返回值检查**（`dispatch.c`）：状态表满(32条)时 `state_add` 返回 0，原代码仍返回 `status:ok` + `record_id:0` → 故障已执行但不可清理。现检查返回值并返回 error，提示用户先清理已有注入
-- **README 故障表修正**：从 18 条补全到 39 条（补齐 20 条 NPU + `rCPU_overload_yes`），README 描述补 NPU 模块
+- **README 故障表修正**：从 18 条补全到 38 条（补齐 20 条 NPU），README 描述补 NPU 模块
 - **断链修复**：`smoke_test_manual.md` → `manual_test_guide.md`（Release_Notes / test_report / smoke_root.sh 三处）
 
 **P1 健壮性修复：**
@@ -32,9 +32,9 @@
 
 **文档同步：**
 - **DESIGN.md §3.4**：executor_run 签名更新（删除 `timeout_ms`/`timer_create`），新增 `executor_clear_env_params` + `executor_set_env` 声明
-- **DESIGN.md §4.3**：CPU 模块 2→3 条（补 `rCPU_overload_yes`）
-- **DESIGN.md §8 + SPEC.md**：脚本路径 `config/scripts/` → `src/scripts/`，38 条 → 39 条，v0.1 状态 "待开发" → "已完成"
-- **SPEC.md §3.3**：补 `rCPU_overload_yes` 行 + `rDISK_write_overload` optional_params 补 `size_mb(默认200)`
+- **DESIGN.md §8 + SPEC.md**：脚本路径 `config/scripts/` → `src/scripts/`，v0.1 状态 "待开发" → "已完成"
+- **SPEC.md §3.3**：`rDISK_write_overload` optional_params 补 `size_mb(默认200)`
+- **删除 `rCPU_overload_yes`**：移除冗余故障（`rCPU_overload` 已用 perl 实现纯用户态满载，yes 变体无独立存在价值），故障总数 39→38，同步清理 conf / README / SPEC / DESIGN / user_manual / test_faults / test_smoke / test_registry / test_report
 
 ### 已知限制
 
@@ -61,9 +61,9 @@
 - **命令格式**：子命令式 `dcat <subcommand> [uid] --key=value ...`，支持 `inject` / `clean` / `query` / `list` 四个操作；所有参数以 `--key=value` 标志传入，全局选项 `--config` / `--help` 与参数标志混合使用
 - **参数校验分层**：dcat 负责**结构校验**（`required_params` 是否齐全且非空、未声明参数直接拒绝、脚本可执行性）；参数值合法性（核号范围、iface 是否存在、chip 是否有效）由脚本自行**语义校验**，职责边界清晰
 - **同步阻塞执行**：所有 inject / clean / query 均通过 `fork/exec + waitpid` **同步阻塞**调用脚本，执行完返回；需要长驻的故障（CPU 过载、端口占用、僵尸生成、磁盘写压、链路闪断、D 状态进程）由脚本自行 spawn 子进程并写 pidfile / sidecar，clean 时重跑脚本读取清理
-- **故障目录**：39 条故障（CPU 3 + 存储 1 + 网络 11 + 进程 4 + NPU 20），全部以**外部脚本 + 声明式配置**（`demoncat.conf`）接入；加一个故障 = 加一个脚本 + 配置文件一段，**免重新编译**（开闭原则）
-- **测试体系**：分层 5 级——Tier 0 核心单元测试（6：cli / registry / precheck / state / output / executor-mock）+ Tier 1 mock 表驱动故障测试（39 条全覆盖下发命令串与环境变量）+ Tier 2 脚本语法检查（`sh -n`，39 脚本）+ Tier 3 真实执行测试（无需 root 的 7 条故障：rCPU_overload / rCPU_overload_yes / rDISK_write_overload / rNET_port_occupy / rPROC_exit / rPROC_hang / rPROC_zstate）+ 手动冒烟测试（32 条需 root 或 NPU 硬件）
-- **文档**：README + 用户手册（`docs/user_manual.md`，39 条故障 × 7 字段）+ 手动测试指南（`docs/manual_test_guide.md`，覆盖 10 条高危故障）+ SPEC（技术规格）+ DESIGN（架构设计）
+- **故障目录**：38 条故障（CPU 2 + 存储 1 + 网络 11 + 进程 4 + NPU 20），全部以**外部脚本 + 声明式配置**（`demoncat.conf`）接入；加一个故障 = 加一个脚本 + 配置文件一段，**免重新编译**（开闭原则）
+- **测试体系**：分层 5 级——Tier 0 核心单元测试（6：cli / registry / precheck / state / output / executor-mock）+ Tier 1 mock 表驱动故障测试（38 条全覆盖下发命令串与环境变量）+ Tier 2 脚本语法检查（`sh -n`，38 脚本）+ Tier 3 真实执行测试（无需 root 的 6 条故障：rCPU_overload / rDISK_write_overload / rNET_port_occupy / rPROC_exit / rPROC_hang / rPROC_zstate）+ 手动冒烟测试（32 条需 root 或 NPU 硬件）
+- **文档**：README + 用户手册（`docs/user_manual.md`，38 条故障 × 7 字段）+ 手动测试指南（`docs/manual_test_guide.md`，覆盖 10 条高危故障）+ SPEC（技术规格）+ DESIGN（架构设计）
 - **构建**：CMake ≥ 3.10，C11（ISO/IEC 9899:2011），`-Wall -Wextra -Werror`，pthread 状态锁，cJSON 单文件库 vendored 进仓库（`third_party/cjson/`），输出格式 JSON
 
 ### 已知限制

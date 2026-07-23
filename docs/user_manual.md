@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 39 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 38 条故障。
 > 完整规格见 [SPEC.md](../SPEC.md)，架构见 [DESIGN.md](../DESIGN.md)。
 
 ---
@@ -10,18 +10,18 @@
 
 | 模块 | 条数 | 故障范围 |
 |---|:---:|---|
-| CPU | 3 | 核满载（纯用户态 / yes 系统调用）、核离线 |
+| CPU | 2 | 核满载（纯用户态）、核离线 |
 | 存储 | 1 | 磁盘写压（dd 多实例） |
 | 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
 | 进程 | 4 | 进程退出 / D 状态 / 挂起 / 僵尸 |
 | NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / FEC / DSCP / PFC / RoCE 端口 |
-| **合计** | **39** | |
+| **合计** | **38** | |
 
 ---
 
 **补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `iptables` 命令（传统 iptables，非 nftables）；clean 通过 `-D` 删除规则，若规则已被手动删除或顺序变化，`-D` 可能静默失败；sidecar 文件后缀为 `.rule`（非 `.sidecar`）；`direction=both` 时 inject 只要任一方向插入失败即整体报错退出；query 的 `direction` 参数需与 inject 时一致才能正确匹配；防火墙后端为 nftables 时 `iptables` 命令可能行为不同，需确认兼容性。
 
-## 第一章 CPU 模块（3 条）
+## 第一章 CPU 模块（2 条）
 
 ### 1.1 rCPU_overload
 
@@ -52,36 +52,7 @@ dcat clean rCPU_overload --cores=0,1
 
 ---
 
-### 1.2 rCPU_overload_yes
-
-**UID**: `rCPU_overload_yes`
-
-**描述**: 通过 `taskset` 绑定到指定 CPU 核运行 `yes` 命令，使指定核满载并伴随高系统调用开销（约 70% sy）。
-
-**实现原理**: 
-- **inject**: 对每个核，用 `taskset -c <n>` 绑定启动 `yes >/dev/null`（反复向 /dev/null 写 `"y\n"`，约 30% us / 70% sy），后台运行。将所有子进程 pid 写入 pidfile。
-- **clean**: 读取 pidfile，逐个 kill 进程并删除 pidfile。
-- **query**: 用 `pgrep -x yes` 统计 yes 进程数，打印 top 及进程详情。
-
-**使用示例**:
-```bash
-dcat inject rCPU_overload_yes --cores=0-3
-dcat query rCPU_overload_yes --cores=0-3
-dcat clean rCPU_overload_yes --cores=0-3
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| cores | 必填 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 或 `"0-3,7"` 格式 |
-
-**危险等级**: 中 — 指定核满载且约 70% 时间消耗在系统调用路径，对内核 syscall 链路额外施压。
-
-**补充说明**: 依赖 `taskset` 和 `yes`，无需 perl。与 `rCPU_overload` 的区别：本故障固定使用 yes，刻意制造系统调用开销（用于压测 syscall 路径）。
-
----
-
-### 1.3 rCPU_core_offline
+### 1.2 rCPU_core_offline
 
 **UID**: `rCPU_core_offline`
 

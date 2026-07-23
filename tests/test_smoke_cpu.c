@@ -63,29 +63,7 @@ int main(void) {
         CK(n == 0);
     }
 
-    /* ---- rCPU_overload_yes (yes) ---- */
-    {
-        params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, "0,1"); p.count = 1;
-
-        result_t *r = dispatch_inject("rCPU_overload_yes", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-
-        sleep(1);
-        int n = count_proc("yes");
-        CK(n >= 2);
-
-        r = dispatch_clean("rCPU_overload_yes", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-
-        sleep(1);
-        n = count_proc("yes");
-        CK(n == 0);
-    }
-
     smoke_teardown();
-    printf("test_smoke_cpu: 2 faults passed\n");
+    printf("test_smoke_cpu: 1 fault passed\n");
     return 0;
 }

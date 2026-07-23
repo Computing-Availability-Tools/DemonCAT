@@ -1,7 +1,7 @@
 # DemonCAT 测试报告
 
 > **项目**: DemonCAT (dcat) — Linux 计算故障注入工具
-> **版本**: v0.1.0（核心框架 + 39 条故障 + 四层测试体系）
+> **版本**: v0.1.0（核心框架 + 38 条故障 + 四层测试体系）
 > **日期**: 2026-07-23
 > **测试执行**: CTest 自动化 + mock 驱动（OpenCode）
 
@@ -11,11 +11,11 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1.0 核心框架 + 39 条故障的完整性和正确性：
+验证 DemonCAT v0.1.0 核心框架 + 38 条故障的完整性和正确性：
 
 - 核心框架 9 模块功能正确（cli/config/registry/executor/precheck/state/dispatch/output）
-- 全部 39 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
-- 全部 39 个脚本无语法错误
+- 全部 38 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
+- 全部 38 个脚本无语法错误
 - 7 条无需 root 的故障端到端可执行（真实脚本执行）
 - 32 条需 root/硬件的故障有手动冒烟测试文档
 - strict C11 (`CMAKE_C_EXTENSIONS=OFF`) 可移植性验证
@@ -30,7 +30,7 @@
 | 跳过 | **0** |
 | 通过率 | **100%** |
 | `cmake --build` | ✅ 通过（-Wall -Wextra -Werror, 0 warnings） |
-| 故障目录总数 | 39 (CPU 3 + 存储 1 + 网络 11 + 进程 4 + NPU 20) |
+| 故障目录总数 | 38 (CPU 2 + 存储 1 + 网络 11 + 进程 4 + NPU 20) |
 
 ---
 
@@ -74,11 +74,11 @@
 | test_precheck | 4 步校验 + 未知参数拒绝 (12 cases) | PASS | 0.00s |
 | test_state | params 存储 + find_by_params + 持久化 + 并发注入 | PASS | 0.00s |
 
-### 4.2 Tier 1: Mock 表驱动故障测试 (39 条全覆盖)
+### 4.2 Tier 1: Mock 表驱动故障测试 (38 条全覆盖)
 
 | 测试 | 覆盖故障数 | 覆盖模块 | 结果 | 耗时 |
 |------|:---:|---|:----:|:----:|
-| test_faults_cpu_storage | 4 | CPU(3) + 存储(1) | PASS | 0.01s |
+| test_faults_cpu_storage | 3 | CPU(2) + 存储(1) | PASS | 0.01s |
 | test_faults_network | 11 | 网络(11) | PASS | 0.02s |
 | test_faults_process | 4 | 进程(4) | PASS | 0.01s |
 | test_faults_npu | 20 | NPU(20) | PASS | 0.04s |
@@ -89,14 +89,13 @@
 
 | 测试 | 检查范围 | 结果 | 耗时 |
 |------|---|:----:|:----:|
-| test_syntax | 全部 39 个 .sh 脚本 + _common.sh (`sh -n`) | PASS | 0.11s |
+| test_syntax | 全部 38 个 .sh 脚本 + _common.sh (`sh -n`) | PASS | 0.11s |
 
 ### 4.4 Tier 3: 真实执行测试 (7 条无需 root 的故障)
 
 | 测试 | 故障 | 验证内容 | 结果 | 耗时 |
 |------|---|---|:----:|:----:|
 | test_smoke_cpu | rCPU_overload | inject→pgrep perl≥2→clean→pgrep=0 | PASS | 4.05s |
-| | rCPU_overload_yes | inject→pgrep yes≥2→clean→pgrep=0 | PASS | |
 | test_smoke_process | rPROC_exit | inject→fork child→kill -9→waitpid 确认 | PASS | 6.07s |
 | | rPROC_hang | inject→/proc/PID/status T 状态→clean→恢复 R→kill 清理 | PASS | |
 | | rPROC_zstate | inject→ps Z 计数>0→clean→Z=0 | PASS | |
@@ -143,7 +142,7 @@
 DemonCAT v0.1.0 全部 **14** 个测试通过，零失败。测试覆盖：
 
 - **核心框架**: 6 个单元测试覆盖全部 9 模块
-- **故障目录**: 39 条故障全覆盖 (mock 表驱动 + 语法检查)
+- **故障目录**: 38 条故障全覆盖 (mock 表驱动 + 语法检查)
 - **端到端**: 7 条非 root 故障真实 inject→query→clean 验证
 - **手动冒烟**: 32 条 root/硬件故障有详细操作文档
 

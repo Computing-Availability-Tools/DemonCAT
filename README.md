@@ -42,14 +42,13 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
 
-## 当前故障目录（39 条）
+## 当前故障目录（38 条）
 
-### CPU 模块（3 条）
+### CPU 模块（2 条）
 
 | UID | 必填 | 可选 | 说明 |
 |---|---|---|---|
-| `rCPU_overload` | cores | — | 多核 CPU 满载（perl 纯用户态） |
-| `rCPU_overload_yes` | cores | — | 多核 CPU 满载（yes 进程，含系统调用开销） |
+| `rCPU_overload` | cores | — | CPU核心满载（支持多核心同时满载，perl纯用户态） |
 | `rCPU_core_offline` | cores | — | CPU 核离线（sysfs） |
 
 ### 存储模块（1 条）

@@ -13,9 +13,9 @@ int op_in_supported(const char *supported_ops, const char *op) {
     return 0;
 }
 
-int required_params_present(const fault_def_t *f, const params_t *params) {
+int required_params_present(const char *required_params, const params_t *params) {
     char buf[128];
-    strncpy(buf, f->required_params, sizeof(buf)-1);
+    strncpy(buf, required_params ? required_params : "", sizeof(buf)-1);
     buf[sizeof(buf)-1] = '\0';
     if (buf[0] == '\0') return 1;
     char *save = NULL;
@@ -28,12 +28,12 @@ int required_params_present(const fault_def_t *f, const params_t *params) {
     return 1;
 }
 
-int declared_params_only(const fault_def_t *f, const params_t *params) {
+int declared_params_only(const char *required_params, const char *optional_params, const params_t *params) {
     for (int i = 0; i < params->count; i++) {
         const char *k = params->items[i].key;
         char req[128], opt[128];
-        strncpy(req, f->required_params, sizeof(req)-1); req[sizeof(req)-1]='\0';
-        strncpy(opt, f->optional_params, sizeof(opt)-1); opt[sizeof(opt)-1]='\0';
+        strncpy(req, required_params ? required_params : "", sizeof(req)-1); req[sizeof(req)-1]='\0';
+        strncpy(opt, optional_params ? optional_params : "", sizeof(opt)-1); opt[sizeof(opt)-1]='\0';
         int found = 0;
         char *save = NULL;
         char *tok = strtok_r(req, ",", &save);
@@ -52,9 +52,9 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
     if (!f) return result_err(op, "", 4, "uid not found");
     if (!op_in_supported(f->supported_ops, op))
         return result_err(op, f->uid, 3, "op not in supported_ops");
-    if (!declared_params_only(f, params))
+    if (!declared_params_only(f->required_params, f->optional_params, params))
         return result_err(op, f->uid, 3, "undeclared param");
-    if (strcmp(op, "inject") == 0 && !required_params_present(f, params))
+    if (strcmp(op, "inject") == 0 && !required_params_present(f->required_params, params))
         return result_err(op, f->uid, 3, "missing required params");
     if (executor_check_tool(f->script) != 0)
         return result_err(op, f->uid, 3, "script not executable");

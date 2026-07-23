@@ -1,5 +1,7 @@
 # dcat 核心框架 实现计划
 
+> **注（2026-07-23 重构）**：本计划已废弃（被 v2 取代）；且 `config/scripts/` 已迁移至 `src/scripts/`。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 实现 DemonCAT（dcat）核心框架——9 个核心模块 + types.h + injectors 留位 + CMakeLists + cJSON vendoring + 极简测试框架，可编译、可跑单元测试，为 38 条故障目录（后续计划）打好基础。

@@ -1,5 +1,7 @@
 # dcat 核心框架 v2 实现计划
 
+> **注（2026-07-23 重构）**：`config/scripts/` 已迁移至 `src/scripts/`，`demoncat.conf` 的 `script` 字段路径相应更新。本计划记录迁移前的实现过程，路径引用以当时为准。
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 >
 > **本计划取代** `2026-07-21-dcat-core-framework.md`（旧计划基于已废弃的 SQL-like 语法与 5 步预检，与当前 SPEC/DESIGN 不一致）。

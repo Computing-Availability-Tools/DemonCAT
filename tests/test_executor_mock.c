@@ -1,17 +1,18 @@
 #include "test.h"
 #include "executor.h"
 #include "types.h"
+#include "output.h"
 #include <string.h>
 
 static const char *g_last_cmd = NULL;
 static const char *const *g_last_env = NULL;
-static result_t *mock_fn(const char *cmd, const char *const *env) {
+static result_t *my_mock(const char *cmd, const char *const *env) {
     g_last_cmd = cmd; g_last_env = env;
     return result_ok("inject", "rNET_loss", 0, "mocked");
 }
 
 int test_build_cmd_and_env(void) {
-    executor_set_mock(mock_fn);
+    executor_set_mock(my_mock);
     fault_def_t f; memset(&f, 0, sizeof(f));
     strcpy(f.uid, "rNET_loss");
     strcpy(f.script, "/x/net_loss.sh");
@@ -34,7 +35,7 @@ int test_build_cmd_and_env(void) {
 }
 
 int test_run_raw_mock(void) {
-    executor_set_mock(mock_fn);
+    executor_set_mock(my_mock);
     fault_def_t f; memset(&f, 0, sizeof(f));
     strcpy(f.uid, "rCPU_overload"); strcpy(f.script, "/x/cpu_overload.sh");
     params_t p; params_init(&p); params_set(&p, "cores", "2");

@@ -158,7 +158,7 @@ dcat list
 
 ### 3.4 扩展约定
 
-- **新增模块**：在 `module` 字段取新值（如 `memory`），脚本放到 `config/scripts/<module>/`，cnf 加段即可。`npu` 模块已落地（见 §3.3 `rNPU_*`）。
+- **新增模块**：在 `module` 字段取新值（如 `memory`），脚本放到 `src/scripts/<module>/`，cnf 加段即可。`npu` 模块已落地（见 §3.3 `rNPU_*`）。
 - **现有模块加故障**：同模块目录加脚本 + cnf 加段，UID 不重复即可。
 - 目录将持续扩充（预计 200+），不预设模块实现先后顺序，按发布批次推进（见 §8）。
 
@@ -333,7 +333,7 @@ DemonCAT 故障总量预计 200+，按需求增量推进，**不按模块预设�
 |---|---|---|
 | **v0.1** | 核心框架 + 38 条故障（cpu 2 / network 11 / process 4 / storage 1 / npu 20）+ 测试 | 待开发 |
 
-每批次的实现内容 = `config/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
+每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
 ---
 

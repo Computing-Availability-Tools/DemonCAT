@@ -2,6 +2,7 @@
 # rNPU_iproute_add: add ip route. Clean = delete the added route.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 ip=${DCAT_PARAM_IP:?missing required param: ip}
 mask=${DCAT_PARAM_IP_MASK:?missing required param: ip_mask}
 via=${DCAT_PARAM_VIA:?missing required param: via}

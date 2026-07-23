@@ -2,6 +2,7 @@
 # rNPU_prio_tc_change: prio-to-TC mapping change. Clean = restore original 8-csv map.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 map=${DCAT_PARAM_MAP:?missing required param: map}
 HCCN="hccn_tool -i $chip"
 

@@ -14,6 +14,10 @@ char *executor_build_cmd(const fault_def_t *f, const char *op, const params_t *p
 /* Set DCAT_OP / DCAT_UID / DCAT_PARAM_<KEY> env vars for the script. */
 void executor_set_env(const char *op, const char *uid, const params_t *p);
 
+/* Unset all DCAT_PARAM_<KEY> env vars for a fault's declared params (required+optional).
+   Call before executor_set_env in loops to prevent stale param leakage between records. */
+void executor_clear_env_params(const fault_def_t *f);
+
 /* Run a command synchronously (fork/exec + pipe, capture stdout into data.message).
    Returns result_t. If mock is set, calls mock(cmd) instead of fork/exec. */
 result_t *executor_run(const char *cmd);

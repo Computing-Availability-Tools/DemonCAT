@@ -2,6 +2,7 @@
 # rNPU_iprule_add: add ip rule. Clean = delete the added rule.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 dir=${DCAT_PARAM_DIR:?missing required param: dir}
 ip=${DCAT_PARAM_IP:?missing required param: ip}
 table=${DCAT_PARAM_TABLE:?missing required param: table}

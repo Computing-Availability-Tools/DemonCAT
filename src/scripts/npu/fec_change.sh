@@ -2,6 +2,7 @@
 # rNPU_fec_change: RoCE FEC mode change. Clean = restore original FEC from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 enc=${DCAT_PARAM_ENCODING:?missing required param: encoding}
 HCCN="hccn_tool -i $chip"
 

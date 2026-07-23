@@ -2,6 +2,7 @@
 # rNPU_arp_del: delete ARP entry. Clean = re-add with original mac from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 dev=${DCAT_PARAM_DEV:?missing required param: dev}
 ip=${DCAT_PARAM_IP:?missing required param: ip}
 HCCN="hccn_tool -i $chip"

@@ -2,6 +2,7 @@
 # rNPU_netdetect_change: netdetect IP change. Clean = restore original from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 addr=${DCAT_PARAM_ADDRESS:?missing required param: address}
 HCCN="hccn_tool -i $chip"
 

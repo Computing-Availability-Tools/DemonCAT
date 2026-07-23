@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
     }
 
     output_print(res);
-    int code = res ? res->code : 0;
+    int code = res ? res->code : DCAT_E_RUN;
     result_free(res);
     return code;
 }

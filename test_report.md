@@ -18,6 +18,7 @@
 - 全部 39 个脚本无语法错误
 - 7 条无需 root 的故障端到端可执行（真实脚本执行）
 - 32 条需 root/硬件的故障有手动冒烟测试文档
+- strict C11 (`CMAKE_C_EXTENSIONS=OFF`) 可移植性验证
 
 ### 1.2 测试结果汇总
 
@@ -41,7 +42,7 @@
 | CPU 逻辑核 | 28 |
 | 编译器 | gcc 13.3.0 |
 | 构建系统 | CMake 3.28.3 |
-| C 标准 | C11 (gnu11) |
+| C 标准 | C11 (gnu11) + strict C11 (`_POSIX_C_SOURCE=200809L`) |
 | 第三方依赖 | cJSON v1.7.18 (vendored) |
 | 线程库 | pthread |
 | 测试框架 | CTest |
@@ -104,7 +105,7 @@
 
 ### 4.5 手动冒烟测试 (32 条需 root/硬件)
 
-详见 `docs/smoke_test_manual.md`。按原因分类：
+详见 `docs/manual_test_guide.md`。按原因分类：
 
 | 原因 | 条数 | 故障列表 |
 |------|:---:|---|

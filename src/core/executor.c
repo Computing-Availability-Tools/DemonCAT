@@ -48,6 +48,28 @@ void executor_set_env(const char *op, const char *uid, const params_t *p) {
     }
 }
 
+void executor_clear_env_params(const fault_def_t *f) {
+    if (!f) return;
+    const char *lists[2] = { f->required_params, f->optional_params };
+    for (int li = 0; li < 2; li++) {
+        const char *q = lists[li];
+        if (!q || !q[0]) continue;
+        while (*q) {
+            const char *c = strchr(q, ',');
+            size_t len = c ? (size_t)(c - q) : strlen(q);
+            char tok[64];
+            if (len >= sizeof tok) len = sizeof tok - 1;
+            memcpy(tok, q, len);
+            tok[len] = '\0';
+            char ek[80];
+            env_name(tok, ek, sizeof ek);
+            unsetenv(ek);
+            if (!c) break;
+            q = c + 1;
+        }
+    }
+}
+
 result_t *executor_run(const char *cmd) {
     if (g_mock) return g_mock(cmd);
     if (!cmd) return result_err("run", "", DCAT_E_RUN, "null cmd");
@@ -76,7 +98,7 @@ result_t *executor_run(const char *cmd) {
         ssize_t r = read(p[0], buf + total, sizeof buf - 1 - total);
         if (r > 0) {
             total += (size_t)r;
-            if (total >= sizeof buf - 1) total = sizeof buf - 2;
+            if (total >= sizeof buf - 1) { total = sizeof buf - 2; break; }
         } else if (r == 0) {
             break;
         } else {

@@ -54,6 +54,20 @@ static void extract_message(const result_t *rr, cJSON *data) {
     }
 }
 
+static void extract_err_msg(const result_t *rr, char *out, size_t cap) {
+    if (!out || cap == 0) return;
+    out[0] = '\0';
+    if (!rr || !rr->json) return;
+    cJSON *root = cJSON_Parse(rr->json);
+    if (root) {
+        cJSON *e = cJSON_GetObjectItem(root, "error");
+        cJSON *m = e ? cJSON_GetObjectItem(e, "message") : NULL;
+        if (m && m->valuestring && m->valuestring[0])
+            strncpy(out, m->valuestring, cap - 1), out[cap - 1] = '\0';
+        cJSON_Delete(root);
+    }
+}
+
 result_t *dispatch_list(void) {
     int n;
     const fault_def_t *t = registry_list(&n);
@@ -127,8 +141,10 @@ result_t *dispatch_inject(const char *uid, const params_t *p) {
 
     result_t *rr = executor_run(cmd);
     if (!rr || rr->code != 0) {
-        result_t *err = result_err("inject", f->uid, DCAT_E_RUN,
-                                  rr && rr->json ? "script failed" : "internal error");
+        char emsg[256];
+        extract_err_msg(rr, emsg, sizeof emsg);
+        if (!emsg[0]) snprintf(emsg, sizeof emsg, rr ? "script failed" : "internal error");
+        result_t *err = result_err("inject", f->uid, DCAT_E_RUN, emsg);
         result_free(rr);
         return err;
     }
@@ -142,6 +158,11 @@ result_t *dispatch_inject(const char *uid, const params_t *p) {
     }
 
     int id = state_add(f->uid, p);
+    if (id == 0) {
+        cJSON_Delete(data);
+        return result_err("inject", f->uid, DCAT_E_RUN,
+                          "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+    }
     cJSON_AddNumberToObject(data, "record_id", id);
     return result_ok("inject", f->uid, data);
 }
@@ -161,11 +182,15 @@ result_t *dispatch_clean(const char *uid, const params_t *p) {
     char cmd[256];
     int cleaned = 0;
     for (int i = 0; i < n; i++) {
+        executor_clear_env_params(f);
         executor_build_cmd(f, "clean", &matches[i].params, cmd, sizeof cmd);
         executor_set_env("clean", f->uid, &matches[i].params);
         result_t *rr = executor_run(cmd);
         if (!rr || rr->code != 0) {
-            result_t *err = result_err("clean", f->uid, DCAT_E_RUN, "clean script failed");
+            char emsg[256];
+            extract_err_msg(rr, emsg, sizeof emsg);
+            if (!emsg[0]) snprintf(emsg, sizeof emsg, rr ? "clean script failed" : "internal error");
+            result_t *err = result_err("clean", f->uid, DCAT_E_RUN, emsg);
             result_free(rr);
             if (cleaned > 0) state_save();
             return err;

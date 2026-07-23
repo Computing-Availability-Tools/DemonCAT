@@ -4,6 +4,13 @@ npu_check_env() {
     command -v hccn_tool >/dev/null 2>&1 || { echo "hccn_tool not found in PATH" >&2; exit 1; }
 }
 
+npu_validate_chip() {
+    case "$1" in
+        [0-9]) return 0 ;;
+        *) echo "chip must be a single digit 0-9, got: '$1'" >&2; exit 1 ;;
+    esac
+}
+
 # sidecar_save <uid> <chip> <value>
 sidecar_save() {
     printf '%s\n' "$3" > "/tmp/dcat-$1-$2.bak"

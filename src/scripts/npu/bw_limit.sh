@@ -2,6 +2,7 @@
 # rNPU_bw_limit: RoCE shaping bandwidth limit. Clean = set bw_limit to max (100000).
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 bw=${DCAT_PARAM_BW_LIMIT:?missing required param: bw_limit}
 HCCN="hccn_tool -i $chip"
 MAX_BW=100000

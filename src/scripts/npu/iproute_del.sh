@@ -2,6 +2,7 @@
 # rNPU_iproute_del: delete ip route. Clean = re-add with original via/dev from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 ip=${DCAT_PARAM_IP:?missing required param: ip}
 mask=${DCAT_PARAM_IP_MASK:?missing required param: ip_mask}
 table=${DCAT_PARAM_TABLE:?missing required param: table}

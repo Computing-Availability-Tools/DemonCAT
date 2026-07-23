@@ -168,18 +168,22 @@ int state_save(void) {
         cJSON_AddItemToArray(arr, o);
     }
     char *s = cJSON_PrintUnformatted(arr);
+    cJSON_Delete(arr);
+    pthread_mutex_unlock(&g_lock);
+
+    if (!s) return -1;
+
     char tmp[288];
     snprintf(tmp, sizeof tmp, "%s.tmp", g_path);
     FILE *f = fopen(tmp, "w");
     int ok = 0;
     if (f) {
-        fputs(s, f);
-        fclose(f);
-        ok = (rename(tmp, g_path) == 0);
+        if (fputs(s, f) != EOF && fclose(f) == 0)
+            ok = (rename(tmp, g_path) == 0);
+        else
+            fclose(f);
     }
     free(s);
-    cJSON_Delete(arr);
-    pthread_mutex_unlock(&g_lock);
     return ok ? 0 : -1;
 }
 

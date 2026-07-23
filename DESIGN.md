@@ -84,7 +84,7 @@
 ```
 
 **核心层**（编译进二进制，稳定）：`main / cli / registry / executor / precheck / state / config / output / dispatch`。
-**故障层**（可变，数据驱动）：`demoncat.conf` 声明 + 外部脚本（`config/scripts/<module>/*.sh`）。
+**故障层**（可变，数据驱动）：`demoncat.conf` 声明 + 外部脚本（`src/scripts/<module>/*.sh`）。
 **扩展点**：`injector_t` 编译注入器作为进程内高级扩展点，设计见 §7（本期 `builtin_injectors[]` 为空，仅留位）。
 
 > 本期所有故障**统一同步阻塞执行**，不区分 background/sync 模式。
@@ -106,7 +106,7 @@ required_params = dimm
 optional_params =
 ```
 
-对应脚本放到 `config/scripts/memory/mem_ecc_inject.sh` 并 `chmod +x`。`dcat list` 自动出现新故障，**免重编译**。
+对应脚本放到 `src/scripts/memory/mem_ecc_inject.sh` 并 `chmod +x`。`dcat list` 自动出现新故障，**免重编译**。
 
 ### 1.3 数据流
 
@@ -218,17 +218,20 @@ typedef struct { const char *op; char uid[64]; params_t params; } parsed_cmd_t;
 
 ### 3.4 executor.c
 ```c
-result_t *executor_run(const char *cmd, int timeout_ms);   /* 同步: fork/exec+pipe, timer_create 超时 */
+result_t *executor_run(const char *cmd);                   /* 同步: fork/exec+pipe, 捕获 stdout/stderr */
 int        executor_run_raw(const char *cmd);              /* 同步: system() 直通 stdout, 返回退出码 */
 int        executor_check_tool(const char *path);           /* access/X_OK */
+void       executor_set_env(const char *op, const char *uid, const params_t *p); /* 设置 DCAT_OP/DCAT_UID/DCAT_PARAM_* */
+void       executor_clear_env_params(const fault_def_t *f); /* 清除 fault 声明的 DCAT_PARAM_* 环境变量 */
 void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 ```
 - 命令构造：`build_cmd(fault_def, params, op)` 拼 `"<script>"`，参数通过**环境变量**传递（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_<KEY>`），不走 argv，免注入。
-- `executor_run`：用 `fork/exec + pipe` 同步执行，`timer_create` + `SIGCHLD` / `waitpid` 实现超时；超时返回错误。用于 cnf 故障的 inject / clean 路径——dcat 等待脚本执行完返回。
+- `executor_run`：用 `fork/exec + pipe` 同步执行，`waitpid` 等待子进程结束；用于 cnf 故障的 inject / clean 路径——dcat 等待脚本执行完返回。
 - `executor_run_raw`：用 `system()` 直接执行，stdout/stderr 继承父进程终端（不 pipe 捕获）。用于 cnf 故障的 query 路径——用户需要看到脚本的原始输出（表格/多行文本），而非 JSON 包装。返回脚本退出码（0=成功）。
-- `mock_fn`：测试时注入，捕获 `(cmd, env)` 不真正执行。
+- `executor_clear_env_params`：清除 fault 定义中声明的所有 `DCAT_PARAM_*` 环境变量（required + optional），在 clean 循环遍历多条记录时调用以防止前一条记录的参数泄漏到后一条。
+- `mock_fn`：测试时注入，捕获 `(cmd)` 不真正执行；测试通过 `getenv()` 读取环境变量断言。
 - **仅服务 cnf 故障**：注入器故障不经过 executor，直接调函数指针（§7.5）。
-- **不提供** `executor_spawn` / `executor_kill`：本期统一同步阻塞执行，dcat 不托管子进程 pid。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar，clean 时重跑脚本读取清理。
+- **不提供** `executor_spawn` / `executor_kill` / `timer_create` 超时：本期统一同步阻塞执行，dcat 不托管子进程 pid。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar，clean 时重跑脚本读取清理。
 
 ### 3.5 precheck.c
 - `precheck(fault_def, op, params)`：执行 SPEC §4.2 预检 4 步；返回 `result_t`（成功 / 带错误码）。
@@ -275,9 +278,9 @@ INI 解析 `demoncat.conf`：
 
 ## 4. 故障详设（按模块分组）
 
-> 38 条目录。按模块分组详设，共享机制集中描述，差异以表呈现。
+> 39 条目录。按模块分组详设，共享机制集中描述，差异以表呈现。
 > 所有故障统一同步阻塞执行。需要长驻的故障（CPU 过载、端口占用、僵尸生成、磁盘写压等）由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取 pidfile 清理。
-> 本期 38 条故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
+> 本期 39 条故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
 
 ### 4.1 网络模块（network，11 条）
 
@@ -342,13 +345,14 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - dispatch 走 inject-only 分支：执行 → `output_ok(message)`，**不写 state**。
 - `dcat clean rPROC_exit` / `dcat query rPROC_exit` 在 precheck 阶段拒绝（op 不在 supported_ops，退出码 3）。
 
-### 4.3 CPU 模块（cpu，2 条）
+### 4.3 CPU 模块（cpu，3 条）
 
 #### 4.3.1 共享机制
 
 | UID | 机制 | 命令 | clean |
 |---|---|---|---|
-| `rCPU_overload` * | 多核 burn | `yes` 多实例 | kill 进程组（脚本读 pidfile） |
+| `rCPU_overload` * | 多核 burn（纯用户态） | `perl -e '1 while 1'` 多实例 + taskset | kill 进程组（脚本读 pidfile） |
+| `rCPU_overload_yes` | 多核 burn（含系统调用开销） | `yes` 多实例 + taskset | kill 进程组（脚本读 pidfile） |
 | `rCPU_core_offline` | sysfs 离线 | `echo 0 > /sys/devices/system/cpu/cpu<N>/online` | `echo 1 > ...` |
 
 #### 4.3.2 rCPU_core_offline 详设
@@ -371,7 +375,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 
 #### 4.5.1 共享机制
 
-所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `config/scripts/npu/_common.sh`（`npu_check_env`/`sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
+所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `src/scripts/npu/_common.sh`（`npu_check_env` / `npu_validate_chip` / `sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
 
 | clean 策略 | 适用 UID | 机制 |
 |---|---|---|
@@ -619,13 +623,13 @@ dispatch_route(uid, op, params):
 | 执行方式 | `fork/exec` 子进程 | 进程内直接调用 |
 | 参数传递 | 环境变量 `DCAT_PARAM_*` | `params_t` 结构体指针 |
 | 输出 | stdout→pipe 捕获 / `run_raw` 直通 | 直接构造 `result_t` |
-| 超时 | `executor_run` 的 `timer_create` | 注入器自行实现 |
+| 超时 | 无（同步 waitpid） | 注入器自行实现 |
 | 适用场景 | 大多数故障（tc/iptables/kill 等） | 精确定时/二进制协议/进程内状态 |
 | state 记录 | 可恢复故障写 state | 同左 |
 | list 输出 | 纳入 | 本期不纳入（注入器本期为空） |
 | 优先级 | `registry_find` 优先 | `injector_find` 回退 |
 
-> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有 38 条故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
+> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有 39 条故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
 
 ---
 
@@ -635,6 +639,7 @@ dispatch_route(uid, op, params):
 CAT/
 ├── CMakeLists.txt              # C11, 静态链接, 含 third_party/cjson
 ├── SPEC.md  DESIGN.md  README.md
+├── Release_Notes.md  test_report.md
 ├── third_party/cjson/{cJSON.c,cJSON.h}
 ├── src/
 │   ├── main.c
@@ -648,17 +653,16 @@ CAT/
 │   │   ├── output.{c,h}
 │   │   ├── dispatch.{c,h}
 │   │   └── types.h             # 公共类型: params_t/result_t/fault_def_t(含 optional_params)/injection_record_t
-│   └── injectors/
-│       ├── injector.h          # 注入器接口 injector_t (§7.2)
-│       └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
-├── config/
-│   ├── demoncat.conf           # 故障目录配置(38 条)
+│   ├── injectors/
+│   │   ├── injector.h          # 注入器接口 injector_t (§7.2)
+│   │   └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
 │   └── scripts/
-│       ├── cpu/                    # 2 脚本
-│       │   ├── cpu_overload.sh        # 示例
+│       ├── cpu/                    # 3 脚本
+│       │   ├── cpu_overload.sh
+│       │   ├── cpu_overload_yes.sh
 │       │   └── cpu_core_offline.sh
 │       ├── network/                # 11 脚本
-│       │   ├── net_delay.sh           # 示例
+│       │   ├── net_delay.sh
 │       │   ├── net_loss.sh
 │       │   ├── net_reorder.sh
 │       │   ├── net_down.sh
@@ -698,18 +702,28 @@ CAT/
 │           ├── prio_tc_change.sh
 │           ├── pfc_change.sh
 │           └── roce_port_change.sh
+├── config/
+│   └── demoncat.conf           # 故障目录配置(39 条)
+├── docs/
+│   ├── user_manual.md          # 用户手册 (39 条故障 × 7 字段)
+│   └── manual_test_guide.md    # 高危故障手动测试指南 (10 条)
 └── tests/
-    ├── test_cli.c
+    ├── test_output.c
     ├── test_registry.c
     ├── test_executor_mock.c
     ├── test_precheck.c
     ├── test_state.c
-    ├── test_output.c
-    ├── test_faults.c               # 通用表驱动
-    ├── test_faults_network.c      # 11 条网络故障
-    ├── test_faults_process.c      # 4 条进程故障
-    ├── test_faults_cpu_storage.c  # 2 条 CPU + 1 条存储故障
-    └── test_faults_npu.c          # 20 条 NPU 故障
+    ├── test_cli.c
+    ├── test_faults_common.h     # 通用 mock + 断言宏
+    ├── test_faults_cpu_storage.c  # 3 条 CPU + 1 条存储
+    ├── test_faults_network.c      # 11 条网络
+    ├── test_faults_process.c      # 4 条进程
+    ├── test_faults_npu.c          # 20 条 NPU
+    ├── check_syntax.sh            # sh -n 全脚本语法检查
+    ├── smoke_root.sh             # root 级自动化测试
+    ├── test_smoke_cpu.c          # CPU 真实执行 (2 条)
+    ├── test_smoke_process.c      # 进程真实执行 (3 条)
+    └── test_smoke_storage.c      # 存储+端口真实执行 (2 条)
 ```
 
 > `src/injectors/` 目录含 `injector.h`（接口定义，§7.2）与 `injectors.c`（注册表 + 查找，§7.4）。本期 `builtin_injectors[]` 为空数组。
@@ -718,9 +732,9 @@ CAT/
 
 ## 9. 构建
 
-- `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
-- 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `config/scripts/*.sh` 解析。
-- WSL 验证：`cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure`。
+- `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），`_POSIX_C_SOURCE=200809L` 编译定义（确保 strict C11 可移植），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
+- 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
+- WSL 验证：`cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure`。`WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
 
 ---
 
@@ -730,7 +744,7 @@ CAT/
 
 ### 10.1 mock_executor
 
-`executor_set_mock(fn)`，`fn` 捕获 `(cmd, env)` 不真正 fork。测试可断言 cnf 故障下发命令串与环境变量集合（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_*`）。
+`executor_set_mock(fn)`，`fn` 捕获 `(cmd)` 不真正 fork。测试通过 `getenv()` 读取环境变量断言 cnf 故障下发命令串与环境变量集合（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_*`）。
 
 > 注入器故障不经过 executor，mock_executor 不适用；注入器测试直接断言 `inj->op(params)` 返回的 `result_t`。
 
@@ -843,7 +857,7 @@ dcat list                            # 故障目录
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
 - **决策5（必/选参数区分）**：`required_params` 预检校验；`optional_params` 缺省走脚本默认（§2 + §3.3 SPEC）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1 起步（核心框架 + 38 条故障），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1 起步（核心框架 + 39 条故障），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。

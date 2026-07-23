@@ -111,13 +111,14 @@ dcat list
 
 - **必填 vs 可选**：`required_params` 在 precheck 阶段校验非空；`optional_params` 缺省时不报错，由脚本解释默认值（目录表中以 `(默认X)` 标注）。
 
-### 3.3 目录清单（共 38 条）
+### 3.3 目录清单（共 39 条）
 
 > 标 `*` 为示例故障（rCPU_overload / rNET_delay）。完整 cnf 声明见 §7。
 
 | UID | module | supported_ops | required_params | optional_params |
 |---|---|---|---|---|
 | `rCPU_overload` * | cpu | inject,clean,query | cores | — |
+| `rCPU_overload_yes` | cpu | inject,clean,query | cores | — |
 | `rNET_delay` * | network | inject,clean,query | iface,delay_ms | — |
 | `rNET_loss` | network | inject,clean,query | iface,loss_pct | — |
 | `rNET_reorder` | network | inject,clean,query | iface,reorder_pct | — |
@@ -134,7 +135,7 @@ dcat list
 | `rPROC_hang` | process | inject,clean,query | pid | — |
 | `rPROC_zstate` | process | inject,clean,query | count | — |
 | `rCPU_core_offline` | cpu | inject,clean,query | cores | — |
-| `rDISK_write_overload` | storage | inject,clean,query | device | workers(默认4) |
+| `rDISK_write_overload` | storage | inject,clean,query | device | workers(默认4),size_mb(默认200) |
 | `rNPU_link_down` | npu | inject,clean,query | chip | — |
 | `rNPU_ip_change` | npu | inject,clean,query | chip,address,netmask | — |
 | `rNPU_gw_change` | npu | inject,clean,query | chip,gateway | — |
@@ -158,7 +159,7 @@ dcat list
 
 ### 3.4 扩展约定
 
-- **新增模块**：在 `module` 字段取新值（如 `memory`），脚本放到 `config/scripts/<module>/`，cnf 加段即可。`npu` 模块已落地（见 §3.3 `rNPU_*`）。
+- **新增模块**：在 `module` 字段取新值（如 `memory`），脚本放到 `src/scripts/<module>/`，cnf 加段即可。`npu` 模块已落地（见 §3.3 `rNPU_*`）。
 - **现有模块加故障**：同模块目录加脚本 + cnf 加段，UID 不重复即可。
 - 目录将持续扩充（预计 200+），不预设模块实现先后顺序，按发布批次推进（见 §8）。
 
@@ -331,9 +332,9 @@ DemonCAT 故障总量预计 200+，按需求增量推进，**不按模块预设�
 
 | 批次 | 范围 | 状态 |
 |---|---|---|
-| **v0.1** | 核心框架 + 38 条故障（cpu 2 / network 11 / process 4 / storage 1 / npu 20）+ 测试 | 待开发 |
+| **v0.1** | 核心框架 + 39 条故障（cpu 3 / network 11 / process 4 / storage 1 / npu 20）+ 测试 | ✅ 已完成 |
 
-每批次的实现内容 = `config/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
+每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
 ---
 

@@ -2,6 +2,7 @@
 # rNPU_dscp_tc_change: DSCP-to-TC mapping change. Clean = restore original tc.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 dscp=${DCAT_PARAM_DSCP:?missing required param: dscp}
 tc=${DCAT_PARAM_TC:?missing required param: tc}
 HCCN="hccn_tool -i $chip"

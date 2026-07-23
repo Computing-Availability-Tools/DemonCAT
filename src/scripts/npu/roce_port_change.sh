@@ -2,6 +2,7 @@
 # rNPU_roce_port_change: RoCE UDP port change. Clean = restore original port (default 4791).
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
 port=${DCAT_PARAM_PORT:?missing required param: port}
 HCCN="hccn_tool -i $chip"
 

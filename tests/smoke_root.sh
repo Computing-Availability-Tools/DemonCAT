@@ -31,7 +31,8 @@ skip() { echo "  SKIP: $1 — $2"; SKIP=$((SKIP+1)); }
 
 cleanup_fault() {
     $DCAT clean "$@" --config config/demoncat.conf >/dev/null 2>&1 || true
-    rm -f /tmp/dcat-*.pid /tmp/dcat-*.sidecar /tmp/dcat-*.bak /tmp/dcat-*.rule /tmp/dcat-*.list 2>/dev/null || true
+    pkill -f 'dcat.dstate\|dcat.stress\|dcat.write' 2>/dev/null || true
+    rm -f /tmp/dcat-*.pid /tmp/dcat-*.sidecar /tmp/dcat-*.bak /tmp/dcat-*.rule /tmp/dcat-*.list /tmp/dcat.dstate.* /tmp/dcat.write.* 2>/dev/null || true
 }
 
 echo "=========================================="
@@ -231,11 +232,11 @@ echo "--- rPROC_dstate (dd) ---"
 if [ "$HAS_DD" = 1 ]; then
     if $DCAT inject rPROC_dstate --count=2 --config config/demoncat.conf >/dev/null 2>&1; then
         sleep 1
-        dd_count=$(pgrep -x dd 2>/dev/null | wc -l)
+        dd_count=$(pgrep -f 'dcat.dstate' 2>/dev/null | wc -l)
         if [ "$dd_count" -gt 0 ]; then
             $DCAT clean rPROC_dstate --count=2 --config config/demoncat.conf >/dev/null 2>&1
             sleep 1
-            dd_after=$(pgrep -x dd 2>/dev/null | wc -l)
+            dd_after=$(pgrep -f 'dcat.dstate' 2>/dev/null | wc -l)
             if [ "$dd_after" -eq 0 ]; then
                 pass "rPROC_dstate"
             else

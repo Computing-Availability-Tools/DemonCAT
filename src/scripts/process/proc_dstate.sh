@@ -10,7 +10,13 @@ case "${DCAT_OP:-inject}" in
         pids=""
         i=0
         while [ "$i" -lt "$count" ]; do
-            ( while true; do dd if=/dev/zero of="/tmp/dcat.dstate.$$.$i" bs=1M count=100 conv=fdatasync 2>/dev/null || sleep 1; done ) >/dev/null 2>&1 &
+            (
+                trap 'kill $! 2>/dev/null; exit 0' TERM
+                while true; do
+                    dd if=/dev/zero of="/tmp/dcat.dstate.$$.$i" bs=1M count=100 conv=fdatasync 2>/dev/null &
+                    wait $!
+                done
+            ) >/dev/null 2>&1 &
             pids="$pids $!"
             i=$((i + 1))
         done

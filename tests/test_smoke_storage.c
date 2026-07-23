@@ -48,13 +48,13 @@ int main(void) {
         params_t p; memset(&p, 0, sizeof p);
         strcpy(p.items[0].key, "device"); strcpy(p.items[0].value, "/tmp"); p.count = 1;
         strcpy(p.items[1].key, "workers"); strcpy(p.items[1].value, "2"); p.count = 2;
-        strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "10"); p.count = 3;
+        strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "100"); p.count = 3;
 
         result_t *r = dispatch_inject("rDISK_write_overload", &p);
         CK(r && r->code == 0);
         result_free(r);
 
-        sleep(1);
+        sleep(2);
         int n = count_proc("dd");
         CK(n >= 2);
 

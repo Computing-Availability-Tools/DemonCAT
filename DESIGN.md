@@ -21,11 +21,11 @@
   - [3.8 output.c](#38-outputc)
   - [3.9 dispatch.c](#39-dispatchc)
 - [4. 故障详设（按模块分组）](#4-故障详设按模块分组)
-  - [4.1 网络模块（network）](#41-网络模块network11-条)
-  - [4.2 进程模块（process）](#42-进程模块process4-条)
-  - [4.3 CPU 模块（cpu）](#43-cpu-模块cpu2-条)
-  - [4.4 存储模块（storage）](#44-存储模块storage1-条)
-  - [4.5 NPU 模块（npu）](#45-npu-模块npu20-条)
+  - [4.1 网络模块（network）](#41-网络模块network)
+  - [4.2 进程模块（process）](#42-进程模块process)
+  - [4.3 CPU 模块（cpu）](#43-cpu-模块cpu)
+  - [4.4 存储模块（storage）](#44-存储模块storage)
+  - [4.5 NPU 模块（npu）](#45-npu-模块npu)
 - [5. 关键流程](#5-关键流程)
   - [5.1 inject（含 inject-only 分支 + 注入器回退）](#51-inject含-inject-only-分支--注入器回退)
   - [5.2 clean](#52-clean)
@@ -278,11 +278,11 @@ INI 解析 `demoncat.conf`：
 
 ## 4. 故障详设（按模块分组）
 
-> 38 条目录。按模块分组详设，共享机制集中描述，差异以表呈现。
+> 按模块分组详设，共享机制集中描述，差异以表呈现。
 > 所有故障统一同步阻塞执行。需要长驻的故障（CPU 过载、端口占用、僵尸生成、磁盘写压等）由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取 pidfile 清理。
-> 本期 38 条故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
+> 本期所有故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
 
-### 4.1 网络模块（network，11 条）
+### 4.1 网络模块（network）
 
 #### 4.1.1 共享机制
 
@@ -298,7 +298,7 @@ INI 解析 `demoncat.conf`：
 
 clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）。脚本据此删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程。
 
-#### 4.1.2 11 条故障差异表
+#### 4.1.2 故障差异表
 
 | UID | 必填参数 | 可选参数 | clean 机制 | 备注 |
 |---|---|---|---|---|
@@ -320,7 +320,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - `iface` 不存在时 `tc qdisc add` 报错，脚本退出非 0。
 - 长驻型故障（port_occupy / link_flap）脚本 clean 时读 pidfile kill 子进程后清理。
 
-### 4.2 进程模块（process，4 条）
+### 4.2 进程模块（process）
 
 #### 4.2.1 共享机制
 
@@ -330,7 +330,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | 不可中断 IO | C helper `open + ioctl(不可中断命令)` 或 `vhangup` | dstate | 触发 D 状态，需 root |
 | 僵尸生成 | fork 子进程 + 子 exit + 父不 wait | zstate | count 个僵尸 |
 
-#### 4.2.2 4 条故障差异表
+#### 4.2.2 故障差异表
 
 | UID | supported_ops | 必填 | 可选 | clean 机制 | 备注 |
 |---|---|---|---|---|---|
@@ -345,7 +345,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - dispatch 走 inject-only 分支：执行 → `output_ok(message)`，**不写 state**。
 - `dcat clean rPROC_exit` / `dcat query rPROC_exit` 在 precheck 阶段拒绝（op 不在 supported_ops，退出码 3）。
 
-### 4.3 CPU 模块（cpu，2 条）
+### 4.3 CPU 模块（cpu）
 
 #### 4.3.1 共享机制
 
@@ -360,7 +360,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - 脚本 `for n in cores; do echo 0 > .../cpu<N>/online; done`，执行完返回。clean = 重跑脚本 `DCAT_OP=clean`，对所有 cores `echo 1`。
 - **限制**：cpu0 通常不可离线（内核 CONFIG_BOOTPARAM_HOTPLUG_CPU0），脚本须跳过并 stderr 提示。
 
-### 4.4 存储模块（storage，1 条）
+### 4.4 存储模块（storage）
 
 #### 4.4.1 rDISK_write_overload
 
@@ -370,7 +370,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - **clean** = 重跑脚本 `DCAT_OP=clean`：读 pidfile kill 进程组，dd/fio 自然终止；可选 `rm -f <device>/dcat.stress`。
 - **预检**：`device` 存在且可写；`fio` 或 `dd` 可执行。
 
-### 4.5 NPU 模块（npu，20 条）
+### 4.5 NPU 模块（npu）
 
 #### 4.5.1 共享机制
 
@@ -383,7 +383,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
 | -cfg recovery | link_down, route_clear | hccn_tool 内置恢复 |
 
-#### 4.5.2 20 条故障差异表
+#### 4.5.2 故障差异表
 
 （见 SPEC §3.3 完整目录表）
 
@@ -628,7 +628,7 @@ dispatch_route(uid, op, params):
 | list 输出 | 纳入 | 本期不纳入（注入器本期为空） |
 | 优先级 | `registry_find` 优先 | `injector_find` 回退 |
 
-> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有 38 条故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
+> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
 
 ---
 
@@ -656,10 +656,10 @@ CAT/
 │   │   ├── injector.h          # 注入器接口 injector_t (§7.2)
 │   │   └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
 │   └── scripts/
-│       ├── cpu/                    # 2 脚本
+│       ├── cpu/                    # cpu 模块脚本
 │       │   ├── cpu_overload.sh
 │       │   └── cpu_core_offline.sh
-│       ├── network/                # 11 脚本
+│       ├── network/                # network 模块脚本
 │       │   ├── net_delay.sh
 │       │   ├── net_loss.sh
 │       │   ├── net_reorder.sh
@@ -671,14 +671,14 @@ CAT/
 │       │   ├── net_bw_limit.sh
 │       │   ├── net_jitter.sh
 │       │   └── net_tcp_loss.sh
-│       ├── process/                # 4 脚本
+│       ├── process/                # process 模块脚本
 │       │   ├── proc_exit.sh
 │       │   ├── proc_dstate.sh
 │       │   ├── proc_hang.sh
 │       │   └── proc_zstate.sh
-│       ├── storage/                # 1 脚本
+│       ├── storage/                # storage 模块脚本
 │       │   └── disk_write_overload.sh
-│       └── npu/                    # 20 脚本 + _common.sh helper
+│       └── npu/                    # npu 模块脚本 + _common.sh helper
 │           ├── _common.sh
 │           ├── link_down.sh
 │           ├── ip_change.sh
@@ -701,10 +701,10 @@ CAT/
 │           ├── pfc_change.sh
 │           └── roce_port_change.sh
 ├── config/
-│   └── demoncat.conf           # 故障目录配置(38 条)
+│   └── demoncat.conf           # 故障目录配置
 ├── docs/
-│   ├── user_manual.md          # 用户手册 (38 条故障 × 7 字段)
-│   └── manual_test_guide.md    # 高危故障手动测试指南 (10 条)
+│   ├── user_manual.md          # 用户手册
+│   └── manual_test_guide.md    # 高危故障手动测试指南
 └── tests/
     ├── test_output.c
     ├── test_registry.c

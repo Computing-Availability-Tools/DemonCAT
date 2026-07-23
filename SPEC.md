@@ -111,7 +111,7 @@ dcat list
 
 - **必填 vs 可选**：`required_params` 在 precheck 阶段校验非空；`optional_params` 缺省时不报错，由脚本解释默认值（目录表中以 `(默认X)` 标注）。
 
-### 3.3 目录清单（共 38 条）
+### 3.3 目录清单
 
 > 标 `*` 为示例故障（rCPU_overload / rNET_delay）。完整 cnf 声明见 §7。
 

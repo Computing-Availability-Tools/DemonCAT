@@ -67,7 +67,16 @@ static result_t *dispatch_query_state(void) {
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
     result_t *r = executor_run_fault(f, "inject", params, 0);
     if (r->code == 0 && !is_inject_only(f)) {
-        state_add(f->uid, params);
+        int id = state_add(f->uid, params);
+        cJSON *root = cJSON_Parse(r->json);
+        if (root) {
+            cJSON *data = cJSON_GetObjectItem(root, "data");
+            if (data) cJSON_AddNumberToObject(data, "record_id", id);
+            char *s = cJSON_PrintUnformatted(root);
+            cJSON_Delete(root);
+            free(r->json);
+            r->json = s;
+        }
     }
     return r;
 }

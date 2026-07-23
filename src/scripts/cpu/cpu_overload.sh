@@ -68,9 +68,17 @@ case "${DCAT_OP:-inject}" in
         total=$((burn_count + yes_count))
         echo "requested_cores: $spec"
         echo "burn_processes: $total"
-        echo "--- per-core CPU ---"
+        echo "--- per-core CPU (requested only) ---"
         if command -v mpstat >/dev/null 2>&1; then
-            mpstat -P ALL 1 1 2>/dev/null | tail -n +4
+            first=1
+            for n in $(parse_cores "$spec"); do
+                if [ "$first" = 1 ]; then
+                    mpstat -P "$n" 1 1 2>/dev/null | tail -2
+                    first=0
+                else
+                    mpstat -P "$n" 1 1 2>/dev/null | tail -1
+                fi
+            done
         else
             echo "(mpstat unavailable — apt install sysstat for per-core view)"
         fi

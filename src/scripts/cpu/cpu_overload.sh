@@ -2,7 +2,7 @@
 # rCPU_overload: CPU overload (per-core burn with taskset pinning, pure user-space).
 # inject: for each specified core, spawn taskset -c <core> perl burn + pidfile, exit
 # clean:  read pidfile, kill processes, exit
-# query:  check yes process count + per-core CPU usage
+# query:  check burn process count + per-core CPU usage
 #
 # cores spec: "0,2,4" or "0-3" or "0-3,7" (same format as rCPU_core_offline)
 # Uses `perl -e '1 while 1'` for pure user-space (us) CPU burn (no syscall overhead).
@@ -26,13 +26,6 @@ parse_cores() {
         esac
     done
 }
-
-# pick the burner: perl for pure us, fallback to yes
-if command -v perl >/dev/null 2>&1; then
-    BURN_CMD="perl -e 1while1"
-else
-    BURN_CMD="yes"
-fi
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -75,10 +68,14 @@ case "${DCAT_OP:-inject}" in
         total=$((burn_count + yes_count))
         echo "requested_cores: $spec"
         echo "burn_processes: $total"
-        echo "--- per-core CPU (top) ---"
-        top -bn1 2>/dev/null | head -7
-        echo "--- process details ---"
-        ps -eo pid,%cpu,psr,cmd 2>/dev/null | grep -E '[p]erl|[y]es' || echo "(none)"
+        echo "--- per-core CPU ---"
+        if command -v mpstat >/dev/null 2>&1; then
+            mpstat -P ALL 1 1 2>/dev/null | tail -n +4
+        else
+            echo "(mpstat unavailable — apt install sysstat for per-core view)"
+        fi
+        echo "--- burn process details ---"
+        ps -eo pid,%cpu,psr,cmd 2>/dev/null | grep -E 'PID|[p]erl|[y]es' || echo "(none)"
         [ "$total" -gt 0 ]
         ;;
 

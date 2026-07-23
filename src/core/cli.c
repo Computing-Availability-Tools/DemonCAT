@@ -21,8 +21,9 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
         i++;
     }
     for (; i < argc; i++) {
-        if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--help") == 0) {
-            if (strcmp(argv[i], "--config") == 0 && i + 1 < argc) i++;
+        if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--help") == 0 ||
+            strcmp(argv[i], "--plugins") == 0) {
+            if ((strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--plugins") == 0) && i + 1 < argc) i++;
             continue;
         }
         if (strncmp(argv[i], "--", 2) != 0) return -1;

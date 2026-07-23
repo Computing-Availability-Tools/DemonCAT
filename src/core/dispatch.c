@@ -6,6 +6,7 @@
 #include "output.h"
 #include "config.h"
 #include "../injectors/injector.h"
+#include "../plugins/plugin_manager.h"
 #include <cJSON.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +29,21 @@ static result_t *dispatch_list(void) {
         while (tok) { cJSON_AddItemToArray(ops, cJSON_CreateString(tok)); tok = strtok_r(NULL, ",", &save); }
         cJSON_AddItemToObject(o, "supported_ops", ops);
         if (list[i].desc[0]) cJSON_AddStringToObject(o, "desc", list[i].desc);
+        cJSON_AddItemToArray(arr, o);
+    }
+    /* 动态插件纳入 list */
+    int pc = 0;
+    const dcat_plugin_t *const *plugs = plugin_list(&pc);
+    for (int i = 0; i < pc; i++) {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "uid", plugs[i]->uid);
+        cJSON_AddStringToObject(o, "module", plugs[i]->name ? plugs[i]->name : "");
+        cJSON *ops = cJSON_CreateArray();
+        char pbuf[64]; strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf)-1); pbuf[sizeof(pbuf)-1]='\0';
+        char *psave = NULL, *ptok = strtok_r(pbuf, ",", &psave);
+        while (ptok) { cJSON_AddItemToArray(ops, cJSON_CreateString(ptok)); ptok = strtok_r(NULL, ",", &psave); }
+        cJSON_AddItemToObject(o, "supported_ops", ops);
+        if (plugs[i]->description && plugs[i]->description[0]) cJSON_AddStringToObject(o, "desc", plugs[i]->description);
         cJSON_AddItemToArray(arr, o);
     }
     cJSON *root = cJSON_CreateObject();
@@ -96,6 +112,57 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     return result_ok("clean", f->uid, 0, "cleaned");
 }
 
+/* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */
+static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const params_t *params) {
+    if (!op_in_supported(p->supported_ops, op))
+        return result_err(op, p->uid, 3, "op not in supported_ops");
+    if (!declared_params_only(p->required_params, p->optional_params, params))
+        return result_err(op, p->uid, 3, "undeclared param");
+    if (strcmp(op, "inject") == 0 && !required_params_present(p->required_params, params))
+        return result_err(op, p->uid, 3, "missing required params");
+    if (p->precheck) {
+        result_t *pc = p->precheck(op, params);
+        if (pc && pc->code != 0) return pc;
+        if (pc) result_free(pc);
+    }
+    if (strcmp(op, "inject") == 0) {
+        result_t *r = p->inject(params);
+        if (r->code == 0 && p->clean) {
+            int id = state_add(p->uid, params);
+            cJSON *root = cJSON_Parse(r->json);
+            if (root) {
+                cJSON *data = cJSON_GetObjectItem(root, "data");
+                if (data) cJSON_AddNumberToObject(data, "record_id", id);
+                char *s = cJSON_PrintUnformatted(root);
+                cJSON_Delete(root);
+                free(r->json);
+                r->json = s;
+            }
+        }
+        return r;
+    }
+    if (strcmp(op, "clean") == 0) {
+        if (!p->clean) return result_err("clean", p->uid, 3, "op not in supported_ops");
+        int ids[DCAT_MAX_RECORDS];
+        int n = state_find_by_params(p->uid, params, ids, DCAT_MAX_RECORDS);
+        if (n == 0) return result_err("clean", p->uid, 1, "no active injection");
+        for (int i = 0; i < n; i++) {
+            const injection_record_t *rec = state_find_by_id(ids[i]);
+            if (!rec) continue;
+            result_t *r = p->clean(&rec->params);
+            if (r->code != 0) return r;
+            state_mark_inactive(ids[i]);
+            result_free(r);
+        }
+        return result_ok("clean", p->uid, 0, "cleaned");
+    }
+    if (strcmp(op, "query") == 0) {
+        if (!p->query) return result_err("query", p->uid, 3, "op not in supported_ops");
+        return p->query(params);
+    }
+    return result_err(op, p->uid, 3, "op not in supported_ops");
+}
+
 result_t *dispatch_route(const char *uid, const char *op, const params_t *params) {
     if (strcmp(op, "list") == 0) return dispatch_list();
     if (strcmp(op, "query") == 0 && (uid == NULL || uid[0] == '\0'))
@@ -145,5 +212,7 @@ result_t *dispatch_route(const char *uid, const char *op, const params_t *params
         }
         if (strcmp(op, "query") == 0) return inj->query(params);
     }
+    const dcat_plugin_t *plg = plugin_find(uid);
+    if (plg) return plugin_dispatch(plg, op, params);
     return result_err(op, uid ? uid : "", 4, "not found");
 }

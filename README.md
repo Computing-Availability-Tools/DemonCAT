@@ -40,7 +40,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `query [uid] [--k1=v1 ...]` | 无 uid：查全部活跃记录；有 uid：验证故障生效 | `dcat query` / `dcat query rCPU_overload` |
 | `list` | 列出故障目录 | `dcat list` |
 
-详细使用手册见 [MANUAL.md](MANUAL.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
+详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
 
 ## 当前故障目录（18 条）
 

@@ -19,7 +19,54 @@
 
 ---
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `iptables` 命令（传统 iptables，非 nftables）；clean 通过 `-D` 删除规则，若规则已被手动删除或顺序变化，`-D` 可能静默失败；sidecar 文件后缀为 `.rule`（非 `.sidecar`）；`direction=both` 时 inject 只要任一方向插入失败即整体报错退出；query 的 `direction` 参数需与 inject 时一致才能正确匹配；防火墙后端为 nftables 时 `iptables` 命令可能行为不同，需确认兼容性。
+## 目录
+
+- [故障能力清单](#故障能力清单)
+- [第一章 CPU 模块](#第一章-cpu-模块2-条)
+  - [1.1 rCPU_overload](#11-rcpu_overload) — 核满载（perl 纯用户态）
+  - [1.2 rCPU_core_offline](#12-rcpu_core_offline) — 核离线（sysfs）
+- [第二章 存储模块](#第二章-存储模块1-条)
+  - [2.1 rDISK_write_overload](#21-rdisk_write_overload) — 磁盘写压（dd 多实例）
+- [第三章 网络模块](#第三章-网络模块11-条)
+  - [3.1 rNET_delay](#31-rnet_delay) — 网络延迟（tc netem）
+  - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包（tc netem）
+  - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序（tc netem）
+  - [3.4 rNET_down](#34-rnet_down) — 网卡 down（ip link）
+  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速（ethtool）
+  - [3.6 rNET_port_occupy](#36-rnet_port_occupy) — 端口占用（socket holder）
+  - [3.7 rNET_service_stop](#37-rnet_service_stop) — 服务停止（systemctl）
+  - [3.8 rNET_link_flap](#38-rnet_link_flap) — 链路闪断（ip link 循环）
+  - [3.9 rNET_bw_limit](#39-rnet_bw_limit) — 带宽限制（tc tbf）
+  - [3.10 rNET_jitter](#310-rnet_jitter) — 延迟抖动（tc netem）
+  - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包（iptables DROP）
+- [第四章 进程模块](#第四章-进程模块4-条)
+  - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出（kill -9，inject-only）
+  - [4.2 rPROC_dstate](#42-rproc_dstate) — D 状态进程（不可中断 IO）
+  - [4.3 rPROC_hang](#43-rproc_hang) — 进程挂起（SIGSTOP）
+  - [4.4 rPROC_zstate](#44-rproc_zstate) — 僵尸进程（fork+exit）
+- [第五章 NPU 模块](#第五章-npu-模块20-条)
+  - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
+  - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
+  - [5.3 rNPU_gw_change](#53-rnpu_gw_change) — RoCE 网关变更
+  - [5.4 rNPU_netdetect_change](#54-rnpu_netdetect_change) — Netdetect IP 变更
+  - [5.5 rNPU_arp_poison](#55-rnpu_arp_poison) — ARP 毒化
+  - [5.6 rNPU_arp_del](#56-rnpu_arp_del) — ARP 条目删除
+  - [5.7 rNPU_route_add](#57-rnpu_route_add) — 添加 RoCE 路由
+  - [5.8 rNPU_route_del](#58-rnpu_route_del) — 删除 RoCE 路由
+  - [5.9 rNPU_route_clear](#59-rnpu_route_clear) — 清空路由表
+  - [5.10 rNPU_iprule_add](#510-rnpu_iprule_add) — 添加 ip rule
+  - [5.11 rNPU_iprule_del](#511-rnpu_iprule_del) — 删除 ip rule
+  - [5.12 rNPU_iproute_add](#512-rnpu_iproute_add) — 添加 ip route
+  - [5.13 rNPU_iproute_del](#513-rnpu_iproute_del) — 删除 ip route
+  - [5.14 rNPU_bw_limit](#514-rnpu_bw_limit) — RoCE 带宽限速
+  - [5.15 rNPU_mtu_mismatch](#515-rnpu_mtu_mismatch) — RoCE MTU 变更
+  - [5.16 rNPU_fec_change](#516-rnpu_fec_change) — RoCE FEC 编码变更
+  - [5.17 rNPU_dscp_tc_change](#517-rnpu_dscp_tc_change) — DSCP→TC 映射变更
+  - [5.18 rNPU_prio_tc_change](#518-rnpu_prio_tc_change) — Prio→TC 映射变更
+  - [5.19 rNPU_pfc_change](#519-rnpu_pfc_change) — PFC 位图变更
+  - [5.20 rNPU_roce_port_change](#520-rnpu_roce_port_change) — RoCE UDP 端口变更
+
+---
 
 ## 第一章 CPU 模块（2 条）
 
@@ -414,6 +461,8 @@ dcat clean rNET_tcp_loss --port=8080 --direction=both
 | direction | 可选 | 字符串 | 丢包方向：`in`（入向）、`out`（出向）、`both`（双向），默认 `both` |
 
 **危险等级**: 高 — DROP 规则会导致该端口上所有 TCP 连接的包被静默丢弃，新建连接无法建立、已有连接超时断开。`both` 方向影响最大。注意此规则在 iptables 层面生效，影响所有协议栈上层，且重启后规则不自动清除。
+
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `iptables` 命令（传统 iptables，非 nftables）；clean 通过 `-D` 删除规则，若规则已被手动删除或顺序变化，`-D` 可能静默失败；sidecar 文件后缀为 `.rule`（非 `.sidecar`）；`direction=both` 时 inject 只要任一方向插入失败即整体报错退出；query 的 `direction` 参数需与 inject 时一致才能正确匹配；防火墙后端为 nftables 时 `iptables` 命令可能行为不同，需确认兼容性。
 
 ## 第四章 进程模块（4 条）
 

@@ -1,53 +1,68 @@
 #!/bin/sh
-# rCPU_overload: CPU overload (multi-core burn)
-# inject: spawn N `yes` processes, write pidfile, exit immediately
-# clean:  read pidfile, kill yes processes, remove pidfile, exit
-# query:  check actual CPU state (yes process count, cpu usage)
+# rCPU_overload: CPU overload (per-core burn with taskset pinning).
+# inject: for each specified core, spawn `taskset -c <core> yes` + pidfile, exit
+# clean:  read pidfile, kill yes processes, exit
+# query:  check yes process count + per-core CPU usage
+#
+# cores spec: "0,2,4" or "0-3" or "0-3,7" (same format as rCPU_core_offline)
 
-# pidfile includes params for concurrent-injection isolation
-PIDFILE="/tmp/dcat-rCPU_overload-cores${DCAT_PARAM_CORES:-0}.pid"
+PIDFILE="/tmp/dcat-rCPU_overload.pid"
+
+parse_cores() {
+    echo "$1" | tr ',' '\n' | while IFS= read -r r; do
+        [ -z "$r" ] && continue
+        case "$r" in
+            *-*)
+                start=${r%%-*}
+                end=${r##*-}
+                n=$start
+                while [ "$n" -le "$end" ]; do echo "$n"; n=$((n + 1)); done
+                ;;
+            *)
+                echo "$r"
+                ;;
+        esac
+    done
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
-        cores=${DCAT_PARAM_CORES:?missing required param: cores}
+        spec=${DCAT_PARAM_CORES:?missing required param: cores}
+        PIDFILE="/tmp/dcat-rCPU_overload-${spec}.pid"
         pids=""
-        i=0
-        while [ "$i" -lt "$cores" ]; do
-            yes >/dev/null 2>&1 &
+        for n in $(parse_cores "$spec"); do
+            taskset -c "$n" yes >/dev/null 2>&1 &
             pids="$pids $!"
-            i=$((i + 1))
         done
         echo "$pids" > "$PIDFILE"
-        echo "injected CPU overload: $cores cores (pids:$pids)"
+        echo "injected CPU overload on cores [$spec] (pids:$pids)"
         ;;
 
     clean)
-        cores=${DCAT_PARAM_CORES:-0}
-        PIDFILE="/tmp/dcat-rCPU_overload-cores${cores}.pid"
+        spec="${DCAT_PARAM_CORES:-}"
+        PIDFILE="/tmp/dcat-rCPU_overload-${spec}.pid"
         if [ -f "$PIDFILE" ]; then
             for pid in $(cat "$PIDFILE"); do
                 kill "$pid" 2>/dev/null
             done
             rm -f "$PIDFILE"
-            echo "cleaned CPU overload: $cores cores"
+            echo "cleaned CPU overload on cores [$spec]"
         else
-            echo "no active injection for cores=$cores" >&2
+            echo "no active injection for cores=$spec" >&2
             exit 1
         fi
         ;;
 
     query)
-        cores=${DCAT_PARAM_CORES:-1}
+        spec=${DCAT_PARAM_CORES:-0}
         yes_count=$(pgrep -x yes 2>/dev/null | wc -l)
         yes_count=${yes_count## }
-        echo "requested_cores: $cores"
+        echo "requested_cores: $spec"
         echo "yes_processes: $yes_count"
-        echo "--- cpu usage ---"
-        if command -v mpstat >/dev/null 2>&1; then
-            mpstat 1 1 2>/dev/null | tail -5
-        else
-            top -bn1 2>/dev/null | head -5
-        fi
+        echo "--- per-core CPU (top) ---"
+        top -bn1 2>/dev/null | head -7
+        echo "--- yes process details ---"
+        ps -eo pid,%cpu,psr,cmd 2>/dev/null | grep '[y]es' || echo "(none)"
         [ "$yes_count" -gt 0 ]
         ;;
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -104,6 +105,15 @@ int executor_run_raw_fault(const fault_def_t *f, const char *op, const params_t 
     return WIFEXITED(rc) ? WEXITSTATUS(rc) : 1;
 }
 
+int executor_check_tool_diag(const char *path, char *diag, int diag_cap) {
+    if (access(path, X_OK) == 0) return 0;
+    int e = errno;
+    if (diag && diag_cap > 0)
+        snprintf(diag, (size_t)diag_cap, "script not executable: %s (%s)",
+                 path ? path : "(null)", strerror(e));
+    return -1;
+}
+
 int executor_check_tool(const char *path) {
-    return access(path, X_OK);
+    return executor_check_tool_diag(path, NULL, 0);
 }

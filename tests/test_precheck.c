@@ -75,6 +75,21 @@ int test_precheck_clean_no_required_check(void) {
     result_free(r); return 0;
 }
 
+int test_precheck_script_diag(void) {
+    fault_def_t f; memset(&f, 0, sizeof(f));
+    strcpy(f.uid, "rTEST_noscript");
+    strcpy(f.script, "/no/such/path/x.sh");
+    strcpy(f.supported_ops, "inject");
+    strcpy(f.required_params, "cores");
+    params_t p; params_init(&p); params_set(&p, "cores", "1");
+    result_t *r = precheck(&f, "inject", &p);
+    ASSERT_INT_EQ(r->code, 3);
+    ASSERT_STR_CONTAINS(r->json, "script not executable");
+    ASSERT_STR_CONTAINS(r->json, "/no/such/path/x.sh");
+    ASSERT_STR_CONTAINS(r->json, "No such file");
+    result_free(r); return 0;
+}
+
 int main(void) {
     RUN_TEST(test_precheck_uid_not_found);
     RUN_TEST(test_precheck_op_not_supported);
@@ -83,5 +98,6 @@ int main(void) {
     RUN_TEST(test_precheck_required_empty_rejected);
     RUN_TEST(test_precheck_undeclared_param_rejected);
     RUN_TEST(test_precheck_clean_no_required_check);
+    RUN_TEST(test_precheck_script_diag);
     return TEST_MAIN_RETURN();
 }

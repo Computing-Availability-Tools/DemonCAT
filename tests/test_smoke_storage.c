@@ -27,13 +27,15 @@ static void smoke_setup(void) {
     config_t cfg;
     config_load("config/demoncat.conf", &cfg);
     registry_init(&cfg);
-    state_init("/tmp/dcat_smoke_storage.json");
+    state_reset();
+    state_set_file("/tmp/dcat_smoke_storage.json");
     state_load();
     executor_set_mock(NULL);
 }
 
 static void smoke_teardown(void) {
-    state_init("");
+    state_reset();
+    state_set_file("");
     unlink("/tmp/dcat_smoke_storage.json");
     unlink("/tmp/dcat-rDISK_write_overload-*.pid");
     unlink("/tmp/dcat.write.*");
@@ -50,7 +52,7 @@ int main(void) {
         strcpy(p.items[1].key, "workers"); strcpy(p.items[1].value, "2"); p.count = 2;
         strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "100"); p.count = 3;
 
-        result_t *r = dispatch_inject("rDISK_write_overload", &p);
+        result_t *r = dispatch_route("rDISK_write_overload", "inject", &p);
         CK(r && r->code == 0);
         result_free(r);
 
@@ -58,7 +60,7 @@ int main(void) {
         int n = count_proc("dd");
         CK(n >= 2);
 
-        r = dispatch_clean("rDISK_write_overload", &p);
+        r = dispatch_route("rDISK_write_overload", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
 
@@ -72,7 +74,7 @@ int main(void) {
         params_t p; memset(&p, 0, sizeof p);
         strcpy(p.items[0].key, "port"); strcpy(p.items[0].value, "19999"); p.count = 1;
 
-        result_t *r = dispatch_inject("rNET_port_occupy", &p);
+        result_t *r = dispatch_route("rNET_port_occupy", "inject", &p);
         CK(r && r->code == 0);
         result_free(r);
 
@@ -84,7 +86,7 @@ int main(void) {
         int n = 0; fscanf(f, "%d", &n); pclose(f);
         CK(n >= 1);
 
-        r = dispatch_clean("rNET_port_occupy", &p);
+        r = dispatch_route("rNET_port_occupy", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
 

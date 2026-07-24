@@ -1,95 +1,88 @@
-/* src/core/config.c */
 #include "config.h"
-
-#include <ctype.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 
 static char *trim(char *s) {
-    while (*s && isspace((unsigned char)*s)) s++;
+    while (*s == ' ' || *s == '\t') s++;
     char *e = s + strlen(s);
-    while (e > s && isspace((unsigned char)e[-1])) *--e = '\0';
+    while (e > s && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\n' || e[-1] == '\r')) *--e = '\0';
     return s;
 }
 
-static void copystr(char *dst, size_t cap, const char *src) {
-    strncpy(dst, src, cap - 1);
-    dst[cap - 1] = '\0';
-}
-
-/* Derive project root from config path:
- * config at <root>/config/demoncat.conf -> root = dirname(dirname(path)).
- * For relative paths like "config/demoncat.conf", root = "." (CWD). */
-static void derive_project_root(const char *cfgpath, char *root, size_t cap) {
-    if (!cfgpath || !root || cap == 0) { if (root && cap) root[0] = '\0'; return; }
-    copystr(root, cap, cfgpath);
-    char *slash = strrchr(root, '/');
-    if (slash) *slash = '\0'; else { root[0] = '.'; root[1] = '\0'; return; }
-    slash = strrchr(root, '/');
-    if (slash && slash != root) *slash = '\0';
-    else if (slash) { root[0] = '/'; root[1] = '\0'; }
-    else { root[0] = '.'; root[1] = '\0'; }
-}
-
-/* Resolve script path: absolute/home-relative keep as-is; relative prepend root.
- * When root is "." or empty, keep relative (CWD resolution). */
-static void resolve_script(const char *root, const char *val, char *dst, size_t cap) {
-    if (!val || !dst || cap == 0) return;
-    if (val[0] == '/' || val[0] == '~') { copystr(dst, cap, val); return; }
-    if (!root[0] || !strcmp(root, ".")) { copystr(dst, cap, val); return; }
-    snprintf(dst, cap, "%s/%s", root, val);
-}
-
 int config_load(const char *path, config_t *cfg) {
-    if (!path || !cfg) return -1;
-    memset(cfg, 0, sizeof *cfg);
-    FILE *f = fopen(path, "r");
-    if (!f) return -1;
-
-    char root[256];
-    derive_project_root(path, root, sizeof root);
-
+    memset(cfg, 0, sizeof(*cfg));
+    FILE *fp = fopen(path, "r");
+    if (!fp) return -1;
     char line[512];
-    char section[80] = "";
     fault_def_t *cur = NULL;
-
-    while (fgets(line, sizeof line, f)) {
+    char section[128] = "";
+    while (fgets(line, sizeof(line), fp)) {
         char *p = trim(line);
-        if (*p == '\0' || *p == ';' || *p == '#') continue;
+        if (*p == '#' || *p == ';' || *p == '\0') continue;
         if (*p == '[') {
             char *e = strchr(p, ']');
             if (!e) continue;
             *e = '\0';
-            char *sec = trim(p + 1);
-            copystr(section, sizeof section, sec);
-            if (!strncmp(sec, "fault.", 6)) {
-                if (cfg->fault_count >= DCAT_MAX_FAULTS) { cur = NULL; continue; }
+            strncpy(section, p + 1, sizeof(section) - 1);
+            section[sizeof(section)-1] = '\0';
+            cur = NULL;
+            if (strncmp(section, "fault.", 6) == 0 && cfg->fault_count < DCAT_MAX_FAULTS) {
                 cur = &cfg->faults[cfg->fault_count++];
-                memset(cur, 0, sizeof *cur);
-                copystr(cur->uid, sizeof cur->uid, sec + 6);
-            } else {
-                cur = NULL;
+                strncpy(cur->uid, section + 6, sizeof(cur->uid) - 1);
+                cur->uid[sizeof(cur->uid)-1] = '\0';
             }
             continue;
         }
         char *eq = strchr(p, '=');
         if (!eq) continue;
         *eq = '\0';
-        char *key = trim(p);
-        char *val = trim(eq + 1);
-        if (!strcmp(section, "demoncat")) {
-            if (!strcmp(key, "state_file")) copystr(cfg->state_file, sizeof cfg->state_file, val);
-            else if (!strcmp(key, "log_level")) copystr(cfg->log_level, sizeof cfg->log_level, val);
+        char *k = trim(p), *v = trim(eq + 1);
+        if (strcmp(section, "demoncat") == 0) {
+            if (strcmp(k, "state_file") == 0) { strncpy(cfg->state_file, v, sizeof(cfg->state_file)-1); cfg->state_file[sizeof(cfg->state_file)-1]='\0'; }
+            else if (strcmp(k, "log_level") == 0) { strncpy(cfg->log_level, v, sizeof(cfg->log_level)-1); cfg->log_level[sizeof(cfg->log_level)-1]='\0'; }
         } else if (cur) {
-            if (!strcmp(key, "module")) copystr(cur->module, sizeof cur->module, val);
-            else if (!strcmp(key, "desc")) copystr(cur->desc, sizeof cur->desc, val);
-            else if (!strcmp(key, "script")) resolve_script(root, val, cur->script, sizeof cur->script);
-            else if (!strcmp(key, "supported_ops")) copystr(cur->supported_ops, sizeof cur->supported_ops, val);
-            else if (!strcmp(key, "required_params")) copystr(cur->required_params, sizeof cur->required_params, val);
-            else if (!strcmp(key, "optional_params")) copystr(cur->optional_params, sizeof cur->optional_params, val);
+            if      (strcmp(k, "module") == 0)          { strncpy(cur->module, v, sizeof(cur->module)-1); cur->module[sizeof(cur->module)-1]='\0'; }
+            else if (strcmp(k, "desc") == 0)            { strncpy(cur->desc, v, sizeof(cur->desc)-1); cur->desc[sizeof(cur->desc)-1]='\0'; }
+            else if (strcmp(k, "script") == 0)          { strncpy(cur->script, v, sizeof(cur->script)-1); cur->script[sizeof(cur->script)-1]='\0'; }
+            else if (strcmp(k, "supported_ops") == 0)    { strncpy(cur->supported_ops, v, sizeof(cur->supported_ops)-1); cur->supported_ops[sizeof(cur->supported_ops)-1]='\0'; }
+            else if (strcmp(k, "inject_required") == 0)  { strncpy(cur->inject_required, v, sizeof(cur->inject_required)-1); cur->inject_required[sizeof(cur->inject_required)-1]='\0'; }
+            else if (strcmp(k, "inject_optional") == 0)  { strncpy(cur->inject_optional, v, sizeof(cur->inject_optional)-1); cur->inject_optional[sizeof(cur->inject_optional)-1]='\0'; }
+            else if (strcmp(k, "clean_required") == 0)   { strncpy(cur->clean_required, v, sizeof(cur->clean_required)-1); cur->clean_required[sizeof(cur->clean_required)-1]='\0'; }
+            else if (strcmp(k, "clean_optional") == 0)   { strncpy(cur->clean_optional, v, sizeof(cur->clean_optional)-1); cur->clean_optional[sizeof(cur->clean_optional)-1]='\0'; }
+            else if (strcmp(k, "query_required") == 0)   { strncpy(cur->query_required, v, sizeof(cur->query_required)-1); cur->query_required[sizeof(cur->query_required)-1]='\0'; }
+            else if (strcmp(k, "query_optional") == 0)   { strncpy(cur->query_optional, v, sizeof(cur->query_optional)-1); cur->query_optional[sizeof(cur->query_optional)-1]='\0'; }
         }
     }
-    fclose(f);
+    fclose(fp);
     return 0;
+}
+
+const fault_def_t *config_find(const config_t *cfg, const char *uid) {
+    for (int i = 0; i < cfg->fault_count; i++)
+        if (strcmp(cfg->faults[i].uid, uid) == 0) return &cfg->faults[i];
+    return NULL;
+}
+
+void resolve_script(const char *root, const char *val, char *dst, int cap) {
+    if (val[0] == '/' || val[0] == '~' || strcmp(root, ".") == 0) {
+        strncpy(dst, val, cap - 1); dst[cap - 1] = '\0';
+    } else {
+        snprintf(dst, cap, "%s/%s", root, val);
+    }
+}
+
+void derive_project_root(const char *cfgpath, char *root, int cap) {
+    /* <root>/config/demoncat.conf → <root>；相对路径 → '.' */
+    const char *marker = "/config/demoncat.conf";
+    size_t mlen = strlen(marker);
+    size_t plen = strlen(cfgpath);
+    if (plen >= mlen && strcmp(cfgpath + plen - mlen, marker) == 0) {
+        size_t rlen = plen - mlen;
+        if (rlen == 0) { strncpy(root, "/", cap-1); root[cap-1]='\0'; return; }
+        if (rlen >= (size_t)cap) rlen = cap - 1;
+        memcpy(root, cfgpath, rlen); root[rlen] = '\0';
+    } else {
+        strncpy(root, ".", cap - 1); root[cap - 1] = '\0';
+    }
 }

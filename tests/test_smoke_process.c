@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -19,13 +20,15 @@ static void smoke_setup(void) {
     config_t cfg;
     config_load("config/demoncat.conf", &cfg);
     registry_init(&cfg);
-    state_init("/tmp/dcat_smoke_proc.json");
+    state_reset();
+    state_set_file("/tmp/dcat_smoke_proc.json");
     state_load();
     executor_set_mock(NULL);
 }
 
 static void smoke_teardown(void) {
-    state_init("");
+    state_reset();
+    state_set_file("");
     unlink("/tmp/dcat_smoke_proc.json");
 }
 
@@ -43,7 +46,7 @@ int main(void) {
         params_t p; memset(&p, 0, sizeof p);
         strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, pidstr); p.count = 1;
 
-        result_t *r = dispatch_inject("rPROC_exit", &p);
+        result_t *r = dispatch_route("rPROC_exit", "inject", &p);
         CK(r && r->code == 0);
         CK(strstr(r->json, "record_id") == NULL);  /* inject-only: no state */
         result_free(r);
@@ -65,7 +68,7 @@ int main(void) {
         params_t p; memset(&p, 0, sizeof p);
         strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, pidstr); p.count = 1;
 
-        result_t *r = dispatch_inject("rPROC_hang", &p);
+        result_t *r = dispatch_route("rPROC_hang", "inject", &p);
         CK(r && r->code == 0);
         result_free(r);
 
@@ -81,7 +84,7 @@ int main(void) {
         fclose(f);
         CK(stopped);
 
-        r = dispatch_clean("rPROC_hang", &p);
+        r = dispatch_route("rPROC_hang", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
 
@@ -92,34 +95,51 @@ int main(void) {
         waitpid(pid, NULL, 0);  /* reap to avoid zombie interfering with zstate test */
     }
 
-    /* ---- rPROC_zstate (zombie) ---- */
+    /* ---- rPROC_zstate (kill target → zombie) ---- */
     {
-        params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "count"); strcpy(p.items[0].value, "3"); p.count = 1;
+        /* Create watcher process (detached via setsid) that forks target and won't reap.
+         * This isolates the parent so clean killing the parent doesn't kill the test. */
+        pid_t watcher = fork();
+        CK(watcher >= 0);
+        if (watcher == 0) {
+            setsid();
+            pid_t target = fork();
+            if (target == 0) { sleep(30); _exit(0); }
+            FILE *f = fopen("/tmp/dcat_zstate_test.pid", "w");
+            if (f) { fprintf(f, "%d", (int)target); fclose(f); }
+            sleep(30);
+            _exit(0);
+        }
+        sleep(1);  /* wait for watcher to write target PID */
 
-        result_t *r = dispatch_inject("rPROC_zstate", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-
-        sleep(2);
-        /* check zombies exist */
-        char cmd[128]; snprintf(cmd, sizeof cmd, "ps -eo stat | grep '^Z' | wc -l");
-        FILE *f = popen(cmd, "r");
+        char target_str[16] = {0};
+        FILE *f = fopen("/tmp/dcat_zstate_test.pid", "r");
         CK(f);
-        int n = 0; fscanf(f, "%d", &n); pclose(f);
-        CK(n > 0);
+        fscanf(f, "%15s", target_str);
+        fclose(f);
+        unlink("/tmp/dcat_zstate_test.pid");
 
-        r = dispatch_clean("rPROC_zstate", &p);
+        params_t p; memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, target_str); p.count = 1;
+
+        result_t *r = dispatch_route("rPROC_zstate", "inject", &p);
         CK(r && r->code == 0);
         result_free(r);
 
         sleep(1);
-        /* zombies should be gone */
-        snprintf(cmd, sizeof cmd, "ps -eo stat | grep '^Z' | wc -l");
+        r = dispatch_route("rPROC_zstate", "clean", &p);
+        CK(r && r->code == 0);
+        result_free(r);
+
+        sleep(1);
+        /* target should be gone (reaped) */
+        char cmd[128];
+        snprintf(cmd, sizeof cmd, "ls /proc/%s 2>/dev/null | wc -l", target_str);
         f = popen(cmd, "r");
         CK(f);
-        n = 0; fscanf(f, "%d", &n); pclose(f);
+        int n = 0; fscanf(f, "%d", &n); pclose(f);
         CK(n == 0);
+        kill(watcher, 9); waitpid(watcher, NULL, 0);
     }
 
     smoke_teardown();

@@ -43,7 +43,7 @@
   - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出（kill -9，inject-only）
   - [4.2 rPROC_dstate](#42-rproc_dstate) — D 状态进程（不可中断 IO）
   - [4.3 rPROC_hang](#43-rproc_hang) — 进程挂起（SIGSTOP）
-  - [4.4 rPROC_zstate](#44-rproc_zstate) — 僵尸进程（fork+exit）
+  - [4.4 rPROC_zstate](#44-rproc_zstate) — 僵尸进程（kill 目标 → 僵尸）
 - [第五章 NPU 模块](#第五章-npu-模块20-条)
   - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
   - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
@@ -494,28 +494,28 @@ dcat inject rPROC_exit --pid=12345
 
 **UID**: `rPROC_dstate`
 
-**描述**: 后台启动 N 个进程，循环执行 `dd if=/dev/zero ... conv=fdatasync` 制造不可中断 IO（D 状态）。
+**描述**: 在指定块设备上启动 dd 进程执行 `fdatasync`，在 fsync 期间进程进入 D 状态（不可中断睡眠）。
 
 **实现原理**: 
-- **inject**: 启动 count 个后台 worker，每个在死循环中执行 `dd if=/dev/zero of=/tmp/dcat.dstate.$$.$i bs=1M count=100 conv=fdatasync`，失败时 sleep 1 重试。将所有 worker PID 写入 pidfile。
-- **clean**: 从 pidfile 读取 PID 逐个 kill，删除 pidfile 及 `/tmp/dcat.dstate.*` 临时文件。
-- **query**: 用 `ps -eo pid,stat,cmd | awk '$2 ~ /^D/'` 扫描全系统 D 状态进程，存在则 exit 0。
+- **inject**: 在 `device` 指定的路径下启动 2 个后台 worker，每个在死循环中执行 `dd if=/dev/zero of=<device>/dcat.dstate.$$.$i bs=1M count=200 conv=fdatasync`。在真实块设备上，fdatasync 会阻塞进程进入 D 状态。将 worker PID 写入 pidfile。
+- **clean**: 从 pidfile 读取 PID 逐个 kill，删除 pidfile 及 `dcat.dstate.*` 临时文件。D 状态进程可能无法立即被 kill（D 状态不可中断），需等待 I/O 完成后才退出。
+- **query**: 用 `ps -eo pid,stat,cmd | awk '$2 ~ /^D/'` 扫描全系统 D 状态进程。
 
 **使用示例**:
 ```bash
-dcat inject rPROC_dstate --count=4
-dcat query rPROC_dstate --count=4
-dcat clean rPROC_dstate --count=4
+dcat inject rPROC_dstate --device=/data
+dcat query rPROC_dstate
+dcat clean rPROC_dstate --device=/data
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| count | 必填 | 正整数 | 注入的 D 状态 worker 数量 |
+| device | 必填（inject/clean） | 路径 | 真实块设备路径或挂载点（如 /data、/dev/sda1 挂载目录） |
 
-**危险等级**: 中 — 后台 dd worker 持续占用 CPU/磁盘/内存，可由 clean 清理。
+**危险等级**: 中 — dd 进程持续占用磁盘 I/O，可能影响其他 I/O 密集型进程。
 
-**补充说明**: 能否真正进入 D 态取决于 `/tmp` 底层文件系统与磁盘 IO 调度，tmpfs 上可能仅处于 R/S 态。clean 与 query 需使用与 inject 相同的 count 以定位 pidfile。
+**补充说明**: D 状态仅在真实块设备（机械盘/SSD/NVMe）上产生。tmpfs（如 /tmp）上 fdatasync 立即返回，不会进入 D 状态。query 不需要参数，扫描全系统 D 状态进程。clean 时 D 状态进程可能无法立即被 SIGKILL 杀死（D 状态忽略信号），需等待 I/O 完成后自动退出。
 
 ---
 
@@ -552,28 +552,28 @@ dcat clean rPROC_hang --pid=12345
 
 **UID**: `rPROC_zstate`
 
-**描述**: 创建 N 个僵尸进程（fork 后子进程立即 exit，父进程不 wait 回收）。
+**描述**: 将指定进程 kill 后变为僵尸进程（进程退出但父进程未调用 wait 回收，残留为 Z 状态）。
 
 **实现原理**: 
-- **inject**: 优先用 `perl` fork count 个立即 `exit 0` 的子进程，父进程进入 `sleep 3600` 死循环保持存活（perl 不自动回收子进程，故子进程成为僵尸）。将父进程 PID 写入 pidfile。无 perl 时回退到 shell 方案。
-- **clean**: 从 pidfile 读取父进程 PID 并 kill，父进程退出后僵尸被 reparent 到 init 并被回收。
-- **query**: 用 `ps -eo pid,stat,cmd | awk '$2 ~ /^Z/'` 扫描全系统僵尸进程，存在则 exit 0。
+- **inject**: 读取 `DCAT_PARAM_PID` 获取目标进程 PID，记录其父进程 PID（PPID）到 sidecar 文件，然后 `kill -9` 目标进程。进程退出后，如果父进程没有调用 wait 回收，则成为僵尸进程（Z 状态）。如果父进程立即回收，则僵尸不会持续存在（此为正常现象）。
+- **clean**: 从 sidecar 读取目标 PID 和父进程 PID。如果僵尸仍存在，kill 父进程使僵尸 reparent 到 init（PID 1），init 自动回收僵尸。如果僵尸已被父进程回收，则无需操作。
+- **query**: 检查目标 PID 的 `/proc/<pid>/status` 中 State 是否为 Z（僵尸）。是则返回 confirmed:true，否则返回 confirmed:false。
 
 **使用示例**:
 ```bash
-dcat inject rPROC_zstate --count=10
-dcat query rPROC_zstate --count=10
-dcat clean rPROC_zstate --count=10
+dcat inject rPROC_zstate --pid=12345
+dcat query rPROC_zstate --pid=12345
+dcat clean rPROC_zstate --pid=12345
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| count | 必填 | 正整数 | 注入的僵尸进程数量 |
+| pid | 必填 | 正整数 | 目标进程 PID |
 
-**危险等级**: 低 — 僵尸进程仅占用 PID 与 task_struct，资源消耗小，易被 clean 清理。
+**危险等级**: 中 — 会 kill 目标进程和其父进程，操作不可逆。clean 后目标进程已死，需手动重启。
 
-**补充说明**: 优先依赖 `perl`（行为稳定），无 perl 时 shell 回退方案在部分系统上可能无法产生持久僵尸。clean 通过杀父进程使僵尸被 reparent 并回收。clean 与 query 需使用与 inject 相同的 count 以定位 pidfile。
+**补充说明**: inject 后如果父进程立即回收子进程，则僵尸不会持续（这是正常行为，说明父进程实现良好）。clean 通过杀父进程强制 reparent 到 init 回收僵尸——如果父进程是关键服务，kill 父进程可能影响其他子进程。clean 后目标进程和父进程均已终止，无法自动恢复，需手动重启相关进程。
 
 ---
 

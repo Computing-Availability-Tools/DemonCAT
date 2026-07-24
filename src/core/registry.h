@@ -1,16 +1,9 @@
-/* src/core/registry.h */
 #ifndef DCAT_REGISTRY_H
 #define DCAT_REGISTRY_H
-
 #include "types.h"
-
-/* Load fault table from config. Returns 0 on success. */
-int registry_init(const config_t *cfg);
-
-/* Find a fault by uid in cnf table. Returns NULL if not found. */
-const fault_def_t *registry_find(const char *uid);
-
-/* List all registered faults. Returns pointer to table; *count set. */
+#include "config.h"
+void registry_init(const config_t *cfg);
+const fault_def_t *registry_find(const char *uid);   /* 未命中返回 NULL（dispatch 回退 injector_find） */
 const fault_def_t *registry_list(int *count);
-
-#endif /* DCAT_REGISTRY_H */
+int registry_count(void);
+#endif

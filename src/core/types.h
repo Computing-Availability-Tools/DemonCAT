@@ -1,75 +1,49 @@
-/* src/core/types.h */
 #ifndef DCAT_TYPES_H
 #define DCAT_TYPES_H
+#include <stddef.h>
 
-#include <time.h>
+#define DCAT_MAX_PARAMS 16
+#define DCAT_KEY_LEN    32
+#define DCAT_VAL_LEN    64
+typedef struct { char key[DCAT_KEY_LEN]; char value[DCAT_VAL_LEN]; } param_kv_t;
+typedef struct { param_kv_t items[DCAT_MAX_PARAMS]; int count; } params_t;
 
-/* ---- error / exit codes ---- */
-#define DCAT_E_OK        0
-#define DCAT_E_RUN       1   /* runtime error (script fail, fork fail) */
-#define DCAT_E_PARSE     2   /* parse error (bad command format) */
-#define DCAT_E_PRECHECK  3   /* precheck rejection (op not supported, missing params, unknown params) */
-#define DCAT_E_NOTFOUND  4   /* uid not found in catalog */
+/* result_t: 输出边界，json 由 cJSON 堆分配，调用方 result_free */
+typedef struct { int code; char *json; } result_t;
 
-/* ---- limits ---- */
-#define DCAT_MAX_PARAMS  16
-#define DCAT_KEY_LEN     32
-#define DCAT_VAL_LEN     64
-#define DCAT_MAX_FAULTS  64
-#define DCAT_MAX_RECORDS 32
-
-/* ---- params (stack-allocated) ---- */
-typedef struct {
-    char key[DCAT_KEY_LEN];
-    char value[DCAT_VAL_LEN];
-} param_kv_t;
-
-typedef struct {
-    param_kv_t items[DCAT_MAX_PARAMS];
-    int count;
-} params_t;
-
-/* ---- result (output boundary; json heap-allocated) ---- */
-typedef struct {
-    int code;        /* 0 success, nonzero error */
-    char *json;      /* cJSON serialized, owned, freed by result_free */
-} result_t;
-
-/* ---- fault definition (loaded from demoncat.conf) ---- */
+/* fault_def: 由 config.c 从 demoncat.conf 载入；registry 持有表 */
 typedef struct {
     char uid[64];
     char module[32];
     char desc[128];
     char script[256];
     char supported_ops[64];      /* "inject" | "inject,clean,query" */
-    char required_params[128];   /* "iface,loss_pct" */
-    char optional_params[128];   /* "speed_mbps" */
+    char inject_required[128];   /* inject 必填参数: "iface,loss_pct" */
+    char inject_optional[128];   /* inject 可选参数: "direction" */
+    char clean_required[128];    /* clean 必填参数: "iface" */
+    char clean_optional[128];    /* clean 可选参数 */
+    char query_required[128];    /* query 必填参数: "iface" */
+    char query_optional[128];    /* query 可选参数 */
 } fault_def_t;
 
-/* ---- injection record (state) ---- */
+/* injection_record_t: state 持有，固定数组 — 仅 inject,clean,query 故障创建 */
 typedef struct {
-    int  record_id;             /* monotonic */
+    int  record_id;             /* 单调递增 */
     char uid[64];
-    params_t params;            /* inject-time user params, for clean matching + script replay */
-    time_t started_at;
-    int active;                 /* 1 active, 0 cleaned */
+    params_t params;            /* inject 时用户提供的参数，用于 clean 按参数匹配 */
+    long started_at;
+    int  active;                /* 1 活跃，0 已清理 */
 } injection_record_t;
+#define DCAT_MAX_RECORDS 32
 
-/* ---- parsed command (cli output) ---- */
-typedef struct {
-    const char *op;             /* "inject" / "clean" / "query" / "list" / NULL */
-    char uid[64];               /* "" if omitted */
-    params_t params;             /* --key=value params */
-    char config_path[256];       /* --config path, "" if not specified */
-    int help;                    /* 1 if --help */
-} parsed_cmd_t;
+/* mock 钩子：捕获 (cmd, env) 不真正执行；返回伪造 result_t（堆分配，调用方 result_free） */
+typedef result_t *(*mock_fn)(const char *cmd, const char *const *env);
 
-/* ---- runtime config (config_load output) ---- */
-typedef struct {
-    char state_file[256];
-    char log_level[16];
-    fault_def_t faults[DCAT_MAX_FAULTS];
-    int fault_count;
-} config_t;
+/* params 辅助 */
+void params_init(params_t *p);
+int  params_set(params_t *p, const char *key, const char *val);          /* 覆盖更新；满返回 -1 */
+const char *params_find(const params_t *p, const char *key);             /* 未找到返回 NULL */
+const char *dcat_key_to_env(const char *key);                            /* 返回静态缓冲，DCAT_PARAM_<KEY> */
+int  params_match_subset(const params_t *query, const params_t *record); /* query 每个 key 值与 record 一致则 1 */
 
 #endif /* DCAT_TYPES_H */

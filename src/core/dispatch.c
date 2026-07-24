@@ -1,206 +1,203 @@
-/* src/core/dispatch.c */
 #include "dispatch.h"
 #include "registry.h"
-#include "injectors/injector.h"
-#include "precheck.h"
 #include "executor.h"
+#include "precheck.h"
 #include "state.h"
 #include "output.h"
-#include "cJSON.h"
-
+#include "config.h"
+#include "../injectors/injector.h"
+#include "../plugins/plugin_manager.h"
+#include <cJSON.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
 
 static int is_inject_only(const fault_def_t *f) {
-    const char *p = f->supported_ops;
-    while (*p) {
-        const char *c = strchr(p, ',');
-        size_t len = c ? (size_t)(c - p) : strlen(p);
-        if (len == 5 && !strncmp(p, "clean", 5)) return 0;
-        if (!c) break;
-        p = c + 1;
-    }
-    return 1;
+    return strcmp(f->supported_ops, "inject") == 0;
 }
 
-static cJSON *ops_array(const char *csv) {
-    cJSON *a = cJSON_CreateArray();
-    if (!csv) return a;
-    const char *p = csv;
-    while (*p) {
-        const char *c = strchr(p, ',');
-        size_t len = c ? (size_t)(c - p) : strlen(p);
-        char tok[32];
-        if (len >= sizeof tok) len = sizeof tok - 1;
-        memcpy(tok, p, len);
-        tok[len] = '\0';
-        cJSON_AddItemToArray(a, cJSON_CreateString(tok));
-        if (!c) break;
-        p = c + 1;
-    }
-    return a;
-}
-
-static void extract_message(const result_t *rr, cJSON *data) {
-    if (!rr || !data) return;
-    cJSON *root = cJSON_Parse(rr->json);
-    if (root) {
-        cJSON *d = cJSON_GetObjectItem(root, "data");
-        cJSON *msg = d ? cJSON_GetObjectItem(d, "message") : NULL;
-        if (msg && msg->valuestring && msg->valuestring[0])
-            cJSON_AddStringToObject(data, "message", msg->valuestring);
-        cJSON_Delete(root);
-    }
-}
-
-static void extract_err_msg(const result_t *rr, char *out, size_t cap) {
-    if (!out || cap == 0) return;
-    out[0] = '\0';
-    if (!rr || !rr->json) return;
-    cJSON *root = cJSON_Parse(rr->json);
-    if (root) {
-        cJSON *e = cJSON_GetObjectItem(root, "error");
-        cJSON *m = e ? cJSON_GetObjectItem(e, "message") : NULL;
-        if (m && m->valuestring && m->valuestring[0])
-            strncpy(out, m->valuestring, cap - 1), out[cap - 1] = '\0';
-        cJSON_Delete(root);
-    }
-}
-
-result_t *dispatch_list(void) {
-    int n;
-    const fault_def_t *t = registry_list(&n);
+static result_t *dispatch_list(void) {
+    int n = 0; const fault_def_t *list = registry_list(&n);
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < n; i++) {
         cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "uid", t[i].uid);
-        cJSON_AddStringToObject(o, "module", t[i].module);
-        cJSON_AddItemToObject(o, "supported_ops", ops_array(t[i].supported_ops));
-        if (t[i].desc[0]) cJSON_AddStringToObject(o, "desc", t[i].desc);
-        if (t[i].required_params[0])
-            cJSON_AddItemToObject(o, "required_params", ops_array(t[i].required_params));
-        if (t[i].optional_params[0])
-            cJSON_AddItemToObject(o, "optional_params", ops_array(t[i].optional_params));
+        cJSON_AddStringToObject(o, "uid", list[i].uid);
+        cJSON_AddStringToObject(o, "module", list[i].module);
+        cJSON *ops = cJSON_CreateArray();
+        char buf[64]; strncpy(buf, list[i].supported_ops, sizeof(buf)-1); buf[sizeof(buf)-1]='\0';
+        char *save = NULL, *tok = strtok_r(buf, ",", &save);
+        while (tok) { cJSON_AddItemToArray(ops, cJSON_CreateString(tok)); tok = strtok_r(NULL, ",", &save); }
+        cJSON_AddItemToObject(o, "supported_ops", ops);
+        if (list[i].desc[0]) cJSON_AddStringToObject(o, "desc", list[i].desc);
         cJSON_AddItemToArray(arr, o);
     }
-    return result_ok("list", NULL, arr);
+    /* 动态插件纳入 list */
+    int pc = 0;
+    const dcat_plugin_t *const *plugs = plugin_list(&pc);
+    for (int i = 0; i < pc; i++) {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "uid", plugs[i]->uid);
+        cJSON_AddStringToObject(o, "module", plugs[i]->name ? plugs[i]->name : "");
+        cJSON *ops = cJSON_CreateArray();
+        char pbuf[64]; strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf)-1); pbuf[sizeof(pbuf)-1]='\0';
+        char *psave = NULL, *ptok = strtok_r(pbuf, ",", &psave);
+        while (ptok) { cJSON_AddItemToArray(ops, cJSON_CreateString(ptok)); ptok = strtok_r(NULL, ",", &psave); }
+        cJSON_AddItemToObject(o, "supported_ops", ops);
+        if (plugs[i]->description && plugs[i]->description[0]) cJSON_AddStringToObject(o, "desc", plugs[i]->description);
+        cJSON_AddItemToArray(arr, o);
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddStringToObject(root, "op", "list");
+    cJSON_AddItemToObject(root, "data", arr);
+    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
+    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
 }
 
-result_t *dispatch_query(const char *uid, const params_t *p) {
-    if (!uid || !uid[0]) {
-        cJSON *arr = cJSON_CreateArray();
-        for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-            injection_record_t r;
-            if (!state_record(i, &r)) continue;
-            cJSON *o = cJSON_CreateObject();
-            cJSON_AddNumberToObject(o, "record_id", r.record_id);
-            cJSON_AddStringToObject(o, "uid", r.uid);
-            cJSON_AddNumberToObject(o, "started_at", (double)r.started_at);
-            cJSON_AddBoolToObject(o, "active", r.active);
-            cJSON *pobj = cJSON_CreateObject();
-            for (int j = 0; j < r.params.count; j++)
-                cJSON_AddStringToObject(pobj, r.params.items[j].key, r.params.items[j].value);
-            cJSON_AddItemToObject(o, "params", pobj);
-            cJSON_AddItemToArray(arr, o);
+static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
+    result_t *r = executor_run_fault(f, "inject", params, 0);
+    if (r->code == 0 && !is_inject_only(f)) {
+        int id = state_add(f->uid, params);
+        if (id < 0) {
+            result_free(r);
+            return result_err("inject", f->uid, 1,
+                "state table full, cannot track injection — run 'dcat query' and clean existing faults");
         }
-        return result_ok("query", NULL, arr);
+        cJSON *root = cJSON_Parse(r->json);
+        if (root) {
+            cJSON *data = cJSON_GetObjectItem(root, "data");
+            if (data) cJSON_AddNumberToObject(data, "record_id", id);
+            char *s = cJSON_PrintUnformatted(root);
+            cJSON_Delete(root);
+            free(r->json);
+            r->json = s;
+        }
     }
-
-    const fault_def_t *f = registry_find(uid);
-    if (!f) return result_err("query", uid, DCAT_E_NOTFOUND, "uid not found");
-
-    result_t *pc = precheck(f, "query", p);
-    if (pc->code != 0) return pc;
-    result_free(pc);
-
-    char cmd[256];
-    executor_build_cmd(f, "query", p, cmd, sizeof cmd);
-    executor_set_env("query", uid, p);
-    int rc = executor_run_raw(cmd);
-
-    printf("---\n");
-    fflush(stdout);
-
-    cJSON *data = cJSON_CreateObject();
-    cJSON_AddBoolToObject(data, "confirmed", rc == 0);
-    return result_ok("query", uid, data);
+    return r;
 }
 
-result_t *dispatch_inject(const char *uid, const params_t *p) {
-    const fault_def_t *f = registry_find(uid);
-    if (!f) return result_err("inject", uid, DCAT_E_NOTFOUND, "uid not found");
-
-    result_t *pc = precheck(f, "inject", p);
-    if (pc->code != 0) return pc;
-    result_free(pc);
-
-    char cmd[256];
-    executor_build_cmd(f, "inject", p, cmd, sizeof cmd);
-    executor_set_env("inject", f->uid, p);
-
-    result_t *rr = executor_run(cmd);
-    if (!rr || rr->code != 0) {
-        char emsg[256];
-        extract_err_msg(rr, emsg, sizeof emsg);
-        if (!emsg[0]) snprintf(emsg, sizeof emsg, rr ? "script failed" : "internal error");
-        result_t *err = result_err("inject", f->uid, DCAT_E_RUN, emsg);
-        result_free(rr);
-        return err;
-    }
-
-    cJSON *data = cJSON_CreateObject();
-    extract_message(rr, data);
-    result_free(rr);
-
-    if (is_inject_only(f)) {
-        return result_ok("inject", f->uid, data);
-    }
-
-    int id = state_add(f->uid, p);
-    if (id == 0) {
-        cJSON_Delete(data);
-        return result_err("inject", f->uid, DCAT_E_RUN,
-                          "state table full, cannot track injection — run 'dcat query' and clean existing faults");
-    }
-    cJSON_AddNumberToObject(data, "record_id", id);
-    return result_ok("inject", f->uid, data);
-}
-
-result_t *dispatch_clean(const char *uid, const params_t *p) {
-    const fault_def_t *f = registry_find(uid);
-    if (!f) return result_err("clean", uid, DCAT_E_NOTFOUND, "uid not found");
-
-    result_t *pc = precheck(f, "clean", p);
-    if (pc->code != 0) return pc;
-    result_free(pc);
-
-    injection_record_t matches[DCAT_MAX_RECORDS];
-    int n = state_find_by_params(uid, p, matches, DCAT_MAX_RECORDS);
-    if (n == 0) return result_err("clean", uid, DCAT_E_RUN, "no active injection");
-
-    char cmd[256];
-    int cleaned = 0;
+static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
+    int ids[DCAT_MAX_RECORDS];
+    int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
+    if (n == 0) return result_err("clean", f->uid, 1, "no active injection");
     for (int i = 0; i < n; i++) {
-        executor_clear_env_params(f);
-        executor_build_cmd(f, "clean", &matches[i].params, cmd, sizeof cmd);
-        executor_set_env("clean", f->uid, &matches[i].params);
-        result_t *rr = executor_run(cmd);
-        if (!rr || rr->code != 0) {
-            char emsg[256];
-            extract_err_msg(rr, emsg, sizeof emsg);
-            if (!emsg[0]) snprintf(emsg, sizeof emsg, rr ? "clean script failed" : "internal error");
-            result_t *err = result_err("clean", f->uid, DCAT_E_RUN, emsg);
-            result_free(rr);
-            if (cleaned > 0) state_save();
-            return err;
-        }
-        result_free(rr);
-        state_mark_inactive(matches[i].record_id);
-        cleaned++;
+        const injection_record_t *rec = state_find_by_id(ids[i]);
+        if (!rec) continue;
+        result_t *r = executor_run_fault(f, "clean", &rec->params, 0);
+        if (r->code != 0) return r;
+        state_mark_inactive(ids[i]);
+        result_free(r);
     }
+    return result_ok("clean", f->uid, 0, "cleaned");
+}
 
-    cJSON *data = cJSON_CreateObject();
-    cJSON_AddNumberToObject(data, "cleaned", cleaned);
-    return result_ok("clean", f->uid, data);
+/* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */
+static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const params_t *params) {
+    if (!op_in_supported(p->supported_ops, op))
+        return result_err(op, p->uid, 3, "op not in supported_ops");
+    if (!declared_params_only(p->inject_required, p->inject_optional, p->clean_required, p->clean_optional, p->query_required, p->query_optional, params))
+        return result_err(op, p->uid, 3, "undeclared param");
+    const char *op_req = NULL;
+    if (strcmp(op, "inject") == 0)     op_req = p->inject_required;
+    else if (strcmp(op, "clean") == 0) op_req = p->clean_required;
+    else if (strcmp(op, "query") == 0) op_req = p->query_required;
+    if (op_req && !required_params_present(op_req, params))
+        return result_err(op, p->uid, 3, "missing required params");
+    if (p->precheck) {
+        result_t *pc = p->precheck(op, params);
+        if (pc && pc->code != 0) return pc;
+        if (pc) result_free(pc);
+    }
+    if (strcmp(op, "inject") == 0) {
+        result_t *r = p->inject(params);
+        if (r->code == 0 && p->clean) {
+            int id = state_add(p->uid, params);
+            cJSON *root = cJSON_Parse(r->json);
+            if (root) {
+                cJSON *data = cJSON_GetObjectItem(root, "data");
+                if (data) cJSON_AddNumberToObject(data, "record_id", id);
+                char *s = cJSON_PrintUnformatted(root);
+                cJSON_Delete(root);
+                free(r->json);
+                r->json = s;
+            }
+        }
+        return r;
+    }
+    if (strcmp(op, "clean") == 0) {
+        if (!p->clean) return result_err("clean", p->uid, 3, "op not in supported_ops");
+        int ids[DCAT_MAX_RECORDS];
+        int n = state_find_by_params(p->uid, params, ids, DCAT_MAX_RECORDS);
+        if (n == 0) return result_err("clean", p->uid, 1, "no active injection");
+        for (int i = 0; i < n; i++) {
+            const injection_record_t *rec = state_find_by_id(ids[i]);
+            if (!rec) continue;
+            result_t *r = p->clean(&rec->params);
+            if (r->code != 0) return r;
+            state_mark_inactive(ids[i]);
+            result_free(r);
+        }
+        return result_ok("clean", p->uid, 0, "cleaned");
+    }
+    if (strcmp(op, "query") == 0) {
+        if (!p->query) return result_err("query", p->uid, 3, "op not in supported_ops");
+        return p->query(params);
+    }
+    return result_err(op, p->uid, 3, "op not in supported_ops");
+}
+
+result_t *dispatch_route(const char *uid, const char *op, const params_t *params) {
+    if (strcmp(op, "list") == 0) return dispatch_list();
+    if (strcmp(op, "list") != 0 && (uid == NULL || uid[0] == '\0'))
+        return result_err(op, "", 2, "uid required (use 'dcat list' to see available faults)");
+
+    const fault_def_t *f = registry_find(uid);
+    if (f) {
+        result_t *pc = precheck(f, op, params);
+        if (pc) return pc;
+        if (strcmp(op, "inject") == 0) return cnf_inject(f, params);
+        if (strcmp(op, "clean") == 0)   return cnf_clean(f, params);
+        if (strcmp(op, "query") == 0) {
+            int rc = executor_run_raw_fault(f, "query", params);
+            printf("---\n");
+            cJSON *root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "status", "ok");
+            cJSON_AddStringToObject(root, "op", "query");
+            cJSON_AddStringToObject(root, "uid", uid);
+            cJSON *data = cJSON_AddObjectToObject(root, "data");
+            cJSON_AddBoolToObject(data, "confirmed", rc == 0);
+            char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
+            result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
+        }
+    }
+    const injector_t *inj = injector_find(uid);
+    if (inj) {
+        result_t *pc = inj->precheck(op, params);
+        if (pc && pc->code != 0) return pc;
+        if (pc) result_free(pc);
+        if (strcmp(op, "inject") == 0) {
+            result_t *r = inj->inject(params);
+            if (r->code == 0 && inj->clean) state_add(uid, params);
+            return r;
+        }
+        if (strcmp(op, "clean") == 0) {
+            int ids[DCAT_MAX_RECORDS];
+            int n = state_find_by_params(uid, params, ids, DCAT_MAX_RECORDS);
+            if (n == 0) return result_err("clean", uid, 1, "no active injection");
+            for (int i = 0; i < n; i++) {
+                const injection_record_t *rec = state_find_by_id(ids[i]);
+                if (!rec) continue;
+                result_t *r = inj->clean(&rec->params);
+                if (r->code != 0) return r;
+                state_mark_inactive(ids[i]); result_free(r);
+            }
+            return result_ok("clean", uid, 0, "cleaned");
+        }
+        if (strcmp(op, "query") == 0) return inj->query(params);
+    }
+    const dcat_plugin_t *plg = plugin_find(uid);
+    if (plg) return plugin_dispatch(plg, op, params);
+    char msg[256];
+    snprintf(msg, sizeof msg, "uid '%s' not found in catalog (use 'dcat list' to see available faults)", uid ? uid : "");
+    return result_err(op, uid ? uid : "", 4, msg);
 }

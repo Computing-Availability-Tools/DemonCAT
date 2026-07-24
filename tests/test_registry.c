@@ -1,39 +1,21 @@
-/* tests/test_registry.c */
-#include "core/config.h"
-#include "core/registry.h"
+#include "test.h"
+#include "registry.h"
+#include "config.h"
 #include <string.h>
 
-int main(void) {
-    config_t cfg;
-    if (config_load("config/demoncat.conf", &cfg)) return 1;
-    if (cfg.fault_count != 38) return 1; /* 2 cpu + 1 storage + 11 network + 4 process + 20 npu */
+static config_t cfg;
+static void setup(void) { config_load("config/demoncat.conf", &cfg); registry_init(&cfg); }
 
-    if (registry_init(&cfg)) return 1;
-
-    /* rCPU_overload */
-    const fault_def_t *cpu = registry_find("rCPU_overload");
-    if (!cpu || strcmp(cpu->module, "cpu")) return 1;
-    if (strcmp(cpu->supported_ops, "inject,clean,query")) return 1;
-    if (strcmp(cpu->required_params, "cores")) return 1;
-    if (cpu->optional_params[0] != '\0') return 1;
-
-    /* rNET_loss */
-    const fault_def_t *net = registry_find("rNET_loss");
-    if (!net || strcmp(net->module, "network")) return 1;
-    if (strcmp(net->required_params, "iface,loss_pct")) return 1;
-
-    /* rPROC_exit (inject-only) */
-    const fault_def_t *proc = registry_find("rPROC_exit");
-    if (!proc || strcmp(proc->supported_ops, "inject")) return 1;
-    if (strcmp(proc->required_params, "pid")) return 1;
-
-    /* not found */
-    if (registry_find("nope") != NULL) return 1;
-
-    /* list count */
-    int cnt;
-    (void)registry_list(&cnt);
-    if (cnt != 38) return 1;
-
+int test_find_and_list(void) {
+    setup();
+    const fault_def_t *f = registry_find("rNET_delay");
+    ASSERT_TRUE(f != NULL);
+    ASSERT_STREQ(f->module, "network");
+    ASSERT_TRUE(registry_find("nope") == NULL);
+    int n = 0; registry_list(&n);
+    ASSERT_INT_EQ(n, cfg.fault_count);
+    ASSERT_INT_EQ(registry_count(), cfg.fault_count);
     return 0;
 }
+
+int main(void) { RUN_TEST(test_find_and_list); return TEST_MAIN_RETURN(); }

@@ -5,26 +5,63 @@
 
 > 覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
+## 依赖说明
+
+极简 Linux 环境（最小安装/容器）可能不自带以下工具。运行 `scripts/install_deps.sh` 一键安装。
+
+### 编译依赖
+
+| 依赖 | 包名 (apt) | 包名 (yum) | 用途 |
+|---|---|---|---|
+| cmake ≥ 3.10 | `cmake` | `cmake` | 构建系统 |
+| C 编译器 | `gcc` | `gcc` | 编译 dcat 二进制 |
+| pthread | `libc6-dev` | `glibc-devel` | 状态锁 |
+| dlopen | `libc6-dev` | `glibc-devel` | 动态插件加载 |
+
+### 运行时依赖（按模块）
+
+| 模块 | 工具 | 包名 (apt) | 包名 (yum) | 需要 root |
+|---|---|---|---|---|
+| **CPU** | `perl`, `taskset` | `perl`, `util-linux` | `perl`, `util-linux` | core_offline 需要 |
+| **存储** | `dd` | `coreutils` | `coreutils` | — |
+| **网络** | `tc`, `ip` | `iproute2` | `iproute` | ✅ |
+| | `ethtool` | `ethtool` | `ethtool` | ✅ |
+| | `iptables` | `iptables` | `iptables` | ✅ |
+| | `systemctl` | `systemd` | `systemd` | ✅ |
+| | `python3` | `python3` | `python3` | — |
+| **进程** | `kill`, `perl` | `util-linux`, `perl` | `util-linux`, `perl` | 部分需要 |
+| **NPU** | `hccn_tool` | — (Atlas 驱动自带) | — | ✅ |
+
+> 无 NPU 硬件的环境可跳过 NPU 模块，不影响其他模块使用。
+
 ## 快速开始
 
 ```bash
-# 编译
+# 1. 一键安装依赖（Debian/Ubuntu/RHEL/CentOS 自动识别）
+bash scripts/install_deps.sh
+
+# 2. 编译
 cmake -B build && cmake --build build
 
-# 运行测试
+# 3. 运行测试
 ctest --test-dir build --output-on-failure
 
-# 列出故障目录
+# 4. 列出故障目录
 ./build/dcat list
 
-# 注入 CPU 过载（4 核）
-./build/dcat inject rCPU_overload --cores=4
+# 5. 注入 CPU 过载（2 核）
+./build/dcat inject rCPU_overload --cores=0,1
 
-# 查询活跃注入
-./build/dcat query
+# 6. 查询故障是否生效
+./build/dcat query rCPU_overload --cores=0,1
 
-# 清除故障
-./build/dcat clean rCPU_overload --cores=4
+# 7. 清除故障
+./build/dcat clean rCPU_overload --cores=0,1
+
+# 查看帮助
+./build/dcat --help
+./build/dcat inject --help
+./build/dcat inject rCPU_overload --help
 ```
 
 ## 命令格式
@@ -78,9 +115,9 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | UID | 必填 | 可选 | 说明 |
 |---|---|---|---|
 | `rPROC_exit` | pid | — | 进程退出（kill -9，不可恢复，inject-only） |
-| `rPROC_dstate` | count | — | D 状态进程（不可中断 IO） |
+| `rPROC_dstate` | device | — | D 状态进程（真实块设备 I/O，tmpfs 无效） |
 | `rPROC_hang` | pid | — | 进程挂起（SIGSTOP） |
-| `rPROC_zstate` | count | — | 僵尸进程（fork+exit） |
+| `rPROC_zstate` | pid | — | 僵尸进程（kill 目标进程 → 僵尸，clean 杀父进程回收，不可恢复） |
 
 ### NPU 模块（20 条）
 

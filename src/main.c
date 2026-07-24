@@ -1,88 +1,89 @@
-/* src/main.c */
-#include "core/cli.h"
-#include "core/config.h"
-#include "core/registry.h"
-#include "core/state.h"
-#include "core/output.h"
-#include "core/dispatch.h"
-#include "core/executor.h"
-
-#include <libgen.h>
+#include "config.h"
+#include "registry.h"
+#include "state.h"
+#include "dispatch.h"
+#include "output.h"
+#include "cli.h"
+#include "help.h"
+#include "plugins/plugin_manager.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-static void copystr_safe(char *dst, size_t cap, const char *src) {
-    if (!dst || !src || cap == 0) return;
-    strncpy(dst, src, cap - 1);
-    dst[cap - 1] = '\0';
-}
-
-static const char *default_config_path(void) {
-    static char path[512];
-    char exe[256];
-    ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-    if (n <= 0) return NULL;
-    exe[n] = '\0';
-    char exe_copy[256];
-    copystr_safe(exe_copy, sizeof(exe_copy), exe);
-    char *dir = dirname(exe_copy);
-    snprintf(path, sizeof(path), "%s/../config/demoncat.conf", dir);
-    return path;
-}
-
-static void expand_state_path(const char *in, char *out, size_t cap) {
-    if (in[0] == '~') {
-        const char *home = getenv("HOME");
-        snprintf(out, cap, "%s%s", home ? home : "", in + 1);
-    } else {
-        copystr_safe(out, cap, in);
+static const char *resolve_cfgpath(const char *override, char *buf, size_t cap) {
+    if (override) return override;
+    ssize_t n = readlink("/proc/self/exe", buf, (int)cap - 1);
+    if (n > 0) {
+        buf[n] = '\0';
+        char *slash = strrchr(buf, '/'); if (slash) *slash = '\0';
+        char *bslash = strrchr(buf, '/'); if (bslash) *bslash = '\0';
+        snprintf(buf + strlen(buf), cap - strlen(buf), "/config/demoncat.conf");
+        return buf;
     }
+    return "config/demoncat.conf";
 }
 
 int main(int argc, char **argv) {
     parsed_cmd_t pc;
-    if (cli_parse(argc, argv, &pc) != 0) {
-        output_print(result_err("", "", DCAT_E_PARSE, "parse error"));
-        return DCAT_E_PARSE;
-    }
+    int rc = cli_parse(argc, argv, &pc);
 
-    if (pc.help) {
-        printf("usage: dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]\n");
-        printf("  subcommands: inject, clean, query, list\n");
+    /* --help 始终优先：即使其余参数 malformed 也直接输出帮助后退出 0 */
+    if (cli_has_help(argc, argv)) {
+        const char *sub = cli_subcommand(argc, argv);
+        if (sub) {
+            char cfgbuf[512];
+            const char *cp = resolve_cfgpath(pc.config, cfgbuf, sizeof cfgbuf);
+            config_t cfg;
+            if (config_load(cp, &cfg) == 0) registry_init(&cfg);
+            help_print_subcommand(sub, pc.uid[0] ? pc.uid : NULL);
+        } else {
+            help_print_global();
+        }
         return 0;
     }
+    if (argc < 2) { help_print_global(); return 2; }
+    if (rc != 0 || !pc.op) {
+        printf("{\"status\":\"error\",\"op\":\"parse\",\"error\":{\"code\":2,\"message\":\"%s\"}}\n",
+               cli_get_error());
+        return 2;
+    }
 
-    const char *cfgpath = pc.config_path[0] ? pc.config_path : default_config_path();
+    char cfgbuf[512];
+    const char *cfgpath = resolve_cfgpath(pc.config, cfgbuf, sizeof cfgbuf);
     config_t cfg;
-    if (!cfgpath || config_load(cfgpath, &cfg)) {
-        output_print(result_err(pc.op, pc.uid, DCAT_E_RUN, "config not found"));
-        return DCAT_E_RUN;
+    if (config_load(cfgpath, &cfg) != 0) {
+        fprintf(stderr, "config load failed: %s\n", cfgpath);
+        return 1;
     }
     registry_init(&cfg);
-
-    char sp[256];
-    expand_state_path(cfg.state_file[0] ? cfg.state_file : "~/.demoncat/state.json",
-                      sp, sizeof(sp));
-    state_init(sp);
+    const char *sf = cfg.state_file[0] ? cfg.state_file : "~/.demoncat/state.json";
+    char sfbuf[512];
+    if (sf[0] == '~') {
+        const char *home = getenv("HOME");
+        if (home) snprintf(sfbuf, sizeof sfbuf, "%s%s", home, sf + 1);
+        else { strncpy(sfbuf, sf, sizeof(sfbuf) - 1); sfbuf[sizeof(sfbuf) - 1] = '\0'; }
+        state_set_file(sfbuf);
+    } else {
+        state_set_file(sf);
+    }
     state_load();
 
-    result_t *res = NULL;
-    if (!strcmp(pc.op, "list")) {
-        res = dispatch_list();
-    } else if (!strcmp(pc.op, "query")) {
-        res = dispatch_query(pc.uid, &pc.params);
-    } else if (!strcmp(pc.op, "inject")) {
-        res = dispatch_inject(pc.uid, &pc.params);
-    } else if (!strcmp(pc.op, "clean")) {
-        res = dispatch_clean(pc.uid, &pc.params);
-    } else {
-        res = result_err(pc.op, "", DCAT_E_PARSE, "unknown op");
+    char defplugins[512];
+    const char *plugindir = pc.plugins;
+    if (!plugindir) {
+        char root[256];
+        derive_project_root(cfgpath, root, sizeof root);
+        snprintf(defplugins, sizeof defplugins, "%s/plugins", root);
+        plugindir = defplugins;
     }
+    plugin_load_dir(plugindir);
 
-    output_print(res);
-    int code = res ? res->code : DCAT_E_RUN;
-    result_free(res);
+    result_t *r = dispatch_route(pc.uid, pc.op, &pc.params);
+    output_print(r);
+    int code = r ? r->code : 1;
+    result_free(r);
+    state_save();
+    plugin_fini();
     return code;
 }

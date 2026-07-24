@@ -14,22 +14,28 @@
 #include <string.h>
 #include <unistd.h>
 
-static char g_last_cmd[256];
-static int  g_mock_called;
+static const char *g_last_cmd;
+static const char *const *g_env;
+static int g_mock_called;
 
-static result_t *mock_ok(const char *cmd) {
-    strncpy(g_last_cmd, cmd, sizeof g_last_cmd - 1);
-    g_last_cmd[sizeof g_last_cmd - 1] = '\0';
+static result_t *mock_ok(const char *cmd, const char *const *env) {
+    g_last_cmd = cmd;
+    g_env = env;
     g_mock_called = 1;
-    return result_ok("inject", "mock", NULL);
+    return result_ok("inject", "mock", 0, "ok");
 }
 
 #define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
 
-#define CMD_CONTAINS(str) CK(strstr(g_last_cmd, str) != NULL)
+#define CMD_CONTAINS(str) CK(strstr(g_last_cmd ? g_last_cmd : "", str) != NULL)
 #define ENV_EQ(key, val) do { \
-    const char *_v = getenv(key); \
-    CK(_v && strcmp(_v, val) == 0); \
+    char _eb[80]; \
+    snprintf(_eb, sizeof _eb, "%s=%s", key, val); \
+    int _found = 0; \
+    for (int _i = 0; g_env && g_env[_i]; _i++) { \
+        if (strcmp(g_env[_i], _eb) == 0) { _found = 1; break; } \
+    } \
+    CK(_found); \
 } while (0)
 #define MOCK_CALLED CK(g_mock_called)
 
@@ -37,16 +43,19 @@ static void faults_setup(void) {
     config_t cfg;
     config_load("config/demoncat.conf", &cfg);
     registry_init(&cfg);
-    state_init("/tmp/dcat_test_faults.json");
+    state_reset();
+    state_set_file("/tmp/dcat_test_faults.json");
     state_load();
     executor_set_mock(mock_ok);
     g_mock_called = 0;
-    g_last_cmd[0] = '\0';
+    g_last_cmd = NULL;
+    g_env = NULL;
 }
 
 static void faults_teardown(void) {
     executor_set_mock(NULL);
-    state_init("");
+    state_reset();
+    state_set_file("");
     unlink("/tmp/dcat_test_faults.json");
 }
 
@@ -58,28 +67,24 @@ static params_t mkparams(const char *k1, const char *v1,
                          const char *k5, const char *v5,
                          const char *k6, const char *v6) {
     params_t p;
-    memset(&p, 0, sizeof p);
+    params_init(&p);
     struct { const char *k, *v; } pairs[] = {
         {k1,v1},{k2,v2},{k3,v3},{k4,v4},{k5,v5},{k6,v6}
     };
-    for (int i = 0; i < 6 && pairs[i].k; i++) {
-        strncpy(p.items[p.count].key, pairs[i].k, DCAT_KEY_LEN - 1);
-        strncpy(p.items[p.count].value, pairs[i].v, DCAT_VAL_LEN - 1);
-        p.count++;
-    }
+    for (int i = 0; i < 6 && pairs[i].k; i++)
+        params_set(&p, pairs[i].k, pairs[i].v);
     return p;
 }
 
-/* Check env var for a param key (DCAT_PARAM_<KEY uppercased>). Returns 0=ok, 1=fail. */
+/* Check env array for a param key (DCAT_PARAM_<KEY>). Returns 0=ok, 1=fail. */
 static int check_param_env(const char *key, const char *expected) {
-    char env_name[80];
-    snprintf(env_name, sizeof env_name, "DCAT_PARAM_%s", key);
-    for (char *p = env_name + 12; *p; p++) {
-        if (isalnum((unsigned char)*p)) *p = toupper((unsigned char)*p);
-        else *p = '_';
+    char eb[80];
+    snprintf(eb, sizeof eb, "%s=%s", dcat_key_to_env(key), expected);
+    int found = 0;
+    for (int i = 0; g_env && g_env[i]; i++) {
+        if (strcmp(g_env[i], eb) == 0) { found = 1; break; }
     }
-    const char *val = getenv(env_name);
-    CK(val && strcmp(val, expected) == 0);
+    CK(found);
     return 0;
 }
 

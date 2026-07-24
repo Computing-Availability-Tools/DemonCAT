@@ -5,8 +5,9 @@
 # query:  check burn process count + per-core CPU usage
 #
 # cores spec: "0,2,4" or "0-3" or "0-3,7" (same format as rCPU_core_offline)
-# Uses `perl -e '1 while 1'` for pure user-space (us) CPU burn (no syscall overhead).
-# Falls back to `yes >/dev/null` if perl not available (will have ~60% sy overhead).
+# load_pct (optional, default 100): target CPU load percentage 1-100.
+#   100 = full burn (perl -e '1 while 1'); <100 = duty-cycle loop (work + usleep).
+# Falls back to `yes >/dev/null` if perl not available (load_pct ignored, always ~100%).
 
 PIDFILE="/tmp/dcat-rCPU_overload.pid"
 
@@ -27,21 +28,54 @@ parse_cores() {
     done
 }
 
+# Variable-load burner: $1 = load_pct (1-100)
+# Uses Time::HiRes (core since Perl 5.8) for microsecond duty cycling.
+# 10ms period: work for (pct% * 10ms), idle for the rest.
+
 case "${DCAT_OP:-inject}" in
     inject)
         spec=${DCAT_PARAM_CORES:?missing required param: cores}
+        load_pct=${DCAT_PARAM_LOAD_PCT:-100}
+
+        # validate cores format: only digits, commas, and hyphens
+        case "$spec" in
+            *[!0-9,-]*)
+                echo "invalid cores spec '$spec': use comma (0,2,4) or range (0-3)" >&2
+                exit 1
+                ;;
+        esac
+
+        # validate load_pct: 1-100
+        if ! echo "$load_pct" | grep -qE '^[0-9]+$' 2>/dev/null; then
+            echo "load_pct must be a number (1-100), got: '$load_pct'" >&2
+            exit 1
+        fi
+        if [ "$load_pct" -lt 1 ] 2>/dev/null || [ "$load_pct" -gt 100 ] 2>/dev/null; then
+            echo "load_pct must be 1-100, got: $load_pct" >&2
+            exit 1
+        fi
+
         PIDFILE="/tmp/dcat-rCPU_overload-${spec}.pid"
         pids=""
         for n in $(parse_cores "$spec"); do
             if command -v perl >/dev/null 2>&1; then
-                taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
+                if [ "$load_pct" -ge 100 ] 2>/dev/null; then
+                    taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
+                else
+                    taskset -c "$n" perl -e '
+use Time::HiRes qw(usleep gettimeofday);
+my $pct=shift||100; $pct=100 if $pct>100; $pct=1 if $pct<1;
+my $period=10000; my $work=int($period*$pct/100); my $idle=$period-$work;
+while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($idle) }
+' "$load_pct" >/dev/null 2>&1 &
+                fi
             else
                 taskset -c "$n" yes >/dev/null 2>&1 &
             fi
             pids="$pids $!"
         done
         echo "$pids" > "$PIDFILE"
-        echo "injected CPU overload on cores [$spec] (pids:$pids)"
+        echo "injected CPU overload on cores [$spec] load=${load_pct}% (pids:$pids)"
         ;;
 
     clean)

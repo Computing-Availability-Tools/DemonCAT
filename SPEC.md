@@ -60,7 +60,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | 命令 | 语义 | 适用 supported_ops |
 |---|---|---|
 | `inject <uid> --p1=v1 --p2=v2 ...` | 注入指定故障，按参数配置；**同步阻塞执行脚本，执行完返回** | `inject` 或 `inject,clean,query` |
-| `clean <uid> [--k1=v1 ...]` | 清除该 uid 活跃注入；按参数匹配记录，逐条清理；同步重跑脚本 `DCAT_OP=clean` | 仅 `inject,clean,query` |
+| `clean <uid> --k1=v1 ...` | 清除该 uid 活跃注入；**必须至少一个参数**按匹配记录逐条清理；同步重跑脚本 `DCAT_OP=clean` | 仅 `inject,clean,query` |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查询 dcat 自身全部活跃注入记录；有 uid：调脚本 `query` 分支验证故障是否真的在系统上生效，用户参数与 inject 参数独立 | `inject,clean,query` |
 | `list` | 列出配置中声明的全部故障目录 | 所有 |
 
@@ -102,20 +102,25 @@ dcat list
 | `desc` | 否 | 一句话描述 |
 | `script` | 是 | 外部脚本路径（绝对或相对；相对路径基于项目根目录自动解析为绝对），须可执行 |
 | `supported_ops` | 是 | 支持的操作子集，逗号分隔：`inject` 或 `inject,clean,query` |
-| `required_params` | 否 | **必填**参数名（逗号分隔），预检校验完整性，缺失即拒；无必填参数时省略此字段 |
-| `optional_params` | 否 | **可选**参数名（逗号分隔），不填时脚本走自有默认值 |
+| `inject_required` | 否 | inject 操作**必填**参数名（逗号分隔），预检校验完整性，缺失即拒；无则省略 |
+| `inject_optional` | 否 | inject 操作**可选**参数名（逗号分隔），不填时脚本走自有默认值 |
+| `clean_required` | 否 | clean 操作必填参数名；无则省略 |
+| `clean_optional` | 否 | clean 操作可选参数名 |
+| `query_required` | 否 | query 操作必填参数名 |
+| `query_optional` | 否 | query 操作可选参数名 |
 
 > 所有故障统一同步阻塞执行；需要长驻的故障由脚本自行管理子进程。
 
 ### 3.2 参数语义约定
 
-- **必填 vs 可选**：`required_params` 在 precheck 阶段校验非空；`optional_params` 缺省时不报错，由脚本解释默认值（目录表中以 `(默认X)` 标注）。
+- **必填 vs 可选**：`inject_required`/`clean_required`/`query_required` 在 precheck 阶段按操作分别校验非空；`inject_optional`/`clean_optional`/`query_optional` 缺省时不报错，由脚本解释默认值。空字段可省略（默认空字符串）。
 
 ### 3.3 目录清单
 
 > 标 `*` 为示例故障（rCPU_overload / rNET_delay）。完整 cnf 声明见 §7。
+> 上表仅列 inject 操作的 required/optional 参数；clean / query 的 per-op 参数见 `demoncat.conf`（§7）。
 
-| UID | module | supported_ops | required_params | optional_params |
+| UID | module | supported_ops | inject_required | inject_optional |
 |---|---|---|---|---|
 | `rCPU_overload` * | cpu | inject,clean,query | cores | — |
 | `rNET_delay` * | network | inject,clean,query | iface,delay_ms | — |
@@ -130,9 +135,9 @@ dcat list
 | `rNET_jitter` | network | inject,clean,query | iface,delay_ms,jitter_ms | — |
 | `rNET_tcp_loss` | network | inject,clean,query | port | direction(默认both) |
 | `rPROC_exit` | process | **inject** | pid | — |
-| `rPROC_dstate` | process | inject,clean,query | count | — |
+| `rPROC_dstate` | process | inject,clean,query | device | — |
 | `rPROC_hang` | process | inject,clean,query | pid | — |
-| `rPROC_zstate` | process | inject,clean,query | count | — |
+| `rPROC_zstate` | process | inject,clean,query | pid | — |
 | `rCPU_core_offline` | cpu | inject,clean,query | cores | — |
 | `rDISK_write_overload` | storage | inject,clean,query | device | workers(默认4),size_mb(默认200) |
 | `rNPU_link_down` | npu | inject,clean,query | chip | — |
@@ -162,6 +167,21 @@ dcat list
 - **现有模块加故障**：同模块目录加脚本 + cnf 加段，UID 不重复即可。
 - 目录将持续扩充（预计 200+），不预设模块实现先后顺序，按发布批次推进（见 §8）。
 
+新增故障的 cnf 段按**每操作**声明 required/optional 参数（空字段可省略，默认空字符串）：
+
+```ini
+[fault.rNET_loss]
+module          = network
+script          = /usr/lib/demoncat/scripts/network/net_loss.sh
+supported_ops   = inject,clean,query
+inject_required = iface,loss_pct
+inject_optional = direction
+clean_required  = iface
+clean_optional  = direction
+query_required  = iface
+query_optional  = direction
+```
+
 ---
 
 ## 4. 预检
@@ -176,14 +196,14 @@ dcat list
 
 1. uid 在配置中存在（否则退出码 4）
 2. 请求的 op 属于该故障 `supported_ops`（`inject`-only 故障拒绝 `clean`/`query`）
-3. `inject`：`required_params` 全部提供且非空
+3. 对应操作的 `inject_required` / `clean_required` / `query_required` 全部提供且非空（按操作分别校验）
 4. 脚本路径存在且可执行（`access/X_OK`）
 
 > 允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
-> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。
-> 所有命令（inject / clean / query）均校验用户提供的参数是否在 `required_params` / `optional_params` 中声明，未声明的参数（`--foo=bar`）直接拒绝（退出码 3）。
+> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。**clean 和 query（带 uid）均要求：如果该操作有声明的参数，必须提供至少一个参数，空参数被拒绝（退出码 3）。无声明参数的操作允许空参数。query（不带 uid）查全部不受此限制。**
+> 所有命令（inject / clean / query）均校验用户提供的参数是否在该操作对应的 required/optional 列表（`inject_required`/`inject_optional`、`clean_required`/`clean_optional`、`query_required`/`query_optional`）中声明，未声明的参数（`--foo=bar`）直接拒绝（退出码 3）。
 
-> **参数校验分层**：dcat 负责**结构校验**（`required_params` 是否齐全且非空，即第 3 步）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
+> **参数校验分层**：dcat 负责**结构校验**（`inject_required`/`clean_required`/`query_required` 是否齐全且非空，即第 3 步）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
 
 ---
 
@@ -204,7 +224,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 - **stderr**：失败时输出错误信息，dcat 纳入 `error.message`。
 - 可选参数未提供时，对应 `DCAT_PARAM_<KEY>` 环境变量不设置；脚本须自行处理默认值（目录表中以 `(默认X)` 标注期望默认）。
 - **同步阻塞**：dcat 用 `fork/exec + waitpid` 同步等待脚本执行完返回；脚本应自行管理长驻子进程（spawn + pidfile/sidecar），不要前台驻留阻塞 dcat。
-- **参数校验边界**：dcat 在 precheck 阶段校验 `required_params` 齐全且非空（结构校验）；参数值合法性（如 `cores` 是否在有效范围、`iface` 是否真实存在）由脚本自行校验（语义校验）。未在 `required_params` / `optional_params` 中声明的参数直接拒绝（报错退出码 3）。
+- **参数校验边界**：dcat 在 precheck 阶段按操作校验 `inject_required`/`clean_required`/`query_required` 齐全且非空（结构校验）；参数值合法性（如 `cores` 是否在有效范围、`iface` 是否真实存在）由脚本自行校验（语义校验）。未在该操作对应 required/optional 列表中声明的参数直接拒绝（报错退出码 3）。
 
 ### 5.2 可恢复故障（`inject,clean,query`）
 
@@ -303,15 +323,22 @@ module          = network
 desc            = 网络丢包（tc netem loss）
 script          = /usr/lib/demoncat/scripts/network/net_loss.sh
 supported_ops   = inject,clean,query
-required_params = iface,loss_pct
+inject_required = iface,loss_pct
+inject_optional = direction
+clean_required  = iface
+clean_optional  = direction
+query_required  = iface
+query_optional  = direction
 
 [fault.rPROC_exit]
 module          = process
 desc            = 进程异常退出（kill -9，不可恢复）
 script          = /usr/lib/demoncat/scripts/process/proc_exit.sh
 supported_ops   = inject
-required_params = pid
+inject_required = pid
 ```
+
+每个 `[fault.<uid>]` 段按**每操作**声明 required/optional 参数，共 6 个字段：`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`。空字段可省略（默认空字符串）。仅 `inject` 的故障（`supported_ops = inject`）只需声明 `inject_*`。
 
 ### 7.1 配置定位
 

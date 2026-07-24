@@ -1,12 +1,10 @@
-/* src/core/precheck.h */
 #ifndef DCAT_PRECHECK_H
 #define DCAT_PRECHECK_H
-
 #include "types.h"
-
-/* Precheck (SPEC §4.2): op supported, required params present (inject),
- * script executable, no unknown params.
- * Returns result_t with code 0 on pass, DCAT_E_PRECHECK on rejection. */
-result_t *precheck(const fault_def_t *f, const char *op, const params_t *p);
-
-#endif /* DCAT_PRECHECK_H */
+/* fault_def 版本预检（cnf 故障用）。返回 NULL=通过；非 NULL=失败 result_t(code)。fault=NULL → code 4 */
+result_t *precheck(const fault_def_t *f, const char *op, const params_t *params);
+/* 通用预检函数（接受字符串，fault_def 与 plugin 共用） */
+int op_in_supported(const char *supported_ops, const char *op);
+int required_params_present(const char *required_params, const params_t *params);
+int declared_params_only(const char *inject_req, const char *inject_opt, const char *clean_req, const char *clean_opt, const char *query_req, const char *query_opt, const params_t *params);
+#endif

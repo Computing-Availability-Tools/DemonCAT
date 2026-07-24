@@ -1,245 +1,165 @@
-/* src/core/state.c */
 #include "state.h"
-#include "cJSON.h"
-
-#include <errno.h>
+#include <cJSON.h>
 #include <pthread.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
+#include <stdlib.h>
 #include <time.h>
 
 static injection_record_t g_records[DCAT_MAX_RECORDS];
 static int g_next_id = 1;
-static char g_path[256];
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+static char g_file[256] = "~/.demoncat/state.json";
 
-static void copystr(char *dst, size_t cap, const char *src) {
-    strncpy(dst, src, cap - 1);
-    dst[cap - 1] = '\0';
-}
-
-/* Check if user params match a record's stored params.
- * Empty user params (count==0) matches all. */
-static int params_match(const params_t *user, const params_t *stored) {
-    if (!user || user->count == 0) return 1;
-    for (int i = 0; i < user->count; i++) {
-        int found = 0;
-        for (int j = 0; j < stored->count; j++) {
-            if (!strcmp(user->items[i].key, stored->items[j].key) &&
-                !strcmp(user->items[i].value, stored->items[j].value)) {
-                found = 1;
-                break;
-            }
-        }
-        if (!found) return 0;
-    }
-    return 1;
-}
-
-int state_init(const char *persist_path) {
+void state_reset(void) {
     pthread_mutex_lock(&g_lock);
-    memset(g_records, 0, sizeof g_records);
+    memset(g_records, 0, sizeof(g_records));
     g_next_id = 1;
-    if (persist_path) {
-        copystr(g_path, sizeof g_path, persist_path);
-    } else {
-        g_path[0] = '\0';
-    }
     pthread_mutex_unlock(&g_lock);
-    return 0;
+}
+void state_set_file(const char *path) {
+    pthread_mutex_lock(&g_lock);
+    strncpy(g_file, path, sizeof(g_file)-1); g_file[sizeof(g_file)-1]='\0';
+    pthread_mutex_unlock(&g_lock);
 }
 
 int state_add(const char *uid, const params_t *params) {
     pthread_mutex_lock(&g_lock);
-    int slot = -1;
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-        if (!g_records[i].active) { slot = i; break; }
-    }
-    int id = 0;
-    if (slot >= 0) {
-        injection_record_t *r = &g_records[slot];
-        memset(r, 0, sizeof *r);
-        r->record_id = g_next_id++;
-        copystr(r->uid, sizeof r->uid, uid ? uid : "");
-        if (params) r->params = *params;
-        r->started_at = time(NULL);
-        r->active = 1;
-        id = r->record_id;
-    }
-    pthread_mutex_unlock(&g_lock);
-    if (id) state_save();
-    return id;
-}
-
-injection_record_t state_find(const char *uid) {
-    injection_record_t res;
-    memset(&res, 0, sizeof res);
-    pthread_mutex_lock(&g_lock);
-    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-        if (g_records[i].active && !strcmp(g_records[i].uid, uid ? uid : "")) {
-            res = g_records[i];
-            break;
+        if (!g_records[i].active) {
+            g_records[i].record_id = g_next_id++;
+            strncpy(g_records[i].uid, uid, sizeof(g_records[i].uid)-1);
+            g_records[i].uid[sizeof(g_records[i].uid)-1]='\0';
+            g_records[i].params = *params;
+            g_records[i].started_at = (long)time(NULL);
+            g_records[i].active = 1;
+            int id = g_records[i].record_id;
+            pthread_mutex_unlock(&g_lock);
+            return id;
         }
     }
     pthread_mutex_unlock(&g_lock);
-    return res;
+    return -1;
 }
 
-int state_find_by_params(const char *uid, const params_t *params,
-                         injection_record_t out[], int max_out) {
-    int n = 0;
+int state_find_by_params(const char *uid, const params_t *query, int *ids, int max_ids) {
     pthread_mutex_lock(&g_lock);
-    for (int i = 0; i < DCAT_MAX_RECORDS && n < max_out; i++) {
-        if (g_records[i].active && !strcmp(g_records[i].uid, uid ? uid : "")) {
-            if (params_match(params, &g_records[i].params)) {
-                out[n] = g_records[i];
-                n++;
-            }
+    int n = 0;
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        if (g_records[i].active && strcmp(g_records[i].uid, uid) == 0 &&
+            params_match_subset(query, &g_records[i].params)) {
+            if (n < max_ids) ids[n] = g_records[i].record_id;
+            n++;
         }
     }
     pthread_mutex_unlock(&g_lock);
     return n;
 }
 
-int state_record(int idx, injection_record_t *out) {
-    if (idx < 0 || idx >= DCAT_MAX_RECORDS || !out) return 0;
+const injection_record_t *state_find_by_id(int id) {
     pthread_mutex_lock(&g_lock);
-    int active = g_records[idx].active;
-    if (active) *out = g_records[idx];
+    const injection_record_t *r = NULL;
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++)
+        if (g_records[i].record_id == id && g_records[i].active) { r = &g_records[i]; break; }
     pthread_mutex_unlock(&g_lock);
-    return active;
+    return r;
 }
 
-int state_count_active(void) {
-    int n = 0;
+int state_list_active(void) {
     pthread_mutex_lock(&g_lock);
+    int n = 0;
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) if (g_records[i].active) n++;
     pthread_mutex_unlock(&g_lock);
     return n;
 }
 
-void state_mark_inactive(int record_id) {
+void state_mark_inactive(int id) {
     pthread_mutex_lock(&g_lock);
-    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-        if (g_records[i].record_id == record_id && g_records[i].active) {
-            g_records[i].active = 0;
-            break;
-        }
-    }
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++)
+        if (g_records[i].record_id == id) { g_records[i].active = 0; break; }
     pthread_mutex_unlock(&g_lock);
-    state_save();
 }
 
-int state_save(void) {
-    if (!g_path[0]) return 0;
+void state_for_each_active(state_visit_fn fn, void *ctx) {
+    pthread_mutex_lock(&g_lock);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++)
+        if (g_records[i].active) fn(&g_records[i], ctx);
+    pthread_mutex_unlock(&g_lock);
+}
 
-    char dir[256];
-    copystr(dir, sizeof dir, g_path);
-    char *slash = strrchr(dir, '/');
-    if (slash) {
-        *slash = '\0';
-        if (dir[0]) {
-            for (char *p = dir + 1; *p; p++) {
-                if (*p == '/') { *p = '\0'; mkdir(dir, 0755); *p = '/'; }
-            }
-            mkdir(dir, 0755);
-        }
+static cJSON *params_to_json(const params_t *p) {
+    cJSON *o = cJSON_CreateObject();
+    for (int i = 0; i < p->count; i++)
+        cJSON_AddStringToObject(o, p->items[i].key, p->items[i].value);
+    return o;
+}
+static void json_to_params(const cJSON *o, params_t *p) {
+    params_init(p);
+    if (!o) return;
+    cJSON *k;
+    cJSON_ArrayForEach(k, o) {
+        if (cJSON_IsString(k)) params_set(p, k->string, k->valuestring);
     }
+}
 
+void state_save(void) {
     pthread_mutex_lock(&g_lock);
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-        if (!g_records[i].record_id) continue;
+        if (!g_records[i].active) continue;
         cJSON *o = cJSON_CreateObject();
         cJSON_AddNumberToObject(o, "record_id", g_records[i].record_id);
         cJSON_AddStringToObject(o, "uid", g_records[i].uid);
-        cJSON_AddNumberToObject(o, "started_at", (double)g_records[i].started_at);
+        cJSON_AddItemToObject(o, "params", params_to_json(&g_records[i].params));
+        cJSON_AddNumberToObject(o, "started_at", g_records[i].started_at);
         cJSON_AddBoolToObject(o, "active", g_records[i].active);
-        cJSON *parr = cJSON_CreateArray();
-        for (int j = 0; j < g_records[i].params.count; j++) {
-            cJSON *pkv = cJSON_CreateObject();
-            cJSON_AddStringToObject(pkv, "key", g_records[i].params.items[j].key);
-            cJSON_AddStringToObject(pkv, "value", g_records[i].params.items[j].value);
-            cJSON_AddItemToArray(parr, pkv);
-        }
-        cJSON_AddItemToObject(o, "params", parr);
         cJSON_AddItemToArray(arr, o);
     }
-    char *s = cJSON_PrintUnformatted(arr);
-    cJSON_Delete(arr);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "next_id", g_next_id);
+    cJSON_AddItemToObject(root, "records", arr);
+    char *s = cJSON_Print(root); cJSON_Delete(root);
     pthread_mutex_unlock(&g_lock);
 
-    if (!s) return -1;
-
-    char tmp[288];
-    snprintf(tmp, sizeof tmp, "%s.tmp", g_path);
-    FILE *f = fopen(tmp, "w");
-    int ok = 0;
-    if (f) {
-        if (fputs(s, f) != EOF && fclose(f) == 0)
-            ok = (rename(tmp, g_path) == 0);
-        else
-            fclose(f);
+    if (!s) return;
+    FILE *fp = fopen(g_file, "w");
+    if (fp) {
+        if (fputs(s, fp) == EOF || fclose(fp) != 0) {
+            fclose(fp);
+        }
     }
     free(s);
-    return ok ? 0 : -1;
 }
 
-int state_load(void) {
-    if (!g_path[0]) return 0;
-    FILE *f = fopen(g_path, "r");
-    if (!f) return 0;
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return 0; }
-    char *buf = malloc((size_t)sz + 1);
-    if (!buf) { fclose(f); return -1; }
-    size_t rd = fread(buf, 1, (size_t)sz, f);
-    fclose(f);
-    buf[rd] = '\0';
-    cJSON *arr = cJSON_Parse(buf);
-    free(buf);
-    if (!arr) return -1;
-
+void state_load(void) {
     pthread_mutex_lock(&g_lock);
-    memset(g_records, 0, sizeof g_records);
-    int maxid = 0;
-    int i = 0;
-    cJSON *o;
-    cJSON_ArrayForEach(o, arr) {
-        if (i >= DCAT_MAX_RECORDS) break;
-        injection_record_t *r = &g_records[i++];
-        cJSON *rid = cJSON_GetObjectItem(o, "record_id");
-        cJSON *u = cJSON_GetObjectItem(o, "uid");
-        cJSON *sa = cJSON_GetObjectItem(o, "started_at");
-        cJSON *ac = cJSON_GetObjectItem(o, "active");
-        cJSON *pa = cJSON_GetObjectItem(o, "params");
-        if (rid) r->record_id = (int)rid->valuedouble;
-        if (u && cJSON_IsString(u)) copystr(r->uid, sizeof r->uid, u->valuestring);
-        if (sa) r->started_at = (time_t)sa->valuedouble;
-        if (ac) r->active = cJSON_IsTrue(ac) ? 1 : 0;
-        if (pa && cJSON_IsArray(pa)) {
-            cJSON *pkv;
-            cJSON_ArrayForEach(pkv, pa) {
-                if (r->params.count >= DCAT_MAX_PARAMS) break;
-                cJSON *k = cJSON_GetObjectItem(pkv, "key");
-                cJSON *v = cJSON_GetObjectItem(pkv, "value");
-                if (k && v && cJSON_IsString(k) && cJSON_IsString(v)) {
-                    copystr(r->params.items[r->params.count].key,
-                            sizeof r->params.items[r->params.count].key, k->valuestring);
-                    copystr(r->params.items[r->params.count].value,
-                            sizeof r->params.items[r->params.count].value, v->valuestring);
-                    r->params.count++;
-                }
-            }
+    FILE *fp = fopen(g_file, "r");
+    if (!fp) { pthread_mutex_unlock(&g_lock); return; }
+    fseek(fp, 0, SEEK_END); long sz = ftell(fp); fseek(fp, 0, SEEK_SET);
+    if (sz < 0) { fclose(fp); pthread_mutex_unlock(&g_lock); return; }
+    char *buf = malloc((size_t)sz + 1);
+    size_t rd = fread(buf, 1, (size_t)sz, fp); buf[rd] = '\0'; fclose(fp);
+    cJSON *root = cJSON_Parse(buf); free(buf);
+    if (root) {
+        cJSON *nid = cJSON_GetObjectItem(root, "next_id");
+        if (nid) g_next_id = nid->valueint;
+        cJSON *arr = cJSON_GetObjectItem(root, "records");
+        cJSON *o; int i = 0;
+        cJSON_ArrayForEach(o, arr) {
+            if (i >= DCAT_MAX_RECORDS) break;
+            cJSON *rid = cJSON_GetObjectItem(o, "record_id");
+            cJSON *uid = cJSON_GetObjectItem(o, "uid");
+            cJSON *prms = cJSON_GetObjectItem(o, "params");
+            cJSON *sa = cJSON_GetObjectItem(o, "started_at");
+            cJSON *ac = cJSON_GetObjectItem(o, "active");
+            if (rid) g_records[i].record_id = rid->valueint;
+            if (uid) { strncpy(g_records[i].uid, uid->valuestring, sizeof(g_records[i].uid)-1); g_records[i].uid[sizeof(g_records[i].uid)-1]='\0'; }
+            if (prms) json_to_params(prms, &g_records[i].params);
+            if (sa) g_records[i].started_at = (long)sa->valuedouble;
+            if (ac) g_records[i].active = cJSON_IsTrue(ac);
+            i++;
         }
-        if (r->record_id > maxid) maxid = r->record_id;
+        cJSON_Delete(root);
     }
-    g_next_id = maxid + 1;
     pthread_mutex_unlock(&g_lock);
-    cJSON_Delete(arr);
-    return 0;
 }

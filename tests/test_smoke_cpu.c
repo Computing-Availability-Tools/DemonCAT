@@ -27,13 +27,15 @@ static void smoke_setup(void) {
     config_t cfg;
     config_load("config/demoncat.conf", &cfg);
     registry_init(&cfg);
-    state_init("/tmp/dcat_smoke_cpu.json");
+    state_reset();
+    state_set_file("/tmp/dcat_smoke_cpu.json");
     state_load();
     executor_set_mock(NULL);
 }
 
 static void smoke_teardown(void) {
-    state_init("");
+    state_reset();
+    state_set_file("");
     unlink("/tmp/dcat_smoke_cpu.json");
 }
 
@@ -45,7 +47,7 @@ int main(void) {
         params_t p; memset(&p, 0, sizeof p);
         strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, "0,1"); p.count = 1;
 
-        result_t *r = dispatch_inject("rCPU_overload", &p);
+        result_t *r = dispatch_route("rCPU_overload", "inject", &p);
         CK(r && r->code == 0);
         CK(strstr(r->json, "record_id") != NULL);
         result_free(r);
@@ -54,7 +56,7 @@ int main(void) {
         int n = count_proc("perl");
         CK(n >= 2);
 
-        r = dispatch_clean("rCPU_overload", &p);
+        r = dispatch_route("rCPU_overload", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
 

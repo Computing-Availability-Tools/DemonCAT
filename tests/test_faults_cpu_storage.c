@@ -8,7 +8,7 @@ int main(void) {
     {
         params_t p = mkparams("cores", "0,1", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
         g_mock_called = 0;
-        result_t *r = dispatch_inject("rCPU_overload", &p);
+        result_t *r = dispatch_route("rCPU_overload", "inject", &p);
         CK(r && r->code == 0);
         MOCK_CALLED;
         CMD_CONTAINS("cpu_overload.sh");
@@ -19,7 +19,7 @@ int main(void) {
         result_free(r);
 
         g_mock_called = 0;
-        r = dispatch_clean("rCPU_overload", &p);
+        r = dispatch_route("rCPU_overload", "clean", &p);
         CK(r && r->code == 0);
         MOCK_CALLED;
         ENV_EQ("DCAT_OP", "clean");
@@ -30,7 +30,7 @@ int main(void) {
     {
         params_t p = mkparams("cores", "0-3", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
         g_mock_called = 0;
-        result_t *r = dispatch_inject("rCPU_core_offline", &p);
+        result_t *r = dispatch_route("rCPU_core_offline", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("cpu_core_offline.sh");
         ENV_EQ("DCAT_UID", "rCPU_core_offline");
@@ -38,7 +38,7 @@ int main(void) {
         result_free(r);
 
         g_mock_called = 0;
-        r = dispatch_clean("rCPU_core_offline", &p);
+        r = dispatch_route("rCPU_core_offline", "clean", &p);
         CK(r && r->code == 0);
         ENV_EQ("DCAT_OP", "clean");
         result_free(r);
@@ -49,7 +49,7 @@ int main(void) {
         params_t p = mkparams("device", "/tmp", "workers", "2", "size_mb", "50",
                               NULL,NULL, NULL,NULL, NULL,NULL);
         g_mock_called = 0;
-        result_t *r = dispatch_inject("rDISK_write_overload", &p);
+        result_t *r = dispatch_route("rDISK_write_overload", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("disk_write_overload.sh");
         ENV_EQ("DCAT_UID", "rDISK_write_overload");
@@ -59,7 +59,7 @@ int main(void) {
         result_free(r);
 
         g_mock_called = 0;
-        r = dispatch_clean("rDISK_write_overload", &p);
+        r = dispatch_route("rDISK_write_overload", "clean", &p);
         CK(r && r->code == 0);
         ENV_EQ("DCAT_OP", "clean");
         result_free(r);

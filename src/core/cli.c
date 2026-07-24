@@ -1,77 +1,104 @@
-/* src/core/cli.c */
 #include "cli.h"
-
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+static const char *valid_subcommands[] = {"inject", "clean", "query", "list", NULL};
+static char g_cli_error[256] = "";
+
+const char *cli_get_error(void) { return g_cli_error; }
 
 static int is_subcommand(const char *s) {
-    return !strcmp(s, "inject") || !strcmp(s, "clean") ||
-           !strcmp(s, "query")  || !strcmp(s, "list");
+    if (!s) return 0;
+    for (int i = 0; valid_subcommands[i]; i++)
+        if (strcmp(s, valid_subcommands[i]) == 0) return 1;
+    return 0;
+}
+
+const char *cli_subcommand(int argc, char **argv) {
+    if (argc < 2 || !is_subcommand(argv[1])) return NULL;
+    return argv[1];
+}
+
+int cli_has_help(int argc, char **argv) {
+    for (int i = 1; i < argc; i++)
+        if (argv[i] && strcmp(argv[i], "--help") == 0) return 1;
+    return 0;
 }
 
 int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
-    if (!argv || !out || argc < 2) return -1;
-    memset(out, 0, sizeof *out);
-
-    int i = 1;
-
-    /* scan for --help anywhere; also find subcommand (first non-flag arg) */
-    for (int j = 1; j < argc; j++) {
-        if (!strcmp(argv[j], "--help") || !strcmp(argv[j], "-h")) {
-            out->help = 1;
-            return 0;
-        }
-    }
-
-    /* skip --config <path> at front */
-    while (i < argc && !strcmp(argv[i], "--config")) {
-        if (i + 1 >= argc) return -1; /* --config needs a value */
-        strncpy(out->config_path, argv[i + 1], sizeof(out->config_path) - 1);
-        out->config_path[sizeof(out->config_path) - 1] = '\0';
-        i += 2;
-    }
-
-    /* subcommand */
-    if (i >= argc) return -1;
-    if (!is_subcommand(argv[i])) return -1;
-    out->op = argv[i];
-    i++;
-
-    /* uid (if present and not a --flag) */
-    if (i < argc && argv[i][0] != '-') {
-        strncpy(out->uid, argv[i], sizeof(out->uid) - 1);
-        out->uid[sizeof(out->uid) - 1] = '\0';
-        i++;
-    } else if (out->op && (!strcmp(out->op, "inject") || !strcmp(out->op, "clean"))) {
-        /* inject and clean require uid */
+    memset(out, 0, sizeof(*out));
+    params_init(&out->params);
+    g_cli_error[0] = '\0';
+    if (argc < 2) {
+        snprintf(g_cli_error, sizeof g_cli_error, "no subcommand given (available: inject, clean, query, list)");
         return -1;
     }
 
-    /* remaining: --key=value flags and --config <path> */
-    while (i < argc) {
-        if (!strcmp(argv[i], "--config")) {
-            if (i + 1 >= argc) return -1;
-            strncpy(out->config_path, argv[i + 1], sizeof(out->config_path) - 1);
-            out->config_path[sizeof(out->config_path) - 1] = '\0';
-            i += 2;
-            continue;
-        }
-        /* must start with -- and contain = */
-        if (argv[i][0] != '-' || argv[i][1] != '-') return -1;
-        char *eq = strchr(argv[i], '=');
-        if (!eq) return -1;
-        /* extract key (skip --) and value */
-        const char *kstart = argv[i] + 2;
-        size_t klen = eq - kstart;
-        if (klen == 0 || klen >= DCAT_KEY_LEN) return -1;
-        if (out->params.count >= DCAT_MAX_PARAMS) return -1;
-        strncpy(out->params.items[out->params.count].key, kstart, klen);
-        out->params.items[out->params.count].key[klen] = '\0';
-        const char *vstart = eq + 1;
-        strncpy(out->params.items[out->params.count].value, vstart, DCAT_VAL_LEN - 1);
-        out->params.items[out->params.count].value[DCAT_VAL_LEN - 1] = '\0';
-        out->params.count++;
+    out->op = is_subcommand(argv[1]) ? argv[1] : NULL;
+    int i = out->op ? 2 : 1;
+
+    /* uid：紧跟子命令、非 flag、非保留字 */
+    if (out->op && i < argc && argv[i][0] != '-' && argv[i][0] != '\0' &&
+        strcmp(argv[i], "values") != 0 && strcmp(argv[i], "where") != 0) {
+        strncpy(out->uid, argv[i], sizeof(out->uid) - 1);
+        out->uid[sizeof(out->uid) - 1] = '\0';
         i++;
     }
 
+    for (; i < argc; i++) {
+        if (strcmp(argv[i], "--help") == 0) {
+            out->help = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--plugins") == 0) {
+            if (i + 1 < argc) {
+                if (strcmp(argv[i], "--config") == 0) out->config  = argv[i + 1];
+                else                                    out->plugins = argv[i + 1];
+                i++;
+            }
+            continue;
+        }
+        /* subcommand may appear after global options (e.g. dcat --config x.conf inject ...) */
+        if (!out->op && is_subcommand(argv[i])) {
+            out->op = argv[i];
+            /* uid may follow */
+            if (i + 1 < argc && argv[i+1][0] != '-' && argv[i+1][0] != '\0' &&
+                strcmp(argv[i+1], "values") != 0 && strcmp(argv[i+1], "where") != 0) {
+                strncpy(out->uid, argv[i+1], sizeof(out->uid) - 1);
+                out->uid[sizeof(out->uid) - 1] = '\0';
+                i++;
+            }
+            continue;
+        }
+        if (strncmp(argv[i], "--", 2) != 0) {
+            snprintf(g_cli_error, sizeof g_cli_error, "unexpected argument '%s' (expected --key=value)", argv[i]);
+            return -1;
+        }
+        const char *kv = argv[i] + 2;
+        const char *eq = strchr(kv, '=');
+        if (!eq) {
+            snprintf(g_cli_error, sizeof g_cli_error, "invalid parameter '%s' (expected --key=value)", argv[i]);
+            return -1;
+        }
+        char key[64];
+        size_t kl = (size_t)(eq - kv);
+        if (kl >= sizeof(key)) {
+            snprintf(g_cli_error, sizeof g_cli_error, "parameter name too long in '%s'", argv[i]);
+            return -1;
+        }
+        memcpy(key, kv, kl); key[kl] = '\0';
+        const char *val = eq + 1;
+        if (params_set(&out->params, key, val) != 0) {
+            snprintf(g_cli_error, sizeof g_cli_error, "too many parameters (max %d)", DCAT_MAX_PARAMS);
+            return -1;
+        }
+    }
+    if (!out->op && !out->help) {
+        if (argc >= 2 && !is_subcommand(argv[1])) {
+            snprintf(g_cli_error, sizeof g_cli_error, "unknown subcommand '%s' (available: inject, clean, query, list)", argv[1]);
+        }
+        return -1;
+    }
     return 0;
 }

@@ -8,7 +8,7 @@ int main(void) {
     {
         params_t p = mkparams("pid", "99999", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
         g_mock_called = 0;
-        result_t *r = dispatch_inject("rPROC_exit", &p);
+        result_t *r = dispatch_route("rPROC_exit", "inject", &p);
         CK(r && r->code == 0);
         MOCK_CALLED;
         CMD_CONTAINS("proc_exit.sh");
@@ -19,42 +19,42 @@ int main(void) {
         result_free(r);
 
         /* clean should be rejected (op not in supported_ops) */
-        r = dispatch_clean("rPROC_exit", &p);
-        CK(r && r->code == DCAT_E_PRECHECK);
+        r = dispatch_route("rPROC_exit", "clean", &p);
+        CK(r && r->code == 3);
         result_free(r);
 
         /* query should be rejected */
-        r = dispatch_query("rPROC_exit", &p);
-        CK(r && r->code == DCAT_E_PRECHECK);
+        r = dispatch_route("rPROC_exit", "query", &p);
+        CK(r && r->code == 3);
         result_free(r);
     }
 
     /* rPROC_dstate */
     {
-        params_t p = mkparams("count", "2", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_inject("rPROC_dstate", &p);
+        params_t p = mkparams("device", "/tmp", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
+        result_t *r = dispatch_route("rPROC_dstate", "inject", &p);
         CK(r && r->code == 0); CMD_CONTAINS("proc_dstate.sh");
-        check_param_env("count", "2"); CK(strstr(r->json, "record_id") != NULL);
+        check_param_env("device", "/tmp"); CK(strstr(r->json, "record_id") != NULL);
         result_free(r);
-        r = dispatch_clean("rPROC_dstate", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rPROC_dstate", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
 
     /* rPROC_hang */
     {
         params_t p = mkparams("pid", "12345", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_inject("rPROC_hang", &p);
+        result_t *r = dispatch_route("rPROC_hang", "inject", &p);
         CK(r && r->code == 0); CMD_CONTAINS("proc_hang.sh");
         check_param_env("pid", "12345"); result_free(r);
-        r = dispatch_clean("rPROC_hang", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rPROC_hang", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
 
     /* rPROC_zstate */
     {
-        params_t p = mkparams("count", "3", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_inject("rPROC_zstate", &p);
+        params_t p = mkparams("pid", "54321", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
+        result_t *r = dispatch_route("rPROC_zstate", "inject", &p);
         CK(r && r->code == 0); CMD_CONTAINS("proc_zstate.sh");
-        check_param_env("count", "3"); result_free(r);
-        r = dispatch_clean("rPROC_zstate", &p); CK(r && r->code == 0); result_free(r);
+        check_param_env("pid", "54321"); result_free(r);
+        r = dispatch_route("rPROC_zstate", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
 
     faults_teardown();

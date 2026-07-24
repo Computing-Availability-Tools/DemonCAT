@@ -1,144 +1,131 @@
-/* src/core/executor.c */
 #include "executor.h"
 #include "output.h"
-
-#include <ctype.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/wait.h>
 #include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <time.h>
 
 static mock_fn g_mock = NULL;
+void executor_set_mock(mock_fn fn) { g_mock = fn; }
 
-int executor_check_tool(const char *path) {
-    return (path && access(path, X_OK) == 0) ? 0 : -1;
-}
-
-char *executor_build_cmd(const fault_def_t *f, const char *op, const params_t *p,
-                         char *buf, size_t len) {
-    (void)op; (void)p;
-    if (!f || !buf || len == 0) return NULL;
-    strncpy(buf, f->script, len - 1);
-    buf[len - 1] = '\0';
-    return buf;
-}
-
-static void env_name(const char *k, char *out, size_t cap) {
-    static const char prefix[] = "DCAT_PARAM_";
-    size_t i = 0;
-    for (const char *p = prefix; *p && i + 1 < cap; p++) out[i++] = *p;
-    for (size_t j = 0; k[j] && i + 1 < cap; j++) {
-        char c = k[j];
-        if (isalnum((unsigned char)c) || c == '_') out[i++] = (char)toupper((unsigned char)c);
-        else out[i++] = '_';
-    }
-    out[i] = '\0';
-}
-
-void executor_set_env(const char *op, const char *uid, const params_t *p) {
-    setenv("DCAT_OP", op ? op : "", 1);
-    setenv("DCAT_UID", uid ? uid : "", 1);
-    if (!p) return;
+static const char **build_env(const fault_def_t *f, const char *op, const params_t *p, int *out_n) {
+    int cap = p->count + 4;
+    const char **env = calloc((size_t)cap, sizeof(char*));
+    int n = 0;
+    char buf[160];
+    snprintf(buf, sizeof(buf), "DCAT_OP=%s", op); env[n++] = strdup(buf);
+    snprintf(buf, sizeof(buf), "DCAT_UID=%s", f->uid); env[n++] = strdup(buf);
     for (int i = 0; i < p->count; i++) {
-        char ek[80];
-        env_name(p->items[i].key, ek, sizeof ek);
-        setenv(ek, p->items[i].value, 1);
+        snprintf(buf, sizeof(buf), "%s=%s", dcat_key_to_env(p->items[i].key), p->items[i].value);
+        env[n++] = strdup(buf);
+    }
+    env[n] = NULL;
+    if (out_n) *out_n = n;
+    return env;
+}
+static void free_env(const char **env, int n) {
+    for (int i = 0; i < n; i++) free((void*)env[i]);
+    free(env);
+}
+static void apply_env(const char *const *env, int n) {
+    for (int i = 0; i < n; i++) {
+        const char *eq = strchr(env[i], '=');
+        if (eq) {
+            size_t kl = (size_t)(eq - env[i]);
+            char *k = malloc(kl + 1);
+            memcpy(k, env[i], kl); k[kl] = '\0';
+            setenv(k, eq + 1, 1);
+            free(k);
+        }
     }
 }
 
-void executor_clear_env_params(const fault_def_t *f) {
+/* Clear stale DCAT_PARAM_* env vars for a fault's declared params (required+optional).
+ * Prevents param leakage between records in clean loop when records have different param sets. */
+static void clear_stale_env_params(const fault_def_t *f) {
     if (!f) return;
-    const char *lists[2] = { f->required_params, f->optional_params };
-    for (int li = 0; li < 2; li++) {
+    const char *lists[6] = { f->inject_required, f->inject_optional, f->clean_required, f->clean_optional, f->query_required, f->query_optional };
+    for (int li = 0; li < 6; li++) {
         const char *q = lists[li];
         if (!q || !q[0]) continue;
-        while (*q) {
-            const char *c = strchr(q, ',');
-            size_t len = c ? (size_t)(c - q) : strlen(q);
-            char tok[64];
-            if (len >= sizeof tok) len = sizeof tok - 1;
-            memcpy(tok, q, len);
-            tok[len] = '\0';
-            char ek[80];
-            env_name(tok, ek, sizeof ek);
-            unsetenv(ek);
-            if (!c) break;
-            q = c + 1;
+        char buf[128];
+        strncpy(buf, q, sizeof(buf) - 1); buf[sizeof(buf) - 1] = '\0';
+        char *save = NULL;
+        char *tok = strtok_r(buf, ",", &save);
+        while (tok) {
+            const char *env_name = dcat_key_to_env(tok);
+            unsetenv(env_name);
+            tok = strtok_r(NULL, ",", &save);
         }
     }
 }
 
-result_t *executor_run(const char *cmd) {
-    if (g_mock) return g_mock(cmd);
-    if (!cmd) return result_err("run", "", DCAT_E_RUN, "null cmd");
+static pid_t g_timed_pid = 0;
+static void on_timeout(union sigval sv) { (void)sv; if (g_timed_pid > 0) kill(g_timed_pid, SIGKILL); }
 
-    int p[2];
-    if (pipe(p)) return result_err("run", "", DCAT_E_RUN, "pipe failed");
-    pid_t pid = fork();
-    if (pid < 0) {
-        close(p[0]); close(p[1]);
-        return result_err("run", "", DCAT_E_RUN, "fork failed");
+result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_t *p, int timeout_ms) {
+    int nenv = 0;
+    const char **env = build_env(f, op, p, &nenv);
+    if (g_mock) {
+        return g_mock(f->script, env);  /* mock 场景 env 供测试检查，不释放 */
     }
+    clear_stale_env_params(f);
+    int pipefd[2];
+    if (pipe(pipefd) < 0) { free_env(env, nenv); return result_err(op, f->uid, 1, "pipe failed"); }
+    pid_t pid = fork();
+    if (pid < 0) { free_env(env, nenv); close(pipefd[0]); close(pipefd[1]); return result_err(op, f->uid, 1, "fork failed"); }
     if (pid == 0) {
-        close(p[0]);
-        dup2(p[1], 1);
-        dup2(p[1], 2);
-        close(p[1]);
-        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        apply_env(env, nenv);
+        dup2(pipefd[1], 1); dup2(pipefd[1], 2); close(pipefd[0]); close(pipefd[1]);
+        execl(f->script, f->script, (char*)NULL);
         _exit(127);
     }
-    close(p[1]);
-
-    char buf[8192];
-    size_t total = 0;
-    int status = 0;
-    while (1) {
-        ssize_t r = read(p[0], buf + total, sizeof buf - 1 - total);
-        if (r > 0) {
-            total += (size_t)r;
-            if (total >= sizeof buf - 1) { total = sizeof buf - 2; break; }
-        } else if (r == 0) {
-            break;
-        } else {
-            if (errno == EINTR) continue;
-            break;
-        }
+    close(pipefd[1]);
+    timer_t timer = NULL;
+    if (timeout_ms > 0) {
+        g_timed_pid = pid;
+        struct sigevent sev; memset(&sev, 0, sizeof(sev));
+        sev.sigev_notify = SIGEV_THREAD; sev.sigev_notify_function = on_timeout;
+        timer_create(CLOCK_MONOTONIC, &sev, &timer);
+        struct itimerspec its; memset(&its, 0, sizeof(its));
+        its.it_value.tv_sec = timeout_ms / 1000;
+        its.it_value.tv_nsec = (long)(timeout_ms % 1000) * 1000000L;
+        timer_settime(timer, 0, &its, NULL);
     }
-    close(p[0]);
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
-
-    while (total > 0 && (buf[total - 1] == '\n' || buf[total - 1] == '\r')) buf[--total] = '\0';
-    buf[total] = '\0';
-
-    if (WIFEXITED(status)) {
-        int ec = WEXITSTATUS(status);
-        if (ec == 0) {
-            cJSON *data = cJSON_CreateObject();
-            if (total > 0) cJSON_AddStringToObject(data, "message", buf);
-            return result_ok("run", "", data);
-        }
-        char emsg[256];
-        char snippet[200];
-        if (total > 0) {
-            size_t sn = total < sizeof snippet - 1 ? total : sizeof snippet - 1;
-            memcpy(snippet, buf, sn);
-            snippet[sn] = '\0';
-        }
-        snprintf(emsg, sizeof emsg, "script exit %d%s%s", ec,
-                 total > 0 ? ": " : "", total > 0 ? snippet : "");
-        return result_err("run", "", DCAT_E_RUN, emsg);
-    }
-    return result_err("run", "", DCAT_E_RUN, "script signaled");
+    char out[4096] = {0}; ssize_t m = read(pipefd[0], out, sizeof(out)-1); (void)m;
+    close(pipefd[0]);
+    int status = 0; waitpid(pid, &status, 0);
+    if (timer) { timer_delete(timer); g_timed_pid = 0; }
+    free_env(env, nenv);
+    if (timeout_ms > 0 && WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL)
+        return result_err(op, f->uid, 1, "script timeout");
+    int code = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+    if (code != 0) return result_err(op, f->uid, 1, out[0] ? out : "script failed");
+    char *nl = strchr(out, '\n'); if (nl) *nl = '\0';
+    return result_ok(op, f->uid, 0, out[0] ? out : NULL);
 }
 
-int executor_run_raw(const char *cmd) {
-    if (g_mock) return 0;
-    if (!cmd) return -1;
-    int status = system(cmd);
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    return -1;
+int executor_run_raw_fault(const fault_def_t *f, const char *op, const params_t *p) {
+    int nenv = 0;
+    const char **env = build_env(f, op, p, &nenv);
+    if (g_mock) {
+        result_t *r = g_mock(f->script, env);
+        int code = r ? r->code : 1;
+        result_free(r);
+        return code;  /* mock 场景 env 供测试检查，不释放 */
+    }
+    clear_stale_env_params(f);
+    apply_env(env, nenv);
+    int rc = system(f->script);
+    free_env(env, nenv);
+    return WIFEXITED(rc) ? WEXITSTATUS(rc) : 1;
 }
 
-void executor_set_mock(mock_fn fn) { g_mock = fn; }
+int executor_check_tool(const char *path) {
+    return access(path, X_OK);
+}

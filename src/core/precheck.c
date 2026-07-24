@@ -1,76 +1,97 @@
-/* src/core/precheck.c */
 #include "precheck.h"
 #include "executor.h"
 #include "output.h"
-
+#include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
-static int csv_contains(const char *csv, const char *tok) {
-    if (!csv || !tok) return 0;
-    size_t tlen = strlen(tok);
-    const char *p = csv;
-    while (*p) {
-        const char *c = strchr(p, ',');
-        size_t len = c ? (size_t)(c - p) : strlen(p);
-        if (len == tlen && !strncmp(p, tok, len)) return 1;
-        if (!c) break;
-        p = c + 1;
-    }
+static char g_undeclared_param[64];
+
+int op_in_supported(const char *supported_ops, const char *op) {
+    char buf[128];
+    strncpy(buf, supported_ops ? supported_ops : "", sizeof(buf)-1);
+    buf[sizeof(buf)-1] = '\0';
+    char *tok = strtok(buf, ",");
+    while (tok) { if (strcmp(tok, op) == 0) return 1; tok = strtok(NULL, ","); }
     return 0;
 }
 
-static int param_is_declared(const char *key, const char *required, const char *optional) {
-    return csv_contains(required, key) || csv_contains(optional, key);
+int required_params_present(const char *required_params, const params_t *params) {
+    char buf[128];
+    strncpy(buf, required_params ? required_params : "", sizeof(buf)-1);
+    buf[sizeof(buf)-1] = '\0';
+    if (buf[0] == '\0') return 1;
+    char *save = NULL;
+    char *tok = strtok_r(buf, ",", &save);
+    while (tok) {
+        const char *v = params_find(params, tok);
+        if (!v || !v[0]) return 0;
+        tok = strtok_r(NULL, ",", &save);
+    }
+    return 1;
 }
 
-static int find_param(const params_t *p, const char *key, const char **out_val) {
-    for (int i = 0; i < p->count; i++) {
-        if (!strcmp(p->items[i].key, key)) {
-            if (out_val) *out_val = p->items[i].value;
-            return 1;
+int declared_params_only(const char *inject_req, const char *inject_opt, const char *clean_req, const char *clean_opt, const char *query_req, const char *query_opt, const params_t *params) {
+    /* returns 1 if all params are declared, 0 otherwise. Sets g_undeclared_param to the first undeclared param. */
+    for (int i = 0; i < params->count; i++) {
+        const char *k = params->items[i].key;
+        const char *lists[6] = { inject_req, inject_opt, clean_req, clean_opt, query_req, query_opt };
+        int found = 0;
+        for (int li = 0; li < 6 && !found; li++) {
+            if (!lists[li] || !lists[li][0]) continue;
+            char buf[128];
+            strncpy(buf, lists[li], sizeof(buf)-1); buf[sizeof(buf)-1]='\0';
+            char *save = NULL;
+            char *tok = strtok_r(buf, ",", &save);
+            while (tok) { if (strcmp(tok, k) == 0) { found = 1; break; } tok = strtok_r(NULL, ",", &save); }
+        }
+        if (!found) {
+            strncpy(g_undeclared_param, k, sizeof(g_undeclared_param)-1);
+            g_undeclared_param[sizeof(g_undeclared_param)-1] = '\0';
+            return 0;
         }
     }
-    return 0;
+    return 1;
 }
 
-result_t *precheck(const fault_def_t *f, const char *op, const params_t *p) {
-    if (!f || !op) return result_err(op, "", DCAT_E_RUN, "bad args");
+/* Find first missing required param. Returns static string or NULL. */
+static const char *first_missing_required(const char *required, const params_t *params) {
+    static char missing[64];
+    if (!required || !required[0]) return NULL;
+    char buf[128];
+    strncpy(buf, required, sizeof(buf)-1); buf[sizeof(buf)-1]='\0';
+    char *save = NULL;
+    char *tok = strtok_r(buf, ",", &save);
+    while (tok) {
+        const char *v = params_find(params, tok);
+        if (!v || !v[0]) { strncpy(missing, tok, sizeof(missing)-1); missing[sizeof(missing)-1]='\0'; return missing; }
+        tok = strtok_r(NULL, ",", &save);
+    }
+    return NULL;
+}
 
-    /* Step 2: op ∈ supported_ops */
-    if (!csv_contains(f->supported_ops, op))
-        return result_err(op, f->uid, DCAT_E_PRECHECK, "op not supported");
-
-    /* Step 5 (all commands): reject unknown params not in required/optional.
-     * Checked before required-param completeness so an unrecognized key is
-     * surfaced as "unknown param" even when a required key is also missing. */
-    if (p) {
-        for (int i = 0; i < p->count; i++) {
-            if (!param_is_declared(p->items[i].key, f->required_params, f->optional_params))
-                return result_err(op, f->uid, DCAT_E_PRECHECK, "unknown param");
+result_t *precheck(const fault_def_t *f, const char *op, const params_t *params) {
+    if (!f) return result_err(op, "", 4, "uid not found (use 'dcat list' to see available faults)");
+    if (!op_in_supported(f->supported_ops, op))
+        return result_err(op, f->uid, 3, "op not in supported_ops");
+    if (!declared_params_only(f->inject_required, f->inject_optional, f->clean_required, f->clean_optional, f->query_required, f->query_optional, params)) {
+        char msg[256];
+        snprintf(msg, sizeof msg, "unknown parameter '%s' (not declared for %s)", g_undeclared_param, f->uid);
+        return result_err(op, f->uid, 3, msg);
+    }
+    const char *op_required = NULL;
+    if (strcmp(op, "inject") == 0)      op_required = f->inject_required;
+    else if (strcmp(op, "clean") == 0)  op_required = f->clean_required;
+    else if (strcmp(op, "query") == 0)  op_required = f->query_required;
+    if (op_required) {
+        const char *missing = first_missing_required(op_required, params);
+        if (missing) {
+            char msg[256];
+            snprintf(msg, sizeof msg, "missing required parameter '%s' for %s", missing, op);
+            return result_err(op, f->uid, 3, msg);
         }
     }
-
-    /* Step 3 (inject only): required_params present and non-empty */
-    if (!strcmp(op, "inject") && f->required_params[0]) {
-        const char *q = f->required_params;
-        while (*q) {
-            const char *c = strchr(q, ',');
-            size_t len = c ? (size_t)(c - q) : strlen(q);
-            char tok[64];
-            if (len >= sizeof tok) len = sizeof tok - 1;
-            memcpy(tok, q, len);
-            tok[len] = '\0';
-            const char *val = NULL;
-            if (!find_param(p, tok, &val) || !val || !val[0])
-                return result_err(op, f->uid, DCAT_E_PRECHECK, "missing required param");
-            if (!c) break;
-            q = c + 1;
-        }
-    }
-
-    /* Step 4: script exists and executable */
     if (executor_check_tool(f->script) != 0)
-        return result_err(op, f->uid, DCAT_E_PRECHECK, "script not executable");
-
-    return result_ok(op, f->uid, NULL);
+        return result_err(op, f->uid, 3, "script not executable");
+    return NULL;
 }

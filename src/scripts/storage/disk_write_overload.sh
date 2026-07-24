@@ -63,10 +63,15 @@ case "${DCAT_OP:-inject}" in
 
     query)
         dev=${DCAT_PARAM_DEVICE:-/tmp}
-        expected=${DCAT_PARAM_WORKERS:-4}
-        echo "Checking disk write overload on $dev (expected $expected workers)..."
-        dd_procs=$(pgrep -af 'dd if=/dev/zero' 2>/dev/null || true)
-        count=$(printf '%s\n' "$dd_procs" | grep -c .)
+        echo "Checking disk write overload on $dev..."
+        dd_procs=$(pgrep -af 'dd.*dcat.stress' 2>/dev/null; pgrep -af 'dd.*dcat.write' 2>/dev/null || true)
+        dd_procs=$(echo "$dd_procs" | grep -v '^$' || true)
+        if [ -n "$dd_procs" ]; then
+            count=$(echo "$dd_procs" | grep -c . 2>/dev/null)
+            count=${count:-0}
+        else
+            count=0
+        fi
         if [ "$count" -gt 0 ]; then
             echo "FAULT CONFIRMED: $count dd process(es) running"
             echo "$dd_procs"
@@ -75,7 +80,7 @@ case "${DCAT_OP:-inject}" in
             ls -lh /tmp/dcat.write.* 2>/dev/null || true
             exit 0
         else
-            echo "FAULT NOT ACTIVE: no dd if=/dev/zero processes found"
+            echo "FAULT NOT ACTIVE: no dcat disk write processes found"
             exit 1
         fi
         ;;

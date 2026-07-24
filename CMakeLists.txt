@@ -9,7 +9,7 @@ add_library(cjson STATIC third_party/cjson/cJSON.c)
 target_include_directories(cjson PUBLIC third_party/cjson)
 
 set(DCAT_CORE
-    src/core/types.c src/core/cli.c src/core/registry.c src/core/executor.c
+    src/core/types.c src/core/cli.c src/core/help.c src/core/registry.c src/core/executor.c
     src/core/precheck.c src/core/state.c src/core/config.c
     src/core/output.c src/core/dispatch.c
     src/injectors/injectors.c src/plugins/plugin_manager.c)
@@ -20,7 +20,7 @@ target_compile_options(dcat PRIVATE -Wall -Wextra -Werror)
 
 enable_testing()
 set(DCAT_TESTS test_types test_output test_config test_registry test_executor_mock
-    test_precheck test_state test_injectors test_dispatch test_cli test_faults test_plugin_manager test_plugin_integration)
+    test_precheck test_state test_injectors test_dispatch test_cli test_help test_faults test_plugin_manager test_plugin_integration)
 foreach(t ${DCAT_TESTS})
     if(EXISTS ${CMAKE_SOURCE_DIR}/tests/${t}.c)
         add_executable(${t} tests/${t}.c ${DCAT_CORE})

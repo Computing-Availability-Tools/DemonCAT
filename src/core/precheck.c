@@ -56,7 +56,8 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
         return result_err(op, f->uid, 3, "undeclared param");
     if (strcmp(op, "inject") == 0 && !required_params_present(f->required_params, params))
         return result_err(op, f->uid, 3, "missing required params");
-    if (executor_check_tool(f->script) != 0)
-        return result_err(op, f->uid, 3, "script not executable");
+    char diag[400] = "script not executable";
+    if (executor_check_tool_diag(f->script, diag, sizeof(diag)) != 0)
+        return result_err(op, f->uid, 3, diag);
     return NULL;
 }

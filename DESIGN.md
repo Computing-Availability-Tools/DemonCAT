@@ -84,7 +84,7 @@
 ```
 
 **核心层**（编译进二进制，稳定）：`main / cli / registry / executor / precheck / state / config / output / dispatch`。
-**故障层**（可变，数据驱动）：`demoncat.conf` 声明 + 外部脚本（`config/scripts/<module>/*.sh`）。
+**故障层**（可变，数据驱动）：`demoncat.conf` 声明 + 外部脚本（`src/scripts/<module>/*.sh`）。
 **扩展点**：`injector_t` 编译注入器作为进程内高级扩展点，设计见 §7（本期 `builtin_injectors[]` 为空，仅留位）。
 
 > 本期所有故障**统一同步阻塞执行**，不区分 background/sync 模式。
@@ -106,7 +106,7 @@ required_params = dimm
 optional_params =
 ```
 
-对应脚本放到 `config/scripts/memory/mem_ecc_inject.sh` 并 `chmod +x`。`dcat list` 自动出现新故障，**免重编译**。
+对应脚本放到 `src/scripts/memory/mem_ecc_inject.sh` 并 `chmod +x`。`dcat list` 自动出现新故障，**免重编译**。
 
 ### 1.3 数据流
 
@@ -371,7 +371,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 
 #### 4.5.1 共享机制
 
-所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `config/scripts/npu/_common.sh`（`npu_check_env`/`sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
+所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `src/scripts/npu/_common.sh`（`npu_check_env`/`sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
 
 | clean 策略 | 适用 UID | 机制 |
 |---|---|---|
@@ -651,9 +651,7 @@ CAT/
 │   └── injectors/
 │       ├── injector.h          # 注入器接口 injector_t (§7.2)
 │       └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
-├── config/
-│   ├── demoncat.conf           # 故障目录配置(38 条)
-│   └── scripts/
+│   └── scripts/                    # 故障脚本源码（数据驱动，非编译，git chmod +x）
 │       ├── cpu/                    # 2 脚本
 │       │   ├── cpu_overload.sh        # 示例
 │       │   └── cpu_core_offline.sh
@@ -698,6 +696,8 @@ CAT/
 │           ├── prio_tc_change.sh
 │           ├── pfc_change.sh
 │           └── roce_port_change.sh
+├── config/
+│   └── demoncat.conf           # 故障目录配置(38 条)
 └── tests/
     ├── test_cli.c
     ├── test_registry.c
@@ -719,7 +719,7 @@ CAT/
 ## 9. 构建
 
 - `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
-- 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `config/scripts/*.sh` 解析。
+- 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
 - WSL 验证：`cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure`。
 
 ---

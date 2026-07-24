@@ -1,0 +1,159 @@
+#include "help.h"
+#include "registry.h"
+#include "precheck.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+
+/* ---- 极简可增长字符串缓冲（OOM 时停止追加，避免截断） ---- */
+typedef struct { char *buf; size_t len, cap; int oom; } sb_t;
+
+static void sb_init(sb_t *s) {
+    s->cap = 512; s->len = 0; s->oom = 0;
+    s->buf = malloc(s->cap);
+    if (!s->buf) { s->oom = 1; s->cap = 0; }
+    else s->buf[0] = '\0';
+}
+
+static void sb_reserve(sb_t *s, size_t add) {
+    if (s->oom) return;
+    size_t need = s->len + add + 1;
+    if (need <= s->cap) return;
+    size_t c = s->cap ? s->cap : 16;
+    while (c < need) c *= 2;
+    char *nb = realloc(s->buf, c);
+    if (!nb) { s->oom = 1; return; }
+    s->buf = nb; s->cap = c;
+}
+
+static void sb_addf(sb_t *s, const char *fmt, ...) {
+    if (s->oom) return;
+    va_list ap, ap2;
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
+    int n = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    if (n < 0) { va_end(ap2); return; }
+    sb_reserve(s, (size_t)n);
+    if (!s->oom && s->len + (size_t)n + 1 <= s->cap) {
+        vsnprintf(s->buf + s->len, s->cap - s->len, fmt, ap2);
+        s->len += (size_t)n;
+    }
+    va_end(ap2);
+}
+
+static char *sb_done(sb_t *s) {
+    if (s->oom) { free(s->buf); return strdup(""); }
+    return s->buf;
+}
+
+/* ---- 文案 ---- */
+static const char *op_usage(const char *op) {
+    if (strcmp(op, "inject") == 0) return "dcat inject <uid> --<param>=<value> ...";
+    if (strcmp(op, "clean")  == 0) return "dcat clean <uid> [--<param>=<value> ...]";
+    if (strcmp(op, "query")  == 0) return "dcat query [uid] [--<param>=<value> ...]";
+    if (strcmp(op, "list")   == 0) return "dcat list";
+    return "dcat <subcommand> [uid] [--key=value ...]";
+}
+
+static const char *op_desc(const char *op) {
+    if (strcmp(op, "inject") == 0) return "注入故障；可恢复故障写 state + 返回 record_id；inject-only 不写 state";
+    if (strcmp(op, "clean")  == 0) return "清除活跃注入；按用户参数匹配活跃记录，逐条执行 clean，失败停止";
+    if (strcmp(op, "query")  == 0) return "无 uid 查询全部活跃记录（state 回答）；有 uid 走脚本 query 直通 stdout + confirmed";
+    if (strcmp(op, "list")   == 0) return "列出故障目录（cnf + 动态插件）";
+    return "";
+}
+
+/* 按 required/optional 拼参数示例：--k=<k> [--o=<o>] */
+static void render_example(sb_t *s, const char *op, const fault_def_t *f) {
+    sb_addf(s, "  示例：dcat %s %s", op, f->uid);
+    char buf[128];
+    strncpy(buf, f->required_params[0] ? f->required_params : "", sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    if (buf[0]) {
+        char *save = NULL, *tok = strtok_r(buf, ",", &save);
+        while (tok) { sb_addf(s, " --%s=<%s>", tok, tok); tok = strtok_r(NULL, ",", &save); }
+    }
+    strncpy(buf, f->optional_params[0] ? f->optional_params : "", sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    if (buf[0]) {
+        char *save = NULL, *tok = strtok_r(buf, ",", &save);
+        while (tok) { sb_addf(s, " [--%s=<%s>]", tok, tok); tok = strtok_r(NULL, ",", &save); }
+    }
+    sb_addf(s, "\n");
+}
+
+static void render_fault_table(sb_t *s, const char *op) {
+    int n = 0;
+    const fault_def_t *list = registry_list(&n);
+    int printed = 0;
+    for (int i = 0; i < n; i++) {
+        if (!op_in_supported(list[i].supported_ops, op)) continue;
+        sb_addf(s, "  %-24s %s", list[i].uid,
+                list[i].required_params[0] ? list[i].required_params : "（无必填）");
+        if (list[i].optional_params[0])
+            sb_addf(s, "  [可选: %s]", list[i].optional_params);
+        sb_addf(s, "\n");
+        printed++;
+    }
+    if (!printed) sb_addf(s, "  （无）\n");
+}
+
+/* ---- 对外渲染 ---- */
+char *help_render_global(void) {
+    sb_t s; sb_init(&s);
+    sb_addf(&s,
+        "usage: dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--plugins <dir>] [--help]\n"
+        "  subcommand: inject | clean | query | list\n"
+        "  inject <uid> --p1=v1 ...     注入故障\n"
+        "  clean  <uid> [--k1=v1 ...]   清除活跃注入（按参数匹配）\n"
+        "  query  [uid] [--k=v ...]     无 uid 查询全部活跃；有 uid 验证故障生效\n"
+        "  list                         列出故障目录\n"
+        "  --config <path>              指定 demoncat.conf 路径（默认 <root>/config/demoncat.conf）\n"
+        "  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）\n"
+        "  --help                       打印本帮助；置于子命令后可显示该子命令参数\n");
+    return sb_done(&s);
+}
+
+char *help_render_subcommand(const char *op, const char *uid) {
+    if (!op || !op[0]) return help_render_global();
+
+    sb_t s; sb_init(&s);
+    sb_addf(&s, "usage: %s\n  %s\n", op_usage(op), op_desc(op));
+    sb_addf(&s, "  --help                       打印本帮助\n");
+
+    if (strcmp(op, "list") == 0) {
+        sb_addf(&s, "  运行 `dcat list` 查看完整故障目录（含动态插件）\n");
+        return sb_done(&s);
+    }
+
+    /* inject/clean/query */
+    if (uid && uid[0]) {
+        const fault_def_t *f = registry_find(uid);
+        if (f) {
+            sb_addf(&s, "\n故障 %s：%s\n", f->uid, f->desc[0] ? f->desc : "（无描述）");
+            sb_addf(&s, "  支持操作：%s\n", f->supported_ops);
+            sb_addf(&s, "  必填参数：%s\n", f->required_params[0] ? f->required_params : "（无）");
+            sb_addf(&s, "  可选参数：%s\n", f->optional_params[0] ? f->optional_params : "（无）");
+            render_example(&s, op, f);
+        } else {
+            sb_addf(&s, "\n（未知故障 uid：%s）\n", uid);
+        }
+    }
+
+    sb_addf(&s, "\n支持 %s 的故障（必填参数 [可选参数]）：\n", op);
+    render_fault_table(&s, op);
+    sb_addf(&s, "\n动态插件故障参数见 `dcat list`\n");
+    return sb_done(&s);
+}
+
+void help_print_global(void) {
+    char *t = help_render_global();
+    if (t) { fputs(t, stdout); free(t); }
+}
+
+void help_print_subcommand(const char *op, const char *uid) {
+    char *t = help_render_subcommand(op, uid);
+    if (t) { fputs(t, stdout); free(t); }
+}

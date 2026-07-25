@@ -54,36 +54,15 @@ static result_t *dispatch_list(void) {
     result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
 }
 
-struct list_ctx { cJSON *arr; };
-static void push_record(const injection_record_t *r, void *v) {
-    struct list_ctx *c = v;
-    cJSON *o = cJSON_CreateObject();
-    cJSON_AddStringToObject(o, "uid", r->uid);
-    cJSON_AddNumberToObject(o, "record_id", r->record_id);
-    cJSON_AddNumberToObject(o, "started_at", r->started_at);
-    cJSON_AddBoolToObject(o, "active", r->active);
-    cJSON *prms = cJSON_CreateObject();
-    for (int k = 0; k < r->params.count; k++)
-        cJSON_AddStringToObject(prms, r->params.items[k].key, r->params.items[k].value);
-    cJSON_AddItemToObject(o, "params", prms);
-    cJSON_AddItemToArray(c->arr, o);
-}
-static result_t *dispatch_query_state(void) {
-    cJSON *arr = cJSON_CreateArray();
-    struct list_ctx c = { arr };
-    state_for_each_active(push_record, &c);
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "status", "ok");
-    cJSON_AddStringToObject(root, "op", "query");
-    cJSON_AddItemToObject(root, "data", arr);
-    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
-}
-
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
     result_t *r = executor_run_fault(f, "inject", params, 0);
     if (r->code == 0 && !is_inject_only(f)) {
         int id = state_add(f->uid, params);
+        if (id < 0) {
+            result_free(r);
+            return result_err("inject", f->uid, 1,
+                "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+        }
         cJSON *root = cJSON_Parse(r->json);
         if (root) {
             cJSON *data = cJSON_GetObjectItem(root, "data");
@@ -116,9 +95,13 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
 static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const params_t *params) {
     if (!op_in_supported(p->supported_ops, op))
         return result_err(op, p->uid, 3, "op not in supported_ops");
-    if (!declared_params_only(p->required_params, p->optional_params, params))
+    if (!declared_params_only(p->inject_required, p->inject_optional, p->clean_required, p->clean_optional, p->query_required, p->query_optional, params))
         return result_err(op, p->uid, 3, "undeclared param");
-    if (strcmp(op, "inject") == 0 && !required_params_present(p->required_params, params))
+    const char *op_req = NULL;
+    if (strcmp(op, "inject") == 0)     op_req = p->inject_required;
+    else if (strcmp(op, "clean") == 0) op_req = p->clean_required;
+    else if (strcmp(op, "query") == 0) op_req = p->query_required;
+    if (op_req && !required_params_present(op_req, params))
         return result_err(op, p->uid, 3, "missing required params");
     if (p->precheck) {
         result_t *pc = p->precheck(op, params);
@@ -165,8 +148,8 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
 
 result_t *dispatch_route(const char *uid, const char *op, const params_t *params) {
     if (strcmp(op, "list") == 0) return dispatch_list();
-    if (strcmp(op, "query") == 0 && (uid == NULL || uid[0] == '\0'))
-        return dispatch_query_state();
+    if (strcmp(op, "list") != 0 && (uid == NULL || uid[0] == '\0'))
+        return result_err(op, "", 2, "uid required (use 'dcat list' to see available faults)");
 
     const fault_def_t *f = registry_find(uid);
     if (f) {
@@ -214,5 +197,7 @@ result_t *dispatch_route(const char *uid, const char *op, const params_t *params
     }
     const dcat_plugin_t *plg = plugin_find(uid);
     if (plg) return plugin_dispatch(plg, op, params);
-    return result_err(op, uid ? uid : "", 4, "not found");
+    char msg[256];
+    snprintf(msg, sizeof msg, "uid '%s' not found in catalog (use 'dcat list' to see available faults)", uid ? uid : "");
+    return result_err(op, uid ? uid : "", 4, msg);
 }

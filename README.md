@@ -1,182 +1,162 @@
-# DemonCAT
-DemonCAT 是 CAT (Computing Availability Tools) 系列软件之一，是一款主要用于服务器及AI计算平台的故障注入工具，支撑系统可靠性验证能力覆盖。
+# DemonCAT (dcat)
 
-## 核心特性
+> **DemonCAT**（简称 **dcat**）— Demon Computing Availability Tools
+> Linux 计算故障注入工具：统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
 
-- **38 条故障目录**：覆盖 cpu / network / process / storage / npu 五大模块
-- **三层扩展架构**：cnf+脚本（数据驱动）→ 编译注入器（进程内）→ 动态插件（dlopen .so）
-- **数据驱动开闭原则**：新增故障只需加脚本 + `demoncat.conf` 段，免重编译
-- **统一 JSON 输出**：所有命令输出结构化 JSON，便于自动化集成
-- **state 持久化**：注入记录跨进程持久化（`~/.demoncat/state.json`），支持按参数匹配清除
-- **子命令式 CLI**：`dcat <sub> [uid] --key=value ...`，参数经环境变量传脚本
+> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
-## 目录结构
+## 依赖说明
 
-```
-DemonCAT/
-├── src/
-│   ├── core/          # 核心模块
-│   │   ├── types.{c,h}        # 公共类型：params_t/result_t/fault_def_t/injection_record_t
-│   │   ├── cli.{c,h}          # argv 子命令解析（--key=value）
-│   │   ├── config.{c,h}       # INI 解析 + 项目根/脚本路径推导
-│   │   ├── registry.{c,h}     # fault_def 静态表 + find/list
-│   │   ├── executor.{c,h}     # fork/exec+pipe 同步执行 + system 直通 + mock 钩子
-│   │   ├── precheck.{c,h}     # 4 步预检 + 未声明参数拒绝（通用化）
-│   │   ├── state.{c,h}        # 注入记录 + pthread 互斥 + cJSON 持久化
-│   │   ├── output.{c,h}      # result_ok/err JSON schema
-│   │   ├── dispatch.{c,h}     # op 路由 + 三级回退（cnf→injector→plugin）
-│   │   └── ... 
-│   ├── injectors/     # 编译注入器（进程内高级扩展点，builtin_injectors[] 留位）
-│   ├── plugins/       # 动态插件（plugin.h 接口 + plugin_manager + sample 示例）
-│   ├── scripts/       # 38 条故障脚本（cpu/network/process/storage/npu）
-│   └── main.c         # 编排：config→registry→state→plugins→cli→dispatch→output
-├── config/
-│   └── demoncat.conf  # 故障目录配置（38 条声明）
-├── tests/             # 13 个单元测试
-├── third_party/cjson/ # cJSON 单文件库（vendored，MIT）
-└── CMakeLists.txt
-```
+极简 Linux 环境（最小安装/容器）可能不自带以下工具。运行 `scripts/install_deps.sh` 一键安装。
 
-## 编译与运行
+### 编译依赖
 
-### 环境要求
-
-DemonCAT 使用 C11（gnu11 扩展）开发，依赖 POSIX 环境（Linux/WSL），不支持原生 Windows 编译。运行时依赖 `/proc/self/exe` 定位配置、`fork`/`exec`/`pipe`/`timer_create` 等系统调用。
-
-### 第三方依赖
-
-| 依赖 | 版本 | 用途 | 来源 |
+| 依赖 | 包名 (apt) | 包名 (yum) | 用途 |
 |---|---|---|---|
-| GCC（C 编译器） | ≥ 9（建议 13+） | C11/gnu11 编译，使用 `fork`/`exec`/`pipe`/`timer_create`/`usleep`/`strtok_r` 等 POSIX/GNU 扩展 | 系统包 `build-essential` |
-| CMake | ≥ 3.10 | 构建系统，生成 Makefile + 驱动 `ctest` 单元测试 + 编译动态插件 `.so`（MODULE 库） | 系统包 `cmake` |
-| pthread | — | 线程互斥锁（`state.c` 的 `pthread_mutex_t` 保护注入记录并发安全） | glibc 自带，CMake `find_package(Threads)` |
-| cJSON | v1.7.18 | JSON 构造/解析：`output.c` 的 result_t 输出、`state.c` 的 state.json 持久化、`dispatch.c` 的 list/query 输出、record_id 注入 | **vendored**，随仓库分发 `third_party/cjson/cJSON.{c,h}`（MIT 许可） |
-| dl（动态加载） | — | `dlopen`/`dlsym`/`dlclose` 加载动态插件 `.so`（三层扩展架构第 3 层），`dirent.h` 扫描插件目录 | glibc 自带，CMake `${CMAKE_DL_LIBS}` |
+| cmake ≥ 3.10 | `cmake` | `cmake` | 构建系统 |
+| C 编译器 | `gcc` | `gcc` | 编译 dcat 二进制 |
+| pthread | `libc6-dev` | `glibc-devel` | 状态锁 |
+| dlopen | `libc6-dev` | `glibc-devel` | 动态插件加载 |
 
-> cJSON 已 vendoring 到 `third_party/cjson/`，**无需额外下载**；其余依赖均为标准 Linux 开发工具链，通过系统包管理器安装即可。
+### 运行时依赖（按模块）
 
-### 安装依赖（WSL Ubuntu 示例）
+| 模块 | 工具 | 包名 (apt) | 包名 (yum) | 需要 root |
+|---|---|---|---|---|
+| **CPU** | `perl`, `taskset` | `perl`, `util-linux` | `perl`, `util-linux` | core_offline 需要 |
+| **存储** | `dd` | `coreutils` | `coreutils` | — |
+| **网络** | `tc`, `ip` | `iproute2` | `iproute` | ✅ |
+| | `ethtool` | `ethtool` | `ethtool` | ✅ |
+| | `iptables` | `iptables` | `iptables` | ✅ |
+| | `systemctl` | `systemd` | `systemd` | ✅ |
+| | `python3` | `python3` | `python3` | — |
+| **进程** | `kill`, `perl` | `util-linux`, `perl` | `util-linux`, `perl` | 部分需要 |
+| **NPU** | `hccn_tool` | — (Atlas 驱动自带) | — | ✅ |
+
+> 无 NPU 硬件的环境可跳过 NPU 模块，不影响其他模块使用。
+
+## 快速开始
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y build-essential cmake
-```
+# 1. 一键安装依赖（Debian/Ubuntu/RHEL/CentOS 自动识别）
+bash scripts/install_deps.sh
 
-### 编译
-
-```bash
+# 2. 编译
 cmake -B build && cmake --build build
-```
 
-构建产物：
-
-| 产物 | 说明 |
-|---|---|
-| `build/dcat` | 主二进制 |
-| `plugins/libsample.so` | 示例动态插件（验证三层扩展架构：cnf → 编译注入器 → dlopen 插件） |
-| `build/test_*` | 13 个单元测试可执行文件 |
-
-### 运行测试
-
-```bash
+# 3. 运行测试
 ctest --test-dir build --output-on-failure
+
+# 4. 列出故障目录
+./build/dcat list
+
+# 5. 注入 CPU 过载（2 核）
+./build/dcat inject rCPU_overload --cores=0,1
+
+# 6. 查询故障是否生效
+./build/dcat query rCPU_overload --cores=0,1
+
+# 7. 清除故障
+./build/dcat clean rCPU_overload --cores=0,1
+
+# 查看帮助
+./build/dcat --help
+./build/dcat inject --help
+./build/dcat inject rCPU_overload --help
 ```
 
-预期：13/13 全绿（详见 `docs/superpowers/reports/2026-07-23-e2e-test-report.md`）。
-
-## 命令行使用
+## 命令格式
 
 ```
-dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--plugins <dir>] [--help]
+dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
-### 子命令
-
-| 子命令 | 用法 | 说明 |
+| 子命令 | 说明 | 示例 |
 |---|---|---|
-| `inject` | `dcat inject <uid> --p1=v1 ...` | 注入故障；可恢复故障写 state + 返回 record_id；inject-only 不写 state |
-| `clean` | `dcat clean <uid> [--k1=v1 ...]` | 清除注入；按用户参数匹配活跃记录，逐条执行 clean，失败停止 |
-| `query` | `dcat query [uid] [--k=v ...]` | 无 uid 查询全部活跃记录（state 回答）；有 uid 走脚本 query 直通 stdout + confirmed |
-| `list` | `dcat list` | 列出故障目录（cnf + 动态插件） |
+| `inject <uid> --p1=v1 ...` | 注入故障，同步阻塞执行 | `dcat inject rCPU_overload --cores=4` |
+| `clean <uid> [--k1=v1 ...]` | 按参数匹配清除活跃注入 | `dcat clean rCPU_overload --cores=4` |
+| `query [uid] [--k1=v1 ...]` | 无 uid：查全部活跃记录；有 uid：验证故障生效 | `dcat query` / `dcat query rCPU_overload` |
+| `list` | 列出故障目录 | `dcat list` |
 
-### 全局选项
+详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
 
-| 选项 | 说明 |
-|---|---|
-| `--config <path>` | 指定 `demoncat.conf` 路径（默认 `<binary_dir>/../config/demoncat.conf`，通过 `/proc/self/exe` 解析） |
-| `--plugins <dir>` | 指定动态插件目录（默认 `<root>/plugins`） |
-| `--help` | 打印帮助 |
+## 当前故障目录（37 条）
 
-### 退出码
+### CPU 模块（2 条）
+
+| UID | 必填 | 可选 | 说明 |
+|---|---|---|---|
+| `rCPU_overload` | cores | — | CPU核心满载（支持多核心同时满载，perl纯用户态） |
+| `rCPU_core_offline` | cores | — | CPU 核离线（sysfs） |
+
+### 存储模块（1 条）
+
+| UID | 必填 | 可选 | 说明 |
+|---|---|---|---|
+| `rDISK_write_overload` | device | workers(默认4), size_mb(默认200) | 磁盘写压（dd 多实例） |
+
+### 网络模块（11 条）
+
+| UID | 必填 | 可选 | 说明 |
+|---|---|---|---|
+| `rNET_delay` | iface, delay_ms | — | 网络延迟（tc netem） |
+| `rNET_loss` | iface, loss_pct | — | 网络丢包（tc netem） |
+| `rNET_reorder` | iface, reorder_pct | — | 网络乱序（tc netem） |
+| `rNET_down` | iface | — | 网卡 down（ip link） |
+| `rNET_degrade` | iface | speed_mbps(默认10) | 网卡降速（ethtool） |
+| `rNET_port_occupy` | port | protocol(默认tcp) | 端口占用（socket holder） |
+| `rNET_service_stop` | service | — | 服务停止（systemctl） |
+| `rNET_link_flap` | iface | cycle_sec(默认2), count(默认10) | 链路闪断（ip link 循环） |
+| `rNET_bw_limit` | iface, rate_kbps | — | 带宽限制（tc tbf） |
+| `rNET_jitter` | iface, delay_ms, jitter_ms | — | 延迟抖动（tc netem） |
+| `rNET_tcp_loss` | port | direction(默认both) | TCP 丢包（iptables DROP） |
+
+### 进程模块（3 条）
+
+| UID | 必填 | 可选 | 说明 |
+|---|---|---|---|
+| `rPROC_exit` | pid | — | 进程退出（kill -9，不可恢复，inject-only） |
+| `rPROC_hang` | pid | — | 进程挂起（SIGSTOP） |
+| `rPROC_zstate` | pid | — | 僵尸进程（kill 目标进程 → 僵尸，clean 杀父进程回收，不可恢复） |
+
+### NPU 模块（20 条）
+
+| UID | 必填 | 可选 | 说明 |
+|---|---|---|---|
+| `rNPU_link_down` | chip | — | RoCE 链路 down（-cfg recovery） |
+| `rNPU_ip_change` | chip, address, netmask | — | RoCE IP 变更（sidecar 回放） |
+| `rNPU_gw_change` | chip, gateway | — | RoCE 网关变更（sidecar 回放） |
+| `rNPU_netdetect_change` | chip, address | — | Netdetect IP 变更（sidecar 回放） |
+| `rNPU_arp_poison` | chip, dev, ip, mac | — | ARP 毒化（add wrong mac） |
+| `rNPU_arp_del` | chip, dev, ip | — | ARP 条目删除（sidecar 回放） |
+| `rNPU_route_add` | chip, address, netmask, gateway | — | 添加 RoCE 路由（del 清理） |
+| `rNPU_route_del` | chip, address, netmask | — | 删除 RoCE 路由（sidecar 回放） |
+| `rNPU_route_clear` | chip | — | 清空路由表（-cfg recovery） |
+| `rNPU_iprule_add` | chip, dir, ip, table | — | 添加 ip rule（del 清理） |
+| `rNPU_iprule_del` | chip, dir, ip | — | 删除 ip rule（sidecar 回放） |
+| `rNPU_iproute_add` | chip, ip, ip_mask, via, dev, table | — | 添加 ip route（del 清理） |
+| `rNPU_iproute_del` | chip, ip, ip_mask, table | — | 删除 ip route（sidecar 回放） |
+| `rNPU_bw_limit` | chip, bw_limit | — | RoCE 带宽限速（设回 max） |
+| `rNPU_mtu_mismatch` | chip, size | — | RoCE MTU 变更（sidecar 回放） |
+| `rNPU_fec_change` | chip, encoding | — | RoCE FEC 编码变更（sidecar 回放） |
+| `rNPU_dscp_tc_change` | chip, dscp, tc | — | DSCP→TC 映射变更（sidecar 回放） |
+| `rNPU_prio_tc_change` | chip, map | — | Prio→TC 映射变更（sidecar 回放） |
+| `rNPU_pfc_change` | chip, bitmap | — | PFC 位图变更（sidecar 回放） |
+| `rNPU_roce_port_change` | chip, port | — | RoCE UDP 端口变更（sidecar 回放） |
+
+## 退出码
 
 | 码 | 含义 |
 |---|---|
 | 0 | 成功 |
-| 1 | 脚本执行失败 / 无活跃注入可清除 |
-| 2 | 命令行解析错误 |
-| 3 | 预检失败（op 不支持 / 必填参数缺失 / 脚本不可执行 / 未声明参数 / inject-only 拒绝 clean/query） |
-| 4 | uid 未找到（cnf + 编译注入器 + 动态插件三层均未命中） |
+| 1 | 运行错误（脚本失败等） |
+| 2 | 解析错误（命令格式不合法） |
+| 3 | 预检拒绝（参数缺失/不合法/op 不支持） |
+| 4 | 未找到（uid 不在目录中） |
 
-### 输出格式
+## 技术栈
 
-统一 JSON，成功：`{"status":"ok","op":"...","uid":"...","data":{"message":"...","record_id":N}}`；失败：`{"status":"error","op":"...","uid":"...","error":{"code":N,"message":"..."}}`。inject-only 故障成功输出无 `record_id` 字段。
-
-### 运行示例
-
-```bash
-# 列出故障目录（38 条 cnf + 动态插件）
-./build/dcat list
-
-# 注入 CPU 过载故障
-./build/dcat inject rCPU_overload --cores=4
-
-# 查询活跃注入（无 uid 查全部，有 uid 走脚本 query）
-./build/dcat query
-./build/dcat query rNET_delay --iface=eth0 --delay_ms=100
-
-# 清除注入（按参数匹配活跃记录）
-./build/dcat clean rCPU_overload --cores=4
-
-# inject-only 故障（无 clean/query）
-./build/dcat inject rPROC_exit --pid=12345
-./build/dcat clean rPROC_exit    # 退出码 3 拒绝
-
-# 动态插件故障（三级回退命中）
-./build/dcat inject rSAMPLE_test
-./build/dcat clean rSAMPLE_test
-
-# 帮助
-./build/dcat --help
-```
-
-## 故障目录
-
-38 条内置故障，按模块组织（脚本位于 `src/scripts/<module>/`）：
-
-| 模块 | 数量 | 示例 uid |
-|---|---|---|
-| cpu | 2 | `rCPU_overload`、`rCPU_core_offline` |
-| network | 11 | `rNET_delay`、`rNET_loss`、`rNET_down`、`rNET_bw_limit` … |
-| process | 4 | `rPROC_exit`（inject-only）、`rPROC_hang`、`rPROC_dstate`、`rPROC_zstate` |
-| storage | 1 | `rDISK_write_overload` |
-| npu | 20 | `rNPU_link_down`、`rNPU_ip_change`、`rNPU_route_add` … |
-
-完整字段（uid/module/supported_ops/required_params/optional_params）见 `config/demoncat.conf` 与 [SPEC.md](SPEC.md) §3。
-
-## 扩展机制（三层架构）
-
-故障请求经 dispatch 三级回退查找：
-
-```
-dispatch_route(uid, op, params)
-  ├─ 第1层 registry_find(uid)     cnf 数据驱动（脚本，免重编译）   [默认 38 条]
-  ├─ 第2层 injector_find(uid)    编译注入器（进程内 builtin）     [留位]
-  └─ 第3层 plugin_find(uid)       动态插件（dlopen .so）          [运行时可插拔]
-     └─ 未命中 → 退出码 4
-```
-
-1. **cnf + 脚本**：加脚本到 `src/scripts/<module>/` + `demoncat.conf` 加 `[fault.<uid>]` 段即可，免重编译
-2. **编译注入器 `injector_t`**：进程内高级扩展点（`src/injectors/`），用于脚本难胜任的场景，需重编译
-3. **动态插件 `dcat_plugin_t`**：dlopen `.so` 运行时可插拔（`src/plugins/`），含 ABI 版本门控 + init/fini 生命周期 + 元数据驱动通用预检
-
-更多设计详见 [SPEC.md](SPEC.md) 与 [DESIGN.md](DESIGN.md)。
+- C11（ISO/IEC 9899:2011），CMake 构建
+- cJSON（vendored 单文件库）
+- pthread（状态锁）
+- INI 配置文件（`demoncat.conf`）
+- 输出格式：JSON

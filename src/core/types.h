@@ -18,8 +18,12 @@ typedef struct {
     char desc[128];
     char script[256];
     char supported_ops[64];      /* "inject" | "inject,clean,query" */
-    char required_params[128];   /* "iface,loss_pct" */
-    char optional_params[128];   /* 可选参数名 */
+    char inject_required[128];   /* inject 必填参数: "iface,loss_pct" */
+    char inject_optional[128];   /* inject 可选参数: "direction" */
+    char clean_required[128];    /* clean 必填参数: "iface" */
+    char clean_optional[128];    /* clean 可选参数 */
+    char query_required[128];    /* query 必填参数: "iface" */
+    char query_optional[128];    /* query 可选参数 */
 } fault_def_t;
 
 /* injection_record_t: state 持有，固定数组 — 仅 inject,clean,query 故障创建 */

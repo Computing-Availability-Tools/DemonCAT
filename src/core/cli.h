@@ -22,4 +22,7 @@ int cli_has_help(int argc, char **argv);
 /* argv[1] 若为子命令则返回其指针，否则 NULL */
 const char *cli_subcommand(int argc, char **argv);
 
+/* 返回上次 parse 错误的具体消息（用于 JSON 输出） */
+const char *cli_get_error(void);
+
 #endif

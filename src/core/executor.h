@@ -6,7 +6,6 @@
 result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_t *params, int timeout_ms);
 /* cnf 故障 query 路径：设置 env 后 system() 直通 stdout（继承终端），返回脚本退出码 */
 int executor_run_raw_fault(const fault_def_t *f, const char *op, const params_t *params);
-int executor_check_tool(const char *path);                       /* access/X_OK，仅返回 0/-1 */
-int executor_check_tool_diag(const char *path, char *diag, int diag_cap);  /* 失败时把 path+strerror(errno) 写入 diag */
+int executor_check_tool(const char *path);   /* access/X_OK */
 void executor_set_mock(mock_fn fn);
 #endif

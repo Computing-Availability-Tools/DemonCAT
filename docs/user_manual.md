@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 38 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 37 条故障。
 > 完整规格见 [SPEC.md](../SPEC.md)，架构见 [DESIGN.md](../DESIGN.md)。
 
 ---
@@ -13,9 +13,9 @@
 | CPU | 2 | 核满载（纯用户态）、核离线 |
 | 存储 | 1 | 磁盘写压（dd 多实例） |
 | 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
-| 进程 | 4 | 进程退出 / D 状态 / 挂起 / 僵尸 |
+| 进程 | 3 | 进程退出 / 挂起 / 僵尸 |
 | NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / FEC / DSCP / PFC / RoCE 端口 |
-| **合计** | **38** | |
+| **合计** | **37** | |
 
 ---
 
@@ -41,9 +41,8 @@
   - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包（iptables DROP）
 - [第四章 进程模块](#第四章-进程模块4-条)
   - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出（kill -9，inject-only）
-  - [4.2 rPROC_dstate](#42-rproc_dstate) — D 状态进程（不可中断 IO）
-  - [4.3 rPROC_hang](#43-rproc_hang) — 进程挂起（SIGSTOP）
-  - [4.4 rPROC_zstate](#44-rproc_zstate) — 僵尸进程（kill 目标 → 僵尸）
+  - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起（SIGSTOP）
+  - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程（kill 目标 → 僵尸）
 - [第五章 NPU 模块](#第五章-npu-模块20-条)
   - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
   - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
@@ -464,7 +463,7 @@ dcat clean rNET_tcp_loss --port=8080 --direction=both
 
 **补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `iptables` 命令（传统 iptables，非 nftables）；clean 通过 `-D` 删除规则，若规则已被手动删除或顺序变化，`-D` 可能静默失败；sidecar 文件后缀为 `.rule`（非 `.sidecar`）；`direction=both` 时 inject 只要任一方向插入失败即整体报错退出；query 的 `direction` 参数需与 inject 时一致才能正确匹配；防火墙后端为 nftables 时 `iptables` 命令可能行为不同，需确认兼容性。
 
-## 第四章 进程模块（4 条）
+## 第四章 进程模块（3 条）
 
 ### 4.1 rPROC_exit
 
@@ -490,36 +489,9 @@ dcat inject rPROC_exit --pid=12345
 
 ---
 
-### 4.2 rPROC_dstate
 
-**UID**: `rPROC_dstate`
 
-**描述**: 在指定块设备上启动 dd 进程执行 `fdatasync`，在 fsync 期间进程进入 D 状态（不可中断睡眠）。
-
-**实现原理**: 
-- **inject**: 在 `device` 指定的路径下启动 2 个后台 worker，每个在死循环中执行 `dd if=/dev/zero of=<device>/dcat.dstate.$$.$i bs=1M count=200 conv=fdatasync`。在真实块设备上，fdatasync 会阻塞进程进入 D 状态。将 worker PID 写入 pidfile。
-- **clean**: 从 pidfile 读取 PID 逐个 kill，删除 pidfile 及 `dcat.dstate.*` 临时文件。D 状态进程可能无法立即被 kill（D 状态不可中断），需等待 I/O 完成后才退出。
-- **query**: 用 `ps -eo pid,stat,cmd | awk '$2 ~ /^D/'` 扫描全系统 D 状态进程。
-
-**使用示例**:
-```bash
-dcat inject rPROC_dstate --device=/data
-dcat query rPROC_dstate
-dcat clean rPROC_dstate --device=/data
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| device | 必填（inject/clean） | 路径 | 真实块设备路径或挂载点（如 /data、/dev/sda1 挂载目录） |
-
-**危险等级**: 中 — dd 进程持续占用磁盘 I/O，可能影响其他 I/O 密集型进程。
-
-**补充说明**: D 状态仅在真实块设备（机械盘/SSD/NVMe）上产生。tmpfs（如 /tmp）上 fdatasync 立即返回，不会进入 D 状态。query 不需要参数，扫描全系统 D 状态进程。clean 时 D 状态进程可能无法立即被 SIGKILL 杀死（D 状态忽略信号），需等待 I/O 完成后自动退出。
-
----
-
-### 4.3 rPROC_hang
+### 4.2 rPROC_hang
 
 **UID**: `rPROC_hang`
 
@@ -548,7 +520,7 @@ dcat clean rPROC_hang --pid=12345
 
 ---
 
-### 4.4 rPROC_zstate
+### 4.3 rPROC_zstate
 
 **UID**: `rPROC_zstate`
 

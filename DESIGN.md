@@ -334,7 +334,6 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | 机制 | 命令/工具 | 适用故障 | 备注 |
 |---|---|---|---|
 | `kill` 信号 | `kill -9/-STOP/-CONT <pid>` | exit / hang | exit 不可逆；hang 可逆 |
-| 不可中断 IO | C helper `open + ioctl(不可中断命令)` 或 `vhangup` | dstate | 触发 D 状态，需 root |
 | 僵尸生成 | fork 子进程 + 子 exit + 父不 wait | zstate | count 个僵尸 |
 
 #### 4.2.2 故障差异表
@@ -342,7 +341,6 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | UID | supported_ops | 必填 | 可选 | clean 机制 | 备注 |
 |---|---|---|---|---|---|
 | `rPROC_exit` | **inject** | pid | — | **N/A** | `kill -9 <pid>`，不可恢复；**唯一 inject-only 故障** |
-| `rPROC_dstate` | inject,clean,query | device | — | kill dd 进程 | dd + fdatasync 在真实块设备上产生 D 状态 |
 | `rPROC_hang` | inject,clean,query | pid | — | `kill -CONT <pid>` | `kill -STOP`；clean 重跑脚本发 CONT |
 | `rPROC_zstate` | inject,clean,query | pid | — | kill 父进程（子被 init reap） | kill 目标进程 → 僵尸；clean 杀父进程回收 |
 
@@ -683,7 +681,6 @@ CAT/
 │       │   └── net_tcp_loss.sh
 │       ├── process/                # process 模块脚本
 │       │   ├── proc_exit.sh
-│       │   ├── proc_dstate.sh
 │       │   ├── proc_hang.sh
 │       │   └── proc_zstate.sh
 │       ├── storage/                # storage 模块脚本
@@ -772,7 +769,6 @@ CAT/
 | rNET_link_flap | ✓ | ✓ | ✓ | 脚本 spawn 循环进程 + pidfile；按 count 自结束 | 可选 |
 | rNET_tcp_loss | ✓ | ✓ | ✓ | 命令串含 `iptables -I ... DROP` | 可选 |
 | rPROC_exit | ✓ | — | — | inject-only；output 无 record_id；clean/query 退出码 3 | 可选（kill 测试进程） |
-| rPROC_dstate | ✓ | ✓ | ✓ | 脚本 spawn helper + pidfile | 可选（需 root + helper） |
 | rPROC_hang | ✓ | ✓ | ✓ | `kill -STOP`；clean 发 `-CONT` | 可选 |
 | rPROC_zstate | ✓ | ✓ | ✓ | 脚本 spawn 僵尸父进程 + pidfile | 可选 |
 | rCPU_core_offline | ✓ | ✓ | ✓ | 命令串含 `echo 0 > .../online` | 可选（需 root） |
@@ -865,7 +861,7 @@ dcat list                            # 故障目录
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
 - **决策5（必/选参数区分）**：按 op 分 required/optional 字段（`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`）；precheck 按 op 取对应 `*_required` 校验，`*_optional` 缺省走脚本默认（§2 + §3.5 + SPEC §3.3）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1 起步（核心框架 + 38 条故障），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1 起步（核心框架 + 37 条故障），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。

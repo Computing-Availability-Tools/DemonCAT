@@ -1,4 +1,4 @@
-/* tests/test_faults_process.c — Tier 1: mock table-driven tests for process (4) */
+/* tests/test_faults_process.c — Tier 1: mock table-driven tests for process (3) */
 #include "test_faults_common.h"
 
 int main(void) {
@@ -29,16 +29,6 @@ int main(void) {
         result_free(r);
     }
 
-    /* rPROC_dstate */
-    {
-        params_t p = mkparams("device", "/tmp", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rPROC_dstate", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("proc_dstate.sh");
-        check_param_env("device", "/tmp"); CK(strstr(r->json, "record_id") != NULL);
-        result_free(r);
-        r = dispatch_route("rPROC_dstate", "clean", &p); CK(r && r->code == 0); result_free(r);
-    }
-
     /* rPROC_hang */
     {
         params_t p = mkparams("pid", "12345", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
@@ -58,6 +48,6 @@ int main(void) {
     }
 
     faults_teardown();
-    printf("test_faults_process: all 4 faults passed\n");
+    printf("test_faults_process: all 3 faults passed\n");
     return 0;
 }

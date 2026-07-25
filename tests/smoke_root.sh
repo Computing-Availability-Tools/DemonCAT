@@ -227,35 +227,6 @@ fi
 
 # ====================================================================
 echo ""
-echo "--- rPROC_dstate (dd) ---"
-# ====================================================================
-if [ "$HAS_DD" = 1 ]; then
-    if $DCAT inject rPROC_dstate --device=/tmp --config config/demoncat.conf >/dev/null 2>&1; then
-        sleep 1
-        dd_count=$(pgrep -f 'dcat.dstate' 2>/dev/null | wc -l)
-        if [ "$dd_count" -gt 0 ]; then
-            $DCAT clean rPROC_dstate --device=/tmp --config config/demoncat.conf >/dev/null 2>&1
-            sleep 1
-            dd_after=$(pgrep -f 'dcat.dstate' 2>/dev/null | wc -l)
-            if [ "$dd_after" -eq 0 ]; then
-                pass "rPROC_dstate"
-            else
-                cleanup_fault rPROC_dstate --device=/tmp
-                fail "rPROC_dstate" "clean 后 dd 进程仍存在 ($dd_after)"
-            fi
-        else
-            cleanup_fault rPROC_dstate --device=/tmp
-            skip "rPROC_dstate" "dd 进程未创建 (tmpfs 上可能不进入 D 状态，但 inject/clean 流程正常)"
-        fi
-    else
-        fail "rPROC_dstate" "inject 失败"
-    fi
-else
-    skip "rPROC_dstate" "dd 不可用"
-fi
-
-# ====================================================================
-echo ""
 echo "--- NPU 故障 (20 条) ---"
 # ====================================================================
 if [ "$HAS_HCCN" = 1 ]; then

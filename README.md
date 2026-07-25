@@ -79,7 +79,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
 
-## 当前故障目录（38 条）
+## 当前故障目录（37 条）
 
 ### CPU 模块（2 条）
 
@@ -110,12 +110,11 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rNET_jitter` | iface, delay_ms, jitter_ms | — | 延迟抖动（tc netem） |
 | `rNET_tcp_loss` | port | direction(默认both) | TCP 丢包（iptables DROP） |
 
-### 进程模块（4 条）
+### 进程模块（3 条）
 
 | UID | 必填 | 可选 | 说明 |
 |---|---|---|---|
 | `rPROC_exit` | pid | — | 进程退出（kill -9，不可恢复，inject-only） |
-| `rPROC_dstate` | device | — | D 状态进程（真实块设备 I/O，tmpfs 无效） |
 | `rPROC_hang` | pid | — | 进程挂起（SIGSTOP） |
 | `rPROC_zstate` | pid | — | 僵尸进程（kill 目标进程 → 僵尸，clean 杀父进程回收，不可恢复） |
 

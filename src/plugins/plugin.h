@@ -12,8 +12,12 @@ typedef struct dcat_plugin_t {
     const char *description;
     const char *uid;             /* 故障 uid */
     const char *supported_ops;   /* "inject" | "inject,clean,query" */
-    const char *required_params; /* "iface,delay_ms" */
-    const char *optional_params;
+    const char *inject_required; /* inject 必填参数 */
+    const char *inject_optional; /* inject 可选参数 */
+    const char *clean_required;  /* clean 必填参数 */
+    const char *clean_optional;  /* clean 可选参数 */
+    const char *query_required;  /* query 必填参数 */
+    const char *query_optional;  /* query 可选参数 */
     int  (*init)(void);          /* dlopen 后调用：资源初始化；成功返回 0 */
     void (*fini)(void);          /* dlclose 前/进程退出时调用：清理 */
     result_t *(*precheck)(const char *op, const params_t *params);  /* 可选，NULL 跳过 */

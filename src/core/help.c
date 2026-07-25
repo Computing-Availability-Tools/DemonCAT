@@ -60,24 +60,38 @@ static const char *op_usage(const char *op) {
 static const char *op_desc(const char *op) {
     if (strcmp(op, "inject") == 0) return "注入故障；可恢复故障写 state + 返回 record_id；inject-only 不写 state";
     if (strcmp(op, "clean")  == 0) return "清除活跃注入；按用户参数匹配活跃记录，逐条执行 clean，失败停止";
-    if (strcmp(op, "query")  == 0) return "无 uid 查询全部活跃记录（state 回答）；有 uid 走脚本 query 直通 stdout + confirmed";
+    if (strcmp(op, "query")  == 0) return "有 uid 走脚本 query 直通 stdout + confirmed；必须指定 uid";
     if (strcmp(op, "list")   == 0) return "列出故障目录（cnf + 动态插件）";
     return "";
 }
 
-/* 按 required/optional 拼参数示例：--k=<k> [--o=<o>] */
+/* 获取操作对应的 required 字段指针 */
+static const char *get_op_required(const fault_def_t *f, const char *op) {
+    if (strcmp(op, "inject") == 0) return f->inject_required;
+    if (strcmp(op, "clean")  == 0) return f->clean_required;
+    if (strcmp(op, "query")  == 0) return f->query_required;
+    return "";
+}
+static const char *get_op_optional(const fault_def_t *f, const char *op) {
+    if (strcmp(op, "inject") == 0) return f->inject_optional;
+    if (strcmp(op, "clean")  == 0) return f->clean_optional;
+    if (strcmp(op, "query")  == 0) return f->query_optional;
+    return "";
+}
+
+/* 按 op 的 required/optional 拼参数示例 */
 static void render_example(sb_t *s, const char *op, const fault_def_t *f) {
     sb_addf(s, "  示例：dcat %s %s", op, f->uid);
     char buf[128];
-    strncpy(buf, f->required_params[0] ? f->required_params : "", sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-    if (buf[0]) {
+    const char *req = get_op_required(f, op);
+    const char *opt = get_op_optional(f, op);
+    if (req[0]) {
+        strncpy(buf, req, sizeof(buf) - 1); buf[sizeof(buf) - 1] = '\0';
         char *save = NULL, *tok = strtok_r(buf, ",", &save);
         while (tok) { sb_addf(s, " --%s=<%s>", tok, tok); tok = strtok_r(NULL, ",", &save); }
     }
-    strncpy(buf, f->optional_params[0] ? f->optional_params : "", sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
-    if (buf[0]) {
+    if (opt[0]) {
+        strncpy(buf, opt, sizeof(buf) - 1); buf[sizeof(buf) - 1] = '\0';
         char *save = NULL, *tok = strtok_r(buf, ",", &save);
         while (tok) { sb_addf(s, " [--%s=<%s>]", tok, tok); tok = strtok_r(NULL, ",", &save); }
     }
@@ -90,10 +104,10 @@ static void render_fault_table(sb_t *s, const char *op) {
     int printed = 0;
     for (int i = 0; i < n; i++) {
         if (!op_in_supported(list[i].supported_ops, op)) continue;
-        sb_addf(s, "  %-24s %s", list[i].uid,
-                list[i].required_params[0] ? list[i].required_params : "（无必填）");
-        if (list[i].optional_params[0])
-            sb_addf(s, "  [可选: %s]", list[i].optional_params);
+        const char *req = get_op_required(&list[i], op);
+        const char *opt = get_op_optional(&list[i], op);
+        sb_addf(s, "  %-24s %s", list[i].uid, req[0] ? req : "（无必填）");
+        if (opt[0]) sb_addf(s, "  [可选: %s]", opt);
         sb_addf(s, "\n");
         printed++;
     }
@@ -107,8 +121,8 @@ char *help_render_global(void) {
         "usage: dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--plugins <dir>] [--help]\n"
         "  subcommand: inject | clean | query | list\n"
         "  inject <uid> --p1=v1 ...     注入故障\n"
-        "  clean  <uid> [--k1=v1 ...]   清除活跃注入（按参数匹配）\n"
-        "  query  [uid] [--k=v ...]     无 uid 查询全部活跃；有 uid 验证故障生效\n"
+        "  clean  <uid> --k1=v1 ...     清除活跃注入（按参数匹配，需指定参数）\n"
+        "  query  <uid> --k=v ...       验证故障是否生效（需指定 uid + 参数）\n"
         "  list                         列出故障目录\n"
         "  --config <path>              指定 demoncat.conf 路径（默认 <root>/config/demoncat.conf）\n"
         "  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）\n"
@@ -132,10 +146,12 @@ char *help_render_subcommand(const char *op, const char *uid) {
     if (uid && uid[0]) {
         const fault_def_t *f = registry_find(uid);
         if (f) {
+            const char *req = get_op_required(f, op);
+            const char *opt = get_op_optional(f, op);
             sb_addf(&s, "\n故障 %s：%s\n", f->uid, f->desc[0] ? f->desc : "（无描述）");
             sb_addf(&s, "  支持操作：%s\n", f->supported_ops);
-            sb_addf(&s, "  必填参数：%s\n", f->required_params[0] ? f->required_params : "（无）");
-            sb_addf(&s, "  可选参数：%s\n", f->optional_params[0] ? f->optional_params : "（无）");
+            sb_addf(&s, "  %s 必填参数：%s\n", op, req[0] ? req : "（无）");
+            sb_addf(&s, "  %s 可选参数：%s\n", op, opt[0] ? opt : "（无）");
             render_example(&s, op, f);
         } else {
             sb_addf(&s, "\n（未知故障 uid：%s）\n", uid);

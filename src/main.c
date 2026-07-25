@@ -11,8 +11,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-/* 解析配置路径：--config 覆盖优先；否则从 /proc/self/exe 推导 <root>/config/demoncat.conf；
- * 推导失败回落相对路径 config/demoncat.conf。 */
 static const char *resolve_cfgpath(const char *override, char *buf, size_t cap) {
     if (override) return override;
     ssize_t n = readlink("/proc/self/exe", buf, (int)cap - 1);
@@ -34,7 +32,6 @@ int main(int argc, char **argv) {
     if (cli_has_help(argc, argv)) {
         const char *sub = cli_subcommand(argc, argv);
         if (sub) {
-            /* 子命令帮助需 registry 枚举故障参数：尽力加载配置（失败则略过枚举） */
             char cfgbuf[512];
             const char *cp = resolve_cfgpath(pc.config, cfgbuf, sizeof cfgbuf);
             config_t cfg;
@@ -47,7 +44,8 @@ int main(int argc, char **argv) {
     }
     if (argc < 2) { help_print_global(); return 2; }
     if (rc != 0 || !pc.op) {
-        printf("{\"status\":\"error\",\"op\":\"parse\",\"error\":{\"code\":2,\"message\":\"parse error\"}}\n");
+        printf("{\"status\":\"error\",\"op\":\"parse\",\"error\":{\"code\":2,\"message\":\"%s\"}}\n",
+               cli_get_error());
         return 2;
     }
 
@@ -71,7 +69,6 @@ int main(int argc, char **argv) {
     }
     state_load();
 
-    /* 插件目录定位：--plugins 覆盖；否则从 config 路径推导 root，root/plugins */
     char defplugins[512];
     const char *plugindir = pc.plugins;
     if (!plugindir) {

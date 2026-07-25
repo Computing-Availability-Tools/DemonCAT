@@ -1,2 +1,33 @@
 #!/bin/sh
-echo "dscp_tc_change: ${DCAT_OP:-inject} (placeholder)"
+# rNPU_dscp_tc_change: DSCP-to-TC mapping change. Clean = restore original tc.
+. "$(dirname "$0")/_common.sh"
+chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+npu_validate_chip "$chip"
+dscp=${DCAT_PARAM_DSCP:?missing required param: dscp}
+tc=${DCAT_PARAM_TC:?missing required param: tc}
+HCCN="hccn_tool -i $chip"
+
+fault_present() {
+    cur=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | grep -oE 'tc [0-9]+' | grep -oE '[0-9]+')
+    orig=$(sidecar_load rNPU_dscp_tc_change "$chip")
+    [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
+}
+
+case "${DCAT_OP:-inject}" in
+    inject)
+        npu_check_env
+        orig=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | grep -oE 'tc [0-9]+' | grep -oE '[0-9]+')
+        [ -n "$orig" ] && sidecar_save rNPU_dscp_tc_change "$chip" "$orig"
+        $HCCN -dscp_to_tc -s dscp "$dscp" tc "$tc" || { echo "dscp_to_tc set failed" >&2; exit 1; }
+        echo "applied dscp $dscp -> tc $tc on chip $chip (was $orig)"
+        ;;
+    clean)
+        if fault_present; then
+            orig=$(sidecar_load rNPU_dscp_tc_change "$chip"); orig=${orig:-0}
+            $HCCN -dscp_to_tc -s dscp "$dscp" tc "$orig" || { echo "dscp_to_tc restore failed" >&2; exit 1; }
+            sidecar_clear rNPU_dscp_tc_change "$chip"
+            echo "restored dscp $dscp -> tc $orig on chip $chip"
+        else echo "dscp_to_tc already at original, no-op"; fi
+        ;;
+    query) $HCCN -dscp_to_tc -g dscp "$dscp"; fault_present ;;
+esac

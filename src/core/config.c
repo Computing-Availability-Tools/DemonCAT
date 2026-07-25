@@ -14,8 +14,6 @@ int config_load(const char *path, config_t *cfg) {
     memset(cfg, 0, sizeof(*cfg));
     FILE *fp = fopen(path, "r");
     if (!fp) return -1;
-    char root[256];
-    derive_project_root(path, root, sizeof(root));
     char line[512];
     fault_def_t *cur = NULL;
     char section[128] = "";
@@ -46,10 +44,14 @@ int config_load(const char *path, config_t *cfg) {
         } else if (cur) {
             if      (strcmp(k, "module") == 0)          { strncpy(cur->module, v, sizeof(cur->module)-1); cur->module[sizeof(cur->module)-1]='\0'; }
             else if (strcmp(k, "desc") == 0)            { strncpy(cur->desc, v, sizeof(cur->desc)-1); cur->desc[sizeof(cur->desc)-1]='\0'; }
-            else if (strcmp(k, "script") == 0)          { resolve_script(root, v, cur->script, sizeof(cur->script)); }
-            else if (strcmp(k, "supported_ops") == 0)   { strncpy(cur->supported_ops, v, sizeof(cur->supported_ops)-1); cur->supported_ops[sizeof(cur->supported_ops)-1]='\0'; }
-            else if (strcmp(k, "required_params") == 0) { strncpy(cur->required_params, v, sizeof(cur->required_params)-1); cur->required_params[sizeof(cur->required_params)-1]='\0'; }
-            else if (strcmp(k, "optional_params") == 0) { strncpy(cur->optional_params, v, sizeof(cur->optional_params)-1); cur->optional_params[sizeof(cur->optional_params)-1]='\0'; }
+            else if (strcmp(k, "script") == 0)          { strncpy(cur->script, v, sizeof(cur->script)-1); cur->script[sizeof(cur->script)-1]='\0'; }
+            else if (strcmp(k, "supported_ops") == 0)    { strncpy(cur->supported_ops, v, sizeof(cur->supported_ops)-1); cur->supported_ops[sizeof(cur->supported_ops)-1]='\0'; }
+            else if (strcmp(k, "inject_required") == 0)  { strncpy(cur->inject_required, v, sizeof(cur->inject_required)-1); cur->inject_required[sizeof(cur->inject_required)-1]='\0'; }
+            else if (strcmp(k, "inject_optional") == 0)  { strncpy(cur->inject_optional, v, sizeof(cur->inject_optional)-1); cur->inject_optional[sizeof(cur->inject_optional)-1]='\0'; }
+            else if (strcmp(k, "clean_required") == 0)   { strncpy(cur->clean_required, v, sizeof(cur->clean_required)-1); cur->clean_required[sizeof(cur->clean_required)-1]='\0'; }
+            else if (strcmp(k, "clean_optional") == 0)   { strncpy(cur->clean_optional, v, sizeof(cur->clean_optional)-1); cur->clean_optional[sizeof(cur->clean_optional)-1]='\0'; }
+            else if (strcmp(k, "query_required") == 0)   { strncpy(cur->query_required, v, sizeof(cur->query_required)-1); cur->query_required[sizeof(cur->query_required)-1]='\0'; }
+            else if (strcmp(k, "query_optional") == 0)   { strncpy(cur->query_optional, v, sizeof(cur->query_optional)-1); cur->query_optional[sizeof(cur->query_optional)-1]='\0'; }
         }
     }
     fclose(fp);

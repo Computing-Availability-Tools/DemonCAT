@@ -6,18 +6,22 @@ int test_load_faults(void) {
     config_t cfg;
     int rc = config_load("config/demoncat.conf", &cfg);
     ASSERT_INT_EQ(rc, 0);
-    ASSERT_INT_EQ(cfg.fault_count, 38);
+    ASSERT_INT_EQ(cfg.fault_count, 37);
     const fault_def_t *f = config_find(&cfg, "rNET_delay");
     ASSERT_TRUE(f != NULL);
     ASSERT_STREQ(f->module, "network");
     ASSERT_STREQ(f->supported_ops, "inject,clean,query");
-    ASSERT_STR_CONTAINS(f->required_params, "iface");
-    ASSERT_STR_CONTAINS(f->required_params, "delay_ms");
-    /* inject-only 无 optional_params */
+    ASSERT_STR_CONTAINS(f->inject_required, "iface");
+    ASSERT_STR_CONTAINS(f->inject_required, "delay_ms");
+    ASSERT_STR_CONTAINS(f->clean_required, "iface");
+    ASSERT_STR_CONTAINS(f->query_required, "iface");
+    /* inject-only: clean/query fields empty */
     const fault_def_t *p = config_find(&cfg, "rPROC_exit");
     ASSERT_TRUE(p != NULL);
     ASSERT_STREQ(p->supported_ops, "inject");
-    ASSERT_STREQ(p->optional_params, "");
+    ASSERT_STR_CONTAINS(p->inject_required, "pid");
+    ASSERT_STREQ(p->clean_required, "");
+    ASSERT_STREQ(p->query_required, "");
     ASSERT_TRUE(config_find(&cfg, "nope") == NULL);
     return 0;
 }

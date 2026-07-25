@@ -119,10 +119,16 @@ void state_save(void) {
     cJSON_AddNumberToObject(root, "next_id", g_next_id);
     cJSON_AddItemToObject(root, "records", arr);
     char *s = cJSON_Print(root); cJSON_Delete(root);
-    FILE *fp = fopen(g_file, "w");
-    if (fp) { fputs(s, fp); fclose(fp); }
-    free(s);
     pthread_mutex_unlock(&g_lock);
+
+    if (!s) return;
+    FILE *fp = fopen(g_file, "w");
+    if (fp) {
+        if (fputs(s, fp) == EOF || fclose(fp) != 0) {
+            fclose(fp);
+        }
+    }
+    free(s);
 }
 
 void state_load(void) {

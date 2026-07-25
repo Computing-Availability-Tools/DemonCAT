@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
@@ -46,6 +45,26 @@ static void apply_env(const char *const *env, int n) {
     }
 }
 
+/* Clear stale DCAT_PARAM_* env vars for a fault's declared params (required+optional).
+ * Prevents param leakage between records in clean loop when records have different param sets. */
+static void clear_stale_env_params(const fault_def_t *f) {
+    if (!f) return;
+    const char *lists[6] = { f->inject_required, f->inject_optional, f->clean_required, f->clean_optional, f->query_required, f->query_optional };
+    for (int li = 0; li < 6; li++) {
+        const char *q = lists[li];
+        if (!q || !q[0]) continue;
+        char buf[128];
+        strncpy(buf, q, sizeof(buf) - 1); buf[sizeof(buf) - 1] = '\0';
+        char *save = NULL;
+        char *tok = strtok_r(buf, ",", &save);
+        while (tok) {
+            const char *env_name = dcat_key_to_env(tok);
+            unsetenv(env_name);
+            tok = strtok_r(NULL, ",", &save);
+        }
+    }
+}
+
 static pid_t g_timed_pid = 0;
 static void on_timeout(union sigval sv) { (void)sv; if (g_timed_pid > 0) kill(g_timed_pid, SIGKILL); }
 
@@ -55,6 +74,7 @@ result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_
     if (g_mock) {
         return g_mock(f->script, env);  /* mock 场景 env 供测试检查，不释放 */
     }
+    clear_stale_env_params(f);
     int pipefd[2];
     if (pipe(pipefd) < 0) { free_env(env, nenv); return result_err(op, f->uid, 1, "pipe failed"); }
     pid_t pid = fork();
@@ -99,21 +119,13 @@ int executor_run_raw_fault(const fault_def_t *f, const char *op, const params_t 
         result_free(r);
         return code;  /* mock 场景 env 供测试检查，不释放 */
     }
+    clear_stale_env_params(f);
     apply_env(env, nenv);
     int rc = system(f->script);
     free_env(env, nenv);
     return WIFEXITED(rc) ? WEXITSTATUS(rc) : 1;
 }
 
-int executor_check_tool_diag(const char *path, char *diag, int diag_cap) {
-    if (access(path, X_OK) == 0) return 0;
-    int e = errno;
-    if (diag && diag_cap > 0)
-        snprintf(diag, (size_t)diag_cap, "script not executable: %s (%s)",
-                 path ? path : "(null)", strerror(e));
-    return -1;
-}
-
 int executor_check_tool(const char *path) {
-    return executor_check_tool_diag(path, NULL, 0);
+    return access(path, X_OK);
 }

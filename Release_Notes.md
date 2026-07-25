@@ -1,0 +1,81 @@
+# DemonCAT Release Notes
+
+> 本文档记录每次发布的版本信息。每次发布在顶部追加，不删除历史记录。
+
+---
+
+## v0.1
+
+| 项目 | 说明 |
+|------|------|
+| 版本号 | v0.1 |
+| 发布时间 | 2026-07-25 |
+| 发布人 | SamWongCc |
+| 平台支持 | Linux (x86_64), WSL 兼容 |
+
+### 变更摘要
+
+**核心框架（9 模块 + 插件架构）：**
+- `cli` / `config` / `registry` / `executor` / `precheck` / `state` / `dispatch` / `output` / `help` + `main`
+- 动态插件架构：`plugin.h` + `plugin_manager.c`（dlopen + ABI 版本检查 + lifecycle）
+- 3-tier dispatch：cnf 故障 → 编译注入器 → 动态插件（dlopen .so）
+
+**命令格式：**
+- 子命令式 `dcat <subcommand> [uid] --key=value ...`
+- 支持 `inject` / `clean` / `query` / `list` 四个操作
+- `--help` 子命令感知帮助（`dcat inject --help` 列出所有支持 inject 的故障及参数）
+- `--config <path>` / `--plugins <dir>` 全局选项
+
+**per-operation 参数声明：**
+- conf 按操作分别声明必填/可选参数：`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`
+- 空字段可省略（默认空字符串）
+- precheck 按操作检查各自的 `*_required`，错误提示带参数名
+- `dcat query` / `dcat clean` 必须指定 uid + 对应参数
+
+**故障目录（37 条）：**
+- CPU 2 条：核满载（可调负载 1-100%）、核离线
+- 存储 1 条：磁盘写压
+- 网络 11 条：延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包
+- 进程 3 条：进程退出（inject-only）/ 进程挂起 / 僵尸进程
+- NPU 20 条：RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / FEC / DSCP / PFC / RoCE 端口
+- 全部以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + conf 一段，免重新编译
+
+**Bug 修复：**
+- `state_add` 返回值检查（满表时不写 record_id，返回错误）
+- `state_save` cJSON NULL check + fputs/fclose 返回值检查 + I/O 移出锁范围
+- `executor` clear_stale_env_params 防 clean 循环 setenv 泄漏
+- `_POSIX_C_SOURCE=200809L` 确保 strict C11 可移植
+- NPU 脚本 `npu_validate_chip` 防命令注入
+- `disk_write_overload` trap 杀 dd 子进程防孤儿
+- `cpu_overload` query 只显示指定核的 mpstat
+- `cpu_overload` cores/load_pct 输入校验
+- `rPROC_zstate` 重新设计：kill 真实进程制造僵尸（参数从 count 改为 pid）
+
+**测试体系（22 CTest + root 冒烟）：**
+- Tier 0 核心单元测试（13 个）：types / output / config / registry / executor / precheck / state / injectors / dispatch / cli / faults / help / plugin_manager + plugin_integration
+- Tier 1 mock 表驱动故障测试（37 条全覆盖）
+- Tier 2 脚本语法检查（sh -n 全部 37 脚本 + _common.sh）
+- Tier 3 真实执行测试（6 条非 root 故障）
+- root 冒烟测试（smoke_root.sh，10 条可测 + 3 条跳过）
+
+**文档：**
+- README（含依赖说明 + 一键安装脚本 `scripts/install_deps.sh`）
+- 用户手册 `docs/user_manual.md`（37 条故障 × 7 字段，含目录）
+- 手动测试指南 `docs/manual_test_guide.md`
+- SPEC（技术规格）+ DESIGN（架构设计）
+- Release Notes + test_report
+
+**构建：**
+- CMake ≥ 3.10，C11（`_POSIX_C_SOURCE=200809L`），`-Wall -Wextra -Werror`
+- cJSON vendored + pthread + dlopen（`${CMAKE_DL_LIBS}`）
+- 示例动态插件 `plugins/libsample.so`
+
+### 已知限制
+
+- NPU 20 条故障需 Atlas 物理机 + `hccn_tool` 真机验证
+- 网络 11 条故障依赖 root 权限（`tc` / `iptables` / `ip` / `ethtool` / `systemctl`）
+- `rNET_degrade` 在 dummy 虚拟网卡上不支持（需真实物理网卡）
+- 不实现超时自动恢复：所有可恢复故障注入后需用户手动 clean
+- 不实现安全确认交互：预检仅做静态校验
+- D 状态故障（rPROC_dstate）暂不实现：D 状态为内核 I/O 调度层状态，无法从用户态可靠注入
+- 编译注入器 `builtin_injectors[]` 为空：所有故障均走 cnf + 脚本路径

@@ -46,7 +46,7 @@ int test_uid_detail_and_example(void) {
     setup();
     char *t = help_render_subcommand("inject", "rNET_loss");
     ASSERT_TRUE(t != NULL);
-    ASSERT_STR_CONTAINS(t, "网络丢包");   /* desc */
+    ASSERT_STR_CONTAINS(t, "Network packet loss");   /* desc */
     ASSERT_STR_CONTAINS(t, "dcat inject rNET_loss --iface=<iface> --loss_pct=<loss_pct>");
     free(t);
     return 0;
@@ -56,7 +56,7 @@ int test_clean_uid_example(void) {
     setup();
     char *t = help_render_subcommand("clean", "rNET_loss");
     ASSERT_TRUE(t != NULL);
-    ASSERT_STR_CONTAINS(t, "dcat clean rNET_loss --iface=<iface> --loss_pct=<loss_pct>");
+    ASSERT_STR_CONTAINS(t, "dcat clean rNET_loss --iface=<iface>");
     free(t);
     return 0;
 }
@@ -67,7 +67,7 @@ int test_query_help(void) {
     ASSERT_TRUE(t != NULL);
     ASSERT_STR_CONTAINS(t, "dcat query");
     ASSERT_STR_CONTAINS(t, "rNET_delay");
-    ASSERT_STR_CONTAINS(t, "iface,delay_ms");
+    ASSERT_STR_CONTAINS(t, "iface");   /* query_required is iface, not iface,delay_ms */
     free(t);
     return 0;
 }

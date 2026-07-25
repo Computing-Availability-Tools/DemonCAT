@@ -71,16 +71,14 @@ int test_dispatch_list(void) {
     result_free(r); return 0;
 }
 
-int test_dispatch_query_no_uid_lists_state(void) {
+int test_dispatch_query_no_uid_rejected(void) {
     setup();
     params_t p; params_init(&p);
     params_set(&p, "iface", "eth0");
     params_set(&p, "delay_ms", "100");
     dispatch_route("rNET_delay", "inject", &p);
     result_t *r = dispatch_route(NULL, "query", NULL);
-    ASSERT_STR_CONTAINS(r->json, "\"op\":\"query\"");
-    ASSERT_STR_CONTAINS(r->json, "rNET_delay");
-    ASSERT_STR_CONTAINS(r->json, "\"record_id\"");
+    ASSERT_INT_EQ(r->code, 2);
     result_free(r); return 0;
 }
 
@@ -97,7 +95,7 @@ int main(void) {
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
     RUN_TEST(test_dispatch_clean_no_match);
     RUN_TEST(test_dispatch_list);
-    RUN_TEST(test_dispatch_query_no_uid_lists_state);
+    RUN_TEST(test_dispatch_query_no_uid_rejected);
     RUN_TEST(test_dispatch_uid_not_found);
     return TEST_MAIN_RETURN();
 }

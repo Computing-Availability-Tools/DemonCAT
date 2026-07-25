@@ -21,11 +21,11 @@
   - [3.8 output.c](#38-outputc)
   - [3.9 dispatch.c](#39-dispatchc)
 - [4. 故障详设（按模块分组）](#4-故障详设按模块分组)
-  - [4.1 网络模块（network）](#41-网络模块network11-条)
-  - [4.2 进程模块（process）](#42-进程模块process4-条)
-  - [4.3 CPU 模块（cpu）](#43-cpu-模块cpu2-条)
-  - [4.4 存储模块（storage）](#44-存储模块storage1-条)
-  - [4.5 NPU 模块（npu）](#45-npu-模块npu20-条)
+  - [4.1 网络模块（network）](#41-网络模块network)
+  - [4.2 进程模块（process）](#42-进程模块process)
+  - [4.3 CPU 模块（cpu）](#43-cpu-模块cpu)
+  - [4.4 存储模块（storage）](#44-存储模块storage)
+  - [4.5 NPU 模块（npu）](#45-npu-模块npu)
 - [5. 关键流程](#5-关键流程)
   - [5.1 inject（含 inject-only 分支 + 注入器回退）](#51-inject含-inject-only-分支--注入器回退)
   - [5.2 clean](#52-clean)
@@ -98,13 +98,16 @@
 ```ini
 # demoncat.conf
 [fault.rMEM_ecc_inject]
-module          = memory
-desc            = 内存 ECC 错误注入
-script          = /usr/lib/demoncat/scripts/memory/mem_ecc_inject.sh
-supported_ops   = inject,clean,query
-required_params = dimm
-optional_params =
+module           = memory
+desc             = 内存 ECC 错误注入
+script           = /usr/lib/demoncat/scripts/memory/mem_ecc_inject.sh
+supported_ops    = inject,clean,query
+inject_required  = dimm
+clean_required   = dimm
+query_required   = dimm
 ```
+
+> per-op required/optional 字段：`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`。空字段可省略（如上例无可选参数则不写 `*_optional`）。
 
 对应脚本放到 `src/scripts/memory/mem_ecc_inject.sh` 并 `chmod +x`。`dcat list` 自动出现新故障，**免重编译**。
 
@@ -122,7 +125,7 @@ optional_params =
      │                                  └─ 仍未命中 → 退出码 4
      ▼
    dispatch_route:
-   ├── inject ──→ precheck(op∈supported_ops, required_params 齐全, 脚本/注入器可执行)
+    ├── inject ──→ precheck(op∈supported_ops, inject_required 齐全, 脚本/注入器可执行)
    │              ├─ inject-only (rPROC_exit): 执行 → output_ok (无 state)
    │              └─ 可恢复:
    │                    cnf:    executor_run(script, DCAT_OP=inject) → state_add(uid, params)
@@ -170,8 +173,12 @@ typedef struct {
     char desc[128];
     char script[256];
     char supported_ops[64];      /* "inject" | "inject,clean,query" */
-    char required_params[128];   /* "iface,loss_pct" */
-    char optional_params[128];   /* 可选参数名 */
+    char inject_required[128];   /* inject 必填: "iface,loss_pct" */
+    char inject_optional[128];   /* inject 可选参数名 */
+    char clean_required[128];    /* clean 必填: "iface" */
+    char clean_optional[128];    /* clean 可选参数名 */
+    char query_required[128];    /* query 必填: "iface" */
+    char query_optional[128];    /* query 可选参数名 */
 } fault_def_t;
 
 /* injection_record_t: state 持有, 固定数组 — 仅 inject,clean,query 故障创建 */
@@ -185,7 +192,7 @@ typedef struct {
 #define DCAT_MAX_RECORDS 32
 ```
 
-> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检只校验 `required_params`，`optional_params` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同参数允许并发）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
+> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`、query 查 `query_required`），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同参数允许并发）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
 
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 
@@ -218,22 +225,25 @@ typedef struct { const char *op; char uid[64]; params_t params; } parsed_cmd_t;
 
 ### 3.4 executor.c
 ```c
-result_t *executor_run(const char *cmd, int timeout_ms);   /* 同步: fork/exec+pipe, timer_create 超时 */
+result_t *executor_run(const char *cmd);                   /* 同步: fork/exec+pipe, 捕获 stdout/stderr */
 int        executor_run_raw(const char *cmd);              /* 同步: system() 直通 stdout, 返回退出码 */
 int        executor_check_tool(const char *path);           /* access/X_OK */
+void       executor_set_env(const char *op, const char *uid, const params_t *p); /* 设置 DCAT_OP/DCAT_UID/DCAT_PARAM_* */
+void       executor_clear_env_params(const fault_def_t *f); /* 清除 fault 声明的 DCAT_PARAM_* 环境变量 */
 void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 ```
 - 命令构造：`build_cmd(fault_def, params, op)` 拼 `"<script>"`，参数通过**环境变量**传递（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_<KEY>`），不走 argv，免注入。
-- `executor_run`：用 `fork/exec + pipe` 同步执行，`timer_create` + `SIGCHLD` / `waitpid` 实现超时；超时返回错误。用于 cnf 故障的 inject / clean 路径——dcat 等待脚本执行完返回。
+- `executor_run`：用 `fork/exec + pipe` 同步执行，`waitpid` 等待子进程结束；用于 cnf 故障的 inject / clean 路径——dcat 等待脚本执行完返回。
 - `executor_run_raw`：用 `system()` 直接执行，stdout/stderr 继承父进程终端（不 pipe 捕获）。用于 cnf 故障的 query 路径——用户需要看到脚本的原始输出（表格/多行文本），而非 JSON 包装。返回脚本退出码（0=成功）。
-- `mock_fn`：测试时注入，捕获 `(cmd, env)` 不真正执行。
+- `executor_clear_env_params`：清除 fault 定义中声明的所有 `DCAT_PARAM_*` 环境变量（6 个 per-op required/optional 列表的并集），在 clean 循环遍历多条记录时调用以防止前一条记录的参数泄漏到后一条。
+- `mock_fn`：测试时注入，捕获 `(cmd)` 不真正执行；测试通过 `getenv()` 读取环境变量断言。
 - **仅服务 cnf 故障**：注入器故障不经过 executor，直接调函数指针（§7.5）。
-- **不提供** `executor_spawn` / `executor_kill`：本期统一同步阻塞执行，dcat 不托管子进程 pid。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar，clean 时重跑脚本读取清理。
+- **不提供** `executor_spawn` / `executor_kill` / `timer_create` 超时：本期统一同步阻塞执行，dcat 不托管子进程 pid。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar，clean 时重跑脚本读取清理。
 
 ### 3.5 precheck.c
 - `precheck(fault_def, op, params)`：执行 SPEC §4.2 预检 4 步；返回 `result_t`（成功 / 带错误码）。
 - 本模块只做静态校验（uid 存在、op 合法、参数齐全、脚本可执行），**不做交互确认**（本期不实现 safety_confirm）。
-- **参数校验边界**：precheck 校验 `required_params` 齐全且非空（**结构校验**，仅 inject）；参数值合法性（如 `cores` 范围、`iface` 是否存在）由脚本自行校验（**语义校验**）。所有命令（inject / clean / query）均校验用户提供的参数是否在 `required_params` / `optional_params` 中声明，未声明的参数直接拒绝（报错退出码 3）。
+- **参数校验边界**：precheck 按 op 取对应的 `*_required` 列表校验齐全且非空（**结构校验**：inject 查 `inject_required`、clean 查 `clean_required`、query 查 `query_required`）；参数值合法性（如 `cores` 范围、`iface` 是否存在）由脚本自行校验（**语义校验**）。`declared_params_only(inject_req, inject_opt, clean_req, clean_opt, query_req, query_opt, params)` 接收 6 个 per-op required/optional 列表，按 `DCAT_OP` 选对应 required/optional，校验用户参数是否全部在声明范围内，未声明的参数直接拒绝（报错退出码 3）。若某 op 的 `*_required` 列表为空，则该 op 无必填参数、空参数允许通过——precheck 自然处理，不再有"至少一个参数"硬编码检查。
 - **不限制并发注入**：允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
 - 注入器故障的预检由 `injector_t->precheck` 函数指针实现（§7.3），不走本模块。
 
@@ -250,7 +260,7 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 ### 3.7 config.c
 INI 解析 `demoncat.conf`：
 - `[demoncat]` 段：`state_file` / `log_level`。
-- `[fault.<uid>]` 段：载入 `fault_def_t`（含 `optional_params`，不含 `safety` / `timeout`）。
+- `[fault.<uid>]` 段：载入 `fault_def_t`（含 6 个 per-op required/optional 字段，不含 `safety` / `timeout`）。
 - 固定路径见 SPEC §7；`--config` 覆盖。
 - **项目根推导**：`derive_project_root(cfgpath)` 从配置路径反推项目根（`<root>/config/demoncat.conf` → `<root>`）。
 - **脚本路径解析**：`resolve_script(root, val, dst, cap)` 对相对脚本路径 prepend 项目根，使其变为绝对路径，让 dcat 可从任意 CWD 运行。已绝对（`/` 开头）或 home 相对（`~` 开头）的路径保持原样。当 root 为 `.`（测试用相对配置路径加载）时也保持原样，走 CWD 解析。
@@ -275,11 +285,11 @@ INI 解析 `demoncat.conf`：
 
 ## 4. 故障详设（按模块分组）
 
-> 38 条目录。按模块分组详设，共享机制集中描述，差异以表呈现。
+> 按模块分组详设，共享机制集中描述，差异以表呈现。
 > 所有故障统一同步阻塞执行。需要长驻的故障（CPU 过载、端口占用、僵尸生成、磁盘写压等）由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取 pidfile 清理。
-> 本期 38 条故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
+> 本期所有故障均走 cnf+脚本路径；注入器路径（§7）留位待启用。
 
-### 4.1 网络模块（network，11 条）
+### 4.1 网络模块（network）
 
 #### 4.1.1 共享机制
 
@@ -295,7 +305,7 @@ INI 解析 `demoncat.conf`：
 
 clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）。脚本据此删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程。
 
-#### 4.1.2 11 条故障差异表
+#### 4.1.2 故障差异表
 
 | UID | 必填参数 | 可选参数 | clean 机制 | 备注 |
 |---|---|---|---|---|
@@ -317,38 +327,36 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - `iface` 不存在时 `tc qdisc add` 报错，脚本退出非 0。
 - 长驻型故障（port_occupy / link_flap）脚本 clean 时读 pidfile kill 子进程后清理。
 
-### 4.2 进程模块（process，4 条）
+### 4.2 进程模块（process）
 
 #### 4.2.1 共享机制
 
 | 机制 | 命令/工具 | 适用故障 | 备注 |
 |---|---|---|---|
 | `kill` 信号 | `kill -9/-STOP/-CONT <pid>` | exit / hang | exit 不可逆；hang 可逆 |
-| 不可中断 IO | C helper `open + ioctl(不可中断命令)` 或 `vhangup` | dstate | 触发 D 状态，需 root |
 | 僵尸生成 | fork 子进程 + 子 exit + 父不 wait | zstate | count 个僵尸 |
 
-#### 4.2.2 4 条故障差异表
+#### 4.2.2 故障差异表
 
 | UID | supported_ops | 必填 | 可选 | clean 机制 | 备注 |
 |---|---|---|---|---|---|
 | `rPROC_exit` | **inject** | pid | — | **N/A** | `kill -9 <pid>`，不可恢复；**唯一 inject-only 故障** |
-| `rPROC_dstate` | inject,clean,query | count | — | kill D 态进程 | 脚本 spawn count 个 D 态 helper + pidfile，立即返回 |
 | `rPROC_hang` | inject,clean,query | pid | — | `kill -CONT <pid>` | `kill -STOP`；clean 重跑脚本发 CONT |
-| `rPROC_zstate` | inject,clean,query | count | — | kill 父进程（子被 init reap） | 脚本 spawn count 僵尸父进程 + pidfile，立即返回 |
+| `rPROC_zstate` | inject,clean,query | pid | — | kill 父进程（子被 init reap） | kill 目标进程 → 僵尸；clean 杀父进程回收 |
 
 #### 4.2.3 rPROC_exit 的 inject-only 语义
 
-- `supported_ops = inject`：目录中不声明 `optional_params`。
+- `supported_ops = inject`：目录中仅声明 `inject_required`，不声明 `inject_optional` / `clean_*` / `query_*` 字段。
 - dispatch 走 inject-only 分支：执行 → `output_ok(message)`，**不写 state**。
 - `dcat clean rPROC_exit` / `dcat query rPROC_exit` 在 precheck 阶段拒绝（op 不在 supported_ops，退出码 3）。
 
-### 4.3 CPU 模块（cpu，2 条）
+### 4.3 CPU 模块（cpu）
 
 #### 4.3.1 共享机制
 
 | UID | 机制 | 命令 | clean |
 |---|---|---|---|
-| `rCPU_overload` * | 多核 burn | `yes` 多实例 | kill 进程组（脚本读 pidfile） |
+| `rCPU_overload` * | 多核 burn（纯用户态） | `perl -e '1 while 1'` 多实例 + taskset | kill 进程组（脚本读 pidfile） |
 | `rCPU_core_offline` | sysfs 离线 | `echo 0 > /sys/devices/system/cpu/cpu<N>/online` | `echo 1 > ...` |
 
 #### 4.3.2 rCPU_core_offline 详设
@@ -357,7 +365,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - 脚本 `for n in cores; do echo 0 > .../cpu<N>/online; done`，执行完返回。clean = 重跑脚本 `DCAT_OP=clean`，对所有 cores `echo 1`。
 - **限制**：cpu0 通常不可离线（内核 CONFIG_BOOTPARAM_HOTPLUG_CPU0），脚本须跳过并 stderr 提示。
 
-### 4.4 存储模块（storage，1 条）
+### 4.4 存储模块（storage）
 
 #### 4.4.1 rDISK_write_overload
 
@@ -367,11 +375,11 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 - **clean** = 重跑脚本 `DCAT_OP=clean`：读 pidfile kill 进程组，dd/fio 自然终止；可选 `rm -f <device>/dcat.stress`。
 - **预检**：`device` 存在且可写；`fio` 或 `dd` 可执行。
 
-### 4.5 NPU 模块（npu，20 条）
+### 4.5 NPU 模块（npu）
 
 #### 4.5.1 共享机制
 
-所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `src/scripts/npu/_common.sh`（`npu_check_env`/`sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
+所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `src/scripts/npu/_common.sh`（`npu_check_env` / `npu_validate_chip` / `sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
 
 | clean 策略 | 适用 UID | 机制 |
 |---|---|---|
@@ -380,14 +388,14 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
 | -cfg recovery | link_down, route_clear | hccn_tool 内置恢复 |
 
-#### 4.5.2 20 条故障差异表
+#### 4.5.2 故障差异表
 
 （见 SPEC §3.3 完整目录表）
 
 #### 4.5.3 约束
 
 - 所有 NPU 故障同步执行（hccn_tool 是快命令，执行完返回）。
-- 所有故障 `required_params` 含 `chip`（hccn_tool 的 `-i <0~7>`）。
+- 所有故障 `inject_required` / `clean_required` / `query_required` 含 `chip`（hccn_tool 的 `-i <0~7>`）。
 - 真实环境冒烟仅华为 Atlas 物理机可做（CI mock-only，与网络类一致）。
 
 ---
@@ -399,7 +407,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 ```
 parse → registry_find(uid)
   ├─ cnf 命中 fault_def:
-  │     → precheck(op∈supported_ops, required_params 齐全, 脚本可执行)
+  │     → precheck(op∈supported_ops, inject_required 齐全, 脚本可执行)
   │     → dispatch:
   │        ├─ inject-only:    executor_run(script, DCAT_OP=inject) → output_ok (无 state)
   │        └─ 可恢复:          executor_run(script, DCAT_OP=inject) → state_add(uid, params)
@@ -419,7 +427,8 @@ parse → registry_find(uid)
 ```
 parse → registry_find(uid)
   ├─ cnf 命中 fault_def:
-  │     → precheck(op=clean ∈ supported_ops)     # inject-only 故障在此拒绝 (退出码 3)
+  │     → precheck(op=clean ∈ supported_ops, clean_required 齐全)  # inject-only 故障在此拒绝 (退出码 3)
+  │     # 无 clean_required 的故障允许空参数; 有 clean_required 则缺参数被 precheck 拒绝
   │     → state_find_by_params(uid, params)       # 按用户参数匹配活跃记录
   │        ├─ 无记录 → output_err(1, "no active injection")
   │        └─ 记录(s) → 逐条 executor_run(script, DCAT_OP=clean, 传记录存储的 inject 参数)
@@ -439,10 +448,11 @@ parse → registry_find(uid)
 
 - **query（无 uid）**：`state_list` 遍历活跃记录，输出记录数组 JSON。不调用脚本/注入器。
 - **query（有 uid）**：验证故障是否真的生效。用户参数传入（与 inject 参数独立）。
-  - cnf 故障：`executor_run_raw(DCAT_OP=query)`，脚本 stdout 原样输出到终端。
+  - cnf 故障：`executor_run_raw_fault(f, "query", params)`，脚本 stdout 原样输出到终端。
   - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
   - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
-- **list**：`registry_list()`，输出 cnf fault 目录 JSON（含 supported_ops / required_params / optional_params / desc）。注入器故障本期不纳入 list 输出。
+  - **query 与 clean 同规则**：precheck 按 op 校验 `query_required` 齐全。有 `query_required` 的故障缺参数被拒绝（退出码 3）；无 `query_required` 的故障允许空参数 query。
+- **list**：`registry_list()`，输出 cnf fault 目录 JSON（含 supported_ops / 6 个 per-op required/optional 字段 / desc）。注入器故障本期不纳入 list 输出。
 
 ---
 
@@ -451,6 +461,7 @@ parse → registry_find(uid)
 ### 6.1 通用约定
 
 - 环境变量传参：`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_<KEY>`（KEY 大写、非字母数字→`_`）。
+- **参数声明按操作分字段**：`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`（conf 中空字段可省略）。dcat 按 `DCAT_OP` 取对应 required/optional 列表做校验并下发 `DCAT_PARAM_*` 环境变量。
 - 退出码 `0`=成功；非 `0`=失败。
 - stdout 成功文本 → `data.message`；stderr → `error.message`。
 - 可选参数未提供时，对应 `DCAT_PARAM_<KEY>` 环境变量不设置；脚本须自行处理默认值（目录表中 `(默认X)` 标注）。
@@ -459,18 +470,18 @@ parse → registry_find(uid)
 ### 6.2 可恢复故障脚本
 
 - inject 脚本执行完即返回。需要长驻的故障（CPU 过载、端口占用、僵尸生成、磁盘写压等）自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回。
-- clean 时 dcat 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本 `DCAT_OP=clean`，逐条执行。某条失败时停止，剩余不清理。脚本据此清理资源（删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程）。脚本退出码非 0 时 dcat 报错且**不 mark inactive**（故障可能仍在系统上）。
+- clean 时 dcat 按用户参数匹配活跃记录（precheck 按 op 校验 `clean_required` 齐全；无 `clean_required` 的故障允许空参数，有 `clean_required` 则缺参数被拒绝退出码 3），传记录存储的 inject 参数给脚本 `DCAT_OP=clean`，逐条执行。某条失败时停止，剩余不清理。脚本据此清理资源（删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程）。脚本退出码非 0 时 dcat 报错且**不 mark inactive**（故障可能仍在系统上）。
 - **无 uid 的 query** 由 dcat 状态回答，脚本无需实现该路径；**有 uid 的 query** 由 dcat 调脚本 `DCAT_OP=query` 分支验证（参数为用户当前输入，非 inject 时参数）。脚本 stdout 原样输出 + `---` + JSON。
 
 ### 6.3 inject-only 故障脚本
 
 - 仅实现 `DCAT_OP=inject` 分支；不期望 `DCAT_OP=clean`。
-- 目录中不声明 `optional_params`。
+- 目录中不声明 `inject_optional`（inject-only 故障无可选参数）；`clean_*` / `query_*` 字段也省略。
 - inject 完成即终结，不写 state。
 
 ### 6.4 默认值约定
 
-- 目录表中 `(默认X)` 表示该可选参数缺省时的脚本内部默认值。
+- 目录表中 `(默认X)` 表示该可选参数（`inject_optional` / `clean_optional` / `query_optional` 中声明的）缺省时的脚本内部默认值。
 - 脚本须在 `DCAT_PARAM_<KEY>` 未设置时使用该默认值，**不应依赖 dcat 注入默认值到环境变量**（dcat 不解析默认）。
 
 ---
@@ -619,13 +630,13 @@ dispatch_route(uid, op, params):
 | 执行方式 | `fork/exec` 子进程 | 进程内直接调用 |
 | 参数传递 | 环境变量 `DCAT_PARAM_*` | `params_t` 结构体指针 |
 | 输出 | stdout→pipe 捕获 / `run_raw` 直通 | 直接构造 `result_t` |
-| 超时 | `executor_run` 的 `timer_create` | 注入器自行实现 |
+| 超时 | 无（同步 waitpid） | 注入器自行实现 |
 | 适用场景 | 大多数故障（tc/iptables/kill 等） | 精确定时/二进制协议/进程内状态 |
 | state 记录 | 可恢复故障写 state | 同左 |
 | list 输出 | 纳入 | 本期不纳入（注入器本期为空） |
 | 优先级 | `registry_find` 优先 | `injector_find` 回退 |
 
-> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有 38 条故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
+> **YAGNI**：本期 `builtin_injectors[]` 为空数组，仅头文件 `injector.h` 与 `injectors.c` 留位。所有故障均走 cnf+脚本路径。注入器接口设计完成，待后续有脚本无法实现的需求时启用。
 
 ---
 
@@ -635,6 +646,7 @@ dispatch_route(uid, op, params):
 CAT/
 ├── CMakeLists.txt              # C11, 静态链接, 含 third_party/cjson
 ├── SPEC.md  DESIGN.md  README.md
+├── Release_Notes.md  test_report.md
 ├── third_party/cjson/{cJSON.c,cJSON.h}
 ├── src/
 │   ├── main.c
@@ -647,16 +659,16 @@ CAT/
 │   │   ├── config.{c,h}
 │   │   ├── output.{c,h}
 │   │   ├── dispatch.{c,h}
-│   │   └── types.h             # 公共类型: params_t/result_t/fault_def_t(含 optional_params)/injection_record_t
-│   └── injectors/
-│       ├── injector.h          # 注入器接口 injector_t (§7.2)
-│       └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
-│   └── scripts/                    # 故障脚本源码（数据驱动，非编译，git chmod +x）
-│       ├── cpu/                    # 2 脚本
-│       │   ├── cpu_overload.sh        # 示例
+│   │   └── types.h             # 公共类型: params_t/result_t/fault_def_t(含 6 个 per-op required/optional 字段)/injection_record_t
+│   ├── injectors/
+│   │   ├── injector.h          # 注入器接口 injector_t (§7.2)
+│   │   └── injectors.c          # builtin_injectors[] 注册表 + injector_find (§7.4, 本期为空)
+│   └── scripts/
+│       ├── cpu/                    # cpu 模块脚本
+│       │   ├── cpu_overload.sh
 │       │   └── cpu_core_offline.sh
-│       ├── network/                # 11 脚本
-│       │   ├── net_delay.sh           # 示例
+│       ├── network/                # network 模块脚本
+│       │   ├── net_delay.sh
 │       │   ├── net_loss.sh
 │       │   ├── net_reorder.sh
 │       │   ├── net_down.sh
@@ -667,14 +679,13 @@ CAT/
 │       │   ├── net_bw_limit.sh
 │       │   ├── net_jitter.sh
 │       │   └── net_tcp_loss.sh
-│       ├── process/                # 4 脚本
+│       ├── process/                # process 模块脚本
 │       │   ├── proc_exit.sh
-│       │   ├── proc_dstate.sh
 │       │   ├── proc_hang.sh
 │       │   └── proc_zstate.sh
-│       ├── storage/                # 1 脚本
+│       ├── storage/                # storage 模块脚本
 │       │   └── disk_write_overload.sh
-│       └── npu/                    # 20 脚本 + _common.sh helper
+│       └── npu/                    # npu 模块脚本 + _common.sh helper
 │           ├── _common.sh
 │           ├── link_down.sh
 │           ├── ip_change.sh
@@ -697,19 +708,27 @@ CAT/
 │           ├── pfc_change.sh
 │           └── roce_port_change.sh
 ├── config/
-│   └── demoncat.conf           # 故障目录配置(38 条)
+│   └── demoncat.conf           # 故障目录配置
+├── docs/
+│   ├── user_manual.md          # 用户手册
+│   └── manual_test_guide.md    # 高危故障手动测试指南
 └── tests/
-    ├── test_cli.c
+    ├── test_output.c
     ├── test_registry.c
     ├── test_executor_mock.c
     ├── test_precheck.c
     ├── test_state.c
-    ├── test_output.c
-    ├── test_faults.c               # 通用表驱动
-    ├── test_faults_network.c      # 11 条网络故障
-    ├── test_faults_process.c      # 4 条进程故障
-    ├── test_faults_cpu_storage.c  # 2 条 CPU + 1 条存储故障
-    └── test_faults_npu.c          # 20 条 NPU 故障
+    ├── test_cli.c
+    ├── test_faults_common.h     # 通用 mock + 断言宏
+    ├── test_faults_cpu_storage.c  # 3 条 CPU + 1 条存储
+    ├── test_faults_network.c      # 11 条网络
+    ├── test_faults_process.c      # 4 条进程
+    ├── test_faults_npu.c          # 20 条 NPU
+    ├── check_syntax.sh            # sh -n 全脚本语法检查
+    ├── smoke_root.sh             # root 级自动化测试
+    ├── test_smoke_cpu.c          # CPU 真实执行 (2 条)
+    ├── test_smoke_process.c      # 进程真实执行 (3 条)
+    └── test_smoke_storage.c      # 存储+端口真实执行 (2 条)
 ```
 
 > `src/injectors/` 目录含 `injector.h`（接口定义，§7.2）与 `injectors.c`（注册表 + 查找，§7.4）。本期 `builtin_injectors[]` 为空数组。
@@ -718,9 +737,9 @@ CAT/
 
 ## 9. 构建
 
-- `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
+- `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），`_POSIX_C_SOURCE=200809L` 编译定义（确保 strict C11 可移植），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
 - 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
-- WSL 验证：`cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure`。
+- WSL 验证：`cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure`。`WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
 
 ---
 
@@ -730,7 +749,7 @@ CAT/
 
 ### 10.1 mock_executor
 
-`executor_set_mock(fn)`，`fn` 捕获 `(cmd, env)` 不真正 fork。测试可断言 cnf 故障下发命令串与环境变量集合（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_*`）。
+`executor_set_mock(fn)`，`fn` 捕获 `(cmd)` 不真正 fork。测试通过 `getenv()` 读取环境变量断言 cnf 故障下发命令串与环境变量集合（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_*`）。
 
 > 注入器故障不经过 executor，mock_executor 不适用；注入器测试直接断言 `inj->op(params)` 返回的 `result_t`。
 
@@ -750,7 +769,6 @@ CAT/
 | rNET_link_flap | ✓ | ✓ | ✓ | 脚本 spawn 循环进程 + pidfile；按 count 自结束 | 可选 |
 | rNET_tcp_loss | ✓ | ✓ | ✓ | 命令串含 `iptables -I ... DROP` | 可选 |
 | rPROC_exit | ✓ | — | — | inject-only；output 无 record_id；clean/query 退出码 3 | 可选（kill 测试进程） |
-| rPROC_dstate | ✓ | ✓ | ✓ | 脚本 spawn helper + pidfile | 可选（需 root + helper） |
 | rPROC_hang | ✓ | ✓ | ✓ | `kill -STOP`；clean 发 `-CONT` | 可选 |
 | rPROC_zstate | ✓ | ✓ | ✓ | 脚本 spawn 僵尸父进程 + pidfile | 可选 |
 | rCPU_core_offline | ✓ | ✓ | ✓ | 命令串含 `echo 0 > .../online` | 可选（需 root） |
@@ -837,16 +855,16 @@ dcat list                            # 故障目录
 
 ## 12. 与 SPEC 的对应
 
-- **决策1（注册机制）**：registry 从 cnf 载入 `fault_def`（含 `optional_params`）；编译 `injector_t` 作为进程内高级扩展点（§3.3 + §7）。
+- **决策1（注册机制）**：registry 从 cnf 载入 `fault_def`（含 6 个 per-op required/optional 字段）；编译 `injector_t` 作为进程内高级扩展点（§3.3 + §7）。
 - **决策2（命令语法）**：子命令式 `dcat <subcommand> [uid] --key=value ...`，不再使用 SQL-like 单引号命令串；所有参数统一为 `--key=value` 标志（§3.2 + SPEC §2）。
 - **决策3（故障机制）**：cnf + 脚本驱动（§1.2 + §4 + §6）；注入器为进程内回退路径（§7）。
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
-- **决策5（必/选参数区分）**：`required_params` 预检校验；`optional_params` 缺省走脚本默认（§2 + §3.3 SPEC）。
+- **决策5（必/选参数区分）**：按 op 分 required/optional 字段（`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`）；precheck 按 op 取对应 `*_required` 校验，`*_optional` 缺省走脚本默认（§2 + §3.5 + SPEC §3.3）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1 起步（核心框架 + 38 条故障），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1 起步（核心框架 + 37 条故障），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。
 - **决策11（统一同步阻塞执行）**：本期不区分 background/sync 模式，不实现 `executor_spawn`、`executor_kill`、`injection_record_t.bg_pid`。所有故障 inject/clean/query 均同步阻塞执行：cnf 故障用 `executor_run` / `executor_run_raw`，注入器故障直接调函数指针。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取清理。
 - **决策12（注入器接口设计完成，实现留位）**：`injector_t` 接口（uid + 4 函数指针）、`builtin_injectors[]` 注册表、`injector_find` 查找、dispatch 回退路由均已设计（§7）。本期 `builtin_injectors[]` 为空数组，所有故障走 cnf+脚本路径；待出现脚本无法实现的需求（精确定时/二进制协议/进程内状态）时启用。
-- **决策13（参数匹配与并发注入）**：允许同 uid 重复注入（含相同参数），dcat 不做并发拦截，脚本自行处理幂等性。`injection_record_t` 存储 inject 时的 `params`，clean 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本，逐条执行；某条失败时停止，剩余不清理。预检从 5 步减为 4 步（删除原"无活跃注入"并发检查）。所有命令（inject / clean / query）均拒绝未在 `required_params` / `optional_params` 中声明的参数（退出码 3），不做透传。
+- **决策13（参数匹配与并发注入）**：允许同 uid 重复注入（含相同参数），dcat 不做并发拦截，脚本自行处理幂等性。`injection_record_t` 存储 inject 时的 `params`，clean 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本，逐条执行；某条失败时停止，剩余不清理。**clean 和 query（带 uid）各自有独立的 `clean_required` / `query_required`：precheck 按 op 校验对应 required 列表齐全，缺参数被拒绝（退出码 3）；该 op 无 required 参数时允许空参数。** 不再有"至少一个参数"硬编码检查——是否需要参数完全由各 op 的 `*_required` 列表决定（precheck 自然处理）。query（不带 uid）查全部活跃记录不受此限制。所有命令（inject / clean / query）均拒绝未在对应 op 的 `*_required` / `*_optional` 中声明的参数（退出码 3），不做透传。

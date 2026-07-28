@@ -8,6 +8,8 @@ find_package(Threads REQUIRED)
 
 add_library(cjson STATIC third_party/cjson/cJSON.c)
 target_include_directories(cjson PUBLIC third_party/cjson)
+set_target_properties(cjson PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 
 set(DCAT_CORE
     src/core/types.c src/core/cli.c src/core/registry.c src/core/executor.c

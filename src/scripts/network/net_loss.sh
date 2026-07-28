@@ -33,8 +33,8 @@ case "${DCAT_OP:-inject}" in
         for iface in $ifaces; do
             [ -n "$iface" ] || continue
             out=$(tc qdisc show dev "$iface" 2>/dev/null)
-            echo "$out"
-            echo "$out" | grep -qE "netem.*loss" && found=1
+            match=$(echo "$out" | grep -E "netem.*loss")
+            [ -n "$match" ] && { echo "$match"; found=1; }
         done
         [ "$found" = 1 ] && exit 0 || exit 1
         ;;

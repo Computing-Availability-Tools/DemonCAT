@@ -7,4 +7,5 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
 int op_in_supported(const char *supported_ops, const char *op);
 int required_params_present(const char *required_params, const params_t *params);
 int declared_params_only(const char *inject_req, const char *inject_opt, const char *clean_req, const char *clean_opt, const char *query_req, const char *query_opt, const params_t *params);
+const char *precheck_last_undeclared_param(void);  /* 返回上次 declared_params_only 检测到的首个未声明参数名 */
 #endif

@@ -95,8 +95,11 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
 static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const params_t *params) {
     if (!op_in_supported(p->supported_ops, op))
         return result_err(op, p->uid, 3, "op not in supported_ops");
-    if (!declared_params_only(p->inject_required, p->inject_optional, p->clean_required, p->clean_optional, p->query_required, p->query_optional, params))
-        return result_err(op, p->uid, 3, "undeclared param");
+    if (!declared_params_only(p->inject_required, p->inject_optional, p->clean_required, p->clean_optional, p->query_required, p->query_optional, params)) {
+        char msg[256];
+        snprintf(msg, sizeof msg, "unknown parameter '%s' (not declared for %s)", precheck_last_undeclared_param(), p->uid);
+        return result_err(op, p->uid, 3, msg);
+    }
     const char *op_req = NULL;
     if (strcmp(op, "inject") == 0)     op_req = p->inject_required;
     else if (strcmp(op, "clean") == 0) op_req = p->clean_required;
@@ -109,9 +112,15 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
         if (pc) result_free(pc);
     }
     if (strcmp(op, "inject") == 0) {
+        if (!p->inject) return result_err("inject", p->uid, 3, "inject declared in supported_ops but inject() not implemented");
         result_t *r = p->inject(params);
         if (r->code == 0 && p->clean) {
             int id = state_add(p->uid, params);
+            if (id < 0) {
+                result_free(r);
+                return result_err("inject", p->uid, 1,
+                    "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+            }
             cJSON *root = cJSON_Parse(r->json);
             if (root) {
                 cJSON *data = cJSON_GetObjectItem(root, "data");
@@ -125,7 +134,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
         return r;
     }
     if (strcmp(op, "clean") == 0) {
-        if (!p->clean) return result_err("clean", p->uid, 3, "op not in supported_ops");
+        if (!p->clean) return result_err("clean", p->uid, 3, "clean declared in supported_ops but clean() not implemented");
         int ids[DCAT_MAX_RECORDS];
         int n = state_find_by_params(p->uid, params, ids, DCAT_MAX_RECORDS);
         if (n == 0) return result_err("clean", p->uid, 1, "no active injection");
@@ -140,7 +149,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
         return result_ok("clean", p->uid, 0, "cleaned");
     }
     if (strcmp(op, "query") == 0) {
-        if (!p->query) return result_err("query", p->uid, 3, "op not in supported_ops");
+        if (!p->query) return result_err("query", p->uid, 3, "query declared in supported_ops but query() not implemented");
         return p->query(params);
     }
     return result_err(op, p->uid, 3, "op not in supported_ops");
@@ -177,7 +186,14 @@ result_t *dispatch_route(const char *uid, const char *op, const params_t *params
         if (pc) result_free(pc);
         if (strcmp(op, "inject") == 0) {
             result_t *r = inj->inject(params);
-            if (r->code == 0 && inj->clean) state_add(uid, params);
+            if (r->code == 0 && inj->clean) {
+                int id = state_add(uid, params);
+                if (id < 0) {
+                    result_free(r);
+                    return result_err("inject", uid, 1,
+                        "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                }
+            }
             return r;
         }
         if (strcmp(op, "clean") == 0) {

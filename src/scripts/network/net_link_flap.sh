@@ -9,6 +9,10 @@ case "${DCAT_OP:-inject}" in
         cycle=${DCAT_PARAM_CYCLE_SEC:-2}
         count=${DCAT_PARAM_COUNT:-10}
         PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"
+        if [ -f "$PIDFILE" ]; then
+            for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done
+            rm -f "$PIDFILE"
+        fi
         (
             i=0
             while [ "$i" -lt "$count" ]; do

@@ -48,19 +48,32 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     query)
-        pid=${DCAT_PARAM_PID:?missing required param: pid}
-        state=$(awk '/^State:/{print $2}' /proc/$pid/status 2>/dev/null)
-        if [ "$state" = "Z" ]; then
-            echo "pid=$pid state=Z (zombie)"
-            ps -eo pid,ppid,stat,cmd 2>/dev/null | awk -v p="$pid" 'NR==1 || $1==p'
-            exit 0
-        elif [ -d "/proc/$pid" ]; then
-            echo "pid=$pid state=$state (not zombie)"
-            exit 1
+        pids=""
+        if [ -n "$DCAT_PARAM_PID" ]; then
+            pids=$DCAT_PARAM_PID
         else
-            echo "pid=$pid not found (already reaped/gone)"
-            exit 1
+            for sc in /tmp/dcat-rPROC_zstate-*.info; do
+                [ -f "$sc" ] || continue
+                read -r zpid _ < "$sc" 2>/dev/null
+                [ -n "$zpid" ] && pids="$pids $zpid"
+            done
         fi
+        [ -z "$pids" ] && { echo "no pid (no active rPROC_zstate injection)"; exit 1; }
+        found=0
+        for pid in $pids; do
+            [ -n "$pid" ] || continue
+            state=$(awk '/^State:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+            if [ "$state" = "Z" ]; then
+                echo "pid=$pid state=Z (zombie)"
+                ps -eo pid,ppid,stat,cmd 2>/dev/null | awk -v p="$pid" 'NR==1 || $1==p'
+                found=1
+            elif [ -d "/proc/$pid" ]; then
+                echo "pid=$pid state=$state (not zombie)"
+            else
+                echo "pid=$pid not found (already reaped/gone)"
+            fi
+        done
+        [ "$found" = 1 ] && exit 0 || exit 1
         ;;
 
     *)

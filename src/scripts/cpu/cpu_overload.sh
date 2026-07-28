@@ -99,30 +99,58 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
         ;;
 
     query)
-        spec=${DCAT_PARAM_CORES:-0}
-        burn_count=$(pgrep -f 'perl -e' 2>/dev/null | wc -l)
-        yes_count=$(pgrep -x yes 2>/dev/null | wc -l)
-        burn_count=${burn_count## }
-        yes_count=${yes_count## }
-        total=$((burn_count + yes_count))
-        echo "requested_cores: $spec"
+        # 有 cores 参数 → 按指定核; 无参数 → 从 per-core pidfile 探测实际注入的核 (权威, 避免 ps/grep 误匹配)
+        if [ -n "$DCAT_PARAM_CORES" ]; then
+            spec=$DCAT_PARAM_CORES
+            echo "requested_cores: $spec"
+        else
+            spec=""
+            for pf in /tmp/dcat-rCPU_overload-c*.pid; do
+                [ -f "$pf" ] || continue
+                pid=$(cat "$pf" 2>/dev/null)
+                [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || continue
+                n=${pf##*/dcat-rCPU_overload-c}; n=${n%.pid}
+                spec="${spec:+$spec,}$n"
+            done
+            echo "injected_cores: ${spec:-(none)}"
+        fi
+        # burn 进程数 (从 pidfile 统计存活, 与 details 一致)
+        total=0
+        for pf in /tmp/dcat-rCPU_overload-c*.pid; do
+            [ -f "$pf" ] || continue
+            pid=$(cat "$pf" 2>/dev/null)
+            [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && total=$((total+1))
+        done
         echo "burn_processes: $total"
-        echo "--- per-core CPU (requested only) ---"
-        if command -v mpstat >/dev/null 2>&1; then
-            first=1
-            for n in $(parse_cores "$spec"); do
-                if [ "$first" = 1 ]; then
-                    mpstat -P "$n" 1 1 2>/dev/null | tail -2
-                    first=0
-                else
-                    mpstat -P "$n" 1 1 2>/dev/null | tail -1
-                fi
+        if [ "$total" -gt 0 ]; then
+            echo "--- per-core CPU (instantaneous, /proc/stat) ---"
+            # 采样 /proc/stat 两次算 delta → 每核 %us (无外部依赖; 与 top/mpstat 同算法, 瞬时值非生命周期均值)
+            s1=$(awk '/^cpu[0-9]/{sub(/^cpu/,"",$1); print $1,$2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null)
+            sleep 0.2
+            s2=$(awk '/^cpu[0-9]/{sub(/^cpu/,"",$1); print $1,$2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null)
+            req=$(parse_cores "$spec" | tr '\n' ' ')
+            printf '%s\n' "$s1" | awk -v s2="$s2" -v req="$req" '
+            BEGIN { n=split(req,a," "); for(i=1;i<=n;i++) want[a[i]]=1 }
+            { c=$1; uu1[c]=$2+$3; tt1[c]=$2+$3+$4+$5+$6+$7+$8+$9 }
+            END {
+                ns=split(s2,ln,"\n")
+                for(i=1;i<=ns;i++){ split(ln[i],f); c=f[1]; if(!(c in want)) continue
+                    u2=f[2]+f[3]; t2=f[2]+f[3]+f[4]+f[5]+f[6]+f[7]+f[8]+f[9]
+                    dt=t2-tt1[c]; if(dt<=0) dt=1
+                    printf "core %-3s: %5.1f%% us\n", c, (u2-uu1[c])/dt*100
+                }
+            }'
+            echo "--- burn process details ---"
+            echo "    PID  PSR CMD"
+            for pf in /tmp/dcat-rCPU_overload-c*.pid; do
+                [ -f "$pf" ] || continue
+                pid=$(cat "$pf" 2>/dev/null)
+                [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || continue
+                ps -p "$pid" -o pid=,psr=,cmd= 2>/dev/null
             done
         else
-            echo "(mpstat unavailable — apt install sysstat for per-core view)"
+            echo "(no active rCPU_overload injection — run 'dcat inject rCPU_overload --cores=...')"
         fi
-        echo "--- burn process details ---"
-        ps -eo pid,%cpu,psr,cmd 2>/dev/null | grep -E 'PID|[p]erl|[y]es' || echo "(none)"
         [ "$total" -gt 0 ]
         ;;
 

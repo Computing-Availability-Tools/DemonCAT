@@ -16,7 +16,7 @@ int test_load_faults(void) {
     ASSERT_STR_CONTAINS(f->inject_required, "iface");
     ASSERT_STR_CONTAINS(f->inject_required, "delay_ms");
     ASSERT_STR_CONTAINS(f->clean_required, "iface");
-    ASSERT_STR_CONTAINS(f->query_required, "iface");
+    ASSERT_STR_CONTAINS(f->query_optional, "iface");   /* query 不再强制必填，原 query_required 已并入 query_optional */
     /* inject-only: clean/query fields empty */
     const fault_def_t *p = config_find(&cfg, "rPROC_exit");
     ASSERT_TRUE(p != NULL);

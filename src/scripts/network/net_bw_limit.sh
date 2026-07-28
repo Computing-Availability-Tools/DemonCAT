@@ -20,9 +20,22 @@ case "${DCAT_OP:-inject}" in
         echo "cleaned bw limit on $iface"
         ;;
     query)
-        iface="${DCAT_PARAM_IFACE:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
-        out=$(tc qdisc show dev "$iface" 2>/dev/null)
-        echo "$out"
-        echo "$out" | grep -qE "qdisc tbf" && exit 0 || exit 1
+        if [ -n "$DCAT_PARAM_IFACE" ]; then
+            ifaces=$DCAT_PARAM_IFACE
+        else
+            ifaces=""
+            for sc in /tmp/dcat-rNET_bw_limit-*.sidecar; do
+                [ -f "$sc" ] || continue
+                ifaces="$ifaces $(cat "$sc" 2>/dev/null)"
+            done
+        fi
+        found=0
+        for iface in $ifaces; do
+            [ -n "$iface" ] || continue
+            out=$(tc qdisc show dev "$iface" 2>/dev/null)
+            match=$(echo "$out" | grep -E "qdisc tbf")
+            [ -n "$match" ] && { echo "$match"; found=1; }
+        done
+        [ "$found" = 1 ] && exit 0 || exit 1
         ;;
 esac

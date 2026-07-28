@@ -64,6 +64,70 @@ int test_parse_global_options_excluded(void) {
     return 0;
 }
 
+int test_parse_unknown_subcommand(void) {
+    const char *argv[] = {"dcat", "rPROC_exit"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(2, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "unknown subcommand 'rPROC_exit'");
+    return 0;
+}
+
+int test_parse_missing_subcommand_with_param(void) {
+    const char *argv[] = {"dcat", "rPROC_exit", "--pid=1"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(3, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "missing subcommand before 'rPROC_exit'");
+    return 0;
+}
+
+int test_parse_unexpected_positional(void) {
+    const char *argv[] = {"dcat", "inject", "rNET_loss", "extra"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(4, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "unexpected positional argument 'extra'");
+    return 0;
+}
+
+int test_parse_missing_dash_prefix(void) {
+    const char *argv[] = {"dcat", "inject", "rNET_loss", "pid=1"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(4, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "missing the '--' prefix");
+    ASSERT_STR_CONTAINS(cli_get_error(), "did you mean '--pid=1'?");
+    return 0;
+}
+
+int test_parse_missing_equal(void) {
+    const char *argv[] = {"dcat", "inject", "rNET_loss", "--pid"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(4, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "missing '=value'");
+    return 0;
+}
+
+int test_parse_empty_key(void) {
+    const char *argv[] = {"dcat", "inject", "rNET_loss", "--"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(4, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "empty parameter name");
+    return 0;
+}
+
+int test_parse_only_global_option(void) {
+    const char *argv[] = {"dcat", "--config", "x.conf"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(3, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "missing subcommand");
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_parse_inject_flags);
     RUN_TEST(test_parse_clean_flags);
@@ -71,5 +135,12 @@ int main(void) {
     RUN_TEST(test_parse_query_with_uid);
     RUN_TEST(test_parse_list);
     RUN_TEST(test_parse_global_options_excluded);
+    RUN_TEST(test_parse_unknown_subcommand);
+    RUN_TEST(test_parse_missing_subcommand_with_param);
+    RUN_TEST(test_parse_unexpected_positional);
+    RUN_TEST(test_parse_missing_dash_prefix);
+    RUN_TEST(test_parse_missing_equal);
+    RUN_TEST(test_parse_empty_key);
+    RUN_TEST(test_parse_only_global_option);
     return TEST_MAIN_RETURN();
 }

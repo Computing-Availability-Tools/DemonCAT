@@ -54,7 +54,7 @@ echo ""
 echo "=========================================="
 echo "依赖安装完成。检查工具可用性："
 echo "=========================================="
-TOOLS="cmake gcc make perl taskset dd tc ip ethtool iptables systemctl python3 hccn_tool"
+TOOLS="perl taskset dd tc ip ethtool iptables systemctl python3 hccn_tool"
 for t in $TOOLS; do
     if command -v "$t" >/dev/null 2>&1; then
         echo "  $t: ✅"

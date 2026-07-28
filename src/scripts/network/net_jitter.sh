@@ -34,8 +34,8 @@ case "${DCAT_OP:-inject}" in
         for iface in $ifaces; do
             [ -n "$iface" ] || continue
             out=$(tc qdisc show dev "$iface" 2>/dev/null)
-            echo "$out"
-            echo "$out" | grep -qE "netem.*delay [0-9]+[a-z]*[[:space:]]+[0-9]+[a-z]*" && found=1
+            match=$(echo "$out" | grep -E "netem.*delay [0-9]+[a-z]*[[:space:]]+[0-9]+[a-z]*")
+            [ -n "$match" ] && { echo "$match"; found=1; }
         done
         [ "$found" = 1 ] && exit 0 || exit 1
         ;;

@@ -1,4 +1,5 @@
 #include "plugin_manager.h"
+#include "precheck.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -44,6 +45,36 @@ int plugin_load_dir(const char *dir) {
                     path, p->abi_version, DCAT_PLUGIN_ABI_VERSION);
             dlclose(h);
             continue;
+        }
+        if (!p->uid || !p->uid[0] || !p->name || !p->supported_ops || !p->supported_ops[0]) {
+            fprintf(stderr, "plugin: %s missing required fields (uid/name/supported_ops)\n", path);
+            dlclose(h);
+            continue;
+        }
+        if (op_in_supported(p->supported_ops, "inject") && !p->inject) {
+            fprintf(stderr, "plugin: %s supported_ops declares inject but inject() is NULL\n", path);
+            dlclose(h);
+            continue;
+        }
+        if (op_in_supported(p->supported_ops, "clean") && !p->clean) {
+            fprintf(stderr, "plugin: %s supported_ops declares clean but clean() is NULL\n", path);
+            dlclose(h);
+            continue;
+        }
+        if (op_in_supported(p->supported_ops, "query") && !p->query) {
+            fprintf(stderr, "plugin: %s supported_ops declares query but query() is NULL\n", path);
+            dlclose(h);
+            continue;
+        }
+        {
+            int dup = 0;
+            for (int i = 0; i < g_count; i++)
+                if (strcmp(g_plugins[i]->uid, p->uid) == 0) { dup = 1; break; }
+            if (dup) {
+                fprintf(stderr, "plugin: %s duplicate uid '%s' already loaded\n", path, p->uid);
+                dlclose(h);
+                continue;
+            }
         }
         if (p->init && p->init() != 0) {
             fprintf(stderr, "plugin: %s init failed\n", path);

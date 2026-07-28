@@ -1,6 +1,8 @@
 #include "test.h"
 #include "config.h"
 #include <string.h>
+#include <unistd.h>
+#include <stdio.h>
 
 int test_load_faults(void) {
     config_t cfg;
@@ -48,9 +50,25 @@ int test_derive_project_root(void) {
     return 0;
 }
 
+int test_load_resolves_script_abs(void) {
+    char cwd[512];
+    if (!getcwd(cwd, sizeof(cwd))) return 1;
+    char cfgpath[1024];
+    snprintf(cfgpath, sizeof(cfgpath), "%s/config/demoncat.conf", cwd);
+    config_t cfg;
+    int rc = config_load(cfgpath, &cfg);
+    ASSERT_INT_EQ(rc, 0);
+    const fault_def_t *f = config_find(&cfg, "rNET_delay");
+    ASSERT_TRUE(f != NULL);
+    ASSERT_TRUE(f->script[0] == '/');
+    ASSERT_STR_CONTAINS(f->script, "src/scripts/network/net_delay.sh");
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_load_faults);
     RUN_TEST(test_resolve_script);
     RUN_TEST(test_derive_project_root);
+    RUN_TEST(test_load_resolves_script_abs);
     return TEST_MAIN_RETURN();
 }

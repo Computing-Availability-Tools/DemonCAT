@@ -91,7 +91,35 @@ int main(void) {
         CK(count_proc("perl") == 0);
     }
 
+    /* ---- rCPU_overload overlapping specs (per-core idempotency) ---- */
+    {
+        params_t p1; memset(&p1, 0, sizeof p1);
+        strcpy(p1.items[0].key, "cores"); strcpy(p1.items[0].value, "0-1"); p1.count = 1;
+        params_t p2; memset(&p2, 0, sizeof p2);
+        strcpy(p2.items[0].key, "cores"); strcpy(p2.items[0].value, "0"); p2.count = 1;
+
+        result_t *r = dispatch_route("rCPU_overload", "inject", &p1);
+        CK(r && r->code == 0); result_free(r);
+
+        sleep(1);
+        CK(count_proc("perl") >= 2);
+
+        r = dispatch_route("rCPU_overload", "inject", &p2);
+        CK(r && r->code == 0); result_free(r);
+
+        sleep(1);
+        int n = count_proc("perl");
+        CK(n >= 1);
+        CK(n < 3);
+
+        r = dispatch_route("rCPU_overload", "clean", &p1); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rCPU_overload", "clean", &p2); CK(r && r->code == 0); result_free(r);
+
+        sleep(1);
+        CK(count_proc("perl") == 0);
+    }
+
     smoke_teardown();
-    printf("test_smoke_cpu: 2 faults passed\n");
+    printf("test_smoke_cpu: 3 faults passed\n");
     return 0;
 }

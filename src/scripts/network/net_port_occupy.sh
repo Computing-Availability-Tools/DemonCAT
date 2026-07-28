@@ -8,6 +8,10 @@ case "${DCAT_OP:-inject}" in
         port=${DCAT_PARAM_PORT:?missing required param: port}
         proto=${DCAT_PARAM_PROTOCOL:-tcp}
         PIDFILE="/tmp/dcat-rNET_port_occupy-${port}.pid"
+        if [ -f "$PIDFILE" ]; then
+            for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done
+            rm -f "$PIDFILE"
+        fi
         if command -v python3 >/dev/null 2>&1; then
             python3 -c "
 import socket, time
@@ -31,7 +35,7 @@ while True: time.sleep(3600)
             rm -f "$PIDFILE"
             echo "released port $port"
         else
-            echo "no active injection for port=$port" >&2; exit 1
+            echo "released port $port (no active injection)"
         fi
         ;;
     query)

@@ -168,7 +168,7 @@ list 输出 JSON 数组：
 - `dcat_test` 函数同样链接 `${CMAKE_DL_LIBS}`
 - 示例插件 `src/plugins/sample/sample_plugin.c` + `src/core/output.c` + `src/core/types.c` 编为 MODULE 库：
   - `OUTPUT_NAME "sample"` / `PREFIX "lib"` / `LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/plugins"`
-  - 产物：`plugins/libsample.so`（已入仓；`.gitignore` 规则对 `plugins/*.so` 生效）
+  - 产物：`plugins/libsample.so`（构建产物，`.gitignore` 忽略 `plugins/*.so`，不入仓）
 - `add_dependencies(test_plugin_integration sample_plugin)` —— 集成测试依赖 `.so` 先构建
 
 ## 9. 相关集成

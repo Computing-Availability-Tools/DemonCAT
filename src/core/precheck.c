@@ -11,8 +11,9 @@ int op_in_supported(const char *supported_ops, const char *op) {
     char buf[128];
     strncpy(buf, supported_ops ? supported_ops : "", sizeof(buf)-1);
     buf[sizeof(buf)-1] = '\0';
-    char *tok = strtok(buf, ",");
-    while (tok) { if (strcmp(tok, op) == 0) return 1; tok = strtok(NULL, ","); }
+    char *save = NULL;
+    char *tok = strtok_r(buf, ",", &save);
+    while (tok) { if (strcmp(tok, op) == 0) return 1; tok = strtok_r(NULL, ",", &save); }
     return 0;
 }
 
@@ -53,6 +54,8 @@ int declared_params_only(const char *inject_req, const char *inject_opt, const c
     }
     return 1;
 }
+
+const char *precheck_last_undeclared_param(void) { return g_undeclared_param; }
 
 /* Find first missing required param. Returns static string or NULL. */
 static const char *first_missing_required(const char *required, const params_t *params) {

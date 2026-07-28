@@ -106,14 +106,14 @@ dcat list
 | `inject_optional` | 否 | inject 操作**可选**参数名（逗号分隔），不填时脚本走自有默认值 |
 | `clean_required` | 否 | clean 操作必填参数名；无则省略 |
 | `clean_optional` | 否 | clean 操作可选参数名 |
-| `query_required` | 否 | query 操作必填参数名 |
-| `query_optional` | 否 | query 操作可选参数名 |
+| `query_required` | 否 | **已弃用**（解析兼容保留）：query 不再强制必填参数，precheck 对 query 不做必填校验。query 参数应声明在 `query_optional` |
+| `query_optional` | 否 | query 操作可选参数名（逗号分隔）；无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤 |
 
 > 所有故障统一同步阻塞执行；需要长驻的故障由脚本自行管理子进程。
 
 ### 3.2 参数语义约定
 
-- **必填 vs 可选**：`inject_required`/`clean_required`/`query_required` 在 precheck 阶段按操作分别校验非空；`inject_optional`/`clean_optional`/`query_optional` 缺省时不报错，由脚本解释默认值。空字段可省略（默认空字符串）。
+- **必填 vs 可选**：`inject_required`/`clean_required` 在 precheck 阶段按操作分别校验非空；**`query` 不强制必填**（无参时脚本展示全部，有参则过滤），query 参数声明在 `query_optional`。`inject_optional`/`clean_optional`/`query_optional` 缺省时不报错，由脚本解释默认值。空字段可省略（默认空字符串）。
 
 ### 3.3 目录清单
 
@@ -177,8 +177,8 @@ inject_required = iface,loss_pct
 inject_optional = direction
 clean_required  = iface
 clean_optional  = direction
-query_required  = iface
-query_optional  = direction
+query_required  =              # 已弃用（解析兼容保留，留空）；query 参数放 query_optional
+query_optional  = iface,direction
 ```
 
 ---
@@ -195,14 +195,14 @@ query_optional  = direction
 
 1. uid 在配置中存在（否则退出码 4）
 2. 请求的 op 属于该故障 `supported_ops`（`inject`-only 故障拒绝 `clean`/`query`）
-3. 对应操作的 `inject_required` / `clean_required` / `query_required` 全部提供且非空（按操作分别校验）
+3. 对应操作的 `inject_required` / `clean_required` 全部提供且非空（按操作分别校验；**`query` 不做必填校验**，无参合法）
 4. 脚本路径存在且可执行（`access/X_OK`）
 
 > 允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
-> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。**clean 和 query（带 uid）均要求：如果该操作有声明的参数，必须提供至少一个参数，空参数被拒绝（退出码 3）。无声明参数的操作允许空参数。query（不带 uid）查全部不受此限制。**
+> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。**`clean`（带 uid）要求：如果该操作有声明的参数，必须提供至少一个参数，空参数被拒绝（退出码 3）。`query`（带 uid）不强制必填参数——无参时脚本自行展示全部（如全部核/全部网卡/读 sidecar），有参则按参过滤；仅校验参数是否已声明（未声明的 `--foo=bar` 仍拒绝，退出码 3）。`query`（不带 uid）查全部活跃记录，不受此限制。**
 > 所有命令（inject / clean / query）均校验用户提供的参数是否在该操作对应的 required/optional 列表（`inject_required`/`inject_optional`、`clean_required`/`clean_optional`、`query_required`/`query_optional`）中声明，未声明的参数（`--foo=bar`）直接拒绝（退出码 3）。
 
-> **参数校验分层**：dcat 负责**结构校验**（`inject_required`/`clean_required`/`query_required` 是否齐全且非空，即第 3 步）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
+> **参数校验分层**：dcat 负责**结构校验**（`inject_required`/`clean_required` 是否齐全且非空，即第 3 步；**`query` 不强制必填**）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
 
 ---
 
@@ -223,7 +223,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 - **stderr**：失败时输出错误信息，dcat 纳入 `error.message`。
 - 可选参数未提供时，对应 `DCAT_PARAM_<KEY>` 环境变量不设置；脚本须自行处理默认值（目录表中以 `(默认X)` 标注期望默认）。
 - **同步阻塞**：dcat 用 `fork/exec + waitpid` 同步等待脚本执行完返回；脚本应自行管理长驻子进程（spawn + pidfile/sidecar），不要前台驻留阻塞 dcat。
-- **参数校验边界**：dcat 在 precheck 阶段按操作校验 `inject_required`/`clean_required`/`query_required` 齐全且非空（结构校验）；参数值合法性（如 `cores` 是否在有效范围、`iface` 是否真实存在）由脚本自行校验（语义校验）。未在该操作对应 required/optional 列表中声明的参数直接拒绝（报错退出码 3）。
+- **参数校验边界**：dcat 在 precheck 阶段按操作校验 `inject_required`/`clean_required` 齐全且非空（结构校验）；**`query` 不强制必填**（无参时脚本展示全部）。参数值合法性（如 `cores` 是否在有效范围、`iface` 是否真实存在）由脚本自行校验（语义校验）。未在该操作对应 required/optional 列表中声明的参数直接拒绝（报错退出码 3）。
 
 ### 5.2 可恢复故障（`inject,clean,query`）
 
@@ -245,6 +245,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 **有 uid 的 query** 调用脚本 `DCAT_OP=query` 分支验证故障是否真的在系统上生效。可恢复故障脚本（`supported_ops` 含 `query`）须实现该分支：
 
 - dcat 通过环境变量传入**用户当前输入的参数**（`DCAT_PARAM_*`），**不是** inject 时的参数——用户可注入 CPU1 满载后查询 CPU2 的负载。
+- **query 不强制必填参数**：`dcat query <uid>`（无参）合法，脚本应在此情况下展示**全部**相关资源（如 `rCPU_overload` 查全部在线核、`rNET_*` 查全部网卡或读 sidecar）；`dcat query <uid> --key=value` 则按参过滤。precheck 对 query 不做必填校验，仅校验参数是否已声明。
 - 脚本检查**实际系统状态**（如 `top`/`tc qdisc show`/`pgrep`/`sysfs`），输出任意格式的证据文本（表格、多行文本）到 stdout。
 - **退出码**：`0` = 故障确认生效 / 非 `0` = 未生效。
 - **输出格式**（方案 A）：dcat 原样输出脚本 stdout，然后打印 `---` 分隔符，最后输出 JSON：
@@ -326,8 +327,8 @@ inject_required = iface,loss_pct
 inject_optional = direction
 clean_required  = iface
 clean_optional  = direction
-query_required  = iface
-query_optional  = direction
+query_required  =              # 已弃用，留空
+query_optional  = iface,direction
 
 [fault.rPROC_exit]
 module          = process

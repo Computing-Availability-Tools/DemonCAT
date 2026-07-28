@@ -21,9 +21,22 @@ case "${DCAT_OP:-inject}" in
         echo "cleaned jitter on $iface"
         ;;
     query)
-        iface="${DCAT_PARAM_IFACE:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
-        out=$(tc qdisc show dev "$iface" 2>/dev/null)
-        echo "$out"
-        echo "$out" | grep -qE "netem.*delay [0-9]+[a-z]* [0-9]+[a-z]*" && exit 0 || exit 1
+        if [ -n "$DCAT_PARAM_IFACE" ]; then
+            ifaces=$DCAT_PARAM_IFACE
+        else
+            ifaces=""
+            for sc in /tmp/dcat-rNET_jitter-*.sidecar; do
+                [ -f "$sc" ] || continue
+                ifaces="$ifaces $(cat "$sc" 2>/dev/null)"
+            done
+        fi
+        found=0
+        for iface in $ifaces; do
+            [ -n "$iface" ] || continue
+            out=$(tc qdisc show dev "$iface" 2>/dev/null)
+            match=$(echo "$out" | grep -E "netem.*delay [0-9]+[a-z]*[[:space:]]+[0-9]+[a-z]*")
+            [ -n "$match" ] && { echo "$match"; found=1; }
+        done
+        [ "$found" = 1 ] && exit 0 || exit 1
         ;;
 esac

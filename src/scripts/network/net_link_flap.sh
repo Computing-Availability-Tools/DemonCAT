@@ -37,14 +37,20 @@ case "${DCAT_OP:-inject}" in
         echo "stopped link flap, ensured $iface up"
         ;;
     query)
-        iface="${DCAT_PARAM_IFACE:-}"
-        PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"
-        if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-            echo "link flap running on $iface (pid=$(cat "$PIDFILE"))"
-            exit 0
+        if [ -n "$DCAT_PARAM_IFACE" ]; then
+            pfs="/tmp/dcat-rNET_link_flap-${DCAT_PARAM_IFACE}.pid"
         else
-            echo "no link flap on $iface"
-            exit 1
+            pfs="/tmp/dcat-rNET_link_flap-*.pid"
         fi
+        found=0
+        for pf in $pfs; do
+            [ -f "$pf" ] || continue
+            pid=$(cat "$pf" 2>/dev/null)
+            [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || continue
+            ifc=${pf##*/dcat-rNET_link_flap-}; ifc=${ifc%.pid}
+            echo "link flap running on $ifc (pid=$pid)"
+            found=1
+        done
+        [ "$found" = 1 ] && exit 0 || { echo "no link flap running"; exit 1; }
         ;;
 esac

@@ -15,6 +15,14 @@ static int is_subcommand(const char *s) {
     return 0;
 }
 
+static int has_param_after(int argc, char **argv, int from) {
+    for (int j = from; j < argc; j++) {
+        if (argv[j][0] == '-') return 1;
+        if (strchr(argv[j], '=')) return 1;
+    }
+    return 0;
+}
+
 const char *cli_subcommand(int argc, char **argv) {
     if (argc < 2 || !is_subcommand(argv[1])) return NULL;
     return argv[1];
@@ -31,7 +39,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
     params_init(&out->params);
     g_cli_error[0] = '\0';
     if (argc < 2) {
-        snprintf(g_cli_error, sizeof g_cli_error, "no subcommand given (available: inject, clean, query, list)");
+        snprintf(g_cli_error, sizeof g_cli_error, "no subcommand; available: inject, clean, query, list");
         return -1;
     }
 
@@ -72,19 +80,56 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             continue;
         }
         if (strncmp(argv[i], "--", 2) != 0) {
-            snprintf(g_cli_error, sizeof g_cli_error, "unexpected argument '%s' (expected --key=value)", argv[i]);
+            /* 无子命令时, 第一个裸词视作子命令拼写错误 (如 "injec") */
+            if (!out->op) {
+                if (has_param_after(argc, argv, i + 1)) {
+                    snprintf(g_cli_error, sizeof g_cli_error,
+                             "missing subcommand before '%s'; try 'dcat inject %s ...' (available: inject, clean, query, list)",
+                             argv[i], argv[i]);
+                } else {
+                    snprintf(g_cli_error, sizeof g_cli_error,
+                             "unknown subcommand '%s'; available: inject, clean, query, list", argv[i]);
+                }
+                return -1;
+            }
+            /* 形如 key=value 但漏了 '--' 前缀 */
+            const char *eq2 = strchr(argv[i], '=');
+            if (eq2 && argv[i][0] != '-') {
+                char k[64];
+                size_t kl = (size_t)(eq2 - argv[i]);
+                const char *vv = eq2 + 1;
+                if (kl < sizeof(k)) {
+                    memcpy(k, argv[i], kl); k[kl] = '\0';
+                    snprintf(g_cli_error, sizeof g_cli_error,
+                             "argument '%s' is missing the '--' prefix; did you mean '--%s=%s'?", argv[i], k, vv);
+                } else {
+                    snprintf(g_cli_error, sizeof g_cli_error,
+                             "argument '%s' is missing the '--' prefix", argv[i]);
+                }
+            } else {
+                snprintf(g_cli_error, sizeof g_cli_error,
+                         "unexpected positional argument '%s'; expected --key=value (or --help/--config/--plugins)",
+                         argv[i]);
+            }
             return -1;
         }
         const char *kv = argv[i] + 2;
+        if (kv[0] == '\0') {
+            snprintf(g_cli_error, sizeof g_cli_error,
+                     "empty parameter name in '%s'; expected --key=value", argv[i]);
+            return -1;
+        }
         const char *eq = strchr(kv, '=');
         if (!eq) {
-            snprintf(g_cli_error, sizeof g_cli_error, "invalid parameter '%s' (expected --key=value)", argv[i]);
+            snprintf(g_cli_error, sizeof g_cli_error,
+                     "parameter '%s' is missing '=value'; expected '--%s=<value>'", argv[i], kv);
             return -1;
         }
         char key[64];
         size_t kl = (size_t)(eq - kv);
         if (kl >= sizeof(key)) {
-            snprintf(g_cli_error, sizeof g_cli_error, "parameter name too long in '%s'", argv[i]);
+            snprintf(g_cli_error, sizeof g_cli_error,
+                     "parameter name too long in '%s' (max %d)", argv[i], (int)(sizeof(key) - 1));
             return -1;
         }
         memcpy(key, kv, kl); key[kl] = '\0';
@@ -95,9 +140,9 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
         }
     }
     if (!out->op && !out->help) {
-        if (argc >= 2 && !is_subcommand(argv[1])) {
-            snprintf(g_cli_error, sizeof g_cli_error, "unknown subcommand '%s' (available: inject, clean, query, list)", argv[1]);
-        }
+        if (g_cli_error[0] == '\0')
+            snprintf(g_cli_error, sizeof g_cli_error,
+                     "missing subcommand; available: inject, clean, query, list");
         return -1;
     }
     return 0;

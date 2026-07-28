@@ -85,7 +85,7 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
     const char *op_required = NULL;
     if (strcmp(op, "inject") == 0)      op_required = f->inject_required;
     else if (strcmp(op, "clean") == 0)  op_required = f->clean_required;
-    else if (strcmp(op, "query") == 0)  op_required = f->query_required;
+    /* query 不强制必填参数：无参时脚本自行展示全部（如全核/全网卡），有参则按参过滤 */
     if (op_required) {
         const char *missing = first_missing_required(op_required, params);
         if (missing) {

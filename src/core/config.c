@@ -14,6 +14,8 @@ int config_load(const char *path, config_t *cfg) {
     memset(cfg, 0, sizeof(*cfg));
     FILE *fp = fopen(path, "r");
     if (!fp) return -1;
+    char root[256];
+    derive_project_root(path, root, sizeof root);
     char line[512];
     fault_def_t *cur = NULL;
     char section[128] = "";
@@ -44,7 +46,7 @@ int config_load(const char *path, config_t *cfg) {
         } else if (cur) {
             if      (strcmp(k, "module") == 0)          { strncpy(cur->module, v, sizeof(cur->module)-1); cur->module[sizeof(cur->module)-1]='\0'; }
             else if (strcmp(k, "desc") == 0)            { strncpy(cur->desc, v, sizeof(cur->desc)-1); cur->desc[sizeof(cur->desc)-1]='\0'; }
-            else if (strcmp(k, "script") == 0)          { strncpy(cur->script, v, sizeof(cur->script)-1); cur->script[sizeof(cur->script)-1]='\0'; }
+            else if (strcmp(k, "script") == 0)          { resolve_script(root, v, cur->script, sizeof(cur->script)); }
             else if (strcmp(k, "supported_ops") == 0)    { strncpy(cur->supported_ops, v, sizeof(cur->supported_ops)-1); cur->supported_ops[sizeof(cur->supported_ops)-1]='\0'; }
             else if (strcmp(k, "inject_required") == 0)  { strncpy(cur->inject_required, v, sizeof(cur->inject_required)-1); cur->inject_required[sizeof(cur->inject_required)-1]='\0'; }
             else if (strcmp(k, "inject_optional") == 0)  { strncpy(cur->inject_optional, v, sizeof(cur->inject_optional)-1); cur->inject_optional[sizeof(cur->inject_optional)-1]='\0'; }

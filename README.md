@@ -40,8 +40,8 @@
 # 1. 一键安装依赖（Debian/Ubuntu/RHEL/CentOS 自动识别）
 bash scripts/install_deps.sh
 
-# 2. 编译
-cmake -B build && cmake --build build
+# 2. 编译（8核并行加速）
+cmake -B build && cmake --build build -j8
 
 # 3. 运行测试
 ctest --test-dir build --output-on-failure

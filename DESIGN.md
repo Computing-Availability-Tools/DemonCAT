@@ -104,10 +104,11 @@ script           = /usr/lib/demoncat/scripts/memory/mem_ecc_inject.sh
 supported_ops    = inject,clean,query
 inject_required  = dimm
 clean_required   = dimm
-query_required   = dimm
+query_required   =              # 已弃用（留空）；query 参数放 query_optional
+query_optional   = dimm
 ```
 
-> per-op required/optional 字段：`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`。空字段可省略（如上例无可选参数则不写 `*_optional`）。
+> per-op required/optional 字段：`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required`（已弃用，留空）/ `query_optional`。空字段可省略（如上例无可选参数则不写 `*_optional`）。**`query` 不强制必填**——无参时脚本展示全部，有参则过滤；query 参数声明在 `query_optional`。
 
 对应脚本放到 `src/scripts/memory/mem_ecc_inject.sh` 并 `chmod +x`。`dcat list` 自动出现新故障，**免重编译**。
 
@@ -177,7 +178,7 @@ typedef struct {
     char inject_optional[128];   /* inject 可选参数名 */
     char clean_required[128];    /* clean 必填: "iface" */
     char clean_optional[128];    /* clean 可选参数名 */
-    char query_required[128];    /* query 必填: "iface" */
+    char query_required[128];    /* 已弃用（解析兼容保留，留空）；query 参数走 query_optional */
     char query_optional[128];    /* query 可选参数名 */
 } fault_def_t;
 
@@ -192,7 +193,7 @@ typedef struct {
 #define DCAT_MAX_RECORDS 32
 ```
 
-> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`、query 查 `query_required`），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同参数允许并发）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
+> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同参数允许并发）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
 
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 
@@ -243,7 +244,7 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 ### 3.5 precheck.c
 - `precheck(fault_def, op, params)`：执行 SPEC §4.2 预检 4 步；返回 `result_t`（成功 / 带错误码）。
 - 本模块只做静态校验（uid 存在、op 合法、参数齐全、脚本可执行），**不做交互确认**（本期不实现 safety_confirm）。
-- **参数校验边界**：precheck 按 op 取对应的 `*_required` 列表校验齐全且非空（**结构校验**：inject 查 `inject_required`、clean 查 `clean_required`、query 查 `query_required`）；参数值合法性（如 `cores` 范围、`iface` 是否存在）由脚本自行校验（**语义校验**）。`declared_params_only(inject_req, inject_opt, clean_req, clean_opt, query_req, query_opt, params)` 接收 6 个 per-op required/optional 列表，按 `DCAT_OP` 选对应 required/optional，校验用户参数是否全部在声明范围内，未声明的参数直接拒绝（报错退出码 3）。若某 op 的 `*_required` 列表为空，则该 op 无必填参数、空参数允许通过——precheck 自然处理，不再有"至少一个参数"硬编码检查。
+- **参数校验边界**：precheck 按 op 取对应的 `*_required` 列表校验齐全且非空（**结构校验**：inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部）；参数值合法性（如 `cores` 范围、`iface` 是否存在）由脚本自行校验（**语义校验**）。`declared_params_only(inject_req, inject_opt, clean_req, clean_opt, query_req, query_opt, params)` 接收 6 个 per-op required/optional 列表，校验用户参数是否全部在声明范围内，未声明的参数直接拒绝（报错退出码 3）。query 跳过必填校验；inject/clean 若 `*_required` 列表为空，则空参数允许通过。
 - **不限制并发注入**：允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
 - 注入器故障的预检由 `injector_t->precheck` 函数指针实现（§7.3），不走本模块。
 
@@ -395,7 +396,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 #### 4.5.3 约束
 
 - 所有 NPU 故障同步执行（hccn_tool 是快命令，执行完返回）。
-- 所有故障 `inject_required` / `clean_required` / `query_required` 含 `chip`（hccn_tool 的 `-i <0~7>`）。
+- 所有故障 `inject_required` / `clean_required` 含 `chip`（hccn_tool 的 `-i <0~7>`）；query 参数 `chip` 声明在 `query_optional`（query 不强制必填，无参时脚本查全部芯片）。
 - 真实环境冒烟仅华为 Atlas 物理机可做（CI mock-only，与网络类一致）。
 
 ---
@@ -451,7 +452,7 @@ parse → registry_find(uid)
   - cnf 故障：`executor_run_raw_fault(f, "query", params)`，脚本 stdout 原样输出到终端。
   - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
   - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
-  - **query 与 clean 同规则**：precheck 按 op 校验 `query_required` 齐全。有 `query_required` 的故障缺参数被拒绝（退出码 3）；无 `query_required` 的故障允许空参数 query。
+  - **query 不强制必填参数**：precheck 对 query 不做必填校验（与 inject/clean 不同）。无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤；query 参数声明在 `query_optional`。`query_required` 已弃用（解析兼容保留，留空）。
 - **list**：`registry_list()`，输出 cnf fault 目录 JSON（含 supported_ops / 6 个 per-op required/optional 字段 / desc）。注入器故障本期不纳入 list 输出。
 
 ---

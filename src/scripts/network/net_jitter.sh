@@ -24,6 +24,6 @@ case "${DCAT_OP:-inject}" in
         iface="${DCAT_PARAM_IFACE:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
         out=$(tc qdisc show dev "$iface" 2>/dev/null)
         echo "$out"
-        echo "$out" | grep -qE "netem.*delay [0-9]+[a-z]* [0-9]+[a-z]*" && exit 0 || exit 1
+        echo "$out" | grep -qE "netem.*delay [0-9]+[a-z]*[[:space:]]+[0-9]+[a-z]*" && exit 0 || exit 1
         ;;
 esac

@@ -1,11 +1,9 @@
 #!/bin/sh
 # rCPU_core_offline: offline CPU cores via sysfs.
-# inject: echo 0 > /sys/devices/system/cpu<N>/online, write sidecar, exit
-# clean:  read sidecar, echo 1 > online, exit
-# query:  check actual online state of requested cores
+# inject: per-core echo 0 > online + touch cN marker (per-core, no overwrite on multi-inject)
+# clean:  use record's DCAT_PARAM_CORES → per-core echo 1 > online + rm cN marker
+# query:  glob cN markers (or use --cores) → check actual online state
 # cpu0 is usually not offlinable; script skips and warns.
-
-SIDECAR=/tmp/dcat-rCPU_core_offline.list
 
 parse_cores() {
     echo "$1" | tr ',' '\n' | while IFS= read -r r; do
@@ -34,27 +32,39 @@ case "${DCAT_OP:-inject}" in
             if ! echo 0 > "$path" 2>/dev/null; then
                 echo "offline cpu$n failed" >&2; continue
             fi
+            touch "/tmp/dcat-rCPU_core_offline-c$n"
             offlist="$offlist $n"
         done
-        echo "$offlist" > "$SIDECAR"
         echo "offlined cores:$offlist"
         ;;
 
     clean)
-        offlist=$(cat "$SIDECAR" 2>/dev/null || echo "")
+        spec="${DCAT_PARAM_CORES:-$(for f in /tmp/dcat-rCPU_core_offline-c*; do [ -f "$f" ] || continue; n=${f##*/dcat-rCPU_core_offline-c}; printf '%s,' "$n"; done)}"
+        spec=${spec%,}
+        spec=${spec:-0}
         onlist=""
-        for n in $offlist; do
+        for n in $(parse_cores "$spec"); do
             path="/sys/devices/system/cpu/cpu$n/online"
             if [ -w "$path" ] && echo 1 > "$path" 2>/dev/null; then
                 onlist="$onlist $n"
             fi
+            rm -f "/tmp/dcat-rCPU_core_offline-c$n"
         done
-        rm -f "$SIDECAR"
         echo "onlined cores:$onlist"
         ;;
 
     query)
-        spec=${DCAT_PARAM_CORES:-0}
+        if [ -n "$DCAT_PARAM_CORES" ]; then
+            spec=$DCAT_PARAM_CORES
+        else
+            spec=""
+            for f in /tmp/dcat-rCPU_core_offline-c*; do
+                [ -f "$f" ] || continue
+                n=${f##*/dcat-rCPU_core_offline-c}
+                spec="${spec:+$spec,}$n"
+            done
+        fi
+        spec=${spec:-0}
         any_offline=0
         printf 'core\tonline\tstatus\n'
         for n in $(parse_cores "$spec"); do

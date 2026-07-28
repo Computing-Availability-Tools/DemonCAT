@@ -19,11 +19,24 @@ case "${DCAT_OP:-inject}" in
         echo "continued pid $pid"
         ;;
     query)
-        pid="${DCAT_PARAM_PID:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
-        [ -n "$pid" ] || { echo "no pid"; exit 1; }
-        kill -0 "$pid" 2>/dev/null || { echo "pid $pid not found"; exit 1; }
-        state=$(awk '/^State:/{print $2}' "/proc/$pid/status" 2>/dev/null)
-        echo "pid=$pid state=${state:-unknown}"
-        case "$state" in T*) exit 0;; *) exit 1;; esac
+        pids=""
+        if [ -n "$DCAT_PARAM_PID" ]; then
+            pids=$DCAT_PARAM_PID
+        else
+            for sc in /tmp/dcat-rPROC_hang-*.sidecar; do
+                [ -f "$sc" ] || continue
+                pids="$pids $(cat "$sc" 2>/dev/null)"
+            done
+        fi
+        [ -z "$pids" ] && { echo "no pid (no active rPROC_hang injection)"; exit 1; }
+        found=0
+        for pid in $pids; do
+            [ -n "$pid" ] || continue
+            kill -0 "$pid" 2>/dev/null || { echo "pid $pid not found"; continue; }
+            state=$(awk '/^State:/{print $2}' "/proc/$pid/status" 2>/dev/null)
+            echo "pid=$pid state=${state:-unknown}"
+            case "$state" in T*) found=1;; esac
+        done
+        [ "$found" = 1 ] && exit 0 || exit 1
         ;;
 esac

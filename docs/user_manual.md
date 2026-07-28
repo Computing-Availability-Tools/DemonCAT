@@ -78,19 +78,20 @@
 **实现原理**: 
 - **inject**: 从 `DCAT_PARAM_CORES` 取必填的 cores 规格（支持 `0,2,4` / `0-3` / `0-3,7` 等混合格式，由 `parse_cores` 展开为单核号列表）。对每个核，用 `taskset -c <n>` 绑定启动 `perl -e '1 while 1'`（纯用户态死循环，无系统调用开销），后台运行并重定向到 `/dev/null`；若系统无 perl，自动回退为 `yes`（会引入约 60% 系统调用开销）。将所有子进程 pid 写入 pidfile `/tmp/dcat-rCPU_overload-${spec}.pid`（spec 为原始参数串），输出注入结果。
 - **clean**: 读取 pidfile，逐个 `kill` 进程并删除 pidfile；若 pidfile 不存在则报错并 `exit 1`。
-- **query**: 用 `pgrep -f 'perl -e'` 与 `pgrep -x yes` 统计系统中 burn 进程总数，打印 `top -bn1` 前 7 行及匹配进程的 `pid/%cpu/psr/cmd` 详情；进程总数 > 0 时返回成功（exit 0），否则失败。
+- **query**: 用 `pgrep -f 'perl -e'` 与 `pgrep -x yes` 统计系统中 burn 进程总数，打印 per-core CPU（mpstat）及匹配进程的 `pid/%cpu/psr/cmd` 详情；进程总数 > 0 时返回成功（exit 0），否则失败。**无 `--cores` 参数时查询全部在线核**（读 `/sys/devices/system/cpu/online`，形如 `0-27`）；带 `--cores=0,1` 则只查指定核。
 
 **使用示例**:
 ```bash
 dcat inject rCPU_overload --cores=0,1
-dcat query rCPU_overload --cores=0,1
-dcat clean rCPU_overload --cores=0,1
+dcat query  rCPU_overload                 # 无参 = 查全部在线核
+dcat query  rCPU_overload --cores=0,1     # 只查 0,1 号核
+dcat clean  rCPU_overload --cores=0,1
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| cores | 必填 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 或 `"0-3,7"` 格式 |
+| cores | inject/clean 必填；query 可选 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 或 `"0-3,7"` 格式；query 缺省时查全部在线核 |
 
 **危险等级**: 中 — 指定核用户态 100% 满载，影响该核上其他任务调度。
 

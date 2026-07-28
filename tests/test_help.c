@@ -67,7 +67,7 @@ int test_query_help(void) {
     ASSERT_TRUE(t != NULL);
     ASSERT_STR_CONTAINS(t, "dcat query");
     ASSERT_STR_CONTAINS(t, "rNET_delay");
-    ASSERT_STR_CONTAINS(t, "iface");   /* query_required is iface, not iface,delay_ms */
+    ASSERT_STR_CONTAINS(t, "iface");   /* query 参数 iface（现归入 query_optional，不再必填） */
     free(t);
     return 0;
 }

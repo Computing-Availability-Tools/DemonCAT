@@ -9,8 +9,12 @@ case "${DCAT_OP:-inject}" in
         dir=${DCAT_PARAM_DIRECTION:-both}
         SIDECAR="/tmp/dcat-rNET_tcp_loss-${port}.rule"
         rc=0
-        [ "$dir" = "in" ] || [ "$dir" = "both" ] && iptables -I INPUT -p tcp --dport "$port" -j DROP || rc=$?
-        [ "$dir" = "out" ] || [ "$dir" = "both" ] && iptables -I OUTPUT -p tcp --sport "$port" -j DROP || rc=$?
+        if [ "$dir" = "in" ] || [ "$dir" = "both" ]; then
+            iptables -I INPUT -p tcp --dport "$port" -j DROP || rc=$?
+        fi
+        if [ "$dir" = "out" ] || [ "$dir" = "both" ]; then
+            iptables -I OUTPUT -p tcp --sport "$port" -j DROP || rc=$?
+        fi
         [ "$rc" -ne 0 ] && { echo "iptables -I failed (need root?)" >&2; exit 1; }
         echo "$port $dir" > "$SIDECAR"
         echo "applied tcp DROP on port $port ($dir)"
@@ -20,8 +24,12 @@ case "${DCAT_OP:-inject}" in
         SIDECAR="/tmp/dcat-rNET_tcp_loss-${port}.rule"
         rest=$(cat "$SIDECAR" 2>/dev/null || echo "$port both")
         dir=${DCAT_PARAM_DIRECTION:-${rest##* }}
-        [ "$dir" = "in" ] || [ "$dir" = "both" ] && iptables -D INPUT -p tcp --dport "$port" -j DROP 2>/dev/null
-        [ "$dir" = "out" ] || [ "$dir" = "both" ] && iptables -D OUTPUT -p tcp --sport "$port" -j DROP 2>/dev/null
+        if [ "$dir" = "in" ] || [ "$dir" = "both" ]; then
+            iptables -D INPUT -p tcp --dport "$port" -j DROP 2>/dev/null
+        fi
+        if [ "$dir" = "out" ] || [ "$dir" = "both" ]; then
+            iptables -D OUTPUT -p tcp --sport "$port" -j DROP 2>/dev/null
+        fi
         rm -f "$SIDECAR"
         echo "cleaned tcp DROP on port $port ($dir)"
         ;;

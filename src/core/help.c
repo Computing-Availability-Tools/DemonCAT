@@ -60,7 +60,7 @@ static const char *op_usage(const char *op) {
 static const char *op_desc(const char *op) {
     if (strcmp(op, "inject") == 0) return "注入故障；可恢复故障写 state + 返回 record_id；inject-only 不写 state";
     if (strcmp(op, "clean")  == 0) return "清除活跃注入；按用户参数匹配活跃记录，逐条执行 clean，失败停止";
-    if (strcmp(op, "query")  == 0) return "有 uid 走脚本 query 直通 stdout + confirmed；必须指定 uid";
+    if (strcmp(op, "query")  == 0) return "无 uid 列出全部活跃注入；有 uid 走脚本 query 直通 stdout + confirmed（参数可选，无参=查全部）";
     if (strcmp(op, "list")   == 0) return "列出故障目录（cnf + 动态插件）";
     return "";
 }
@@ -122,7 +122,7 @@ char *help_render_global(void) {
         "  subcommand: inject | clean | query | list\n"
         "  inject <uid> --p1=v1 ...     注入故障\n"
         "  clean  <uid> --k1=v1 ...     清除活跃注入（按参数匹配，需指定参数）\n"
-        "  query  <uid> --k=v ...       验证故障是否生效（需指定 uid + 参数）\n"
+        "  query  [uid] [--k=v ...]     无 uid 列出活跃注入；有 uid 验证故障是否生效（参数可选，无参=查全部）\n"
         "  list                         列出故障目录\n"
         "  --config <path>              指定 demoncat.conf 路径（默认 <root>/config/demoncat.conf）\n"
         "  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）\n"

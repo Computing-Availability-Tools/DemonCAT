@@ -9,8 +9,6 @@
 #   100 = full burn (perl -e '1 while 1'); <100 = duty-cycle loop (work + usleep).
 # Falls back to `yes >/dev/null` if perl not available (load_pct ignored, always ~100%).
 
-PIDFILE="/tmp/dcat-rCPU_overload.pid"
-
 parse_cores() {
     echo "$1" | tr ',' '\n' | while IFS= read -r r; do
         [ -z "$r" ] && continue
@@ -55,13 +53,13 @@ case "${DCAT_OP:-inject}" in
             exit 1
         fi
 
-        PIDFILE="/tmp/dcat-rCPU_overload-${spec}.pid"
-        if [ -f "$PIDFILE" ]; then
-            for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done
-            rm -f "$PIDFILE"
-        fi
         pids=""
         for n in $(parse_cores "$spec"); do
+            CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"
+            if [ -f "$CORE_PF" ]; then
+                kill "$(cat "$CORE_PF" 2>/dev/null)" 2>/dev/null
+                rm -f "$CORE_PF"
+            fi
             if command -v perl >/dev/null 2>&1; then
                 if [ "$load_pct" -ge 100 ] 2>/dev/null; then
                     taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
@@ -76,20 +74,24 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             else
                 taskset -c "$n" yes >/dev/null 2>&1 &
             fi
+            echo $! > "$CORE_PF"
             pids="$pids $!"
         done
-        echo "$pids" > "$PIDFILE"
         echo "injected CPU overload on cores [$spec] load=${load_pct}% (pids:$pids)"
         ;;
 
     clean)
         spec="${DCAT_PARAM_CORES:-}"
-        PIDFILE="/tmp/dcat-rCPU_overload-${spec}.pid"
-        if [ -f "$PIDFILE" ]; then
-            for pid in $(cat "$PIDFILE"); do
-                kill "$pid" 2>/dev/null
-            done
-            rm -f "$PIDFILE"
+        any=0
+        for n in $(parse_cores "$spec"); do
+            CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"
+            if [ -f "$CORE_PF" ]; then
+                kill "$(cat "$CORE_PF" 2>/dev/null)" 2>/dev/null
+                rm -f "$CORE_PF"
+                any=1
+            fi
+        done
+        if [ "$any" = 1 ]; then
             echo "cleaned CPU overload on cores [$spec]"
         else
             echo "cleaned CPU overload on cores [$spec] (no active injection)"

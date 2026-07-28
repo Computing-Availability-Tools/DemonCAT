@@ -71,14 +71,16 @@ int test_dispatch_list(void) {
     result_free(r); return 0;
 }
 
-int test_dispatch_query_no_uid_rejected(void) {
+int test_dispatch_query_no_uid_lists_active(void) {
     setup();
     params_t p; params_init(&p);
     params_set(&p, "iface", "eth0");
     params_set(&p, "delay_ms", "100");
     dispatch_route("rNET_delay", "inject", &p);
     result_t *r = dispatch_route(NULL, "query", NULL);
-    ASSERT_INT_EQ(r->code, 2);
+    ASSERT_INT_EQ(r->code, 0);
+    ASSERT_STR_CONTAINS(r->json, "rNET_delay");   /* 活跃记录应被列出 */
+    ASSERT_STR_CONTAINS(r->json, "record_id");
     result_free(r); return 0;
 }
 
@@ -90,12 +92,22 @@ int test_dispatch_uid_not_found(void) {
     result_free(r); return 0;
 }
 
+int test_dispatch_query_uid_no_params_ok(void) {
+    setup();
+    params_t p; params_init(&p);
+    /* query 带 uid 但无参：按 SPEC 不应被拒（脚本自行展示全部），不再返回 code 3 */
+    result_t *r = dispatch_route("rNET_delay", "query", &p);
+    ASSERT_INT_EQ(r->code, 0);
+    result_free(r); return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
     RUN_TEST(test_dispatch_clean_no_match);
     RUN_TEST(test_dispatch_list);
-    RUN_TEST(test_dispatch_query_no_uid_rejected);
+    RUN_TEST(test_dispatch_query_no_uid_lists_active);
+    RUN_TEST(test_dispatch_query_uid_no_params_ok);
     RUN_TEST(test_dispatch_uid_not_found);
     return TEST_MAIN_RETURN();
 }

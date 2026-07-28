@@ -103,7 +103,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     const char *op_req = NULL;
     if (strcmp(op, "inject") == 0)     op_req = p->inject_required;
     else if (strcmp(op, "clean") == 0) op_req = p->clean_required;
-    else if (strcmp(op, "query") == 0) op_req = p->query_required;
+    /* query 不强制必填参数（无参时脚本自行展示全部），与 cnf 路径 precheck 一致 */
     if (op_req && !required_params_present(op_req, params))
         return result_err(op, p->uid, 3, "missing required params");
     if (p->precheck) {
@@ -155,9 +155,37 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     return result_err(op, p->uid, 3, "op not in supported_ops");
 }
 
+/* query 无 uid：列出 dcat 自身全部活跃注入记录（SPEC §6） */
+static void append_active_record(const injection_record_t *r, void *ctx) {
+    cJSON *arr = (cJSON *)ctx;
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "uid", r->uid);
+    cJSON_AddNumberToObject(o, "record_id", r->record_id);
+    cJSON_AddNumberToObject(o, "started_at", r->started_at);
+    cJSON_AddBoolToObject(o, "active", r->active);
+    cJSON *p = cJSON_CreateObject();
+    for (int i = 0; i < r->params.count; i++)
+        cJSON_AddStringToObject(p, r->params.items[i].key, r->params.items[i].value);
+    cJSON_AddItemToObject(o, "params", p);
+    cJSON_AddItemToArray(arr, o);
+}
+
+static result_t *dispatch_query_all(void) {
+    cJSON *arr = cJSON_CreateArray();
+    state_for_each_active(append_active_record, arr);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddStringToObject(root, "op", "query");
+    cJSON_AddItemToObject(root, "data", arr);
+    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
+    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
+}
+
 result_t *dispatch_route(const char *uid, const char *op, const params_t *params) {
     if (strcmp(op, "list") == 0) return dispatch_list();
-    if (strcmp(op, "list") != 0 && (uid == NULL || uid[0] == '\0'))
+    if (strcmp(op, "query") == 0 && (uid == NULL || uid[0] == '\0'))
+        return dispatch_query_all();
+    if (uid == NULL || uid[0] == '\0')
         return result_err(op, "", 2, "uid required (use 'dcat list' to see available faults)");
 
     const fault_def_t *f = registry_find(uid);

@@ -65,7 +65,33 @@ int main(void) {
         CK(n == 0);
     }
 
+    /* ---- rCPU_overload re-inject idempotency (same spec) ---- */
+    {
+        params_t p; memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, "0,1"); p.count = 1;
+
+        result_t *r = dispatch_route("rCPU_overload", "inject", &p);
+        CK(r && r->code == 0); result_free(r);
+
+        sleep(1);
+        CK(count_proc("perl") >= 2);
+
+        r = dispatch_route("rCPU_overload", "inject", &p);
+        CK(r && r->code == 0); result_free(r);
+
+        sleep(1);
+        int n = count_proc("perl");
+        CK(n >= 2);
+        CK(n < 4);
+
+        r = dispatch_route("rCPU_overload", "clean", &p);
+        CK(r && r->code == 0); result_free(r);
+
+        sleep(1);
+        CK(count_proc("perl") == 0);
+    }
+
     smoke_teardown();
-    printf("test_smoke_cpu: 1 fault passed\n");
+    printf("test_smoke_cpu: 2 faults passed\n");
     return 0;
 }

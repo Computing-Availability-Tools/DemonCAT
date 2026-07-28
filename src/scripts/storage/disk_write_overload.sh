@@ -16,6 +16,11 @@ case "${DCAT_OP:-inject}" in
         dev_clean=$(echo "$dev" | tr '/' '_')
         PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
 
+        if [ -f "$PIDFILE" ]; then
+            for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done
+            rm -f "$PIDFILE"
+        fi
+
         # determine target path for stress files
         if [ -d "$dev" ]; then
             target="$dev/dcat.stress.$$"
@@ -56,8 +61,9 @@ case "${DCAT_OP:-inject}" in
             rm -f /tmp/dcat.write.* 2>/dev/null
             echo "cleaned disk write overload on $dev"
         else
-            echo "no active injection for device=$dev" >&2
-            exit 1
+            rm -f "${dev}/dcat.stress."* 2>/dev/null
+            rm -f /tmp/dcat.write.* 2>/dev/null
+            echo "cleaned disk write overload on $dev (no active injection)"
         fi
         ;;
 

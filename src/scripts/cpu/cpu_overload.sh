@@ -56,6 +56,10 @@ case "${DCAT_OP:-inject}" in
         fi
 
         PIDFILE="/tmp/dcat-rCPU_overload-${spec}.pid"
+        if [ -f "$PIDFILE" ]; then
+            for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done
+            rm -f "$PIDFILE"
+        fi
         pids=""
         for n in $(parse_cores "$spec"); do
             if command -v perl >/dev/null 2>&1; then
@@ -88,8 +92,7 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             rm -f "$PIDFILE"
             echo "cleaned CPU overload on cores [$spec]"
         else
-            echo "no active injection for cores=$spec" >&2
-            exit 1
+            echo "cleaned CPU overload on cores [$spec] (no active injection)"
         fi
         ;;
 

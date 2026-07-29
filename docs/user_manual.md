@@ -114,7 +114,7 @@ dcat clean  rCPU_overload --cores=0,1
 ```bash
 dcat inject rCPU_core_offline --cores=2,3
 dcat query rCPU_core_offline --cores=2,3
-dcat clean rCPU_core_offline
+dcat clean rCPU_core_offline --cores=2,3
 ```
 
 **参数可选范围**:
@@ -180,8 +180,8 @@ dcat clean rDISK_write_overload --device=/data
 **使用示例**:
 ```bash
 dcat inject rNET_delay --iface=eth0 --delay_ms=100
-dcat query rNET_delay --iface=eth0 --delay_ms=100
-dcat clean rNET_delay --iface=eth0 --delay_ms=100
+dcat query rNET_delay --iface=eth0
+dcat clean rNET_delay --iface=eth0
 ```
 
 **参数可选范围**:
@@ -207,8 +207,8 @@ dcat clean rNET_delay --iface=eth0 --delay_ms=100
 **使用示例**:
 ```bash
 dcat inject rNET_loss --iface=eth0 --loss_pct=10
-dcat query rNET_loss --iface=eth0 --loss_pct=10
-dcat clean rNET_loss --iface=eth0 --loss_pct=10
+dcat query rNET_loss --iface=eth0
+dcat clean rNET_loss --iface=eth0
 ```
 
 **参数可选范围**:
@@ -234,8 +234,8 @@ dcat clean rNET_loss --iface=eth0 --loss_pct=10
 **使用示例**:
 ```bash
 dcat inject rNET_reorder --iface=eth0 --reorder_pct=25
-dcat query rNET_reorder --iface=eth0 --reorder_pct=25
-dcat clean rNET_reorder --iface=eth0 --reorder_pct=25
+dcat query rNET_reorder --iface=eth0
+dcat clean rNET_reorder --iface=eth0
 ```
 
 **参数可选范围**:

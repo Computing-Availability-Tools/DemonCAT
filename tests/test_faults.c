@@ -44,7 +44,7 @@ int test_faults_table(void) {
         for (int e = 0; g_env && g_env[e]; e++)
             if (strcmp(g_env[e], cases[i].expect_env) == 0) found = 1;
         ASSERT_TRUE(found);
-        int ids[DCAT_MAX_RECORDS];
+        long long ids[DCAT_MAX_RECORDS];
         params_t q; params_init(&q);
         int n = state_find_by_params(cases[i].uid, &q, ids, DCAT_MAX_RECORDS);
         if (cases[i].expect_state_written) ASSERT_TRUE(n >= 1);

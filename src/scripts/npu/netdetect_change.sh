@@ -7,7 +7,7 @@ addr=${DCAT_PARAM_ADDRESS:?missing required param: address}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cur=$($HCCN -netdetect -g 2>/dev/null | grep -oE 'address [0-9.]+' | awk '{print $2}')
+    cur=$($HCCN -netdetect -g 2>/dev/null | grep -oE 'address:[[:space:]]*[0-9.]+' | awk '{print $NF}')
     orig=$(sidecar_load rNPU_netdetect_change "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
@@ -15,7 +15,7 @@ fault_present() {
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        orig=$($HCCN -netdetect -g 2>/dev/null | grep -oE 'address [0-9.]+' | awk '{print $2}')
+        orig=$($HCCN -netdetect -g 2>/dev/null | grep -oE 'address:[[:space:]]*[0-9.]+' | awk '{print $NF}')
         [ -n "$orig" ] && sidecar_save rNPU_netdetect_change "$chip" "$orig"
         $HCCN -netdetect -s address "$addr" || { echo "netdetect set failed" >&2; exit 1; }
         echo "applied netdetect $addr on chip $chip (was $orig)"

@@ -3,7 +3,7 @@
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
 npu_validate_chip "$chip"
-bw=${DCAT_PARAM_BW_LIMIT:?missing required param: bw_limit}
+bw=${DCAT_PARAM_BW_LIMIT:-}
 HCCN="hccn_tool -i $chip"
 
 # Parse hccn_tool -shaping -g output: "bw_limit[200000 Mbps], bw_max[200000 Mbps], ..."

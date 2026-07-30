@@ -3,7 +3,7 @@
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
 npu_validate_chip "$chip"
-map=${DCAT_PARAM_MAP:?missing required param: map}
+map=${DCAT_PARAM_MAP:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {

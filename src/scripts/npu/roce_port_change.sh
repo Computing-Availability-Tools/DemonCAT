@@ -7,7 +7,7 @@ port=${DCAT_PARAM_PORT:?missing required param: port}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cur=$($HCCN -udp -g 2>/dev/null | grep -oE 'port [0-9]+' | awk '{print $2}')
+    cur=$($HCCN -udp -g 2>/dev/null | grep -oE 'udp_port:[0-9]+' | grep -oE '[0-9]+')
     orig=$(sidecar_load rNPU_roce_port_change "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
@@ -15,7 +15,7 @@ fault_present() {
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        orig=$($HCCN -udp -g 2>/dev/null | grep -oE 'port [0-9]+' | awk '{print $2}')
+        orig=$($HCCN -udp -g 2>/dev/null | grep -oE 'udp_port:[0-9]+' | grep -oE '[0-9]+')
         [ -n "$orig" ] && sidecar_save rNPU_roce_port_change "$chip" "$orig"
         $HCCN -udp -s port "$port" || { echo "udp set failed" >&2; exit 1; }
         echo "applied roce udp port $port on chip $chip (was $orig)"

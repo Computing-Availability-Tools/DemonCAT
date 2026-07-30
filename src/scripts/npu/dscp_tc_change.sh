@@ -8,7 +8,7 @@ tc=${DCAT_PARAM_TC:?missing required param: tc}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cur=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | grep -oE 'tc [0-9]+' | grep -oE '[0-9]+')
+    cur=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | awk -v d="$dscp" '$1==d {print $2}')
     orig=$(sidecar_load rNPU_dscp_tc_change "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
@@ -16,7 +16,7 @@ fault_present() {
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        orig=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | grep -oE 'tc [0-9]+' | grep -oE '[0-9]+')
+        orig=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | awk -v d="$dscp" '$1==d {print $2}')
         [ -n "$orig" ] && sidecar_save rNPU_dscp_tc_change "$chip" "$orig"
         $HCCN -dscp_to_tc -s dscp "$dscp" tc "$tc" || { echo "dscp_to_tc set failed" >&2; exit 1; }
         echo "applied dscp $dscp -> tc $tc on chip $chip (was $orig)"

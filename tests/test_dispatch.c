@@ -199,6 +199,35 @@ int test_dispatch_clean_all_marks_state_inactive(void) {
     result_free(r); return 0;
 }
 
+/* clean --all 边界：某 uid 脚本 clean 失败时不得 reconcile 该 uid 记录
+ * （否则会把仍活跃的注入误标 inactive = 反向幽灵）。reconcile 仅在 code==0 时发生。 */
+static result_t *mock_fail_cpu_overload_clean(const char *cmd, const char *const *env) {
+    const char *op = "inject";
+    for (int i = 0; env && env[i]; i++)
+        if (strncmp(env[i], "DCAT_OP=", 8) == 0) op = env[i] + 8;
+    if (strcmp(op, "clean") == 0 && strstr(cmd, "cpu_overload"))
+        return result_err("clean", "rCPU_overload", 1, "simulated clean failure");
+    return result_ok(op, "x", 0, "ok");
+}
+int test_dispatch_clean_all_skips_reconcile_on_failure(void) {
+    setup();
+    executor_set_mock(mock_fail_cpu_overload_clean);
+    params_t a; params_init(&a); params_set(&a, "cores", "0");
+    dispatch_route("rCPU_overload", "inject", &a);     /* rCPU_overload 有活跃记录 */
+    params_t b; params_init(&b); params_set(&b, "iface", "eth0"); params_set(&b, "delay_ms", "100");
+    dispatch_route("rNET_delay", "inject", &b);         /* rNET_delay 有活跃记录 */
+    ASSERT_INT_EQ(state_list_active(), 2);
+    result_t *r = dispatch_clean_all();
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 0);                           /* --all 整体仍 ok（其它 uid 成功） */
+    /* rCPU_overload clean 失败 → 记录保持 active；rNET_delay 成功 → 已 inactive */
+    params_t q; params_init(&q);
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1); /* 仍活跃，未误标 */
+    ASSERT_INT_EQ(state_find_by_params("rNET_delay", &q, ids, DCAT_MAX_RECORDS), 0);   /* 已 reconcile */
+    result_free(r); return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -211,6 +240,7 @@ int main(void) {
     RUN_TEST(test_dispatch_clean_no_params_marks_state_inactive);
     RUN_TEST(test_dispatch_clean_all_fans_out);
     RUN_TEST(test_dispatch_clean_all_marks_state_inactive);
+    RUN_TEST(test_dispatch_clean_all_skips_reconcile_on_failure);
     RUN_TEST(test_dispatch_clean_state_lost_fallback);
     return TEST_MAIN_RETURN();
 }

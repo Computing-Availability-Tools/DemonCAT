@@ -11,11 +11,11 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1 核心框架 + 37 条故障的完整性和正确性：
+验证 DemonCAT v0.1 核心框架 + 36 条故障的完整性和正确性：
 
 - 核心框架 9 模块 + 插件架构功能正确
-- 全部 37 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
-- 全部 37 个脚本无语法错误
+- 全部 36 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
+- 全部 36 个脚本无语法错误
 - 6 条无需 root 的故障端到端可执行（真实脚本执行）
 - root 级冒烟测试覆盖 10 条可测故障
 - strict C11 (`CMAKE_C_EXTENSIONS=OFF`) 可移植性验证
@@ -31,7 +31,7 @@
 | 跳过 | **0** |
 | 通过率 | **100%** |
 | `cmake --build` | ✅ 通过（-Wall -Wextra -Werror, 0 warnings） |
-| 故障目录总数 | 37 (CPU 2 + 存储 1 + 网络 11 + 进程 3 + NPU 20) |
+| 故障目录总数 | 36 (CPU 2 + 存储 1 + 网络 11 + 进程 3 + NPU 19) |
 | root 冒烟 | 10 PASS / 0 FAIL / 3 SKIP |
 
 ---
@@ -73,7 +73,7 @@
 | test_types | params_t helpers (init/set/find/match/env) | PASS | 0.00s |
 | test_output | result_ok/err/print/free + JSON schema | PASS | 0.00s |
 | test_config | INI 解析 + fault_def 载入 + resolve_script + derive_project_root | PASS | 0.00s |
-| test_registry | fault_count=37 + fault_def 查找 + list | PASS | 0.01s |
+| test_registry | fault_count=36 + fault_def 查找 + list | PASS | 0.01s |
 | test_executor | mock 拦截 + build_env + apply_env + check_tool | PASS | 0.00s |
 | test_precheck | per-op required 校验 + undeclared param 拒绝 | PASS | 0.01s |
 | test_state | params 存储 + find_by_params + 持久化 + 并发注入 | PASS | 0.00s |
@@ -90,7 +90,7 @@
 |------|---|:----:|:----:|
 | test_plugin_integration | libsample.so 加载 + inject/clean dispatch + state | PASS | 0.01s |
 
-### 4.3 Tier 1: Mock 表驱动故障测试 (37 条全覆盖)
+### 4.3 Tier 1: Mock 表驱动故障测试 (36 条全覆盖)
 
 | 测试 | 覆盖故障数 | 覆盖模块 | 结果 | 耗时 |
 |------|:---:|---|:----:|:----:|
@@ -105,7 +105,7 @@
 
 | 测试 | 检查范围 | 结果 | 耗时 |
 |------|---|:----:|:----:|
-| test_syntax | 全部 37 个 .sh 脚本 + _common.sh (`sh -n`) | PASS | 0.14s |
+| test_syntax | 全部 36 个 .sh 脚本 + _common.sh (`sh -n`) | PASS | 0.14s |
 
 ### 4.5 Tier 3: 真实执行测试 (6 条无需 root 的故障)
 
@@ -125,7 +125,7 @@
 | 结果 | 条数 | 故障列表 |
 |------|:---:|---|
 | PASS | 10 | rCPU_core_offline, rNET_delay, rNET_loss, rNET_reorder, rNET_bw_limit, rNET_jitter, rNET_down, rNET_link_flap, rNET_tcp_loss, rPROC_zstate |
-| SKIP | 3 | rNET_degrade (dummy 网卡不支持 ethtool), rNET_service_stop (无 systemd), NPU 20 条 (无 hccn_tool) |
+| SKIP | 3 | rNET_degrade (dummy 网卡不支持 ethtool), rNET_service_stop (无 systemd), NPU 19 条 (无 hccn_tool) |
 
 ---
 
@@ -177,7 +177,7 @@
 | tests/test_faults_common.h | 共享 | mock 设置 + 断言宏 + env 检查 |
 | tests/test_types.c | Tier 0 | params helpers |
 | tests/test_output.c | Tier 0 | output 模块 |
-| tests/test_config.c | Tier 0 | config 模块 (fault_count=37) |
+| tests/test_config.c | Tier 0 | config 模块 (fault_count=36) |
 | tests/test_registry.c | Tier 0 | registry + config 模块 |
 | tests/test_executor_mock.c | Tier 0 | executor 模块 (mock + 真实) |
 | tests/test_precheck.c | Tier 0 | precheck 模块 (per-op required) |
@@ -192,7 +192,7 @@
 | tests/test_faults_cpu_storage.c | Tier 1 | 3 条 CPU+存储 mock 测试 |
 | tests/test_faults_network.c | Tier 1 | 11 条网络 mock 测试 |
 | tests/test_faults_process.c | Tier 1 | 3 条进程 mock 测试 |
-| tests/test_faults_npu.c | Tier 1 | 20 条 NPU mock 测试 |
+| tests/test_faults_npu.c | Tier 1 | 19 条 NPU mock 测试 |
 | tests/check_syntax.sh | Tier 2 | 全脚本语法检查 |
 | tests/test_smoke_cpu.c | Tier 3 | CPU 过载真实执行 (1 条) |
 | tests/test_smoke_process.c | Tier 3 | 进程故障真实执行 (3 条) |
@@ -207,7 +207,7 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 
 测试覆盖：
 - **核心框架**: 13 个单元测试覆盖全部模块 + 插件
-- **故障目录**: 37 条故障全覆盖 (mock 表驱动 + 语法检查)
+- **故障目录**: 36 条故障全覆盖 (mock 表驱动 + 语法检查)
 - **端到端**: 6 条非 root 故障 + 10 条 root 故障真实 inject→query→clean 验证
 - **错误提示**: 9 种错误场景验证，消息具体到参数名/uid/子命令
 - **可移植性**: strict C11 编译通过

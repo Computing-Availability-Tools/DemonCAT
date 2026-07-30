@@ -9,18 +9,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <poll.h>
 
 #define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
 
 static int count_proc(const char *name) {
     char cmd[256];
     snprintf(cmd, sizeof cmd, "pgrep -x '%s' 2>/dev/null | wc -l", name);
-    FILE *f = popen(cmd, "r");
-    if (!f) return -1;
-    int n = 0;
-    fscanf(f, "%d", &n);
-    pclose(f);
-    return n;
+    for (int retry = 0; retry < 5; retry++) {
+        FILE *f = popen(cmd, "r");
+        if (!f) return -1;
+        int n = 0;
+        fscanf(f, "%d", &n);
+        pclose(f);
+        if (n > 0) return n;
+        poll(NULL, 0, 100);
+    }
+    return 0;
 }
 
 static void smoke_setup(void) {
@@ -50,7 +55,7 @@ int main(void) {
         params_t p; memset(&p, 0, sizeof p);
         strcpy(p.items[0].key, "device"); strcpy(p.items[0].value, "/tmp"); p.count = 1;
         strcpy(p.items[1].key, "workers"); strcpy(p.items[1].value, "2"); p.count = 2;
-        strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "100"); p.count = 3;
+        strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "500"); p.count = 3;
 
         result_t *r = dispatch_route("rDISK_write_overload", "inject", &p);
         CK(r && r->code == 0);

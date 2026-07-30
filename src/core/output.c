@@ -4,14 +4,14 @@
 #include <stdlib.h>
 #include <time.h>
 
-result_t *result_ok(const char *op, const char *uid, int record_id, const char *message) {
+result_t *result_ok(const char *op, const char *uid, long long record_id, const char *message) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
     cJSON_AddStringToObject(root, "op", op);
     if (uid) cJSON_AddStringToObject(root, "uid", uid);
     cJSON *data = cJSON_AddObjectToObject(root, "data");
     if (message) cJSON_AddStringToObject(data, "message", message);
-    if (record_id > 0) cJSON_AddNumberToObject(data, "record_id", record_id);
+    if (record_id > 0) cJSON_AddNumberToObject(data, "record_id", (double)record_id);
     char *s = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     result_t *r = malloc(sizeof(result_t));

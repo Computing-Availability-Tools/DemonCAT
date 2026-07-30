@@ -8,6 +8,7 @@ typedef struct {
     params_t params;
     int  help;             /* --help 出现过 */
     int  force;            /* --force 出现过 (仅 inject 路径生效) */
+    int  all;              /* --all 出现过 (仅 clean 路径生效：无参 clean 全部故障) */
     const char *config;    /* --config <path> 值（可选） */
     const char *plugins;   /* --plugins <dir> 值（可选） */
 } parsed_cmd_t;

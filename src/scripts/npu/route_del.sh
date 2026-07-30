@@ -12,8 +12,8 @@ fault_present() { ! $HCCN -route -g 2>/dev/null | grep -Fq "$addr"; }
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        orig_gw=$($HCCN -route -g 2>/dev/null | grep "$addr" | grep -oE 'gateway [0-9.]+' | awk '{print $2}')
-        [ -n "$orig_gw" ] && sidecar_save rNPU_route_del "$chip" "$orig_gw"
+        orig_gw=$($HCCN -route -g 2>/dev/null | awk -v a="$addr" '$1==a {print $2}')
+        [ -n "$orig_gw" ] && [ "$orig_gw" != "*" ] && sidecar_save rNPU_route_del "$chip" "$orig_gw"
         $HCCN -route -d address "$addr" netmask "$mask" || { echo "route del failed" >&2; exit 1; }
         echo "deleted route $addr/$mask on chip $chip (was via $orig_gw)"
         ;;

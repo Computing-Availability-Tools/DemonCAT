@@ -12,7 +12,7 @@ fault_present() { ! $HCCN -ip_rule -g 2>/dev/null | grep -Fq "$ip"; }
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        orig_table=$($HCCN -ip_rule -g 2>/dev/null | grep "$ip" | grep -oE 'table [0-9]+' | awk '{print $2}')
+        orig_table=$($HCCN -ip_rule -g 2>/dev/null | grep "$ip" | grep -oE 'lookup [0-9]+' | awk '{print $2}')
         [ -n "$orig_table" ] && sidecar_save rNPU_iprule_del "$chip" "$orig_table"
         $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
         echo "deleted ip_rule $dir $ip on chip $chip (was table $orig_table)"

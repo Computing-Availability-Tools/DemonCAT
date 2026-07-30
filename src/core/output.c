@@ -2,6 +2,7 @@
 #include <cJSON.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 result_t *result_ok(const char *op, const char *uid, int record_id, const char *message) {
     cJSON *root = cJSON_CreateObject();
@@ -32,7 +33,20 @@ result_t *result_err(const char *op, const char *uid, int code, const char *msg)
 }
 
 void output_print(result_t *r) {
-    if (r && r->json) printf("%s\n", r->json);
+    if (!r || !r->json) return;
+    cJSON *root = cJSON_Parse(r->json);
+    if (root) {
+        time_t t = time(NULL);
+        struct tm tm;
+        char buf[32];
+        localtime_r(&t, &tm);
+        strftime(buf, sizeof buf, "%Y-%m-%d %H:%M:%S", &tm);
+        cJSON_AddStringToObject(root, "timestamp", buf);
+        char *s = cJSON_PrintUnformatted(root);
+        cJSON_Delete(root);
+        if (s) { printf("%s\n", s); free(s); return; }
+    }
+    printf("%s\n", r->json);
 }
 
 void result_free(result_t *r) {

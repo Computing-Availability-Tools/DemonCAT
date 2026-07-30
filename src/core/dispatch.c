@@ -2,6 +2,7 @@
 #include "registry.h"
 #include "executor.h"
 #include "precheck.h"
+#include "reinject.h"
 #include "state.h"
 #include "output.h"
 #include "config.h"
@@ -76,17 +77,40 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
     return r;
 }
 
+/* 清单条活动记录(复用于 cnf_clean 与 --force 替换路径)。
+ * 成功返回 NULL; 失败返回 executor 的 err(调用方 result_free)。 */
+static result_t *clean_one_record(const fault_def_t *f, int record_id) {
+    const injection_record_t *rec = state_find_by_id(record_id);
+    if (!rec) return NULL;
+    result_t *r = executor_run_fault(f, "clean", &rec->params, 0);
+    if (r->code != 0) return r;
+    state_mark_inactive(record_id);
+    result_free(r);
+    return NULL;
+}
+
+/* 格式化记录的全部参数为 "key=val,key=val"（用于 reinject 拒绝消息展示前次注入）。 */
+static void fmt_record_params(const injection_record_t *rec, char *out, size_t cap) {
+    if (!out || cap == 0) return;
+    out[0] = '\0';
+    if (!rec) return;
+    size_t len = 0;
+    for (int i = 0; i < rec->params.count && len + 1 < cap; i++) {
+        int w = snprintf(out + len, cap - len, "%s%s=%s",
+                         len ? "," : "", rec->params.items[i].key, rec->params.items[i].value);
+        if (w < 0) break;
+        if ((size_t)w >= cap - len) { out[cap - 1] = '\0'; break; }
+        len += (size_t)w;
+    }
+}
+
 static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     int ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) return result_err("clean", f->uid, 1, "no active injection");
     for (int i = 0; i < n; i++) {
-        const injection_record_t *rec = state_find_by_id(ids[i]);
-        if (!rec) continue;
-        result_t *r = executor_run_fault(f, "clean", &rec->params, 0);
-        if (r->code != 0) return r;
-        state_mark_inactive(ids[i]);
-        result_free(r);
+        result_t *r = clean_one_record(f, ids[i]);
+        if (r) return r;
     }
     return result_ok("clean", f->uid, 0, "cleaned");
 }
@@ -181,7 +205,7 @@ static result_t *dispatch_query_all(void) {
     result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
 }
 
-result_t *dispatch_route(const char *uid, const char *op, const params_t *params) {
+result_t *dispatch_route_force(const char *uid, const char *op, const params_t *params, int force) {
     if (strcmp(op, "list") == 0) return dispatch_list();
     if (strcmp(op, "query") == 0 && (uid == NULL || uid[0] == '\0'))
         return dispatch_query_all();
@@ -192,7 +216,53 @@ result_t *dispatch_route(const char *uid, const char *op, const params_t *params
     if (f) {
         result_t *pc = precheck(f, op, params);
         if (pc) return pc;
-        if (strcmp(op, "inject") == 0) return cnf_inject(f, params);
+        if (strcmp(op, "inject") == 0) {
+            int ids[DCAT_MAX_RECORDS];
+            int on = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);
+            if (on > 0 && !force) {
+                char msg[512];
+                int off = 0;
+                int w = snprintf(msg, sizeof msg, "resource already injected");
+                if (w < 0) off = (int)sizeof msg; else off = w;
+                int shown = on < 3 ? on : 3;
+                for (int k = 0; k < shown && off < (int)sizeof msg; k++) {
+                    const injection_record_t *rec = state_find_by_id(ids[k]);
+                    char pstr[256]; pstr[0] = '\0';
+                    if (rec) fmt_record_params(rec, pstr, sizeof pstr);
+                    const char *sep = (k == 0) ? " (" : "; ";
+                    w = snprintf(msg + off, sizeof msg - (size_t)off,
+                                 "%srecord id %d: %s", sep, ids[k], pstr);
+                    if (w < 0) { off = (int)sizeof msg; break; }
+                    off += w;
+                }
+                if (on > 3 && off < (int)sizeof msg) {
+                    w = snprintf(msg + off, sizeof msg - (size_t)off, "; +%d more", on - 3);
+                    if (w < 0) off = (int)sizeof msg; else off += w;
+                }
+                if (off < (int)sizeof msg)
+                    snprintf(msg + off, sizeof msg - (size_t)off, "); use --force to replace");
+                return result_err("inject", f->uid, DCAT_REINJECT_CONFLICT, msg);
+            }
+            if (on > 0 && force) {
+                for (int k = 0; k < on; k++) {
+                    result_t *rc = clean_one_record(f, ids[k]);
+                    if (rc) {
+                        char m[320]; const char *detail = "";
+                        cJSON *root = cJSON_Parse(rc->json);
+                        if (root) {
+                            cJSON *e = cJSON_GetObjectItem(root, "error");
+                            cJSON *mj = e ? cJSON_GetObjectItem(e, "message") : NULL;
+                            if (mj && cJSON_IsString(mj)) detail = mj->valuestring;
+                        }
+                        snprintf(m, sizeof m, "--force: clean of record %d failed: %s", ids[k], detail);
+                        cJSON_Delete(root);
+                        result_free(rc);
+                        return result_err("inject", f->uid, 1, m);
+                    }
+                }
+            }
+            return cnf_inject(f, params);
+        }
         if (strcmp(op, "clean") == 0)   return cnf_clean(f, params);
         if (strcmp(op, "query") == 0) {
             int rc = executor_run_raw_fault(f, "query", params);
@@ -244,4 +314,8 @@ result_t *dispatch_route(const char *uid, const char *op, const params_t *params
     char msg[256];
     snprintf(msg, sizeof msg, "uid '%s' not found in catalog (use 'dcat list' to see available faults)", uid ? uid : "");
     return result_err(op, uid ? uid : "", 4, msg);
+}
+
+result_t *dispatch_route(const char *uid, const char *op, const params_t *params) {
+    return dispatch_route_force(uid, op, params, 0);
 }

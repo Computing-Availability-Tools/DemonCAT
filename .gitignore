@@ -3,3 +3,4 @@ build/
 *.o
 *.a
 plugins/*.so
+Testing/Temporary/

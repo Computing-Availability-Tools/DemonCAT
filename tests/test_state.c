@@ -1,6 +1,7 @@
 #include "test.h"
 #include "state.h"
 #include <string.h>
+#include <unistd.h>
 
 int test_add_find_by_params_list_inactive(void) {
     state_reset();
@@ -63,9 +64,26 @@ int test_persistence_roundtrip(void) {
     return 0;
 }
 
+int test_state_save_creates_missing_parent_dir(void) {
+    state_reset();
+    state_set_file("/tmp/dcat-fresh-state-test/sub/state.json");
+    params_t p; params_init(&p); params_set(&p, "iface", "eth0");
+    ASSERT_TRUE(state_add("rNET_delay", &p) > 0);
+    state_save();
+    state_reset();
+    state_load();                                   /* 父目录不存在时 fopen 失败 → load 找不到 */
+    int ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rNET_delay", &p, ids, DCAT_MAX_RECORDS), 1);
+    unlink("/tmp/dcat-fresh-state-test/sub/state.json");
+    rmdir("/tmp/dcat-fresh-state-test/sub");
+    rmdir("/tmp/dcat-fresh-state-test");
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
     RUN_TEST(test_persistence_roundtrip);
+    RUN_TEST(test_state_save_creates_missing_parent_dir);
     return TEST_MAIN_RETURN();
 }

@@ -97,7 +97,12 @@ result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_
         its.it_value.tv_nsec = (long)(timeout_ms % 1000) * 1000000L;
         timer_settime(timer, 0, &its, NULL);
     }
-    char out[4096] = {0}; ssize_t m = read(pipefd[0], out, sizeof(out)-1); (void)m;
+    char out[4096] = {0}; size_t total = 0; ssize_t m;
+    while (total < sizeof(out) - 1 &&
+           (m = read(pipefd[0], out + total, sizeof(out) - 1 - total)) > 0)
+        total += (size_t)m;
+    char drain[1024];
+    while ((m = read(pipefd[0], drain, sizeof(drain))) > 0) { /* drain overflow so child never blocks */ (void)m; }
     close(pipefd[0]);
     int status = 0; waitpid(pid, &status, 0);
     if (timer) { timer_delete(timer); g_timed_pid = 0; }

@@ -176,6 +176,29 @@ static int t_clean_partial_state_safe_no_fallback(void) {
     return 0;
 }
 
+/* ---- Test 5: state 完好时无参 clean → 既清系统又 reconcile state（用户实测场景） ----
+ * 注入 rPROC_hang（state 有记录）→ 无参 clean → 进程恢复 + sidecar 消失 +
+ * state 记录被标 inactive（query 不再残留幽灵）。 */
+static int t_clean_no_params_reconciles_state(void) {
+    setup();
+    pid_t pid = inject_hang(); CK(pid > 0);
+    sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
+    CK(state_list_active() == 1);       /* state 有该记录（区别于前 3 例误删后 state 为空） */
+    params_t empty; memset(&empty, 0, sizeof empty);   /* count=0 */
+    result_t *r = dispatch_route("rPROC_hang", "clean", &empty);
+    CK(r && r->code == 0);
+    result_free(r);
+    sleep(1);
+    CK(is_stopped(pid) == 0);            /* 系统层：SIGCONT 恢复 */
+    CK(!sidecar_exists(pid));           /* 系统层：sidecar 已删 */
+    /* state 层：记录应已 reconcile 为 inactive（无幽灵） */
+    params_t q; memset(&q, 0, sizeof q);
+    long long ids[DCAT_MAX_RECORDS];
+    CK(state_find_by_params("rPROC_hang", &q, ids, DCAT_MAX_RECORDS) == 0);
+    reap(pid); teardown();
+    return 0;
+}
+
 int main(void) {
     int fail = 0;
     fprintf(stderr, "  -> t_clean_with_params_after_state_lost ... "); fflush(stderr);
@@ -186,5 +209,7 @@ int main(void) {
     { int r = t_clean_all_after_state_lost(); fail |= (r << 2); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
     fprintf(stderr, "  -> t_clean_partial_state_safe_no_fallback ... "); fflush(stderr);
     { int r = t_clean_partial_state_safe_no_fallback(); fail |= (r << 3); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
+    fprintf(stderr, "  -> t_clean_no_params_reconciles_state ... "); fflush(stderr);
+    { int r = t_clean_no_params_reconciles_state(); fail |= (r << 4); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
     return fail ? 1 : 0;
 }

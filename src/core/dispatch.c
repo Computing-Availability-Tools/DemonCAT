@@ -58,7 +58,7 @@ static result_t *dispatch_list(void) {
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
     result_t *r = executor_run_fault(f, "inject", params, 0);
     if (r->code == 0 && !is_inject_only(f)) {
-        int id = state_add(f->uid, params);
+        long long id = state_add(f->uid, params);
         if (id < 0) {
             result_free(r);
             return result_err("inject", f->uid, 1,
@@ -67,7 +67,7 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
         cJSON *root = cJSON_Parse(r->json);
         if (root) {
             cJSON *data = cJSON_GetObjectItem(root, "data");
-            if (data) cJSON_AddNumberToObject(data, "record_id", id);
+            if (data) cJSON_AddNumberToObject(data, "record_id", (double)id);
             char *s = cJSON_PrintUnformatted(root);
             cJSON_Delete(root);
             free(r->json);
@@ -79,7 +79,7 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
 
 /* 清单条活动记录(复用于 cnf_clean 与 --force 替换路径)。
  * 成功返回 NULL; 失败返回 executor 的 err(调用方 result_free)。 */
-static result_t *clean_one_record(const fault_def_t *f, int record_id) {
+static result_t *clean_one_record(const fault_def_t *f, long long record_id) {
     const injection_record_t *rec = state_find_by_id(record_id);
     if (!rec) return NULL;
     result_t *r = executor_run_fault(f, "clean", &rec->params, 0);
@@ -105,7 +105,7 @@ static void fmt_record_params(const injection_record_t *rec, char *out, size_t c
 }
 
 static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
-    int ids[DCAT_MAX_RECORDS];
+    long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) return result_err("clean", f->uid, 1, "no active injection");
     for (int i = 0; i < n; i++) {
@@ -139,7 +139,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
         if (!p->inject) return result_err("inject", p->uid, 3, "inject declared in supported_ops but inject() not implemented");
         result_t *r = p->inject(params);
         if (r->code == 0 && p->clean) {
-            int id = state_add(p->uid, params);
+            long long id = state_add(p->uid, params);
             if (id < 0) {
                 result_free(r);
                 return result_err("inject", p->uid, 1,
@@ -148,7 +148,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
             cJSON *root = cJSON_Parse(r->json);
             if (root) {
                 cJSON *data = cJSON_GetObjectItem(root, "data");
-                if (data) cJSON_AddNumberToObject(data, "record_id", id);
+                if (data) cJSON_AddNumberToObject(data, "record_id", (double)id);
                 char *s = cJSON_PrintUnformatted(root);
                 cJSON_Delete(root);
                 free(r->json);
@@ -159,7 +159,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     }
     if (strcmp(op, "clean") == 0) {
         if (!p->clean) return result_err("clean", p->uid, 3, "clean declared in supported_ops but clean() not implemented");
-        int ids[DCAT_MAX_RECORDS];
+        long long ids[DCAT_MAX_RECORDS];
         int n = state_find_by_params(p->uid, params, ids, DCAT_MAX_RECORDS);
         if (n == 0) return result_err("clean", p->uid, 1, "no active injection");
         for (int i = 0; i < n; i++) {
@@ -184,8 +184,8 @@ static void append_active_record(const injection_record_t *r, void *ctx) {
     cJSON *arr = (cJSON *)ctx;
     cJSON *o = cJSON_CreateObject();
     cJSON_AddStringToObject(o, "uid", r->uid);
-    cJSON_AddNumberToObject(o, "record_id", r->record_id);
-    cJSON_AddNumberToObject(o, "started_at", r->started_at);
+    cJSON_AddNumberToObject(o, "record_id", (double)r->record_id);
+    cJSON_AddStringToObject(o, "started_at", r->started_at);
     cJSON_AddBoolToObject(o, "active", r->active);
     cJSON *p = cJSON_CreateObject();
     for (int i = 0; i < r->params.count; i++)
@@ -217,7 +217,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         result_t *pc = precheck(f, op, params);
         if (pc) return pc;
         if (strcmp(op, "inject") == 0) {
-            int ids[DCAT_MAX_RECORDS];
+            long long ids[DCAT_MAX_RECORDS];
             int on = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);
             if (on > 0 && !force) {
                 char msg[512];
@@ -231,7 +231,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
                     if (rec) fmt_record_params(rec, pstr, sizeof pstr);
                     const char *sep = (k == 0) ? " (" : "; ";
                     w = snprintf(msg + off, sizeof msg - (size_t)off,
-                                 "%srecord id %d: %s", sep, ids[k], pstr);
+                                 "%srecord id %lld: %s", sep, ids[k], pstr);
                     if (w < 0) { off = (int)sizeof msg; break; }
                     off += w;
                 }
@@ -254,7 +254,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
                             cJSON *mj = e ? cJSON_GetObjectItem(e, "message") : NULL;
                             if (mj && cJSON_IsString(mj)) detail = mj->valuestring;
                         }
-                        snprintf(m, sizeof m, "--force: clean of record %d failed: %s", ids[k], detail);
+                        snprintf(m, sizeof m, "--force: clean of record %lld failed: %s", ids[k], detail);
                         cJSON_Delete(root);
                         result_free(rc);
                         return result_err("inject", f->uid, 1, m);
@@ -285,7 +285,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (strcmp(op, "inject") == 0) {
             result_t *r = inj->inject(params);
             if (r->code == 0 && inj->clean) {
-                int id = state_add(uid, params);
+                long long id = state_add(uid, params);
                 if (id < 0) {
                     result_free(r);
                     return result_err("inject", uid, 1,
@@ -295,7 +295,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
             return r;
         }
         if (strcmp(op, "clean") == 0) {
-            int ids[DCAT_MAX_RECORDS];
+            long long ids[DCAT_MAX_RECORDS];
             int n = state_find_by_params(uid, params, ids, DCAT_MAX_RECORDS);
             if (n == 0) return result_err("clean", uid, 1, "no active injection");
             for (int i = 0; i < n; i++) {

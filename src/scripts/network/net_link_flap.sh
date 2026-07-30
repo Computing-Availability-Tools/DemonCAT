@@ -27,14 +27,29 @@ case "${DCAT_OP:-inject}" in
         echo "started link flap on $iface (cycle=${cycle}s count=$count pid=$(cat "$PIDFILE"))"
         ;;
     clean)
-        iface="${DCAT_PARAM_IFACE:-}"
-        PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"
-        if [ -f "$PIDFILE" ]; then
-            kill "$(cat "$PIDFILE")" 2>/dev/null
-            rm -f "$PIDFILE"
+        if [ -n "$DCAT_PARAM_IFACE" ]; then
+            ifaces="$DCAT_PARAM_IFACE"
+        else
+            ifaces=""
+            for pf in /tmp/dcat-rNET_link_flap-*.pid; do
+                [ -f "$pf" ] || continue
+                v=${pf##*/dcat-rNET_link_flap-}; v=${v%.pid}
+                ifaces="$ifaces $v"
+            done
         fi
-        [ -n "$iface" ] && ip link set dev "$iface" up 2>/dev/null
-        echo "stopped link flap, ensured $iface up"
+        cleaned=0
+        for iface in $ifaces; do
+            [ -n "$iface" ] || continue
+            PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"
+            if [ -f "$PIDFILE" ]; then
+                kill "$(cat "$PIDFILE")" 2>/dev/null
+                rm -f "$PIDFILE"
+            fi
+            ip link set dev "$iface" up 2>/dev/null
+            cleaned=1
+        done
+        if [ "$cleaned" = 1 ]; then echo "stopped link flap on [$ifaces]";
+        else echo "stopped link flap (no active injection)"; fi
         ;;
     query)
         if [ -n "$DCAT_PARAM_IFACE" ]; then

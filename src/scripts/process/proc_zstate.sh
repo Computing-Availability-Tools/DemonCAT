@@ -26,9 +26,21 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     clean)
-        pid="${DCAT_PARAM_PID:-}"
-        SIDECAR="/tmp/dcat-rPROC_zstate-$pid.info"
-        if [ -f "$SIDECAR" ]; then
+        if [ -n "$DCAT_PARAM_PID" ]; then
+            pids="$DCAT_PARAM_PID"
+        else
+            pids=""
+            for sc in /tmp/dcat-rPROC_zstate-*.info; do
+                [ -f "$sc" ] || continue
+                read -r zpid _ < "$sc" 2>/dev/null
+                [ -n "$zpid" ] && pids="$pids $zpid"
+            done
+        fi
+        cleaned=0
+        for pid in $pids; do
+            [ -n "$pid" ] || continue
+            SIDECAR="/tmp/dcat-rPROC_zstate-$pid.info"
+            [ -f "$SIDECAR" ] || continue
             read -r zpid ppid < "$SIDECAR"
             state=$(awk '/^State:/{print $2}' /proc/$zpid/status 2>/dev/null)
             if [ "$state" = "Z" ]; then
@@ -37,14 +49,12 @@ case "${DCAT_OP:-inject}" in
                 if [ -d "/proc/$zpid" ]; then
                     echo "zombie $zpid still exists after killing parent $ppid" >&2; exit 1
                 fi
-                echo "zombie $zpid reaped (parent $ppid killed)"
-            else
-                echo "process $zpid already reaped, no zombie to clean"
+                cleaned=1
             fi
             rm -f "$SIDECAR"
-        else
-            echo "no active injection for pid=$pid" >&2; exit 1
-        fi
+        done
+        if [ "$cleaned" = 1 ]; then echo "reaped zombies [$pids]";
+        else echo "reaped zombies (no active injection)"; fi
         ;;
 
     query)

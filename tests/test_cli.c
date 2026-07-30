@@ -128,6 +128,45 @@ int test_parse_only_global_option(void) {
     return 0;
 }
 
+int test_parse_force_flag(void) {
+    const char *argv[] = {"dcat", "inject", "rCPU_overload", "--cores=0,1", "--force"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(5, (char**)argv, &pc);
+    ASSERT_INT_EQ(rc, 0);
+    ASSERT_STREQ(pc.op, "inject");
+    ASSERT_STREQ(params_find(&pc.params, "cores"), "0,1");
+    ASSERT_INT_EQ(pc.force, 1);
+    return 0;
+}
+
+int test_parse_force_default_zero(void) {
+    const char *argv[] = {"dcat", "inject", "rCPU_overload", "--cores=0,1"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(4, (char**)argv, &pc);
+    ASSERT_INT_EQ(rc, 0);
+    ASSERT_INT_EQ(pc.force, 0);
+    return 0;
+}
+
+int test_parse_force_with_value_error(void) {
+    const char *argv[] = {"dcat", "inject", "rCPU_overload", "--cores=0,1", "--force=x"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(5, (char**)argv, &pc);
+    ASSERT_TRUE(rc != 0);
+    ASSERT_STR_CONTAINS(cli_get_error(), "does not take a value");
+    return 0;
+}
+
+int test_parse_force_on_clean_parsed(void) {
+    const char *argv[] = {"dcat", "clean", "rNET_loss", "--iface=eth0", "--force"};
+    parsed_cmd_t pc;
+    int rc = cli_parse(5, (char**)argv, &pc);
+    ASSERT_INT_EQ(rc, 0);
+    ASSERT_STREQ(pc.op, "clean");
+    ASSERT_INT_EQ(pc.force, 1);   /* 解析成功; dispatch 层忽略, 但 parse 不报错 */
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_parse_inject_flags);
     RUN_TEST(test_parse_clean_flags);
@@ -142,5 +181,9 @@ int main(void) {
     RUN_TEST(test_parse_missing_equal);
     RUN_TEST(test_parse_empty_key);
     RUN_TEST(test_parse_only_global_option);
+    RUN_TEST(test_parse_force_flag);
+    RUN_TEST(test_parse_force_default_zero);
+    RUN_TEST(test_parse_force_with_value_error);
+    RUN_TEST(test_parse_force_on_clean_parsed);
     return TEST_MAIN_RETURN();
 }

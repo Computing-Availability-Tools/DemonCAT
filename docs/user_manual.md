@@ -90,6 +90,24 @@ dcat inject rNET_delay --iface=eth0 --delay_ms=200 --force   # 替换
 
 ---
 
+## 通用约定：clean --all 与 stateless clean
+
+除 `clean <uid> --params`（按参数匹配 state 记录逐条清理）外，clean 还支持两种 **stateless** 形式，不依赖 `state.json`，脚本自行 glob `/tmp` 工件清理：
+
+- **`dcat clean <uid>`（无参）**：清该 uid 全部 `/tmp/dcat-<uid>-*` 工件（pidfile/sidecar/.bak），不查 state。`state.json` 丢失/损坏时仍可用。
+- **`dcat clean --all`**：对全部支持 clean 的故障 fan-out 无参 clean，聚合返回 `{uid,status}` 数组。
+
+```bash
+dcat clean rCPU_overload              # stateless：清该 uid 全部 cpu_overload pidfile
+dcat clean rNET_loss                  # stateless：清该 uid 全部网卡 netem
+dcat clean --all                      # 清全部故障（stateless，state.json 丢失仍可清）
+```
+
+> **说明**：NPU 中 clean 需 `chip` + 标识参数（如 arp/route/iprule）的故障（无 /tmp 工件可枚举其标识）在 `clean --all` 下报 "no active injection" 退出 0，**不实际清理**——此类故障的 stateless 清理需带参（`clean <uid> --chip=N [--key=...]`）或依赖完好的 state.json。
+> 脚本 clean 输出约定**仅一行汇总**（循环体内不 echo），因 executor 对 stdout 管道单次 read 后即关闭，多行会触发 SIGPIPE 误判失败。
+
+---
+
 ## 第一章 CPU 模块（2 条）
 
 ### 1.1 rCPU_overload

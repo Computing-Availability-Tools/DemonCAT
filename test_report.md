@@ -216,6 +216,61 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 
 ---
 
-*测试执行时间: 2026-07-25*
+## 9. 增量：clean --all + stateless clean（2026-07-30）
+
+> 在 v0.1 基础上新增 **stateless clean** 能力：`clean <uid>` 无参 / `clean --all` 不依赖 `state.json`，脚本自行 glob `/tmp` 工件清理；`state.json` 丢失/损坏时仍可清。
+
+### 9.1 新增能力
+
+| 入口 | 行为 |
+|---|---|
+| `dcat clean <uid>`（无参） | stateless：脚本 glob `/tmp/dcat-<uid>-*` 工件（pidfile/sidecar/.bak）清理该 uid 全部注入，绕过 state。`clean_required` 在零参数时跳过校验。 |
+| `dcat clean --all` | 对全部支持 clean 的注册故障 fan-out 无参 clean（stateless），聚合每 uid 结果为 `{uid,status}` 数组。 |
+| `dcat clean <uid> --params`（带参） | 原行为：按参数匹配 state 记录逐条清理；**新增**：`state.json` 丢失/损坏（`state_is_lost()`）时回退用用户参数直接调脚本 clean。 |
+
+### 9.2 核心改动
+
+- `cli.c/h`：新增 `--all` 全局标志（仅 clean 生效）。
+- `dispatch.c/h`：`cnf_clean` 零参数走 stateless 脚本 clean；带参数且 state 丢失时回退脚本 clean；新增 `dispatch_clean_all()` 聚合 fan-out。
+- `state.c/h`：新增 `state_is_lost()`——state 文件缺失或 JSON 解析失败（损坏/截断）时为真，clean 据此决定是否回退脚本清理；解析失败不再静默丢数据，输出告警。
+- `precheck.c`：`clean` 零参数时跳过 `clean_required` 校验（clean-all-for-uid 模式）。
+- `help.c` / `main.c`：`--help` 与全局用法补 `clean --all` / 无参 clean 说明；`--all` 与非 clean 组合报错（退出码 2）。
+
+### 9.3 脚本层 no-arg clean 全覆盖
+
+全部 36 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
+
+| 模式 | 脚本 | 无参 clean 行为 |
+|---|---|---|
+| **glob /tmp 工件**（stateless 可枚举） | cpu_overload / cpu_core_offline / disk_write_overload / net_(delay\|loss\|reorder\|down\|degrade\|port_occupy\|service_stop\|link_flap\|bw_limit\|jitter\|tcp_loss) / proc_hang / proc_zstate / npu_(ip_change\|gw_change\|netdetect_change\|mtu_mismatch\|pfc_change\|prio_tc_change\|roce_port_change\|fec_change) | 枚举 `/tmp/dcat-<uid>-*` 工件逐个清理；无工件输出 "no active injection" 退出 0 |
+| **no-op**（无 /tmp 工件可枚举） | npu_(link_down\|route_clear\|bw_limit\|dscp_tc_change\|arp_del\|arp_poison\|route_add\|route_del\|iprule_add\|iprule_del\|iproute_add\|iproute_del) | 无参输出 "no active injection (chip required)" 退出 0；带参走原 fault_present 清理 |
+
+> 所有 NPU 脚本顶部 `chip=${DCAT_PARAM_CHIP:?...}` 改为 `:-`（非致命），`npu_validate_chip` 仅在有值时校验；inject-required 参数的 `:?` 强制移入 `inject)` 分支，保证 query/clean 无参不崩、inject 仍拒绝缺参。
+
+### 9.4 测试结果
+
+| 测试 | 覆盖 | 结果 |
+|---|---|:---:|
+| test_dispatch（新增 3 例） | `clean <uid>` 无参→直接调脚本 clean（不传 DCAT_PARAM_*）；`clean --all` fan-out 次数 = 支持 clean 的故障数；state 丢失→带参 clean 回退脚本 | PASS |
+| test_state（新增 2 例） | `state_is_lost()` 在文件缺失/JSON 损坏时为真、内存空 | PASS |
+| test_syntax | 全部 38 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
+| test_smoke_process | rPROC_zstate inject→clean→reaped（验证 proc_zstate 单行输出约定，避免 executor 单次 read pipe 后 SIGPIPE 误报） | PASS |
+| **test_smoke_state_lost（新增，4 例端到端）** | **state.json 误删后 stateless clean 仍清除活跃故障**：①`clean <uid> --params` 回退用用户参数调脚本；②`clean <uid>` 无参 glob `/tmp` 工件；③`clean --all` fan-out；④部分损坏（文件有效但记录被抹）带参 clean 不回退（安全不动系统资源），无参 clean 仍可恢复。用 rPROC_hang 真实 inject→删 state→clean→验证进程恢复+sidecar 消失 | PASS |
+| 手动 `dcat clean --all` | 36 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
+| 手动 `dcat inject <uid>`（无参） | 21 条新改脚本均拒绝并报 "missing required param"（强制未放松） | PASS |
+
+> CTest 当前共 **24** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
+
+### 9.5 已知限制
+
+- NPU 12 条「no-op」类故障（无 /tmp 工件、clean 需 chip+key 标识参数）在 `clean --all` 下仅报 "no active injection" 退出 0，**不实际清理**其活跃注入——这是 stateless 的固有局限（无法从 /tmp 工件还原标识参数）。此类故障的 stateless 清理需带参（`clean <uid> --chip=N [--key=...]`），或依赖完好的 state.json。
+- **部分损坏不回退**：`clean <uid> --params` 仅在 `state.json` **完全丢失/解析失败**（`state_is_lost()`）时回退脚本；若文件合法但记录被抹（运维手编辑/截断），带参 clean 报 "no active injection" 且**不触碰系统资源**（避免误清非 dcat 注入，如对未注入网卡 `tc qdisc del`）。此场景用无参 `clean <uid>` 或 `clean --all`（stateless glob）恢复。
+- **query 发现盲区**：`state.json` 丢失后 `dcat query`（无 uid）只读 state，返回空——无法用 dcat 列出活跃故障。恢复手段是 `clean --all`（清全部）或直接查 `/tmp/dcat-*` 工件后 `clean <uid>` 无参清理。
+- executor 对脚本 stdout/stderr 经管道单次 `read` 后即关闭，故脚本 clean 输出须**仅一行汇总**（循环体内不得 echo），否则第二行写入触发 SIGPIPE 被判为失败（exit 1）。已据此约定修正 proc_zstate。
+- **executor 已修复 stdin 继承**：原先脚本继承 dcat 的 stdin，非交互场景（ctest/cron/管道，stdin 为空管道）下脚本误 `read` 会永久阻塞（`clean --all` 曾因此超时）。现 executor 将脚本 stdin 重定向到 `/dev/null`。
+
+---
+
+*测试执行时间: 2026-07-25（v0.1 基线）/ 2026-07-30（stateless clean 增量）*
 *测试执行人: Automated (CTest) + Manual*
-*总耗时: 13.85 秒 (CTest) + 手动验证*
+*总耗时: 13.85 秒 (v0.1 CTest) / 21.22 秒 (增量后 CTest 23 项) + 手动验证*

@@ -26,16 +26,22 @@ case "${DCAT_OP:-inject}" in
     inject)
         spec=${DCAT_PARAM_CORES:?missing required param: cores}
         offlist=""
+        faillist=""
         for n in $(parse_cores "$spec"); do
             path="/sys/devices/system/cpu/cpu$n/online"
             [ -w "$path" ] || { echo "cpu$n not offlinable (skipping)" >&2; continue; }
-            if ! echo 0 > "$path" 2>/dev/null; then
-                echo "offline cpu$n failed" >&2; continue
+            echo 0 > "$path" 2>/dev/null
+            actual=$(cat "$path" 2>/dev/null)
+            if [ "$actual" = "0" ]; then
+                touch "/tmp/dcat-rCPU_core_offline-c$n"
+                offlist="$offlist $n"
+            else
+                echo "offline cpu$n failed (actual=$actual, WSL2 unsupported?)" >&2
+                faillist="$faillist $n"
             fi
-            touch "/tmp/dcat-rCPU_core_offline-c$n"
-            offlist="$offlist $n"
         done
         echo "offlined cores:$offlist"
+        [ -z "$faillist" ] || { echo "failed cores:$faillist" >&2; exit 1; }
         ;;
 
     clean)
@@ -43,14 +49,22 @@ case "${DCAT_OP:-inject}" in
         spec=${spec%,}
         spec=${spec:-0}
         onlist=""
+        faillist=""
         for n in $(parse_cores "$spec"); do
             path="/sys/devices/system/cpu/cpu$n/online"
-            if [ -w "$path" ] && echo 1 > "$path" 2>/dev/null; then
-                onlist="$onlist $n"
+            if [ -w "$path" ]; then
+                echo 1 > "$path" 2>/dev/null
+                actual=$(cat "$path" 2>/dev/null)
+                if [ "$actual" = "1" ]; then
+                    onlist="$onlist $n"
+                else
+                    faillist="$faillist $n"
+                fi
             fi
             rm -f "/tmp/dcat-rCPU_core_offline-c$n"
         done
         echo "onlined cores:$onlist"
+        [ -z "$faillist" ] || echo "failed cores:$faillist (WSL2 unsupported?)" >&2
         ;;
 
     query)

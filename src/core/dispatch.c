@@ -104,10 +104,24 @@ static void fmt_record_params(const injection_record_t *rec, char *out, size_t c
     }
 }
 
+/* stateless clean（无参 / clean --all）成功后 reconcile state：把该 uid 全部活跃记录
+ * 标 inactive，使 query 与系统一致（不残留幽灵记录）。内存空（state 丢失/无记录）时
+ * state_find_by_params 返回 0，自然 no-op。 */
+static void reconcile_uid_state(const char *uid) {
+    params_t empty; params_init(&empty);
+    long long ids[DCAT_MAX_RECORDS];
+    int n = state_find_by_params(uid, &empty, ids, DCAT_MAX_RECORDS);
+    for (int i = 0; i < n; i++) state_mark_inactive(ids[i]);
+}
+
 static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
-    /* clean <uid> 无参 = clean-all-for-uid：脚本自行 glob /tmp 工件，绕过 state */
-    if (user_params->count == 0)
-        return executor_run_fault(f, "clean", user_params, 0);
+    /* clean <uid> 无参 = clean-all-for-uid：脚本自行 glob /tmp 工件，绕过 state 查找；
+     * 脚本成功后 reconcile：把该 uid 全部活跃记录标 inactive，避免 query 残留幽灵。 */
+    if (user_params->count == 0) {
+        result_t *r = executor_run_fault(f, "clean", user_params, 0);
+        if (r && r->code == 0) reconcile_uid_state(f->uid);
+        return r;
+    }
     long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) {
@@ -132,6 +146,8 @@ result_t *dispatch_clean_all(void) {
     for (int i = 0; i < n; i++) {
         if (!op_in_supported(list[i].supported_ops, "clean")) continue;
         result_t *r = executor_run_fault(&list[i], "clean", &empty, 0);
+        /* 脚本清完 /tmp 工件后 reconcile 该 uid 的 state 记录，避免 query 幽灵 */
+        if (r && r->code == 0) reconcile_uid_state(list[i].uid);
         cJSON *o = cJSON_CreateObject();
         cJSON_AddStringToObject(o, "uid", list[i].uid);
         cJSON_AddStringToObject(o, "status", (r && r->code == 0) ? "ok" : "error");

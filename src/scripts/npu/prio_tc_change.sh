@@ -18,6 +18,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -prio_tc -g 2>/dev/null | grep -oE 'map [0-9,]+' | grep -oE '[0-9,]+')
         [ -n "$orig" ] && sidecar_save rNPU_prio_tc_change "$chip" "$orig"
         $HCCN -prio_tc -s map "$map" || { echo "prio_tc set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_prio_tc_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied prio_tc map $map on chip $chip (was $orig)"
         ;;
     clean)

@@ -18,6 +18,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway [0-9.]+' | awk '{print $2}')
         [ -n "$orig" ] && sidecar_save rNPU_gw_change "$chip" "$orig"
         $HCCN -gateway -s gateway "$gw" || { echo "gateway set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_gw_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied gateway $gw on chip $chip (was $orig)"
         ;;
     clean)

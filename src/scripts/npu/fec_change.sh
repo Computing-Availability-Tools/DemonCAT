@@ -18,6 +18,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -fec -g 2>/dev/null | grep -oiE 'encoding [a-z]+' | grep -oiE '[a-z]+$')
         [ -n "$orig" ] && sidecar_save rNPU_fec_change "$chip" "$orig"
         $HCCN -fec -s encoding "$enc" || { echo "fec set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_fec_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied fec $enc on chip $chip (was $orig)"
         ;;
     clean)

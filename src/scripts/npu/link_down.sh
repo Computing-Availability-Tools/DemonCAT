@@ -11,6 +11,7 @@ case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
         $HCCN -link -s down || { echo "link down failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_link_down 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "link down on chip $chip"
         ;;
     clean)

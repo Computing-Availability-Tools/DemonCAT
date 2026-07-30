@@ -14,6 +14,7 @@ case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
         $HCCN -arp -a dev "$dev" ip "$ip" mac "$mac" || { echo "arp add failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_arp_poison 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "poisoned arp $dev/$ip -> $mac on chip $chip"
         ;;
     clean)

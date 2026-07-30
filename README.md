@@ -74,7 +74,8 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | 子命令 | 说明 | 示例 |
 |---|---|---|
 | `inject <uid> --p1=v1 ...` | 注入故障，同步阻塞执行 | `dcat inject rCPU_overload --cores=4` |
-| `clean <uid> [--k1=v1 ...]` | 按参数匹配清除活跃注入 | `dcat clean rCPU_overload --cores=4` |
+| `clean <uid> [--k1=v1 ...]` | 带参数：按参数匹配清除活跃注入；无参数：stateless 清该 uid 全部 `/tmp` 工件（state.json 丢失仍可清） | `dcat clean rCPU_overload --cores=4` / `dcat clean rCPU_overload` |
+| `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless） | `dcat clean --all` |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查全部活跃记录；有 uid：验证故障生效 | `dcat query` / `dcat query rCPU_overload` |
 | `list` | 列出故障目录 | `dcat list` |
 

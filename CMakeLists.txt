@@ -62,6 +62,7 @@ add_test(NAME test_syntax COMMAND sh tests/check_syntax.sh WORKING_DIRECTORY ${C
 dcat_test(test_smoke_cpu      tests/test_smoke_cpu.c)
 dcat_test(test_smoke_process  tests/test_smoke_process.c)
 dcat_test(test_smoke_storage  tests/test_smoke_storage.c)
+dcat_test(test_smoke_state_lost tests/test_smoke_state_lost.c)
 
 # ---- 示例动态插件 (编译到 plugins/libsample.so) ----
 add_library(sample_plugin MODULE

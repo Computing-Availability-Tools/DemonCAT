@@ -231,7 +231,7 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 ### 9.2 核心改动
 
 - `cli.c/h`：新增 `--all` 全局标志（仅 clean 生效）。
-- `dispatch.c/h`：`cnf_clean` 零参数走 stateless 脚本 clean；带参数且 state 丢失时回退脚本 clean；新增 `dispatch_clean_all()` 聚合 fan-out。
+- `dispatch.c/h`：`cnf_clean` 零参数走 stateless 脚本 clean，**脚本成功后 `reconcile_uid_state()` 把该 uid 全部活跃记录标 inactive（避免 query 残留幽灵）**；带参数且 state 丢失时回退脚本 clean；新增 `dispatch_clean_all()` 聚合 fan-out（同样 reconcile）。
 - `state.c/h`：新增 `state_is_lost()`——state 文件缺失或 JSON 解析失败（损坏/截断）时为真，clean 据此决定是否回退脚本清理；解析失败不再静默丢数据，输出告警。
 - `precheck.c`：`clean` 零参数时跳过 `clean_required` 校验（clean-all-for-uid 模式）。
 - `help.c` / `main.c`：`--help` 与全局用法补 `clean --all` / 无参 clean 说明；`--all` 与非 clean 组合报错（退出码 2）。
@@ -251,11 +251,12 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 
 | 测试 | 覆盖 | 结果 |
 |---|---|:---:|
-| test_dispatch（新增 3 例） | `clean <uid>` 无参→直接调脚本 clean（不传 DCAT_PARAM_*）；`clean --all` fan-out 次数 = 支持 clean 的故障数；state 丢失→带参 clean 回退脚本 | PASS |
+| test_dispatch（新增 5 例） | `clean <uid>` 无参→直接调脚本 clean（不传 DCAT_PARAM_*）；`clean --all` fan-out 次数 = 支持 clean 的故障数；state 丢失→带参 clean 回退脚本；**无参 clean / `clean --all` 成功后 reconcile state（记录标 inactive，query 无幽灵）** | PASS |
 | test_state（新增 2 例） | `state_is_lost()` 在文件缺失/JSON 损坏时为真、内存空 | PASS |
 | test_syntax | 全部 38 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
 | test_smoke_process | rPROC_zstate inject→clean→reaped（验证 proc_zstate 单行输出约定，避免 executor 单次 read pipe 后 SIGPIPE 误报） | PASS |
-| **test_smoke_state_lost（新增，4 例端到端）** | **state.json 误删后 stateless clean 仍清除活跃故障**：①`clean <uid> --params` 回退用用户参数调脚本；②`clean <uid>` 无参 glob `/tmp` 工件；③`clean --all` fan-out；④部分损坏（文件有效但记录被抹）带参 clean 不回退（安全不动系统资源），无参 clean 仍可恢复。用 rPROC_hang 真实 inject→删 state→clean→验证进程恢复+sidecar 消失 | PASS |
+| **test_smoke_state_lost（新增，5 例端到端）** | **state.json 误删后 stateless clean 仍清除活跃故障**：①`clean <uid> --params` 回退用用户参数调脚本；②`clean <uid>` 无参 glob `/tmp` 工件；③`clean --all` fan-out；④部分损坏（文件有效但记录被抹）带参 clean 不回退（安全不动系统资源），无参 clean 仍可恢复；⑤**state 完好时无参 clean 既清系统又 reconcile state（query 无幽灵）**。用 rPROC_hang 真实 inject→删/不删 state→clean→验证进程恢复+sidecar 消失+state 一致 | PASS |
+| 手动 `dcat clean rCPU_overload`（无参） | inject cores=1,10 → clean 无参 → query 由 2 条→0 条（修复前为 2 条幽灵） | PASS |
 | 手动 `dcat clean --all` | 36 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
 | 手动 `dcat inject <uid>`（无参） | 21 条新改脚本均拒绝并报 "missing required param"（强制未放松） | PASS |
 

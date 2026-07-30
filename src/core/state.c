@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/stat.h>
 
 static injection_record_t g_records[DCAT_MAX_RECORDS];
 static int g_next_id = 1;
@@ -65,6 +66,18 @@ const injection_record_t *state_find_by_id(int id) {
     return r;
 }
 
+int state_snapshot_by_uid(const char *uid, injection_record_t *out, int max) {
+    pthread_mutex_lock(&g_lock);
+    int n = 0;
+    for (int i = 0; i < DCAT_MAX_RECORDS && n < max; i++) {
+        if (g_records[i].active && strcmp(g_records[i].uid, uid) == 0) {
+            out[n++] = g_records[i];
+        }
+    }
+    pthread_mutex_unlock(&g_lock);
+    return n;
+}
+
 int state_list_active(void) {
     pthread_mutex_lock(&g_lock);
     int n = 0;
@@ -122,6 +135,21 @@ void state_save(void) {
     pthread_mutex_unlock(&g_lock);
 
     if (!s) return;
+    /* 确保父目录存在 (mkdir -p 等价, 如 ~/.demoncat/), 否则 fopen 静默失败导致
+     * state 不持久化, 进而使 reinject/重注入检测在全新部署上失效。 */
+    {
+        char dirbuf[256];
+        strncpy(dirbuf, g_file, sizeof dirbuf - 1);
+        dirbuf[sizeof dirbuf - 1] = '\0';
+        char *slash = strrchr(dirbuf, '/');
+        if (slash) {
+            *slash = '\0';                          /* 截掉文件名, 得父目录 */
+            for (char *q = dirbuf + 1; *q; q++) {
+                if (*q == '/') { *q = '\0'; mkdir(dirbuf, 0700); *q = '/'; }
+            }
+            mkdir(dirbuf, 0700);                   /* 末级目录 (忽略 EEXIST) */
+        }
+    }
     FILE *fp = fopen(g_file, "w");
     if (fp) {
         if (fputs(s, fp) == EOF || fclose(fp) != 0) {

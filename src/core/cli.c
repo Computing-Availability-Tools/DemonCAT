@@ -59,6 +59,15 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             out->help = 1;
             continue;
         }
+        if (strcmp(argv[i], "--force") == 0) {
+            out->force = 1;
+            continue;
+        }
+        if (strncmp(argv[i], "--force=", 8) == 0) {
+            snprintf(g_cli_error, sizeof g_cli_error,
+                     "--force does not take a value; use bare '--force'");
+            return -1;
+        }
         if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--plugins") == 0) {
             if (i + 1 < argc) {
                 if (strcmp(argv[i], "--config") == 0) out->config  = argv[i + 1];

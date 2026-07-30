@@ -80,7 +80,7 @@ static int resource_overlaps(const params_t *new_params, const params_t *rec_par
 }
 
 int reinject_find_overlap(const fault_def_t *f, const params_t *new_params,
-                          int *out_ids, int max_ids) {
+                          long long *out_ids, int max_ids) {
     if (!f || !new_params) return 0;
     injection_record_t snap[DCAT_MAX_RECORDS];
     int n = state_snapshot_by_uid(f->uid, snap, DCAT_MAX_RECORDS);

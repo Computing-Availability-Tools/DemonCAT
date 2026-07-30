@@ -2,13 +2,13 @@
 #define DCAT_STATE_H
 #include "types.h"
 void state_reset(void);
-int  state_add(const char *uid, const params_t *params);   /* 返回 record_id；满返回 -1 */
-int  state_find_by_params(const char *uid, const params_t *query, int *ids, int max_ids);
-const injection_record_t *state_find_by_id(int id);       /* 仅活跃记录 */
+long long state_add(const char *uid, const params_t *params);   /* 返回 record_id；满返回 -1 */
+int  state_find_by_params(const char *uid, const params_t *query, long long *ids, int max_ids);
+const injection_record_t *state_find_by_id(long long id);       /* 仅活跃记录 */
 /* 拷贝 uid 的活跃记录快照到 out（锁内拷贝，调用方无需持锁）；返回拷贝数(<=max)。 */
 int  state_snapshot_by_uid(const char *uid, injection_record_t *out, int max);
 int  state_list_active(void);
-void state_mark_inactive(int id);
+void state_mark_inactive(long long id);
 void state_set_file(const char *path);
 void state_save(void);
 void state_load(void);

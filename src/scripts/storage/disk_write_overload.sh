@@ -46,25 +46,31 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     clean)
-        dev=${DCAT_PARAM_DEVICE:-}
-        dev_clean=$(echo "$dev" | tr '/' '_')
-        PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
-        if [ -f "$PIDFILE" ]; then
-            for pid in $(cat "$PIDFILE"); do
-                kill "$pid" 2>/dev/null
-            done
-            rm -f "$PIDFILE"
-            # remove stress files (pid-prefixed)
-            if [ -d "$dev" ]; then
-                rm -f "${dev}/dcat.stress."* 2>/dev/null
-            fi
-            rm -f /tmp/dcat.write.* 2>/dev/null
-            echo "cleaned disk write overload on $dev"
+        if [ -n "$DCAT_PARAM_DEVICE" ]; then
+            dev_cleans=$(echo "$DCAT_PARAM_DEVICE" | tr '/' '_')
         else
-            rm -f "${dev}/dcat.stress."* 2>/dev/null
-            rm -f /tmp/dcat.write.* 2>/dev/null
-            echo "cleaned disk write overload on $dev (no active injection)"
+            dev_cleans=""
+            for pf in /tmp/dcat-rDISK_write_overload-*.pid; do
+                [ -f "$pf" ] || continue
+                d=${pf##*/dcat-rDISK_write_overload-}; d=${d%.pid}
+                dev_cleans="$dev_cleans $d"
+            done
         fi
+        cleaned=0
+        for dev_clean in $dev_cleans; do
+            [ -n "$dev_clean" ] || continue
+            dev=$(echo "$dev_clean" | tr '_' '/')
+            PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
+            if [ -f "$PIDFILE" ]; then
+                for pid in $(cat "$PIDFILE"); do kill "$pid" 2>/dev/null; done
+                rm -f "$PIDFILE"
+                [ -d "$dev" ] && rm -f "${dev}/dcat.stress."* 2>/dev/null
+                cleaned=1
+            fi
+        done
+        rm -f /tmp/dcat.write.* 2>/dev/null
+        if [ "$cleaned" = 1 ]; then echo "cleaned disk write overload on [$dev_cleans]";
+        else echo "cleaned disk write overload (no active injection)"; fi
         ;;
 
     query)

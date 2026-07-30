@@ -16,15 +16,29 @@ case "${DCAT_OP:-inject}" in
         echo "stopped $svc"
         ;;
     clean)
-        svc="${DCAT_PARAM_SERVICE:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
-        [ -n "$svc" ] || { echo "no service to restart" >&2; exit 1; }
-        if command -v systemctl >/dev/null 2>&1; then
-            systemctl start "$svc" 2>/dev/null
+        if [ -n "$DCAT_PARAM_SERVICE" ]; then
+            svcs="$DCAT_PARAM_SERVICE"
         else
-            service "$svc" start 2>/dev/null || true
+            svcs=""
+            for sc in /tmp/dcat-rNET_service_stop-*.sidecar; do
+                [ -f "$sc" ] || continue
+                v=${sc##*/dcat-rNET_service_stop-}; v=${v%.sidecar}
+                svcs="$svcs $v"
+            done
         fi
-        rm -f "/tmp/dcat-rNET_service_stop-${svc}.sidecar"
-        echo "started $svc"
+        cleaned=0
+        for svc in $svcs; do
+            [ -n "$svc" ] || continue
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl start "$svc" 2>/dev/null
+            else
+                service "$svc" start 2>/dev/null || true
+            fi
+            rm -f "/tmp/dcat-rNET_service_stop-${svc}.sidecar"
+            cleaned=1
+        done
+        if [ "$cleaned" = 1 ]; then echo "started [$svcs]";
+        else echo "started (no active injection)"; fi
         ;;
     query)
         svc="${DCAT_PARAM_SERVICE:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"

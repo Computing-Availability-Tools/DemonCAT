@@ -12,6 +12,7 @@ static long long g_next_id = 1;
 #define DCAT_MAX_ID ((long long)9000000000000000000LL)
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_file[256] = "~/.demoncat/state.json";
+static int g_state_lost = 0;   /* 1=state 文件缺失或 JSON 解析失败(损坏/截断) */
 
 static void fmt_started_at(time_t t, char *buf, size_t n) {
     struct tm tmv;
@@ -23,6 +24,7 @@ void state_reset(void) {
     pthread_mutex_lock(&g_lock);
     memset(g_records, 0, sizeof(g_records));
     g_next_id = 1;
+    g_state_lost = 0;
     pthread_mutex_unlock(&g_lock);
 }
 void state_set_file(const char *path) {
@@ -173,13 +175,14 @@ void state_save(void) {
 void state_load(void) {
     pthread_mutex_lock(&g_lock);
     FILE *fp = fopen(g_file, "r");
-    if (!fp) { pthread_mutex_unlock(&g_lock); return; }
+    if (!fp) { g_state_lost = 1; pthread_mutex_unlock(&g_lock); return; }
     fseek(fp, 0, SEEK_END); long sz = ftell(fp); fseek(fp, 0, SEEK_SET);
     if (sz < 0) { fclose(fp); pthread_mutex_unlock(&g_lock); return; }
     char *buf = malloc((size_t)sz + 1);
     size_t rd = fread(buf, 1, (size_t)sz, fp); buf[rd] = '\0'; fclose(fp);
     cJSON *root = cJSON_Parse(buf); free(buf);
     if (root) {
+        g_state_lost = 0;
         cJSON *nid = cJSON_GetObjectItem(root, "next_id");
         if (nid) g_next_id = (long long)nid->valuedouble;
         cJSON *arr = cJSON_GetObjectItem(root, "records");
@@ -210,6 +213,16 @@ void state_load(void) {
             i++;
         }
         cJSON_Delete(root);
+    } else {
+        g_state_lost = 1;
+        fprintf(stderr, "dcat: state file corrupt or unreadable, ignoring: %s\n", g_file);
     }
     pthread_mutex_unlock(&g_lock);
+}
+
+int state_is_lost(void) {
+    pthread_mutex_lock(&g_lock);
+    int v = g_state_lost;
+    pthread_mutex_unlock(&g_lock);
+    return v;
 }

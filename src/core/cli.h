@@ -7,6 +7,7 @@ typedef struct {
     char uid[64];
     params_t params;
     int  help;             /* --help 出现过 */
+    int  force;            /* --force 出现过 (仅 inject 路径生效) */
     const char *config;    /* --config <path> 值（可选） */
     const char *plugins;   /* --plugins <dir> 值（可选） */
 } parsed_cmd_t;

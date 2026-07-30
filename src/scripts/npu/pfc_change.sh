@@ -18,6 +18,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -pfc -g 2>/dev/null | grep -oE 'bitmap [0-9,]+' | grep -oE '[0-9,]+')
         [ -n "$orig" ] && sidecar_save rNPU_pfc_change "$chip" "$orig"
         $HCCN -pfc -s bitmap "$bitmap" || { echo "pfc set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_pfc_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied pfc bitmap $bitmap on chip $chip (was $orig)"
         ;;
     clean)

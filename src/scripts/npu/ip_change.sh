@@ -11,7 +11,8 @@ SIDECAR="/tmp/dcat-rNPU_ip_change-$chip.bak"
 fault_present() {
     cur=$($HCCN -ip -g 2>/dev/null)
     [ -f "$SIDECAR" ] && orig_addr=$(grep '^address=' "$SIDECAR" | cut -d= -f2)
-    [ -n "$orig_addr" ] && ! echo "$cur" | grep -Fq "$orig_addr"
+    cur_addr=$(echo "$cur" | grep -oE 'ipaddr:[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+$')
+    [ -n "$orig_addr" ] && [ "$cur_addr" != "$orig_addr" ]
 }
 
 case "${DCAT_OP:-inject}" in

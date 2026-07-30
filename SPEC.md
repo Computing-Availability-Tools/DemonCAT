@@ -79,6 +79,11 @@ dcat inject rNET_loss --iface=eth0 --loss_pct=5
 dcat inject rNET_loss --iface=eth1 --loss_pct=3
 dcat clean rNET_loss --iface=eth0    # 只清 eth0
 
+# 同资源重注入：默认拒绝；--force 原子替换
+dcat inject rNET_loss --iface=eth0 --loss_pct=5
+dcat inject rNET_loss --iface=eth0 --loss_pct=8             # REJECT (同 iface, code 5)
+dcat inject rNET_loss --iface=eth0 --loss_pct=8 --force     # 原子替换
+
 # 一次性故障：无法 clean
 dcat inject rPROC_exit --pid=12345
 
@@ -254,6 +259,42 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
   ---
   {"status":"ok","op":"query","uid":"rCPU_overload","data":{"confirmed":true}}
   ```
+
+### 5.5 reinject 默认拒绝 + --force 原子替换
+
+对同一资源的重复注入，dcat **默认拒绝**（退出码 5），需显式 `--force` 才原子替换。
+
+- **资源键** = 故障的 `clean_required` 各参数（资源标识，非值参数）。例：`rCPU_overload` 资源键=`cores`；`rNET_delay` 资源键=`iface`；`rNPU_arp_poison` 资源键=`chip,dev,ip`。
+- **重叠判定**：
+  - `cores` 参数走**集合交集**（核集语义）：`0,1` 与 `0-8` 重叠（核 0、1 相交），`0,1` 与 `2,3` 不重叠。
+  - 其余参数（device/iface/port/pid/chip/...）走**精确等值**；多参资源键（如 chip,dev,ip）各参精确 AND。
+- **默认拒绝**：inject 时若已有同 uid + 同资源键重叠的活动记录 → 返回 `code:5` 拒绝，message 列出重叠记录的 record id + 其参数（最多 3 条，超出显示 `+N more`），如 `resource already injected (record id 3: cores=0,1); use --force to replace`，不执行注入。
+- **--force 原子替换**：`dcat inject <uid> ... --force` → 先逐个 clean 所有重叠记录（复用 clean 路径），全成功后再 inject。非真原子（两步脚本，有窗口）：clean 中途失败则中止后续注入（**已 clean 的记录保持已清理**，message 带出失败的 record id + 底层脚本错误；操作者可再次 `--force` 重试清理剩余并注入）；注入失败则旧已清（操作者可重注）。
+- **作用范围**：v1 仅对 catalog（CNF/config 驱动）故障生效；插件与 legacy injector 路径暂不接入 reinject 检测（同资源重注入不拒绝、`--force` 不替换）。
+- **不同资源并发**：不重叠的资源（不同核段/不同 iface/不同 pid）仍可并发注入，各自独立 state 记录。
+- **inject-only 故障**：不写 state → 无活动记录 → 天然不触发拒绝（如 `rPROC_exit` 可重复 inject 同 pid）。
+- **`--force` 仅 inject 路径生效**；clean/query/list 上出现 `--force` 被忽略（不报错，兼容历史脚本）。`--force=x`（带值）报解析错误。
+
+**BREAKING 变更**（相对 v0.1 加法并集）：`rCPU_overload` 同核/重叠核重注入从"幂等共存"改为"默认拒绝"。迁移：重注入改加 `--force`；不同核并发不变。
+
+示例：
+```
+# 同资源重注入 → 默认拒绝 (code 5)
+dcat inject rCPU_overload --cores=0,1
+dcat inject rCPU_overload --cores=0,1           # REJECT
+dcat inject rCPU_overload --cores=0,1 --force   # 原子替换
+
+# 重叠核集 → 拒绝
+dcat inject rCPU_overload --cores=0,1
+dcat inject rCPU_overload --cores=0-8           # REJECT (核集相交)
+dcat inject rCPU_overload --cores=0-8 --force   # 替换
+
+# 不同资源 → 并发 OK
+dcat inject rCPU_overload --cores=0,1
+dcat inject rCPU_overload --cores=2,3           # OK (不重叠)
+dcat inject rNET_delay --iface=eth0 --delay_ms=100
+dcat inject rNET_delay --iface=eth1 --delay_ms=100   # OK (不同 iface)
+```
 
 ---
 

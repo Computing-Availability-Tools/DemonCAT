@@ -22,6 +22,7 @@
 ## 目录
 
 - [故障能力清单](#故障能力清单)
+- [通用约定：重注入与 --force](#通用约定重注入与---force)
 - [第一章 CPU 模块](#第一章-cpu-模块2-条)
   - [1.1 rCPU_overload](#11-rcpu_overload) — 核满载（perl 纯用户态）
   - [1.2 rCPU_core_offline](#12-rcpu_core_offline) — 核离线（sysfs）
@@ -64,6 +65,28 @@
   - [5.18 rNPU_prio_tc_change](#518-rnpu_prio_tc_change) — Prio→TC 映射变更
   - [5.19 rNPU_pfc_change](#519-rnpu_pfc_change) — PFC 位图变更
   - [5.20 rNPU_roce_port_change](#520-rnpu_roce_port_change) — RoCE UDP 端口变更
+
+---
+
+## 通用约定：重注入与 --force
+
+dcat 对**同一资源的重复注入默认拒绝**（退出码 5），需显式 `--force` 才原子替换。这避免意外的故障叠加/资源冲突（如两次 CPU 满载抢核、两个 tc qdisc 打架）。
+
+- **资源键**：各故障的 `clean_required` 参数（见每章参数表）。`cores` 走核集交集，其余走精确等值。
+- 同资源（同 iface / 重叠核 / 同 pid）重注入 → **拒绝**；加 `--force` → 先清旧再注新（原子替换）。
+- 不同资源（不同 iface / 不重叠核段）→ 并发注入 OK，互不影响。
+- inject-only 故障（如 `rPROC_exit`）不写 state，可重复 inject。
+- `--force` 仅 inject 生效；clean/query/list 上忽略。`--force=x`（带值）报错。
+
+```bash
+dcat inject rCPU_overload --cores=0,1
+dcat inject rCPU_overload --cores=0,1 --force      # 替换（否则拒绝）
+dcat inject rCPU_overload --cores=2,3               # 不同核，并发 OK
+dcat inject rNET_delay --iface=eth0 --delay_ms=100
+dcat inject rNET_delay --iface=eth0 --delay_ms=200 --force   # 替换
+```
+
+> **BREAKING**：相对旧版，CPU 同核/重叠核重注入从"幂等共存"改为"默认拒绝"。重注入请加 `--force`。
 
 ---
 
@@ -114,7 +137,7 @@ dcat clean  rCPU_overload --cores=0,1
 ```bash
 dcat inject rCPU_core_offline --cores=2,3
 dcat query rCPU_core_offline --cores=2,3
-dcat clean rCPU_core_offline
+dcat clean rCPU_core_offline --cores=2,3
 ```
 
 **参数可选范围**:
@@ -180,8 +203,8 @@ dcat clean rDISK_write_overload --device=/data
 **使用示例**:
 ```bash
 dcat inject rNET_delay --iface=eth0 --delay_ms=100
-dcat query rNET_delay --iface=eth0 --delay_ms=100
-dcat clean rNET_delay --iface=eth0 --delay_ms=100
+dcat query rNET_delay --iface=eth0
+dcat clean rNET_delay --iface=eth0
 ```
 
 **参数可选范围**:
@@ -207,8 +230,8 @@ dcat clean rNET_delay --iface=eth0 --delay_ms=100
 **使用示例**:
 ```bash
 dcat inject rNET_loss --iface=eth0 --loss_pct=10
-dcat query rNET_loss --iface=eth0 --loss_pct=10
-dcat clean rNET_loss --iface=eth0 --loss_pct=10
+dcat query rNET_loss --iface=eth0
+dcat clean rNET_loss --iface=eth0
 ```
 
 **参数可选范围**:
@@ -234,8 +257,8 @@ dcat clean rNET_loss --iface=eth0 --loss_pct=10
 **使用示例**:
 ```bash
 dcat inject rNET_reorder --iface=eth0 --reorder_pct=25
-dcat query rNET_reorder --iface=eth0 --reorder_pct=25
-dcat clean rNET_reorder --iface=eth0 --reorder_pct=25
+dcat query rNET_reorder --iface=eth0
+dcat clean rNET_reorder --iface=eth0
 ```
 
 **参数可选范围**:
@@ -518,6 +541,8 @@ dcat clean rPROC_hang --pid=12345
 **危险等级**: 中 — 进程被暂停但可由 `SIGCONT` 恢复，可逆。
 
 **补充说明**: 可逆故障，STOP/CONT 成对出现。clean 时可不带参数（从 sidecar 自动恢复 PID）。query 依赖 `/proc` 文件系统，仅 Linux 有效。
+
+> **适用对象**：rPROC_hang 适用于**非终端控制的后台进程**（守护进程/工作进程/服务/`sleep`/构建任务等不持有控制终端的进程）。交互式终端程序（`top`/`vim`/`less`/`htop`）被 SIGSTOP 后，shell 作业控制会回收终端，clean 的 SIGCONT 使其在后台恢复→试图读终端→被终端驱动以 `SIGTTIN` 再次停止，故无法仅靠 `kill -CONT` 恢复（需 shell `fg` 重回前台进程组）。对交互终端程序的"挂起"用 shell 作业控制（Ctrl+Z / `fg`）更合适。
 
 ---
 

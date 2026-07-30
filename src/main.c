@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     }
     plugin_load_dir(plugindir);
 
-    result_t *r = dispatch_route(pc.uid, pc.op, &pc.params);
+    result_t *r = dispatch_route_force(pc.uid, pc.op, &pc.params, pc.force);
     output_print(r);
     int code = r ? r->code : 1;
     result_free(r);

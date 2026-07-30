@@ -3,14 +3,14 @@
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
 npu_validate_chip "$chip"
-ip=${DCAT_PARAM_IP:?missing required param: ip}
-mask=${DCAT_PARAM_IP_MASK:?missing required param: ip_mask}
-via=${DCAT_PARAM_VIA:?missing required param: via}
-dev=${DCAT_PARAM_DEV:?missing required param: dev}
-table=${DCAT_PARAM_TABLE:?missing required param: table}
+ip=${DCAT_PARAM_IP:-}
+mask=${DCAT_PARAM_IP_MASK:-}
+via=${DCAT_PARAM_VIA:-}
+dev=${DCAT_PARAM_DEV:-}
+table=${DCAT_PARAM_TABLE:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"; }
+fault_present() { [ -n "$ip" ] && [ -n "$table" ] && $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"; }
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -24,5 +24,5 @@ case "${DCAT_OP:-inject}" in
             echo "removed ip_route $ip/$mask table $table on chip $chip"
         else echo "ip_route not present, no-op"; fi
         ;;
-    query) $HCCN -ip_route -g table "$table"; fault_present ;;
+    query) [ -n "$table" ] && $HCCN -ip_route -g table "$table"; fault_present ;;
 esac

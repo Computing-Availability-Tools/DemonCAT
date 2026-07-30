@@ -10,7 +10,7 @@ fault_present() { $HCCN -link -g 2>/dev/null | grep -qi 'down'; }
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        $HCCN -link -s down || { echo "link down failed" >&2; exit 1; }
+        echo y | $HCCN -link -s down || { echo "link down failed" >&2; exit 1; }
         echo "link down on chip $chip"
         ;;
     clean)

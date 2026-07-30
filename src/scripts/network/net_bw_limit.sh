@@ -13,11 +13,25 @@ case "${DCAT_OP:-inject}" in
         echo "applied ${rate}kbps limit on $iface"
         ;;
     clean)
-        iface="${DCAT_PARAM_IFACE:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
-        [ -n "$iface" ] || { echo "no iface to clean" >&2; exit 1; }
-        tc qdisc del dev "$iface" root 2>/dev/null
-        rm -f "/tmp/dcat-rNET_bw_limit-${iface}.sidecar"
-        echo "cleaned bw limit on $iface"
+        if [ -n "$DCAT_PARAM_IFACE" ]; then
+            ifaces="$DCAT_PARAM_IFACE"
+        else
+            ifaces=""
+            for sc in /tmp/dcat-rNET_bw_limit-*.sidecar; do
+                [ -f "$sc" ] || continue
+                v=${sc##*/dcat-rNET_bw_limit-}; v=${v%.sidecar}
+                ifaces="$ifaces $v"
+            done
+        fi
+        cleaned=0
+        for iface in $ifaces; do
+            [ -n "$iface" ] || continue
+            tc qdisc del dev "$iface" root 2>/dev/null
+            rm -f "/tmp/dcat-rNET_bw_limit-${iface}.sidecar"
+            cleaned=1
+        done
+        if [ "$cleaned" = 1 ]; then echo "cleaned bw limit on [$ifaces]";
+        else echo "cleaned bw limit (no active injection)"; fi
         ;;
     query)
         if [ -n "$DCAT_PARAM_IFACE" ]; then

@@ -60,7 +60,8 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | 命令 | 语义 | 适用 supported_ops |
 |---|---|---|
 | `inject <uid> --p1=v1 --p2=v2 ...` | 注入指定故障，按参数配置；**同步阻塞执行脚本，执行完返回** | `inject` 或 `inject,clean,query` |
-| `clean <uid> --k1=v1 ...` | 清除该 uid 活跃注入；**必须至少一个参数**按匹配记录逐条清理；同步重跑脚本 `DCAT_OP=clean` | 仅 `inject,clean,query` |
+| `clean <uid> [--k1=v1 ...]` | 清除该 uid 活跃注入。**带参数**：按参数匹配 state 记录逐条清理；**无参数**：stateless 模式，脚本自行 glob `/tmp` 工件（pidfile/sidecar）清理该 uid 全部注入，不依赖 state.json | 仅 `inject,clean,query` |
+| `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless，不依赖 state.json）；聚合每 uid 结果。state.json 丢失/损坏时仍可清 | — |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查询 dcat 自身全部活跃注入记录；有 uid：调脚本 `query` 分支验证故障是否真的在系统上生效，用户参数与 inject 参数独立 | `inject,clean,query` |
 | `list` | 列出配置中声明的全部故障目录 | 所有 |
 
@@ -204,7 +205,7 @@ query_optional  = iface,direction
 4. 脚本路径存在且可执行（`access/X_OK`）
 
 > 允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
-> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。**`clean`（带 uid）要求：如果该操作有声明的参数，必须提供至少一个参数，空参数被拒绝（退出码 3）。`query`（带 uid）不强制必填参数——无参时脚本自行展示全部（如全部核/全部网卡/读 sidecar），有参则按参过滤；仅校验参数是否已声明（未声明的 `--foo=bar` 仍拒绝，退出码 3）。`query`（不带 uid）查全部活跃记录，不受此限制。**
+> `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。**`clean <uid>` 带参数时按参数匹配 state 记录逐条清理；`clean <uid>` 无参数时走 stateless 路径（脚本自行 glob `/tmp` 工件清理该 uid 全部注入，不查 state，`clean_required` 在零参数时跳过校验）；`clean --all` 对全部支持 clean 的故障 fan-out 无参 clean（stateless）。`query`（带 uid）不强制必填参数——无参时脚本自行展示全部（如全部核/全部网卡/读 sidecar），有参则按参过滤；仅校验参数是否已声明（未声明的 `--foo=bar` 仍拒绝，退出码 3）。`query`（不带 uid）查全部活跃记录，不受此限制。**
 > 所有命令（inject / clean / query）均校验用户提供的参数是否在该操作对应的 required/optional 列表（`inject_required`/`inject_optional`、`clean_required`/`clean_optional`、`query_required`/`query_optional`）中声明，未声明的参数（`--foo=bar`）直接拒绝（退出码 3）。
 
 > **参数校验分层**：dcat 负责**结构校验**（`inject_required`/`clean_required` 是否齐全且非空，即第 3 步；**`query` 不强制必填**）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
@@ -233,7 +234,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 ### 5.2 可恢复故障（`inject,clean,query`）
 
 - **inject**：脚本执行完即返回。需要长驻的故障（如 CPU 过载、端口占用、僵尸生成、磁盘写压），脚本自行 spawn 子进程并写 pidfile/sidecar 到约定位置（如 `/tmp/dcat-<uid>.pid`）后立即返回。
-- **clean**：dcat 按用户提供的参数匹配活跃记录。dcat 传记录存储的 inject 参数给脚本 `DCAT_OP=clean`，脚本据此清理资源（删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程）。多条记录匹配时，逐条执行 clean 脚本；某条失败时停止，剩余记录不清理。脚本退出码非 0 时 dcat 报错且**不 mark inactive**（故障可能仍在系统上）。
+- **clean**：dcat 按用户提供的参数匹配活跃记录。dcat 传记录存储的 inject 参数给脚本 `DCAT_OP=clean`，脚本据此清理资源（删 qdisc / 删 iptables 规则 / 起服务 / 读 pidfile kill 子进程）。多条记录匹配时，逐条执行 clean 脚本；某条失败时停止，剩余记录不清理。脚本退出码非 0 时 dcat 报错且**不 mark inactive**（故障可能仍在系统上）。**无参 clean**：`clean <uid>` 无参数 或 `clean --all` 走 stateless 路径——脚本自行 glob `/tmp/dcat-<uid>-*` 工件（pidfile/sidecar/.bak）清理，不查 state.json；state.json 丢失/损坏时仍可清。脚本 clean 输出约定**仅一行**汇总（executor 单次 read pipe 后即关，多行写入会触发 SIGPIPE 误报失败）。
 - **`query`（无 uid）**：由 dcat 自身 state 回答（遍历活跃记录），**不调用脚本**。
 - **`query`（有 uid）**：调脚本 `DCAT_OP=query` 分支验证故障是否实际生效，详见 §5.4。
 

@@ -14,7 +14,7 @@ set_target_properties(cjson PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set(DCAT_CORE
     src/core/types.c src/core/cli.c src/core/registry.c src/core/executor.c
     src/core/precheck.c src/core/state.c src/core/config.c
-    src/core/output.c src/core/dispatch.c src/core/help.c
+    src/core/output.c src/core/dispatch.c src/core/reinject.c src/core/help.c
     src/injectors/injectors.c src/plugins/plugin_manager.c)
 add_executable(dcat src/main.c ${DCAT_CORE})
 target_include_directories(dcat PRIVATE src src/core src/injectors src/plugins third_party/cjson)
@@ -40,6 +40,7 @@ dcat_test(test_precheck     tests/test_precheck.c)
 dcat_test(test_state        tests/test_state.c)
 dcat_test(test_injectors    tests/test_injectors.c)
 dcat_test(test_dispatch     tests/test_dispatch.c)
+dcat_test(test_reinject     tests/test_reinject.c)
 dcat_test(test_cli          tests/test_cli.c)
 dcat_test(test_faults       tests/test_faults.c)
 dcat_test(test_help         tests/test_help.c)

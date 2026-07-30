@@ -125,7 +125,7 @@ int test_reinject_force_replaces_cpu(void) {
     ASSERT_TRUE(r && r->code == 0); result_free(r);
 
     ASSERT_INT_EQ(state_list_active(), 1);              /* 旧 0,1 被清, 仅 0-8 */
-    int ids[DCAT_MAX_RECORDS];
+    long long ids[DCAT_MAX_RECORDS];
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p1, ids, DCAT_MAX_RECORDS), 0);
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p2, ids, DCAT_MAX_RECORDS), 1);
     return 0;
@@ -166,7 +166,7 @@ int test_reinject_network_force_replace(void) {
     ASSERT_TRUE(r && r->code == 0); result_free(r);
 
     ASSERT_INT_EQ(state_list_active(), 1);
-    int ids[DCAT_MAX_RECORDS];
+    long long ids[DCAT_MAX_RECORDS];
     ASSERT_INT_EQ(state_find_by_params("rNET_delay", &p2, ids, DCAT_MAX_RECORDS), 1);
     return 0;
 }
@@ -256,7 +256,7 @@ int test_reinject_force_partial_clean_failure(void) {
     ASSERT_STR_CONTAINS(r->json, "simulated clean failure"); /* 带出底层错误 */
     result_free(r);
 
-    int ids[DCAT_MAX_RECORDS];
+    long long ids[DCAT_MAX_RECORDS];
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p1, ids, DCAT_MAX_RECORDS), 0); /* rec1 已清 */
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p2, ids, DCAT_MAX_RECORDS), 1); /* rec2 仍活动 */
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p3, ids, DCAT_MAX_RECORDS), 0); /* 未注入 */

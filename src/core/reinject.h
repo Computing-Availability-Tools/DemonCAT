@@ -16,6 +16,6 @@ int cores_intersect(const unsigned char a[16], const unsigned char b[16]);
  * out_ids[] 仅写入前 max_ids 个(按 max_ids 截断)；返回重叠总数(可能 > max_ids)。
  * 调用方循环须以 min(返回值, max_ids) 为上限；典型调用 max_ids=DCAT_MAX_RECORDS。 */
 int reinject_find_overlap(const fault_def_t *f, const params_t *new_params,
-                          int *out_ids, int max_ids);
+                          long long *out_ids, int max_ids);
 
 #endif

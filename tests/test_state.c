@@ -108,11 +108,36 @@ int test_state_save_creates_missing_parent_dir(void) {
     return 0;
 }
 
+int test_state_load_missing_is_lost(void) {
+    state_reset();
+    state_set_file("/tmp/dcat-test-state-missing.json");
+    state_load();
+    ASSERT_TRUE(state_is_lost());
+    ASSERT_INT_EQ(state_list_active(), 0);
+    return 0;
+}
+
+int test_state_load_corrupt_is_lost(void) {
+    state_reset();
+    state_set_file("/tmp/dcat-test-state-corrupt.json");
+    FILE *fp = fopen("/tmp/dcat-test-state-corrupt.json", "w");
+    ASSERT_TRUE(fp != NULL);
+    fputs("{not valid json}}}", fp);
+    fclose(fp);
+    state_load();
+    ASSERT_TRUE(state_is_lost());
+    ASSERT_INT_EQ(state_list_active(), 0);
+    unlink("/tmp/dcat-test-state-corrupt.json");
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
     RUN_TEST(test_persistence_roundtrip);
     RUN_TEST(test_started_at_numeric_backcompat);
+    RUN_TEST(test_state_load_missing_is_lost);
+    RUN_TEST(test_state_load_corrupt_is_lost);
     RUN_TEST(test_state_save_creates_missing_parent_dir);
     return TEST_MAIN_RETURN();
 }

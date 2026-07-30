@@ -8,9 +8,16 @@
 #include <sys/stat.h>
 
 static injection_record_t g_records[DCAT_MAX_RECORDS];
-static int g_next_id = 1;
+static long long g_next_id = 1;
+#define DCAT_MAX_ID ((long long)9000000000000000000LL)
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_file[256] = "~/.demoncat/state.json";
+
+static void fmt_started_at(time_t t, char *buf, size_t n) {
+    struct tm tmv;
+    if (localtime_r(&t, &tmv) && strftime(buf, n, "%Y-%m-%d %H:%M:%S", &tmv) > 0) return;
+    buf[0] = '\0';
+}
 
 void state_reset(void) {
     pthread_mutex_lock(&g_lock);
@@ -24,17 +31,21 @@ void state_set_file(const char *path) {
     pthread_mutex_unlock(&g_lock);
 }
 
-int state_add(const char *uid, const params_t *params) {
+long long state_add(const char *uid, const params_t *params) {
     pthread_mutex_lock(&g_lock);
+    if (g_next_id > DCAT_MAX_ID) {
+        pthread_mutex_unlock(&g_lock);
+        return -1;
+    }
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
         if (!g_records[i].active) {
             g_records[i].record_id = g_next_id++;
             strncpy(g_records[i].uid, uid, sizeof(g_records[i].uid)-1);
             g_records[i].uid[sizeof(g_records[i].uid)-1]='\0';
             g_records[i].params = *params;
-            g_records[i].started_at = (long)time(NULL);
+            fmt_started_at(time(NULL), g_records[i].started_at, sizeof(g_records[i].started_at));
             g_records[i].active = 1;
-            int id = g_records[i].record_id;
+            long long id = g_records[i].record_id;
             pthread_mutex_unlock(&g_lock);
             return id;
         }
@@ -43,7 +54,7 @@ int state_add(const char *uid, const params_t *params) {
     return -1;
 }
 
-int state_find_by_params(const char *uid, const params_t *query, int *ids, int max_ids) {
+int state_find_by_params(const char *uid, const params_t *query, long long *ids, int max_ids) {
     pthread_mutex_lock(&g_lock);
     int n = 0;
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
@@ -57,7 +68,7 @@ int state_find_by_params(const char *uid, const params_t *query, int *ids, int m
     return n;
 }
 
-const injection_record_t *state_find_by_id(int id) {
+const injection_record_t *state_find_by_id(long long id) {
     pthread_mutex_lock(&g_lock);
     const injection_record_t *r = NULL;
     for (int i = 0; i < DCAT_MAX_RECORDS; i++)
@@ -86,7 +97,7 @@ int state_list_active(void) {
     return n;
 }
 
-void state_mark_inactive(int id) {
+void state_mark_inactive(long long id) {
     pthread_mutex_lock(&g_lock);
     for (int i = 0; i < DCAT_MAX_RECORDS; i++)
         if (g_records[i].record_id == id) { g_records[i].active = 0; break; }
@@ -121,15 +132,15 @@ void state_save(void) {
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
         if (!g_records[i].active) continue;
         cJSON *o = cJSON_CreateObject();
-        cJSON_AddNumberToObject(o, "record_id", g_records[i].record_id);
+        cJSON_AddNumberToObject(o, "record_id", (double)g_records[i].record_id);
         cJSON_AddStringToObject(o, "uid", g_records[i].uid);
         cJSON_AddItemToObject(o, "params", params_to_json(&g_records[i].params));
-        cJSON_AddNumberToObject(o, "started_at", g_records[i].started_at);
+        cJSON_AddStringToObject(o, "started_at", g_records[i].started_at);
         cJSON_AddBoolToObject(o, "active", g_records[i].active);
         cJSON_AddItemToArray(arr, o);
     }
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "next_id", g_next_id);
+    cJSON_AddNumberToObject(root, "next_id", (double)g_next_id);
     cJSON_AddItemToObject(root, "records", arr);
     char *s = cJSON_Print(root); cJSON_Delete(root);
     pthread_mutex_unlock(&g_lock);
@@ -170,7 +181,7 @@ void state_load(void) {
     cJSON *root = cJSON_Parse(buf); free(buf);
     if (root) {
         cJSON *nid = cJSON_GetObjectItem(root, "next_id");
-        if (nid) g_next_id = nid->valueint;
+        if (nid) g_next_id = (long long)nid->valuedouble;
         cJSON *arr = cJSON_GetObjectItem(root, "records");
         cJSON *o; int i = 0;
         cJSON_ArrayForEach(o, arr) {
@@ -180,10 +191,21 @@ void state_load(void) {
             cJSON *prms = cJSON_GetObjectItem(o, "params");
             cJSON *sa = cJSON_GetObjectItem(o, "started_at");
             cJSON *ac = cJSON_GetObjectItem(o, "active");
-            if (rid) g_records[i].record_id = rid->valueint;
+            if (rid) g_records[i].record_id = (long long)rid->valuedouble;
             if (uid) { strncpy(g_records[i].uid, uid->valuestring, sizeof(g_records[i].uid)-1); g_records[i].uid[sizeof(g_records[i].uid)-1]='\0'; }
             if (prms) json_to_params(prms, &g_records[i].params);
-            if (sa) g_records[i].started_at = (long)sa->valuedouble;
+            if (sa) {
+                if (cJSON_IsString(sa) && sa->valuestring[0]) {
+                    strncpy(g_records[i].started_at, sa->valuestring, sizeof(g_records[i].started_at)-1);
+                    g_records[i].started_at[sizeof(g_records[i].started_at)-1] = '\0';
+                } else if (cJSON_IsNumber(sa)) {
+                    fmt_started_at((time_t)sa->valuedouble, g_records[i].started_at, sizeof(g_records[i].started_at));
+                } else {
+                    g_records[i].started_at[0] = '\0';
+                }
+            } else {
+                g_records[i].started_at[0] = '\0';
+            }
             if (ac) g_records[i].active = cJSON_IsTrue(ac);
             i++;
         }

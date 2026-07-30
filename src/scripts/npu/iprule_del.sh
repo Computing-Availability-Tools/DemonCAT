@@ -15,6 +15,7 @@ case "${DCAT_OP:-inject}" in
         orig_table=$($HCCN -ip_rule -g 2>/dev/null | grep "$ip" | grep -oE 'lookup [0-9]+' | awk '{print $2}')
         [ -n "$orig_table" ] && sidecar_save rNPU_iprule_del "$chip" "$orig_table"
         $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_iprule_del 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "deleted ip_rule $dir $ip on chip $chip (was table $orig_table)"
         ;;
     clean)

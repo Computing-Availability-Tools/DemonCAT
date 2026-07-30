@@ -22,6 +22,7 @@ case "${DCAT_OP:-inject}" in
         o_mask=$(echo "$cur" | grep -oE 'netmask [0-9.]+' | awk '{print $2}')
         [ -n "$o_addr" ] && printf 'address=%s\nnetmask=%s\n' "$o_addr" "$o_mask" > "$SIDECAR"
         $HCCN -ip -s address "$addr" netmask "$mask" || { echo "ip set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_ip_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied ip $addr/$mask on chip $chip (was $o_addr/$o_mask)"
         ;;
     clean)

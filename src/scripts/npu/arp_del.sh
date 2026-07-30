@@ -12,7 +12,7 @@ fault_present() { ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"; }
 case "${DCAT_OP:-inject}" in
     inject)
         npu_check_env
-        orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'mac [0-9a-f:]+' | awk '{print $2}')
+        orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'at [0-9a-f:]+' | awk '{print $2}')
         [ -n "$orig_mac" ] && sidecar_save rNPU_arp_del "$chip" "$orig_mac"
         $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
         echo "deleted arp $dev/$ip on chip $chip (was mac $orig_mac)"

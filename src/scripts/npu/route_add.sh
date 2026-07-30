@@ -3,12 +3,12 @@
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
 npu_validate_chip "$chip"
-addr=${DCAT_PARAM_ADDRESS:?missing required param: address}
-mask=${DCAT_PARAM_NETMASK:?missing required param: netmask}
-gw=${DCAT_PARAM_GATEWAY:?missing required param: gateway}
+addr=${DCAT_PARAM_ADDRESS:-}
+mask=${DCAT_PARAM_NETMASK:-}
+gw=${DCAT_PARAM_GATEWAY:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { $HCCN -route -g 2>/dev/null | grep -Fq "$addr"; }
+fault_present() { [ -n "$addr" ] && $HCCN -route -g 2>/dev/null | grep -Fq "$addr"; }
 
 case "${DCAT_OP:-inject}" in
     inject)

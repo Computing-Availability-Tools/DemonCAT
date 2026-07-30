@@ -3,8 +3,8 @@
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:?missing required param: chip}
 npu_validate_chip "$chip"
-dev=${DCAT_PARAM_DEV:?missing required param: dev}
-ip=${DCAT_PARAM_IP:?missing required param: ip}
+dev=${DCAT_PARAM_DEV:-}
+ip=${DCAT_PARAM_IP:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() { ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"; }

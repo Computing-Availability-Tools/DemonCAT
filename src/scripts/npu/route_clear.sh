@@ -6,8 +6,8 @@ npu_validate_chip "$chip"
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cnt=$($HCCN -route -g 2>/dev/null | grep -cE 'address|gateway')
-    [ "$cnt" -eq 0 ] 2>/dev/null || [ -z "$cnt" ]
+    cnt=$($HCCN -route -g 2>/dev/null | grep -cE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    [ "$cnt" -eq 0 ] 2>/dev/null
 }
 
 case "${DCAT_OP:-inject}" in

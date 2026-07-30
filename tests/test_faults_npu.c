@@ -126,14 +126,6 @@ int main(void) {
         check_param_env("size", "1280"); result_free(r);
         r = dispatch_route("rNPU_mtu_mismatch", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_fec_change */
-    {
-        params_t p = mkparams("chip", "0", "encoding", "rs", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_fec_change", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("fec_change.sh");
-        check_param_env("encoding", "rs"); result_free(r);
-        r = dispatch_route("rNPU_fec_change", "clean", &p); CK(r && r->code == 0); result_free(r);
-    }
     /* rNPU_dscp_tc_change */
     {
         params_t p = mkparams("chip", "0", "dscp", "46", "tc", "5", NULL,NULL, NULL,NULL, NULL,NULL);

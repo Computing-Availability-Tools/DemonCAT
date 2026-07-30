@@ -1,13 +1,14 @@
 # DemonCAT (dcat)
 
-> **DemonCAT**（简称 **dcat**）— Demon Computing Availability Tools
-> Linux 计算故障注入工具：统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
+> **DemonCAT**（简称 **dcat**）— Demon Computing Availability Tools，专注于计算故障注入工具。
 
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
+覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块，提供统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
+
+加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
 ## 依赖说明
 
-极简 Linux 环境（最小安装/容器）可能不自带以下工具。运行 `scripts/install_deps.sh` 一键安装。
+极简 Linux 环境（最小安装/容器）可能不自带以下工具。运行 `scripts/install_deps.sh` 一键安装编译和运行依赖。
 
 ### 编译依赖
 

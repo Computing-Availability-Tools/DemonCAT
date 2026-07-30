@@ -4,6 +4,32 @@
 
 ---
 
+## v0.1.1
+
+| 项目 | 说明 |
+|------|------|
+| 版本号 | v0.1.1 |
+| 发布时间 | 2026-07-30 |
+| 平台支持 | Linux (aarch64), WSL 兼容 |
+
+### 变更摘要
+
+**NPU 真机验证（Atlas 910B4）：**
+- 19 条 rNPU_* 故障全部通过真机 inject/clean/query 验证（device 2 & 5）
+- 4 种清理策略（reverse op / sidecar replay / set to max / cfg recovery）真机全覆盖
+- `link_down.sh` 修复：`hccn_tool -link -s down` 交互式 y/n 确认 → `echo y |` 自动应答
+- NPU inject 回读：fault_present() 条件化，inject 参数降为可选（query 场景）
+
+**故障目录调整（37 → 36 条）：**
+- 删除 `rNPU_fec_change`：910B4 硬件不支持 FEC 模式切换（`hccn_tool -fec` 返回 "This device does not support switching fec mode"）
+- NPU 模块从 20 条减至 19 条
+
+**合并：**
+- upstream PR #20: state record_id 64-bit 防 overflow + started_at 可读格式
+- upstream PR #21: rCPU_core_offline 校验核心实际状态
+
+---
+
 ## v0.1
 
 | 项目 | 说明 |

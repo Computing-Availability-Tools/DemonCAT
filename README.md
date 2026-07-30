@@ -80,7 +80,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
 
-## 当前故障目录（37 条）
+## 当前故障目录（36 条）
 
 ### CPU 模块（2 条）
 
@@ -119,7 +119,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rPROC_hang` | pid | — | 进程挂起（SIGSTOP） |
 | `rPROC_zstate` | pid | — | 僵尸进程（kill 目标进程 → 僵尸，clean 杀父进程回收，不可恢复） |
 
-### NPU 模块（20 条）
+### NPU 模块（19 条）
 
 | UID | 必填 | 可选 | 说明 |
 |---|---|---|---|
@@ -138,7 +138,6 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rNPU_iproute_del` | chip, ip, ip_mask, table | — | 删除 ip route（sidecar 回放） |
 | `rNPU_bw_limit` | chip, bw_limit | — | RoCE 带宽限速（设回 max） |
 | `rNPU_mtu_mismatch` | chip, size | — | RoCE MTU 变更（sidecar 回放） |
-| `rNPU_fec_change` | chip, encoding | — | RoCE FEC 编码变更（sidecar 回放） |
 | `rNPU_dscp_tc_change` | chip, dscp, tc | — | DSCP→TC 映射变更（sidecar 回放） |
 | `rNPU_prio_tc_change` | chip, map | — | Prio→TC 映射变更（sidecar 回放） |
 | `rNPU_pfc_change` | chip, bitmap | — | PFC 位图变更（sidecar 回放） |

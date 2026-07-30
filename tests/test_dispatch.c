@@ -32,7 +32,7 @@ int test_dispatch_inject_recoverable_writes_state(void) {
     ASSERT_STR_CONTAINS(r->json, "\"status\":\"ok\"");
     ASSERT_TRUE(r->code == 0);
     params_t q; params_init(&q); params_set(&q, "iface", "eth0");
-    int ids[DCAT_MAX_RECORDS]; int n = 0;
+    long long ids[DCAT_MAX_RECORDS]; int n = 0;
     n = state_find_by_params("rNET_delay", &q, ids, DCAT_MAX_RECORDS);
     ASSERT_INT_EQ(n, 1);
     result_free(r); return 0;

@@ -169,6 +169,36 @@ int test_dispatch_clean_state_lost_fallback(void) {
     return 0;
 }
 
+/* clean <uid> 无参（stateless）：脚本清 /tmp 工件后，必须 reconcile state——
+ * 把该 uid 全部活跃记录标 inactive，避免 query 残留幽灵记录。 */
+int test_dispatch_clean_no_params_marks_state_inactive(void) {
+    setup();
+    params_t p; params_init(&p); params_set(&p, "cores", "0");
+    dispatch_route("rCPU_overload", "inject", &p);
+    ASSERT_INT_EQ(state_list_active(), 1);
+    params_t empty; params_init(&empty);
+    result_t *r = dispatch_route("rCPU_overload", "clean", &empty);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 0);
+    ASSERT_INT_EQ(state_list_active(), 0);   /* reconcile 后无幽灵记录 */
+    result_free(r); return 0;
+}
+
+/* clean --all：fan-out 无参 clean 后，全部活跃记录应被 reconcile 为 inactive。 */
+int test_dispatch_clean_all_marks_state_inactive(void) {
+    setup();
+    params_t a; params_init(&a); params_set(&a, "cores", "0");
+    dispatch_route("rCPU_overload", "inject", &a);
+    params_t b; params_init(&b); params_set(&b, "iface", "eth0"); params_set(&b, "delay_ms", "100");
+    dispatch_route("rNET_delay", "inject", &b);
+    ASSERT_INT_EQ(state_list_active(), 2);
+    result_t *r = dispatch_clean_all();
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 0);
+    ASSERT_INT_EQ(state_list_active(), 0);
+    result_free(r); return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -178,7 +208,9 @@ int main(void) {
     RUN_TEST(test_dispatch_query_uid_no_params_ok);
     RUN_TEST(test_dispatch_uid_not_found);
     RUN_TEST(test_dispatch_clean_no_params_invokes_script);
+    RUN_TEST(test_dispatch_clean_no_params_marks_state_inactive);
     RUN_TEST(test_dispatch_clean_all_fans_out);
+    RUN_TEST(test_dispatch_clean_all_marks_state_inactive);
     RUN_TEST(test_dispatch_clean_state_lost_fallback);
     return TEST_MAIN_RETURN();
 }

@@ -67,6 +67,18 @@ const injection_record_t *state_find_by_id(int id) {
     return r;
 }
 
+int state_snapshot_by_uid(const char *uid, injection_record_t *out, int max) {
+    pthread_mutex_lock(&g_lock);
+    int n = 0;
+    for (int i = 0; i < DCAT_MAX_RECORDS && n < max; i++) {
+        if (g_records[i].active && strcmp(g_records[i].uid, uid) == 0) {
+            out[n++] = g_records[i];
+        }
+    }
+    pthread_mutex_unlock(&g_lock);
+    return n;
+}
+
 int state_list_active(void) {
     pthread_mutex_lock(&g_lock);
     int n = 0;

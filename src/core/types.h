@@ -28,10 +28,10 @@ typedef struct {
 
 /* injection_record_t: state 持有，固定数组 — 仅 inject,clean,query 故障创建 */
 typedef struct {
-    int  record_id;             /* 单调递增 */
+    long long record_id;        /* 单调递增 (64-bit, 防溢出) */
     char uid[64];
     params_t params;            /* inject 时用户提供的参数，用于 clean 按参数匹配 */
-    long started_at;
+    char started_at[20];         /* "YYYY-MM-DD HH:MM:SS" 本地时间 */
     int  active;                /* 1 活跃，0 已清理 */
 } injection_record_t;
 #define DCAT_MAX_RECORDS 32

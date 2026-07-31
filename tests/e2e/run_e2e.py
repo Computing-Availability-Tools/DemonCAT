@@ -345,8 +345,8 @@ def main():
             tracked_pids.append(int(ctx["pid"]))
         if "_watcher_pid" in ctx:
             tracked_pids.append(ctx["_watcher_pid"])
-        # P 类（非 root 拒绝）：inject 步降权到 nobody 验证拒绝；verify/query 仍 root
-        is_priv = fid.startswith("P-")
+        # SEC-P 类（非 root 拒绝）：inject 步降权到 nobody 验证拒绝；verify/query 仍 root
+        is_priv = fid.startswith("SEC-P")
 
         flow_pass = True
         for s in steps:
@@ -374,7 +374,7 @@ def main():
             results.append(res)
             if not ok:
                 flow_pass = False
-                if cat in ("I", "H") and not ok:
+                if cat == "SEC" and not ok:
                     findings.append(f"{s['id']} ({fid}): {s['expected_behavior']} → {detail}")
                 break  # flow 内一步失败则中止该 flow 后续
         # 后置清扫
@@ -519,20 +519,24 @@ def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt):
     sec.append(f"- 执行环境: root={ipt}, HOME 隔离={E2E_HOME}, 测试网卡={TEST_IFACE}\n")
     sec.append(f"- 结果: **PASS {counters['PASS']} / FAIL {counters['FAIL']} / SKIP {counters['SKIP']} / TOTAL {total}**，通过率 {rate}%\n\n")
     sec.append("### 10.1 分类统计\n\n| 分类 | 说明 | PASS | FAIL | SKIP |\n|---|---|---|---|---|")
-    desc = {"F": "功能基线(37故障 inject→verify→clean→query无幽灵)",
-            "B": "边界值(参数 valid/invalid)", "H": "主机安全(危险资源/路径穿越)",
-            "P": "权限边界(非root跑root故障,无半成品)", "I": "命令注入(良性载荷,验未执行)",
-            "R": "自愈/一键恢复(state删/坏/孤儿/幽灵/幂等)", "S": "状态一致性与幂等(clean×2/--force/query×2)",
-            "MISC": "list/help/错误码"}
+    desc = {"FUNC": "功能基线(37故障全链路+query<uid>+插件)",
+            "BOUND": "边界值(每参数类型系统覆盖)",
+            "SEC": "安全(命令注入+权限边界+主机安全+symlink)",
+            "STATE": "状态一致性/幂等(clean×2/--force/reinject/并发inject)",
+            "RES": "韧性/自愈(state丢失/损坏/孤儿/幽灵/clean--all/state表满)",
+            "CLI": "CLI接口(解析错误+帮助+退出码+--config)",
+            "CONC": "并发竞争(同时inject+clean/双进程写state)",
+            "INTER": "故障交互(多故障叠加/clean一个不影响其他)"}
     for cat in sorted(cat_stats):
         c = cat_stats[cat]
         sec.append(f"| {cat} | {desc.get(cat,'')} | {c['PASS']} | {c['FAIL']} | {c['SKIP']} |")
     fails = [r for r in results if r["result"] == "FAIL"]
     sec.append("\n### 10.2 覆盖说明\n")
     sec.append("- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。\n")
-    sec.append("- P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝（root 框架下仍测非 root 拒绝）。\n")
-    sec.append("- rCPU_core_offline：默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。\n")
-    sec.append("- H-3 写入边界：用 device=/tmp 安全路径（不污染 /etc）。\n")
+    sec.append("- SEC-P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝。\n")
+    sec.append("- FUNC 中 rCPU_core_offline 默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。\n")
+    sec.append("- SEC-H 写入边界：用 device=/tmp 安全路径（不污染 /etc）。\n")
+    sec.append("- CONC/INTER 为混沌工程新增维度：并发竞争与故障交互。\n")
     if findings:
         sec.append("\n### 10.3 安全/韧性发现\n")
         for x in findings:

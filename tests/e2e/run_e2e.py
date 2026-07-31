@@ -162,14 +162,16 @@ def check_precondition(cond, ctx):
             if iface_found:
                 ctx["iface"] = iface_found  # real_phy 优先于 dummy 作为 {iface}
         elif p == "noncritical_svc":
+            # 仅选可干净 stop/start 的简单服务；rsyslog/systemd-resolved 等 socket-activated
+            # 或半关键服务不选（stop 会告警且不真停 → 误失败）
             svc = ""
-            for s in ("chronyd", "cron", "ntp poll", "rsyslog"):
+            for s in ("cron", "chronyd", "ntpd"):
                 rc, _ = sh(f"systemctl is-active {s} >/dev/null 2>&1")
                 if rc == 0:
                     svc = s
                     break
             if not svc:
-                return False, "无可测非关键服务(chronyd/cron 未运行)"
+                return False, "无可测非关键服务(cron/chronyd/ntpd 未运行)"
             ctx["svc"] = svc
         else:
             return False, f"未知 precondition: {p}"

@@ -153,6 +153,53 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | 2 | 解析错误（命令格式不合法） |
 | 3 | 预检拒绝（参数缺失/不合法/op 不支持） |
 | 4 | 未找到（uid 不在目录中） |
+| 5 | 重注入拒绝（同资源已注入，需 `--force`） |
+
+## E2E 测试架构
+
+E2E 测试采用 **CSV 驱动 + 8 类分类** 的混沌工程测试矩阵，用例由 `tests/e2e/gen_cases.py` 自动生成，`tests/e2e/run_e2e.py` 串行执行。
+
+### 8 类分类
+
+| 分类 | 前缀 | 覆盖内容 | 混沌工程维度 |
+|---|---|---|---|
+| **FUNC** | `FUNC-` | 37 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
+| **BOUND** | `BOUND-` | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法） | 边界值 |
+| **SEC** | `SEC-` | 命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击 | 安全 |
+| **STATE** | `STATE-` | clean×2/--force/reinject 拒绝/query 幂等/并发 inject 同/不同资源 | 状态一致性 |
+| **RES** | `RES-` | state 丢失/损坏/孤儿/幽灵/clean --all 幂等/state 表满 | 韧性/自愈 |
+| **CLI** | `CLI-` | 解析错误 + 帮助 + 退出码 + --config + 未知 uid | CLI 接口 |
+| **CONC** | `CONC-` | 同时 inject+clean / 双进程写 state / clean --all + inject | 并发竞争 |
+| **INTER** | `INTER-` | 多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify | 故障交互 |
+
+### 运行 E2E 测试
+
+```bash
+# 生成用例（329 条）
+python3 tests/e2e/gen_cases.py
+
+# 执行（需要 root 权限以覆盖全部用例）
+sudo python3 tests/e2e/run_e2e.py
+
+# 只跑指定分类
+sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
+```
+
+### 用例统计
+
+| 分类 | 用例数（约） | 说明 |
+|---|---|---|
+| FUNC | ~150 | 37 故障 × 3-4 步 + query\<uid\> × 5 + 插件 × 4 |
+| BOUND | ~40 | 每参数类型 2-4 条边界 |
+| SEC | ~45 | inject × 21 + clean × 9 + 权限 × 4 + 主机安全 × 5 + symlink × 2 |
+| STATE | ~25 | 幂等性 × 5 + 并发 inject × 6 |
+| RES | ~20 | 韧性场景 × 5 flow |
+| CLI | ~25 | 负面 CLI × 12 + 帮助 × 5 + config × 2 + list × 1 |
+| CONC | ~9 | 并发场景 × 3 flow |
+| INTER | ~15 | 故障交互 × 3 flow |
+| **总计** | **~329** | |
+
+详细测试设计见 [DESIGN.md §10](DESIGN.md) 和 [tests/e2e/README.md](tests/e2e/README.md)。
 
 ## 技术栈
 

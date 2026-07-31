@@ -1,7 +1,7 @@
 # DemonCAT 测试报告
 
 > **项目**: DemonCAT (dcat) — Linux 计算故障注入工具
-> **版本**: v0.1.1
+> **版本**: v0.1.0
 > **日期**: 2026-07-30
 > **测试执行**: CTest 自动化 + Atlas 910B4 真机手动验证
 
@@ -11,7 +11,7 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1.1 核心框架 + 36 条故障的完整性和正确性：
+验证 DemonCAT v0.1.0 核心框架 + 36 条故障的完整性和正确性：
 
 - 核心框架 9 模块 + 插件架构功能正确
 - 全部 36 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
@@ -247,7 +247,7 @@
 | rNET_degrade 不可测 | rNET_degrade | enp125s0f1 处 NO-CARRIER/down，ethtool 无法 advertise 速率 | 仅此环境 | N/A |
 | rNPU_route_clear 不生效 | rNPU_route_clear | `hccn_tool -route -c` 返回 success 但未清空（驱动行为） | 910B4 | `-cfg recovery` |
 | rNPU_prio_tc/pfc 不可验证 | rNPU_prio_tc_change, rNPU_pfc_change | link DOWN 导致 `-g` 失败 (exit 22)，`-s` 虽成功但值不可读 | 需 link UP 环境 | `-cfg recovery` |
-| rNPU_link_down 基线 DOWN | rNPU_link_down | 无对端设备，link 本已 DOWN，inject 为幂等 no-op | 需 link UP 环境 | `-cfg recovery` |
+| rNPU_link_down 基线 DOWN | rNPU_link_down | **RoCE 网口未连接交换机**，link 本已 DOWN，inject 为幂等 no-op，`-cfg recovery` 无法拉起物理链路 | 需 link UP 环境 | `npu-smi set -t reset` |
 
 > **NPU 兜底恢复**: 所有 NPU 故障可通过 `npu-smi set -t reset -i <id>` 复位芯片恢复原始状态。本次测试全程未需使用。
 
@@ -269,7 +269,7 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.1 全部 **23** 个 CTest 测试通过，零失败。**36 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.0 全部 **23** 个 CTest 测试通过，零失败。**36 条故障真机手动测试全覆盖**：
 
 - **31 条 PASS** — inject/query/clean 全流程验证通过
 - **3 条 PASS（修复后）** — 发现 3 个 Bug 并修复后通过
@@ -279,7 +279,7 @@ DemonCAT v0.1.1 全部 **23** 个 CTest 测试通过，零失败。**36 条故�
 
 **3 个 Bug 已全部修复并验证通过**，23 个 CTest 测试无回归。
 
-**测试结论：代码逻辑正确，v0.1.1 可用。已知限制均为环境/硬件约束，非代码缺陷。**
+**测试结论：代码逻辑正确，v0.1.0 可用。已知限制均为环境/硬件约束，非代码缺陷。**
 
 ---
 
@@ -475,3 +475,111 @@ DemonCAT v0.1.1 全部 **23** 个 CTest 测试通过，零失败。**36 条故�
 | E2E-108 | F-rNPU_route_clear | inject | exit 1 != 0 |
 | E2E-111 | F-rNPU_route_del | inject | exit 1 != 0 |
 | E2E-223 | Q-2 | query_active | out contains '"confirmed":true' |
+
+
+## 10. E2E 测试（CSV 驱动，20260731_094706）
+
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`。
+
+
+- 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
+
+- 结果: **PASS 22 / FAIL 21 / SKIP 0 / TOTAL 43**，通过率 51%
+
+
+### 10.1 分类统计
+
+| 分类 | 说明 | PASS | FAIL | SKIP |
+|---|---|---|---|---|
+| FUNC | 功能基线(37故障全链路+query<uid>+插件) | 22 | 21 | 0 |
+
+### 10.2 覆盖说明
+
+- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。
+
+- SEC-P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝。
+
+- FUNC 中 rCPU_core_offline 默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。
+
+- SEC-H 写入边界：用 device=/tmp 安全路径（不污染 /etc）。
+
+- CONC/INTER 为混沌工程新增维度：并发竞争与故障交互。
+
+
+### 10.4 失败用例
+
+| id | flow | phase | detail |
+|---|---|---|---|
+| E2E-015 | FUNC-rNET_degrade | inject | regex /Speed: 10[^0-9]/ |
+| E2E-054 | FUNC-rNPU_arp_del | inject | exit 1 != 0 |
+| E2E-057 | FUNC-rNPU_arp_poison | inject | exit 1 != 0 |
+| E2E-060 | FUNC-rNPU_bw_limit | inject | exit 1 != 0 |
+| E2E-063 | FUNC-rNPU_dscp_tc_change | inject | exit 1 != 0 |
+| E2E-066 | FUNC-rNPU_fec_change | inject | exit 4 != 0 |
+| E2E-069 | FUNC-rNPU_gw_change | inject | exit 1 != 0 |
+| E2E-072 | FUNC-rNPU_ip_change | inject | exit 1 != 0 |
+| E2E-075 | FUNC-rNPU_iproute_add | inject | exit 1 != 0 |
+| E2E-078 | FUNC-rNPU_iproute_del | inject | exit 1 != 0 |
+| E2E-081 | FUNC-rNPU_iprule_add | inject | exit 1 != 0 |
+| E2E-084 | FUNC-rNPU_iprule_del | inject | exit 1 != 0 |
+| E2E-087 | FUNC-rNPU_link_down | inject | exit 1 != 0 |
+| E2E-090 | FUNC-rNPU_mtu_mismatch | inject | exit 1 != 0 |
+| E2E-093 | FUNC-rNPU_netdetect_change | inject | exit 1 != 0 |
+| E2E-096 | FUNC-rNPU_pfc_change | inject | exit 1 != 0 |
+| E2E-099 | FUNC-rNPU_prio_tc_change | inject | exit 1 != 0 |
+| E2E-102 | FUNC-rNPU_roce_port_change | inject | exit 1 != 0 |
+| E2E-105 | FUNC-rNPU_route_add | inject | exit 1 != 0 |
+| E2E-108 | FUNC-rNPU_route_clear | inject | exit 1 != 0 |
+| E2E-111 | FUNC-rNPU_route_del | inject | exit 1 != 0 |
+
+
+## 10. E2E 测试（CSV 驱动，20260731_094916）
+
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`。
+
+
+- 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
+
+- 结果: **PASS 26 / FAIL 17 / SKIP 0 / TOTAL 43**，通过率 60%
+
+
+### 10.1 分类统计
+
+| 分类 | 说明 | PASS | FAIL | SKIP |
+|---|---|---|---|---|
+| FUNC | 功能基线(37故障全链路+query<uid>+插件) | 26 | 17 | 0 |
+
+### 10.2 覆盖说明
+
+- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。
+
+- SEC-P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝。
+
+- FUNC 中 rCPU_core_offline 默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。
+
+- SEC-H 写入边界：用 device=/tmp 安全路径（不污染 /etc）。
+
+- CONC/INTER 为混沌工程新增维度：并发竞争与故障交互。
+
+
+### 10.4 失败用例
+
+| id | flow | phase | detail |
+|---|---|---|---|
+| E2E-015 | FUNC-rNET_degrade | inject | regex /Speed: 10[^0-9]/ |
+| E2E-054 | FUNC-rNPU_arp_del | inject | exit 1 != 0 |
+| E2E-060 | FUNC-rNPU_bw_limit | inject | contains '10000' |
+| E2E-063 | FUNC-rNPU_dscp_tc_change | inject | exit 1 != 0 |
+| E2E-066 | FUNC-rNPU_fec_change | inject | exit 4 != 0 |
+| E2E-069 | FUNC-rNPU_gw_change | inject | exit 1 != 0 |
+| E2E-075 | FUNC-rNPU_iproute_add | inject | exit 1 != 0 |
+| E2E-078 | FUNC-rNPU_iproute_del | inject | exit 1 != 0 |
+| E2E-084 | FUNC-rNPU_iprule_del | inject | exit 1 != 0 |
+| E2E-087 | FUNC-rNPU_link_down | inject | exit 1 != 0 |
+| E2E-090 | FUNC-rNPU_mtu_mismatch | inject | contains '1280' |
+| E2E-096 | FUNC-rNPU_pfc_change | inject | exit 1 != 0 |
+| E2E-099 | FUNC-rNPU_prio_tc_change | inject | exit 1 != 0 |
+| E2E-102 | FUNC-rNPU_roce_port_change | inject | exit 1 != 0 |
+| E2E-105 | FUNC-rNPU_route_add | inject | exit 1 != 0 |
+| E2E-108 | FUNC-rNPU_route_clear | inject | exit 1 != 0 |
+| E2E-111 | FUNC-rNPU_route_del | inject | exit 1 != 0 |

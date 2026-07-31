@@ -4,13 +4,13 @@
 
 ---
 
-## v0.1.1
+## v0.1.0
 
 | 项目 | 说明 |
 |------|------|
-| 版本号 | v0.1.1 |
-| 发布时间 | 2026-07-30 |
-| 平台支持 | Linux (aarch64), WSL 兼容 |
+| 版本号 | v0.1.0 |
+| 发布时间 | 2026-07-31 |
+| 平台支持 | Linux (aarch64 / x86_64), WSL 兼容 |
 
 ### 变更摘要
 
@@ -19,14 +19,36 @@
 - 4 种清理策略（reverse op / sidecar replay / set to max / cfg recovery）真机全覆盖
 - `link_down.sh` 修复：`hccn_tool -link -s down` 交互式 y/n 确认 → `echo y |` 自动应答
 - NPU inject 回读：fault_present() 条件化，inject 参数降为可选（query 场景）
+- `prio_tc` / `pfc` inject 前检查 link 状态，link DOWN 时拒绝注入避免故障卡死
 
 **故障目录调整（37 → 36 条）：**
 - 删除 `rNPU_fec_change`：910B4 硬件不支持 FEC 模式切换（`hccn_tool -fec` 返回 "This device does not support switching fec mode"）
 - NPU 模块从 20 条减至 19 条
 
+**NPU query 增强：**
+- `npu_foreach_chip`：无参 query 遍历所有 NPU device（与 CPU/网络模块行为一致）
+- 9 个 fault_present 加 sidecar 回退：无参 query 时用 sidecar 存在性判断故障状态
+- 4 个 add 类故障（arp_poison/route_add/iprule_add/iproute_add）inject 加 sidecar_save，clean 加 sidecar_clear
+- query 输出加 `FAULT CONFIRMED` / `FAULT NOT ACTIVE` 文本提示
+- `confirmed` 字段修复：echo 退出码恒 0 导致 dispatch.c 误判 → 加 `false` 让 NOT ACTIVE 返回 1
+
+**Bug 修复：**
+- `net_delay.sh` / `net_jitter.sh`：query 正则 `[0-9]+` → `[0-9.]+` 匹配 tc 小数输出
+- `ip_change.sh`：fault_present grep 子串匹配 → 精确 IP 值比较；静态 SIDECAR 路径 → 动态 SIDECAR_FN()
+- `bw_limit.sh`：clean 用未定义变量 `$MAX_BW` → 改为 sidecar 的 `$orig`
+
 **合并：**
 - upstream PR #20: state record_id 64-bit 防 overflow + started_at 可读格式
 - upstream PR #21: rCPU_core_offline 校验核心实际状态
+- upstream PR #22-26: clean --all / 无参 clean / state reconcile / e2e 测试框架
+
+### 已知限制
+
+- **RoCE 链路需物理连接**：`rNPU_link_down` / `rNPU_prio_tc_change` / `rNPU_pfc_change` 在 RoCE 网口未连接交换机时无法完整验证。link DOWN 时 `-cfg recovery` 不会拉起物理链路；`prio_tc` / `pfc` 的 `-g` 读取依赖 link UP。需 link UP 环境做完整 down→up 循环验证。
+- `rNPU_route_clear`：`hccn_tool -route -c` 返回 success 但路由表未清空（910B4 驱动限制）
+- `rNET_degrade`：NIC NO-CARRIER 时 ethtool 无法 advertise 速率
+- NPU 19 条故障需 Atlas 物理机 + `hccn_tool` 真机验证
+- 网络 11 条故障依赖 root 权限（`tc` / `iptables` / `ip` / `ethtool` / `systemctl`）
 
 ---
 
@@ -89,7 +111,7 @@
 - 用户手册 `docs/user_manual.md`（37 条故障 × 7 字段，含目录）
 - 手动测试指南 `docs/manual_test_guide.md`
 - SPEC（技术规格）+ DESIGN（架构设计）
-- Release Notes + test_report
+- Release Notes + docs/test_report.md
 
 **构建：**
 - CMake ≥ 3.10，C11（`_POSIX_C_SOURCE=200809L`），`-Wall -Wextra -Werror`

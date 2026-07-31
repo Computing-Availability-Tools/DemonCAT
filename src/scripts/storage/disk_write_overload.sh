@@ -62,15 +62,21 @@ case "${DCAT_OP:-inject}" in
             dev=$(echo "$dev_clean" | tr '_' '/')
             PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
             if [ -f "$PIDFILE" ]; then
-                for pid in $(cat "$PIDFILE"); do kill "$pid" 2>/dev/null; done
+                for pid in $(cat "$PIDFILE"); do
+                    kill "$pid" 2>/dev/null
+                    kill -9 "$pid" 2>/dev/null
+                done
                 rm -f "$PIDFILE"
+                sleep 0.2
+                pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.stress" 2>/dev/null
                 [ -d "$dev" ] && rm -f "${dev}/dcat.stress."* 2>/dev/null
                 cleaned=1
             fi
         done
+        pkill -9 -f "dd if=/dev/zero of=/tmp/dcat.write" 2>/dev/null
         rm -f /tmp/dcat.write.* 2>/dev/null
-        if [ "$cleaned" = 1 ]; then echo "cleaned disk write overload on [$dev_cleans]";
-        else echo "cleaned disk write overload (no active injection)"; fi
+        if [ "$cleaned" = 1 ]; then echo "cleaned";
+        else echo "cleaned (no active injection)"; fi
         ;;
 
     query)

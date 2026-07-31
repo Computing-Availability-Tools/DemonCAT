@@ -24,6 +24,7 @@ case "${DCAT_OP:-inject}" in
         orig=$(bw_cur)
         [ -n "$orig" ] && sidecar_save rNPU_bw_limit "$chip" "$orig"
         $HCCN -shaping -s bw_limit "$bw" || { echo "shaping set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_bw_limit 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied bw_limit $bw on chip $chip (was $orig)"
         ;;
     clean)

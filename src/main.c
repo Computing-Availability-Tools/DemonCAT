@@ -79,7 +79,16 @@ int main(int argc, char **argv) {
     }
     plugin_load_dir(plugindir);
 
-    result_t *r = dispatch_route_force(pc.uid, pc.op, &pc.params, pc.force);
+    result_t *r;
+    if (pc.all) {
+        if (!pc.op || strcmp(pc.op, "clean") != 0) {
+            printf("{\"status\":\"error\",\"op\":\"parse\",\"error\":{\"code\":2,\"message\":\"--all only valid with clean\"}}\n");
+            return 2;
+        }
+        r = dispatch_clean_all();
+    } else {
+        r = dispatch_route_force(pc.uid, pc.op, &pc.params, pc.force);
+    }
     output_print(r);
     int code = r ? r->code : 1;
     result_free(r);

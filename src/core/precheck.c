@@ -85,8 +85,9 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
     const char *op_required = NULL;
     if (strcmp(op, "inject") == 0)      op_required = f->inject_required;
     else if (strcmp(op, "clean") == 0)  op_required = f->clean_required;
-    /* query 不强制必填参数：无参时脚本自行展示全部（如全核/全网卡），有参则按参过滤 */
-    if (op_required) {
+    /* query 不强制必填参数：无参时脚本自行展示全部（如全核/全网卡），有参则按参过滤。
+     * clean 零参数 = clean-all-for-uid 模式（脚本自行 glob /tmp 工件），亦跳过 required。 */
+    if (op_required && !(strcmp(op, "clean") == 0 && params->count == 0)) {
         const char *missing = first_missing_required(op_required, params);
         if (missing) {
             char msg[256];

@@ -12,11 +12,25 @@ case "${DCAT_OP:-inject}" in
         echo "stopped pid $pid"
         ;;
     clean)
-        pid="${DCAT_PARAM_PID:-$(cat "$SIDECAR" 2>/dev/null || echo "")}"
-        [ -n "$pid" ] || { echo "no pid to continue" >&2; exit 1; }
-        kill -CONT "$pid" 2>/dev/null
-        rm -f "/tmp/dcat-rPROC_hang-${pid}.sidecar"
-        echo "continued pid $pid"
+        if [ -n "$DCAT_PARAM_PID" ]; then
+            pids="$DCAT_PARAM_PID"
+        else
+            pids=""
+            for sc in /tmp/dcat-rPROC_hang-*.sidecar; do
+                [ -f "$sc" ] || continue
+                v=${sc##*/dcat-rPROC_hang-}; v=${v%.sidecar}
+                pids="$pids $v"
+            done
+        fi
+        cleaned=0
+        for pid in $pids; do
+            [ -n "$pid" ] || continue
+            kill -CONT "$pid" 2>/dev/null
+            rm -f "/tmp/dcat-rPROC_hang-${pid}.sidecar"
+            cleaned=1
+        done
+        if [ "$cleaned" = 1 ]; then echo "continued [$pids]";
+        else echo "continued (no active injection)"; fi
         ;;
     query)
         pids=""

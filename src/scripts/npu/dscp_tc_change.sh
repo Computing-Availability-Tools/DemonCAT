@@ -8,6 +8,7 @@ tc=${DCAT_PARAM_TC:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
+    [ -n "${dscp:-}" ] || { [ -f "/tmp/dcat-rNPU_dscp_tc_change-$chip.bak" ]; return $?; }
     cur=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | awk -v d="$dscp" '$1==d {print $2}')
     orig=$(sidecar_load rNPU_dscp_tc_change "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]

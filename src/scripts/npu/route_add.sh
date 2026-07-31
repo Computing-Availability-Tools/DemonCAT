@@ -8,7 +8,10 @@ mask=${DCAT_PARAM_NETMASK:-}
 gw=${DCAT_PARAM_GATEWAY:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { [ -n "$addr" ] && $HCCN -route -g 2>/dev/null | grep -Fq "$addr"; }
+fault_present() {
+    if [ -n "$addr" ]; then $HCCN -route -g 2>/dev/null | grep -Fq "$addr"
+    else [ -f "/tmp/dcat-rNPU_route_add-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -18,6 +21,7 @@ case "${DCAT_OP:-inject}" in
         : ${gw:?missing required param: gateway}
         npu_check_env
         $HCCN -route -a address "$addr" netmask "$mask" gateway "$gw" || { echo "route add failed" >&2; exit 1; }
+        sidecar_save rNPU_route_add "$chip" "$addr"
         echo "added route $addr/$mask via $gw on chip $chip"
         ;;
     clean)
@@ -25,6 +29,7 @@ case "${DCAT_OP:-inject}" in
             echo "no active injection (chip required for route clean)"
         elif fault_present; then
             $HCCN -route -d address "$addr" netmask "$mask" || { echo "route del failed" >&2; exit 1; }
+            sidecar_clear rNPU_route_add "$chip"
             echo "removed route $addr/$mask on chip $chip"
         else echo "route not present, no-op"; fi
         ;;

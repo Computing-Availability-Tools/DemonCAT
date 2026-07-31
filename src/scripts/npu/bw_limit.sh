@@ -32,5 +32,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored bw_limit to $orig on chip $chip"
         else echo "bw_limit already at original, no-op"; fi
         ;;
-    query) $HCCN -shaping -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -shaping -g; fault_present' ;;
 esac

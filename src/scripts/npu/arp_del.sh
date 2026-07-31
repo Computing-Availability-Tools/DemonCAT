@@ -30,5 +30,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored arp $dev/$ip -> $orig_mac on chip $chip"
         else echo "arp entry already present, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -arp -g; fault_present' ;;
+    query) npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
 esac

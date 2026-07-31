@@ -38,5 +38,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored netdetect to $orig on chip $chip"
         else echo "netdetect already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -netdetect -g; fault_present' ;;
+    query) npu_foreach_chip '$HCCN -netdetect -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
 esac

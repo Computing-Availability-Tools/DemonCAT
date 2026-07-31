@@ -17,6 +17,7 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         : ${bitmap:?missing required param: bitmap}
         npu_check_env
+        $HCCN -link -g 2>/dev/null | grep -qi 'up' || { echo "link is DOWN, pfc requires link UP" >&2; exit 1; }
         orig=$($HCCN -pfc -g 2>/dev/null | grep -oE 'bitmap [0-9,]+' | grep -oE '[0-9,]+')
         [ -n "$orig" ] && sidecar_save rNPU_pfc_change "$chip" "$orig"
         $HCCN -pfc -s bitmap "$bitmap" || { echo "pfc set failed" >&2; exit 1; }
@@ -38,5 +39,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored pfc bitmap to $orig on chip $chip"
         else echo "pfc already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -pfc -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
+    query) npu_foreach_chip '$HCCN -pfc -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

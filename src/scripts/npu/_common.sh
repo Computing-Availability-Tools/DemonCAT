@@ -20,18 +20,21 @@ npu_list_chips() {
 }
 
 # Execute callback for each chip: chip has value → once; chip empty → all devices
+# Exit code: 0 if any chip confirms fault, 1 if none (for dispatch confirmed flag)
 # Usage: npu_foreach_chip 'command with $HCCN'
 npu_foreach_chip() {
     if [ -n "$chip" ]; then
         eval "$1"
     else
+        _rc=1
         for c in $(npu_list_chips); do
             echo "=== chip $c ==="
             _oc=$chip; _oh=$HCCN
             chip=$c; HCCN="hccn_tool -i $c"
-            eval "$1"
+            eval "$1" && _rc=0
             chip=$_oc; HCCN=$_oh
         done
+        return $_rc
     fi
 }
 

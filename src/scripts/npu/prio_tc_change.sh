@@ -2,7 +2,7 @@
 # rNPU_prio_tc_change: prio-to-TC mapping change. Clean = restore original 8-csv map.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip"
 map=${DCAT_PARAM_MAP:-}
 HCCN="hccn_tool -i $chip"
 
@@ -14,6 +14,8 @@ fault_present() {
 
 case "${DCAT_OP:-inject}" in
     inject)
+        : ${chip:?missing required param: chip}
+        : ${map:?missing required param: map}
         npu_check_env
         orig=$($HCCN -prio_tc -g 2>/dev/null | grep -oE 'map [0-9,]+' | grep -oE '[0-9,]+')
         [ -n "$orig" ] && sidecar_save rNPU_prio_tc_change "$chip" "$orig"
@@ -21,7 +23,15 @@ case "${DCAT_OP:-inject}" in
         echo "applied prio_tc map $map on chip $chip (was $orig)"
         ;;
     clean)
-        if fault_present; then
+        if [ -z "$chip" ]; then
+            cleaned=0
+            for bak in /tmp/dcat-rNPU_prio_tc_change-*.bak; do
+                [ -f "$bak" ] || continue
+                c=${bak##*/dcat-rNPU_prio_tc_change-}; c=${c%.bak}
+                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+            done
+            [ "$cleaned" = 1 ] && echo "restored prio_tc map (all chips)" || echo "restored prio_tc map (no active injection)"
+        elif fault_present; then
             orig=$(sidecar_load rNPU_prio_tc_change "$chip"); orig=${orig:-0,0,0,0,0,0,0,0}
             $HCCN -prio_tc -s map "$orig" || { echo "prio_tc restore failed" >&2; exit 1; }
             sidecar_clear rNPU_prio_tc_change "$chip"

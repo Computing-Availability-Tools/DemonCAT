@@ -2,7 +2,7 @@
 # rNPU_bw_limit: RoCE shaping bandwidth limit. Clean = restore original bw_limit from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip"
 bw=${DCAT_PARAM_BW_LIMIT:-}
 HCCN="hccn_tool -i $chip"
 
@@ -18,6 +18,8 @@ fault_present() {
 
 case "${DCAT_OP:-inject}" in
     inject)
+        : ${chip:?missing required param: chip}
+        : ${bw:?missing required param: bw_limit}
         npu_check_env
         orig=$(bw_cur)
         [ -n "$orig" ] && sidecar_save rNPU_bw_limit "$chip" "$orig"
@@ -25,9 +27,10 @@ case "${DCAT_OP:-inject}" in
         echo "applied bw_limit $bw on chip $chip (was $orig)"
         ;;
     clean)
-        if fault_present; then
-            orig=$(sidecar_load rNPU_bw_limit "$chip"); orig=${orig:-$(bw_max)}
-            $HCCN -shaping -s bw_limit "$orig" || { echo "shaping restore failed" >&2; exit 1; }
+        if [ -z "$chip" ]; then
+            echo "no active injection (chip required for bw_limit clean)"
+        elif fault_present; then
+            $HCCN -shaping -s bw_limit "$MAX_BW" || { echo "shaping restore failed" >&2; exit 1; }
             sidecar_clear rNPU_bw_limit "$chip"
             echo "restored bw_limit to $orig on chip $chip"
         else echo "bw_limit already at original, no-op"; fi

@@ -20,18 +20,34 @@ case "${DCAT_OP:-inject}" in
         echo "applied tcp DROP on port $port ($dir)"
         ;;
     clean)
-        port="${DCAT_PARAM_PORT:-}"
-        SIDECAR="/tmp/dcat-rNET_tcp_loss-${port}.rule"
-        rest=$(cat "$SIDECAR" 2>/dev/null || echo "$port both")
-        dir=${DCAT_PARAM_DIRECTION:-${rest##* }}
-        if [ "$dir" = "in" ] || [ "$dir" = "both" ]; then
-            iptables -D INPUT -p tcp --dport "$port" -j DROP 2>/dev/null
+        if [ -n "$DCAT_PARAM_PORT" ]; then
+            ports="$DCAT_PARAM_PORT"
+        else
+            ports=""
+            for rf in /tmp/dcat-rNET_tcp_loss-*.rule; do
+                [ -f "$rf" ] || continue
+                p=${rf##*/dcat-rNET_tcp_loss-}; p=${p%.rule}
+                ports="$ports $p"
+            done
         fi
-        if [ "$dir" = "out" ] || [ "$dir" = "both" ]; then
-            iptables -D OUTPUT -p tcp --sport "$port" -j DROP 2>/dev/null
-        fi
-        rm -f "$SIDECAR"
-        echo "cleaned tcp DROP on port $port ($dir)"
+        cleaned=0
+        for port in $ports; do
+            [ -n "$port" ] || continue
+            RF="/tmp/dcat-rNET_tcp_loss-${port}.rule"
+            rest=$(cat "$RF" 2>/dev/null || echo "$port both")
+            dir=${DCAT_PARAM_DIRECTION:-${rest##* }}
+            dir=${dir:-both}
+            if [ "$dir" = "in" ] || [ "$dir" = "both" ]; then
+                iptables -D INPUT -p tcp --dport "$port" -j DROP 2>/dev/null
+            fi
+            if [ "$dir" = "out" ] || [ "$dir" = "both" ]; then
+                iptables -D OUTPUT -p tcp --sport "$port" -j DROP 2>/dev/null
+            fi
+            rm -f "$RF"
+            cleaned=1
+        done
+        if [ "$cleaned" = 1 ]; then echo "cleaned tcp DROP on [$ports]";
+        else echo "cleaned tcp DROP (no active injection)"; fi
         ;;
     query)
         if [ -n "$DCAT_PARAM_PORT" ]; then

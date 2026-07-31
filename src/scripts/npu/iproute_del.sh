@@ -2,7 +2,7 @@
 # rNPU_iproute_del: delete ip route. Clean = re-add with original via/dev from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip"
 ip=${DCAT_PARAM_IP:-}
 mask=${DCAT_PARAM_IP_MASK:-}
 table=${DCAT_PARAM_TABLE:-}
@@ -13,6 +13,10 @@ fault_present() { ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$i
 
 case "${DCAT_OP:-inject}" in
     inject)
+        : ${chip:?missing required param: chip}
+        : ${ip:?missing required param: ip}
+        : ${mask:?missing required param: ip_mask}
+        : ${table:?missing required param: table}
         npu_check_env
         cur=$($HCCN -ip_route -g table "$table" 2>/dev/null | grep "$ip")
         o_via=$(echo "$cur" | grep -oE 'via [0-9.]+' | awk '{print $2}')
@@ -22,7 +26,9 @@ case "${DCAT_OP:-inject}" in
         echo "deleted ip_route $ip/$mask table $table on chip $chip (was via $o_via dev $o_dev)"
         ;;
     clean)
-        if fault_present; then
+        if [ -z "$chip" ]; then
+            echo "no active injection (chip required for ip_route clean)"
+        elif fault_present; then
             . "$SIDECAR" 2>/dev/null
             : ${via:=0.0.0.0}; : ${dev:=eth0}
             $HCCN -ip_route -a ip "$ip" ip_mask "$mask" via "$via" dev "$dev" table "$table" || { echo "ip_route re-add failed" >&2; exit 1; }

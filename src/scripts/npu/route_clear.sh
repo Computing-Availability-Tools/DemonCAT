@@ -2,7 +2,7 @@
 # rNPU_route_clear: clear route table. Clean = -cfg recovery.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip"
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
@@ -12,12 +12,15 @@ fault_present() {
 
 case "${DCAT_OP:-inject}" in
     inject)
+        : ${chip:?missing required param: chip}
         npu_check_env
         $HCCN -route -c || { echo "route clear failed" >&2; exit 1; }
         echo "cleared route table on chip $chip"
         ;;
     clean)
-        if fault_present; then
+        if [ -z "$chip" ]; then
+            echo "no active injection (chip required for route clean)"
+        elif fault_present; then
             $HCCN -cfg recovery || { echo "cfg recovery failed" >&2; exit 1; }
             echo "restored routes via cfg recovery on chip $chip"
         else echo "routes already present, no-op"; fi

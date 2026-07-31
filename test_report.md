@@ -275,3 +275,39 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 *测试执行时间: 2026-07-25（v0.1 基线）/ 2026-07-30（stateless clean 增量）*
 *测试执行人: Automated (CTest) + Manual*
 *总耗时: 13.85 秒 (v0.1 CTest) / 21.22 秒 (增量后 CTest 23 项) + 手动验证*
+
+
+
+## 10. E2E 测试（CSV 驱动，20260731_115918）
+
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`。
+
+
+- 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
+
+- 结果: **PASS 62 / FAIL 0 / SKIP 79 / TOTAL 141**，通过率 43%
+
+
+### 10.1 分类统计
+
+| 分类 | 说明 | PASS | FAIL | SKIP |
+|---|---|---|---|---|
+| B | 边界值(参数 valid/invalid) | 17 | 0 | 0 |
+| F | 功能基线(37故障 inject→verify→clean→query无幽灵) | 16 | 0 | 21 |
+| H | 主机安全(危险资源/路径穿越) | 3 | 0 | 1 |
+| I | 命令注入(良性载荷,验未执行) | 12 | 0 | 9 |
+| MISC | list/help/错误码 | 4 | 0 | 0 |
+| P | 权限边界(非root跑root故障,无半成品) | 0 | 0 | 3 |
+| R | 自愈/一键恢复(state删/坏/孤儿/幽灵/幂等) | 5 | 0 | 0 |
+| S | 状态一致性与幂等(clean×2/--force/query×2) | 5 | 0 | 0 |
+
+### 10.2 覆盖说明
+
+- 非root部分(CI/WSL 可跑): F非root + B + H + I + P(非root断言) + R + S 全部实跑。
+
+- root 部分(tc/iptables/sysfs/ip): 非 root 自动 SKIP；`sudo python3 tests/e2e/run_e2e.py` 实跑。
+
+- NPU(20): 无 hccn_tool 自动 SKIP，需 Atlas NPU 物理机。
+
+- rCPU_core_offline: 默认 SKIP，`DCAT_E2E_ALLOW_CPU_OFFLINE=1` 才实跑（瞬态下线真实核，clean+清扫恢复）。
+

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rNPU_iprule_del: delete ip rule. Clean = re-add with original table from sidecar.
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+chip=${DCAT_PARAM_CHIP:-}
 npu_validate_chip "$chip"
 dir=${DCAT_PARAM_DIR:-}
 ip=${DCAT_PARAM_IP:-}

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rNPU_ip_change: RoCE IP change. Clean = restore original IP+netmask from sidecar.
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+chip=${DCAT_PARAM_CHIP:-}
 npu_validate_chip "$chip"
 addr=${DCAT_PARAM_ADDRESS:-}
 mask=${DCAT_PARAM_NETMASK:-}

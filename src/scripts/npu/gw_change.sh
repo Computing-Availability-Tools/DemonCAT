@@ -1,7 +1,7 @@
 #!/bin/sh
 # rNPU_gw_change: RoCE gateway change. Clean = restore original gateway from sidecar.
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+chip=${DCAT_PARAM_CHIP:-}
 npu_validate_chip "$chip"
 gw=${DCAT_PARAM_GATEWAY:-}
 HCCN="hccn_tool -i $chip"

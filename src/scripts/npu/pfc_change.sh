@@ -1,7 +1,7 @@
 #!/bin/sh
 # rNPU_pfc_change: PFC bitmap change. Clean = restore original 8-csv bitmap.
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+chip=${DCAT_PARAM_CHIP:-}
 npu_validate_chip "$chip"
 bitmap=${DCAT_PARAM_BITMAP:-}
 HCCN="hccn_tool -i $chip"

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rNPU_arp_poison: add wrong ARP entry. Clean = delete the added entry.
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+chip=${DCAT_PARAM_CHIP:-}
 npu_validate_chip "$chip"
 dev=${DCAT_PARAM_DEV:-}
 ip=${DCAT_PARAM_IP:-}

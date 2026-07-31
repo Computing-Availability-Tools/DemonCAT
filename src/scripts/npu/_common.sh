@@ -7,7 +7,8 @@ npu_check_env() {
 npu_validate_chip() {
     case "$1" in
         [0-9]) return 0 ;;
-        *) echo "chip must be a single digit 0-9, got: '$1'" >&2; exit 1 ;;
+        '') return 1 ;;
+        *) echo "chip must be a single digit 0-9, got: '$1'" >&2; return 1 ;;
     esac
 }
 

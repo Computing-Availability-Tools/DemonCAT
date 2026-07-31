@@ -13,11 +13,25 @@ case "${DCAT_OP:-inject}" in
         echo "degraded $iface to ${speed}Mbps"
         ;;
     clean)
-        iface="${DCAT_PARAM_IFACE:-$(cat "$SIDECAR" 2>/dev/null | awk '{print $1}')}"
-        [ -n "$iface" ] || { echo "no iface to clean" >&2; exit 1; }
-        ethtool -s "$iface" speed 1000 autoneg on 2>/dev/null
-        rm -f "/tmp/dcat-rNET_degrade-${iface}.sidecar"
-        echo "restored $iface speed"
+        if [ -n "$DCAT_PARAM_IFACE" ]; then
+            ifaces="$DCAT_PARAM_IFACE"
+        else
+            ifaces=""
+            for sc in /tmp/dcat-rNET_degrade-*.sidecar; do
+                [ -f "$sc" ] || continue
+                v=${sc##*/dcat-rNET_degrade-}; v=${v%.sidecar}
+                ifaces="$ifaces $v"
+            done
+        fi
+        cleaned=0
+        for iface in $ifaces; do
+            [ -n "$iface" ] || continue
+            ethtool -s "$iface" speed 1000 autoneg on 2>/dev/null
+            rm -f "/tmp/dcat-rNET_degrade-${iface}.sidecar"
+            cleaned=1
+        done
+        if [ "$cleaned" = 1 ]; then echo "restored [$ifaces] speed";
+        else echo "restored (no active injection)"; fi
         ;;
     query)
         if [ -n "$DCAT_PARAM_IFACE" ]; then

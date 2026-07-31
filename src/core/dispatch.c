@@ -104,15 +104,63 @@ static void fmt_record_params(const injection_record_t *rec, char *out, size_t c
     }
 }
 
+/* stateless clean（无参 / clean --all）成功后 reconcile state：把该 uid 全部活跃记录
+ * 标 inactive，使 query 与系统一致（不残留幽灵记录）。内存空（state 丢失/无记录）时
+ * state_find_by_params 返回 0，自然 no-op。 */
+static void reconcile_uid_state(const char *uid) {
+    params_t empty; params_init(&empty);
+    long long ids[DCAT_MAX_RECORDS];
+    int n = state_find_by_params(uid, &empty, ids, DCAT_MAX_RECORDS);
+    for (int i = 0; i < n; i++) state_mark_inactive(ids[i]);
+}
+
 static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
+    /* clean <uid> 无参 = clean-all-for-uid：脚本自行 glob /tmp 工件，绕过 state 查找；
+     * 脚本成功后 reconcile：把该 uid 全部活跃记录标 inactive，避免 query 残留幽灵。 */
+    if (user_params->count == 0) {
+        result_t *r = executor_run_fault(f, "clean", user_params, 0);
+        if (r && r->code == 0) reconcile_uid_state(f->uid);
+        return r;
+    }
     long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
-    if (n == 0) return result_err("clean", f->uid, 1, "no active injection");
+    if (n == 0) {
+        /* state 丢失/损坏时回退：用用户参数直接调脚本 clean（脚本读 /tmp 工件清理） */
+        if (state_is_lost())
+            return executor_run_fault(f, "clean", user_params, 0);
+        return result_err("clean", f->uid, 1, "no active injection");
+    }
     for (int i = 0; i < n; i++) {
         result_t *r = clean_one_record(f, ids[i]);
         if (r) return r;
     }
     return result_ok("clean", f->uid, 0, "cleaned");
+}
+
+/* clean --all：遍历全部注册故障(cnf)，对支持 clean 的逐个执行无参 clean；
+ * stateless，不依赖 state.json（脚本自行 glob /tmp 工件）。聚合每 uid 结果。 */
+result_t *dispatch_clean_all(void) {
+    cJSON *arr = cJSON_CreateArray();
+    params_t empty; params_init(&empty);
+    int n = 0; const fault_def_t *list = registry_list(&n);
+    for (int i = 0; i < n; i++) {
+        if (!op_in_supported(list[i].supported_ops, "clean")) continue;
+        result_t *r = executor_run_fault(&list[i], "clean", &empty, 0);
+        /* 脚本清完 /tmp 工件后 reconcile 该 uid 的 state 记录，避免 query 幽灵 */
+        if (r && r->code == 0) reconcile_uid_state(list[i].uid);
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "uid", list[i].uid);
+        cJSON_AddStringToObject(o, "status", (r && r->code == 0) ? "ok" : "error");
+        cJSON_AddItemToArray(arr, o);
+        if (r) result_free(r);
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddStringToObject(root, "op", "clean");
+    cJSON_AddStringToObject(root, "mode", "all");
+    cJSON_AddItemToObject(root, "data", arr);
+    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
+    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
 }
 
 /* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */

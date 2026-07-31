@@ -82,6 +82,14 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
 
     clean)
         spec="${DCAT_PARAM_CORES:-}"
+        if [ -z "$spec" ]; then
+            spec=""
+            for pf in /tmp/dcat-rCPU_overload-c*.pid; do
+                [ -f "$pf" ] || continue
+                n=${pf##*/dcat-rCPU_overload-c}; n=${n%.pid}
+                spec="${spec:+$spec,}$n"
+            done
+        fi
         any=0
         for n in $(parse_cores "$spec"); do
             CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"

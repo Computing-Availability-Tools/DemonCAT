@@ -28,15 +28,28 @@ while True: time.sleep(3600)
         fi
         ;;
     clean)
-        port="${DCAT_PARAM_PORT:-}"
-        PIDFILE="/tmp/dcat-rNET_port_occupy-${port}.pid"
-        if [ -f "$PIDFILE" ]; then
-            kill "$(cat "$PIDFILE")" 2>/dev/null
-            rm -f "$PIDFILE"
-            echo "released port $port"
+        if [ -n "$DCAT_PARAM_PORT" ]; then
+            ports="$DCAT_PARAM_PORT"
         else
-            echo "released port $port (no active injection)"
+            ports=""
+            for pf in /tmp/dcat-rNET_port_occupy-*.pid; do
+                [ -f "$pf" ] || continue
+                p=${pf##*/dcat-rNET_port_occupy-}; p=${p%.pid}
+                ports="$ports $p"
+            done
         fi
+        cleaned=0
+        for port in $ports; do
+            [ -n "$port" ] || continue
+            PIDFILE="/tmp/dcat-rNET_port_occupy-${port}.pid"
+            if [ -f "$PIDFILE" ]; then
+                kill "$(cat "$PIDFILE")" 2>/dev/null
+                rm -f "$PIDFILE"
+                cleaned=1
+            fi
+        done
+        if [ "$cleaned" = 1 ]; then echo "released port [$ports]";
+        else echo "released port (no active injection)"; fi
         ;;
     query)
         if command -v ss >/dev/null 2>&1; then

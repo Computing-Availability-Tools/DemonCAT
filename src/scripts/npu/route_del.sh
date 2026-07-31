@@ -2,7 +2,7 @@
 # rNPU_route_del: delete route. Clean = re-add with original gateway from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip"
 addr=${DCAT_PARAM_ADDRESS:-}
 mask=${DCAT_PARAM_NETMASK:-}
 HCCN="hccn_tool -i $chip"
@@ -11,6 +11,9 @@ fault_present() { ! $HCCN -route -g 2>/dev/null | grep -Fq "$addr"; }
 
 case "${DCAT_OP:-inject}" in
     inject)
+        : ${chip:?missing required param: chip}
+        : ${addr:?missing required param: address}
+        : ${mask:?missing required param: netmask}
         npu_check_env
         orig_gw=$($HCCN -route -g 2>/dev/null | awk -v a="$addr" '$1==a {print $2}')
         [ -n "$orig_gw" ] && [ "$orig_gw" != "*" ] && sidecar_save rNPU_route_del "$chip" "$orig_gw"
@@ -18,7 +21,9 @@ case "${DCAT_OP:-inject}" in
         echo "deleted route $addr/$mask on chip $chip (was via $orig_gw)"
         ;;
     clean)
-        if fault_present; then
+        if [ -z "$chip" ]; then
+            echo "no active injection (chip required for route clean)"
+        elif fault_present; then
             orig_gw=$(sidecar_load rNPU_route_del "$chip"); orig_gw=${orig_gw:-0.0.0.0}
             $HCCN -route -a address "$addr" netmask "$mask" gateway "$orig_gw" || { echo "route re-add failed" >&2; exit 1; }
             sidecar_clear rNPU_route_del "$chip"

@@ -38,5 +38,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored mtu to $orig on chip $chip"
         else echo "mtu already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -mtu -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
+    query) npu_foreach_chip '$HCCN -mtu -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

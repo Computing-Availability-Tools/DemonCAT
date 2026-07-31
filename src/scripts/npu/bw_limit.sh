@@ -30,10 +30,10 @@ case "${DCAT_OP:-inject}" in
         if [ -z "$chip" ]; then
             echo "no active injection (chip required for bw_limit clean)"
         elif fault_present; then
-            $HCCN -shaping -s bw_limit "$MAX_BW" || { echo "shaping restore failed" >&2; exit 1; }
+            $HCCN -shaping -s bw_limit "$orig" || { echo "shaping restore failed" >&2; exit 1; }
             sidecar_clear rNPU_bw_limit "$chip"
             echo "restored bw_limit to $orig on chip $chip"
         else echo "bw_limit already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -shaping -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
+    query) npu_foreach_chip '$HCCN -shaping -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

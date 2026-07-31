@@ -22,5 +22,5 @@ case "${DCAT_OP:-inject}" in
             echo "removed ip_rule $dir $ip on chip $chip"
         else echo "ip_rule not present, no-op"; fi
         ;;
-    query) $HCCN -ip_rule -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present' ;;
 esac

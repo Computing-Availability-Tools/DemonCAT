@@ -22,5 +22,5 @@ case "${DCAT_OP:-inject}" in
             echo "removed poisoned arp $dev/$ip on chip $chip"
         else echo "arp entry not present, no-op"; fi
         ;;
-    query) $HCCN -arp -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -arp -g; fault_present' ;;
 esac

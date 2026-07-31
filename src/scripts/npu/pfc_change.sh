@@ -28,5 +28,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored pfc bitmap to $orig on chip $chip"
         else echo "pfc already at original, no-op"; fi
         ;;
-    query) $HCCN -pfc -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -pfc -g; fault_present' ;;
 esac

@@ -28,5 +28,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored prio_tc map to $orig on chip $chip"
         else echo "prio_tc already at original, no-op"; fi
         ;;
-    query) $HCCN -prio_tc -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -prio_tc -g; fault_present' ;;
 esac

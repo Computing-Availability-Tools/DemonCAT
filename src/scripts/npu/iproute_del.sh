@@ -9,7 +9,10 @@ table=${DCAT_PARAM_TABLE:-}
 HCCN="hccn_tool -i $chip"
 SIDECAR="/tmp/dcat-rNPU_iproute_del-$chip.bak"
 
-fault_present() { ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"; }
+fault_present() {
+    if [ -n "$ip" ] && [ -n "$table" ]; then ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"
+    else [ -f "/tmp/dcat-rNPU_iproute_del-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)

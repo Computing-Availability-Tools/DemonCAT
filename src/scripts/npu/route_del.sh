@@ -7,7 +7,10 @@ addr=${DCAT_PARAM_ADDRESS:-}
 mask=${DCAT_PARAM_NETMASK:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { ! $HCCN -route -g 2>/dev/null | grep -Fq "$addr"; }
+fault_present() {
+    if [ -n "$addr" ]; then ! $HCCN -route -g 2>/dev/null | grep -Fq "$addr"
+    else [ -f "/tmp/dcat-rNPU_route_del-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)

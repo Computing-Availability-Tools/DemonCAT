@@ -7,7 +7,10 @@ dev=${DCAT_PARAM_DEV:-}
 ip=${DCAT_PARAM_IP:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"; }
+fault_present() {
+    if [ -n "$ip" ]; then ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"
+    else [ -f "/tmp/dcat-rNPU_arp_del-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)

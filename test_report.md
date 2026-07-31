@@ -278,14 +278,14 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 
 
 
-## 10. E2E 测试（CSV 驱动，20260731_115918）
+## 10. E2E 测试（CSV 驱动，20260731_142421）
 
 > 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`。
 
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 
-- 结果: **PASS 62 / FAIL 0 / SKIP 79 / TOTAL 141**，通过率 43%
+- 结果: **PASS 61 / FAIL 0 / SKIP 83 / TOTAL 144**，通过率 42%
 
 
 ### 10.1 分类统计
@@ -293,7 +293,7 @@ DemonCAT v0.1 全部 **22** 个 CTest 测试通过，零失败。root 冒烟 10 
 | 分类 | 说明 | PASS | FAIL | SKIP |
 |---|---|---|---|---|
 | B | 边界值(参数 valid/invalid) | 17 | 0 | 0 |
-| F | 功能基线(37故障 inject→verify→clean→query无幽灵) | 16 | 0 | 21 |
+| F | 功能基线(37故障 inject→verify→clean→query无幽灵) | 15 | 0 | 22 |
 | H | 主机安全(危险资源/路径穿越) | 3 | 0 | 1 |
 | I | 命令注入(良性载荷,验未执行) | 12 | 0 | 9 |
 | MISC | list/help/错误码 | 4 | 0 | 0 |

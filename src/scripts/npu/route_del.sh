@@ -30,5 +30,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored route $addr/$mask via $orig_gw on chip $chip"
         else echo "route already present, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
+    query) npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

@@ -30,5 +30,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored ip_rule $dir $ip -> table $orig_table on chip $chip"
         else echo "ip_rule already present, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
+    query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

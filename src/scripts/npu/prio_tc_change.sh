@@ -17,6 +17,7 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         : ${map:?missing required param: map}
         npu_check_env
+        $HCCN -link -g 2>/dev/null | grep -qi 'up' || { echo "link is DOWN, prio_tc requires link UP" >&2; exit 1; }
         orig=$($HCCN -prio_tc -g 2>/dev/null | grep -oE 'map [0-9,]+' | grep -oE '[0-9,]+')
         [ -n "$orig" ] && sidecar_save rNPU_prio_tc_change "$chip" "$orig"
         $HCCN -prio_tc -s map "$map" || { echo "prio_tc set failed" >&2; exit 1; }
@@ -38,5 +39,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored prio_tc map to $orig on chip $chip"
         else echo "prio_tc already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -prio_tc -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
+    query) npu_foreach_chip '$HCCN -prio_tc -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

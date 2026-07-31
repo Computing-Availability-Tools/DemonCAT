@@ -44,7 +44,7 @@ bash scripts/install_deps.sh
 # 2. 编译（8核并行加速）
 cmake -B build && cmake --build build -j8
 
-# 3. 运行测试
+# 3. 运行测试 （cmake>=3.20可直接执行，其它版本切到build目录再执行）
 ctest --test-dir build --output-on-failure
 
 # 4. 列出故障目录

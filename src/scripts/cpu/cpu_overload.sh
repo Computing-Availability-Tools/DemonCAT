@@ -122,11 +122,12 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             done
             echo "injected_cores: ${spec:-(none)}"
         fi
-        # burn 进程数 (从 pidfile 统计存活, 与 details 一致)
+        # burn 进程数 (按 spec 指定核统计存活)
         total=0
-        for pf in /tmp/dcat-rCPU_overload-c*.pid; do
-            [ -f "$pf" ] || continue
-            pid=$(cat "$pf" 2>/dev/null)
+        for n in $(parse_cores "$spec"); do
+            CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"
+            [ -f "$CORE_PF" ] || continue
+            pid=$(cat "$CORE_PF" 2>/dev/null)
             [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && total=$((total+1))
         done
         echo "burn_processes: $total"
@@ -150,9 +151,10 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             }'
             echo "--- burn process details ---"
             echo "    PID  PSR CMD"
-            for pf in /tmp/dcat-rCPU_overload-c*.pid; do
-                [ -f "$pf" ] || continue
-                pid=$(cat "$pf" 2>/dev/null)
+            for n in $(parse_cores "$spec"); do
+                CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"
+                [ -f "$CORE_PF" ] || continue
+                pid=$(cat "$CORE_PF" 2>/dev/null)
                 [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || continue
                 ps -p "$pid" -o pid=,psr=,cmd= 2>/dev/null
             done

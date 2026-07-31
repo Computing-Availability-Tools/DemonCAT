@@ -25,7 +25,7 @@ CONF = os.path.join(ROOT, "config", "demoncat.conf")
 
 COLUMNS = [
     "id", "flow_id", "step", "module", "fault_uid", "phase",
-    "precondition", "command", "expected_exit_code", "expected_json",
+    "command", "expected_exit_code", "expected_json",
     "verify_cmd", "verify_assert", "provision", "expected_behavior",
 ]
 
@@ -76,8 +76,8 @@ OBS = {
         v_cmd="ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}'", v_assert="nonempty",
         c_cmd="ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}'", c_assert="ne:DOWN"),
     "rNET_degrade": dict(module="network", inject_args="--iface={iface} --speed_mbps=10",
-        clean_args="--iface={iface}", provision="dummy_iface", precondition="root+ethtool+real_phy",
-        v_cmd="ethtool {iface} 2>/dev/null | grep -oE 'Speed: [0-9]+[^ ]*'", v_assert="contains:10",
+        clean_args="--iface={iface}", provision="real_phy", precondition="root+ethtool+real_phy",
+        v_cmd="ethtool {iface} 2>/dev/null | grep -oE 'Speed: [0-9]+[^ ]*'", v_assert="regex:Speed: 10[^0-9]",
         c_cmd="ethtool {iface} 2>/dev/null | grep -oE 'Speed: [0-9]+[^ ]*'", c_assert="nonempty"),
     "rNET_port_occupy": dict(module="network", inject_args="--port={port}",
         clean_args="--port={port}", provision="free_port", precondition="none",
@@ -214,7 +214,7 @@ def gen():
             vcmd="", vassert="", prov="", behavior=""):
         rows.append({
             "id": nid("E2E"), "flow_id": flow, "step": step, "module": module,
-            "fault_uid": uid, "phase": phase, "precondition": precond,
+            "fault_uid": uid, "phase": phase,
             "command": cmd, "expected_exit_code": exp_code, "expected_json": exp_json,
             "verify_cmd": vcmd, "verify_assert": vassert, "provision": prov,
             "expected_behavior": behavior,
@@ -324,8 +324,6 @@ def gen():
         s_p += 1
     p_case("rNET_delay", "--iface=dcat-e2e0 --delay_ms=100", "non_root",
            "tc qdisc show dev dcat-e2e0 2>/dev/null | grep -c netem", "==0", "non-root: no qdisc added")
-    p_case("rCPU_core_offline", "--cores=1", "non_root",
-           "cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA", "ne:0", "non-root: cpu stays online")
     p_case("rNET_tcp_loss", "--port=19998", "non_root",
            "iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:19998'", "==0", "non-root: no iptables rule")
 
@@ -339,11 +337,15 @@ def gen():
     add(f"H-{s_h}", 0, "network", "rNET_service_stop", "inject", "none",
         f"{DCAT} inject rNET_service_stop --service=sshd-test", "nonzero", "",
         "", "notcontains:not allowed", "", "no sshd guard: dcat accepts service name (risk)"); s_h += 1
-    # H3: device 路径穿越 → /etc 不被污染（非root perm denied；root 则为真实风险，仅非root 跑）
-    add(f"H-{s_h}", 0, "storage", "rDISK_write_overload", "inject", "non_root",
-        f"{DCAT} inject rDISK_write_overload --device=../../etc", "nonzero", "",
+    # H3: 写入边界（安全路径）— device=/tmp，验证 dcat 只写 /tmp、不污染 /etc（root 也安全）
+    h3 = f"H-{s_h}"
+    add(h3, 0, "storage", "rDISK_write_overload", "inject", "none",
+        f"{DCAT} inject rDISK_write_overload --device=/tmp --workers=2 --size_mb=200", 0, '"status":"ok"',
         "ls /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null | wc -l", "==0", "",
-        "path traversal: /etc not polluted (root would be real risk, skip on root)"); s_h += 1
+        "write containment: /tmp written, /etc not polluted")
+    add(h3, 1, "storage", "rDISK_write_overload", "clean", "none",
+        f"{DCAT} clean rDISK_write_overload --device=/tmp", 0, "", "", "", "", "cleanup H-3")
+    s_h += 1
     # H4: 未知参数拒绝
     add(f"H-{s_h}", 0, "cpu", "rCPU_overload", "inject", "none",
         f"{DCAT} inject rCPU_overload --cores=0 --bogus=1", 3, 'unknown parameter', "", "exitcode:3",

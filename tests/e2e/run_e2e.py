@@ -33,7 +33,7 @@ E2E_HOME = "/tmp/dcat_e2e_home"
 PWN = "/tmp/dcat_pwned"
 
 RESULT_COLS = [
-    "id", "flow_id", "step", "phase", "fault_uid", "precondition",
+    "id", "flow_id", "step", "phase", "fault_uid",
     "command", "expected_exit_code", "expected_json", "verify_cmd", "verify_assert",
     "actual_exit_code", "actual_json", "verify_actual", "result", "error_code",
     "duration_ms", "timestamp", "notes",
@@ -52,15 +52,21 @@ def sh(cmd, env=None, timeout=60):
         return 1, f"[exception {e}]"
 
 
-def run_step_cmd(cmd, env, timeout=120):
+def run_step_cmd(cmd, env, timeout=120, priv_user=None):
     """dcat 命令用 argv 列表执行（不带 shell），使注入载荷原样进入 dcat cli_parse
     （否则 shell=True 会把 ';touch ...' 当命令分隔符，框架自身执行载荷=假阳性）。
-    辅助 shell 命令(rm/echo/pkill/for/$VAR) 仍用 shell=True。"""
+    辅助 shell 命令(rm/echo/pkill/for/$VAR) 仍用 shell=True。
+    priv_user: 非 None 时用 runuser 降权到该用户执行（P 类验证非 root 拒绝）。"""
     cs = cmd.strip()
     dcat_rel = "./build/dcat"
     if cs.startswith(DCAT) or cs.startswith(dcat_rel):
         try:
             argv = shlex.split(cs)
+            if priv_user:
+                # runuser -u <user> -- <argv>；root 专用，免密
+                if sh(f"command -v runuser >/dev/null 2>&1")[0] != 0:
+                    return 1, "[runuser 未安装，无法降权验证非 root 拒绝]"
+                argv = ["runuser", "-u", priv_user, "--"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
             return p.returncode, (p.stdout or "") + (p.stderr or "")
@@ -123,64 +129,9 @@ def sweep(home, iface, tracked_pids):
             pass
 
 
-# ---------------- precondition 检查 ----------------
-def check_precondition(cond, ctx):
-    """返回 (ok, reason). cond 形如 'root+tc+dummy_iface' 或 'none'."""
-    if not cond or cond == "none":
-        return True, ""
-    parts = cond.split("+")
-    for p in parts:
-        if p == "none":
-            continue
-        if p == "root":
-            if os.geteuid() != 0:
-                return False, "需要 root"
-        elif p == "non_root":
-            if os.geteuid() == 0:
-                return False, "P 类仅在非 root 下验证失败行为（root 下注入会成功，跳过）"
-        elif p in ("tc", "ethtool", "iptables", "ip", "systemctl", "hccn_tool"):
-            if not cmd_exists(p):
-                return False, f"{p} 未安装"
-        elif p == "dummy_iface":
-            if sh(f"ip link show {TEST_IFACE} >/dev/null 2>&1")[0] != 0:
-                return False, f"测试网卡 {TEST_IFACE} 不存在"
-        elif p == "sysfs_writable":
-            if not os.access("/sys/devices/system/cpu/cpu1/online", os.W_OK):
-                return False, "sysfs cpu online 不可写(WSL 内核限制)"
-        elif p == "allow_cpu_offline":
-            if os.environ.get("DCAT_E2E_ALLOW_CPU_OFFLINE") != "1":
-                return False, "默认 skip(需 DCAT_E2E_ALLOW_CPU_OFFLINE=1 才实跑真实核下线)"
-        elif p == "real_phy":
-            # 找一个有 speed 的非 dummy 物理网卡
-            ok, out = sh("for i in $(ls /sys/class/net); do "
-                         "case $i in lo|dummy*|veth*|br*|docker*|$TEST_IFACE) continue;; esac; "
-                         "s=$(ethtool $i 2>/dev/null | grep -oE 'Speed: [0-9]+'); "
-                         "[ -n \"$s\" ] && echo $i && exit 0; done; exit 1")
-            if ok != 0:
-                return False, "无物理网卡支持 ethtool 速率(dummy 不支持)"
-            iface_found = out.strip().splitlines()[0] if out.strip() else ""
-            if iface_found:
-                ctx["iface"] = iface_found  # real_phy 优先于 dummy 作为 {iface}
-        elif p == "noncritical_svc":
-            # 仅选可干净 stop/start 的简单服务；rsyslog/systemd-resolved 等 socket-activated
-            # 或半关键服务不选（stop 会告警且不真停 → 误失败）
-            svc = ""
-            for s in ("cron", "chronyd", "ntpd"):
-                rc, _ = sh(f"systemctl is-active {s} >/dev/null 2>&1")
-                if rc == 0:
-                    svc = s
-                    break
-            if not svc:
-                return False, "无可测非关键服务(cron/chronyd/ntpd 未运行)"
-            ctx["svc"] = svc
-        else:
-            return False, f"未知 precondition: {p}"
-    return True, ""
-
-
-# ---------------- provision ----------------
+# ---------------- provision（不再 skip：资源就绪则用，不就绪则用例自然 FAIL） ----------------
 def provision(provs, ctx, iface):
-    """provs: set of provision names. 绑定占位符到 ctx."""
+    """provs: set of provision names. 绑定占位符到 ctx。资源获取失败留空 → 用例 FAIL（生产全量跑）。"""
     if "sleep_pid" in provs:
         # 经 watcher(bash) 派生 target sleep：target.ppid = watcher，不是本框架。
         # 否则 rPROC_zstate clean（kill 父进程回收僵尸）会 kill 本框架自杀。
@@ -194,19 +145,35 @@ def provision(provs, ctx, iface):
             ctx["pid"] = ""
             ctx["_watcher_pid"] = p.pid
     if "free_port" in provs:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("", 0))
-        port = s.getsockname()[1]
-        s.close()
-        ctx["port"] = str(port)
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.bind(("", 0))
+            port = s.getsockname()[1]
+            s.close()
+            ctx["port"] = str(port)
+        except Exception:
+            ctx["port"] = ""
     if "dummy_iface" in provs:
         if os.geteuid() == 0:
             sh(f"ip link add {iface} type dummy 2>/dev/null")
             sh(f"ip link set {iface} up 2>/dev/null")
         ctx.setdefault("iface", iface)  # 不覆盖 real_phy 预置的 iface
+    if "real_phy" in provs:
+        # 找一个有 speed 的非 dummy 物理网卡（生产通常有；dummy/WSL 无 → 留空，用例 FAIL）
+        ok, out = sh("for i in $(ls /sys/class/net 2>/dev/null); do "
+                     "case $i in lo|dummy*|veth*|br*|docker*|" + iface + ") continue;; esac; "
+                     "s=$(ethtool $i 2>/dev/null | grep -oE 'Speed: [0-9]+'); "
+                     "[ -n \"$s\" ] && echo $i && exit 0; done; exit 1")
+        if ok == 0 and out.strip():
+            ctx["iface"] = out.strip().splitlines()[0]
     if "noncritical_svc" in provs:
-        # ctx["svc"] 已由 precondition 设置
-        pass
+        # 仅选可干净 stop/start 的简单服务（cron/chronyd/ntpd）；无则留空 → 用例 FAIL
+        svc = ""
+        for s in ("cron", "chronyd", "ntpd"):
+            if sh(f"systemctl is-active {s} >/dev/null 2>&1")[0] == 0:
+                svc = s
+                break
+        ctx["svc"] = svc
 
 
 def substitute(s, ctx):
@@ -361,33 +328,21 @@ def main():
             continue
         steps = flows[fid]
         cat = fid.split("-")[0]
-        # precondition: 任一 step 的 precondition 不满足 → 整 flow skip
+        # 不再 skip：生产要求全量跑。资源未就绪(无 hccn_tool/非 root/sysfs 等)→用例自然 FAIL。
         ctx = {}
-        skip_reason = ""
-        for s in steps:
-            ok, reason = check_precondition(s["precondition"], ctx)
-            if not ok:
-                skip_reason = reason or s["precondition"]
-                break
-        if skip_reason:
-            for s in steps:
-                results.append(_res(s, "SKIP", notes=f"precondition: {skip_reason}"))
-                counters["SKIP"] += 1
-            cat_stats.setdefault(cat, {"PASS": 0, "FAIL": 0, "SKIP": 0})
-            cat_stats[cat]["SKIP"] += 1
-            print(f"  SKIP {fid}: {skip_reason}")
-            continue
 
         # 前置清扫
         sweep(E2E_HOME, TEST_IFACE, tracked_pids)
         env["HOME"] = E2E_HOME
-        # provision（flow 级，union）— 复用 precondition 的 ctx（svc/iface 已可能预置）
+        # provision（flow 级，union）— 资源获取失败留空 → 用例 FAIL
         provs = set(s["provision"] for s in steps if s.get("provision"))
         provision(provs, ctx, TEST_IFACE)
         if "pid" in ctx and ctx.get("pid"):
             tracked_pids.append(int(ctx["pid"]))
         if "_watcher_pid" in ctx:
             tracked_pids.append(ctx["_watcher_pid"])
+        # P 类（非 root 拒绝）：inject 步降权到 nobody 验证拒绝；verify/query 仍 root
+        is_priv = fid.startswith("P-")
 
         flow_pass = True
         for s in steps:
@@ -401,7 +356,8 @@ def main():
                 res["notes"] = "provision/setup"
                 results.append(res)
                 continue
-            rc, out = run_step_cmd(cmd, env=env, timeout=120)
+            priv = "nobody" if (is_priv and s["phase"] == "inject") else None
+            rc, out = run_step_cmd(cmd, env=env, timeout=120, priv_user=priv)
             dt = int((time.time() - t0) * 1000)
             res["actual_exit_code"] = rc
             res["actual_json"] = out.strip()[:300]
@@ -475,7 +431,7 @@ def main():
 
 def _res(s, result="", notes=""):
     return dict(id=s["id"], flow_id=s["flow_id"], step=s["step"], phase=s["phase"],
-                fault_uid=s["fault_uid"], precondition=s["precondition"],
+                fault_uid=s["fault_uid"],
                 command=s["command"], expected_exit_code=s["expected_exit_code"],
                 expected_json=s["expected_json"], verify_cmd=s["verify_cmd"],
                 verify_assert=s["verify_assert"],
@@ -569,10 +525,10 @@ def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt):
         sec.append(f"| {cat} | {desc.get(cat,'')} | {c['PASS']} | {c['FAIL']} | {c['SKIP']} |")
     fails = [r for r in results if r["result"] == "FAIL"]
     sec.append("\n### 10.2 覆盖说明\n")
-    sec.append("- 非root部分(CI/WSL 可跑): F非root + B + H + I + P(非root断言) + R + S 全部实跑。\n")
-    sec.append("- root 部分(tc/iptables/sysfs/ip): 非 root 自动 SKIP；`sudo python3 tests/e2e/run_e2e.py` 实跑。\n")
-    sec.append("- NPU(20): 无 hccn_tool 自动 SKIP，需 Atlas NPU 物理机。\n")
-    sec.append("- rCPU_core_offline: 默认 SKIP，`DCAT_E2E_ALLOW_CPU_OFFLINE=1` 才实跑（瞬态下线真实核，clean+清扫恢复）。\n")
+    sec.append("- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。\n")
+    sec.append("- P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝（root 框架下仍测非 root 拒绝）。\n")
+    sec.append("- rCPU_core_offline：默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。\n")
+    sec.append("- H-3 写入边界：用 device=/tmp 安全路径（不污染 /etc）。\n")
     if findings:
         sec.append("\n### 10.3 安全/韧性发现\n")
         for x in findings:

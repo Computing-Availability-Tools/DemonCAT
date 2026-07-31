@@ -19,5 +19,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored config (link up) on chip $chip"
         else echo "link already up, no-op"; fi
         ;;
-    query) $HCCN -link -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -link -g; fault_present' ;;
 esac

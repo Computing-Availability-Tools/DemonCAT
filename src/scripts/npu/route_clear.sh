@@ -22,5 +22,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored routes via cfg recovery on chip $chip"
         else echo "routes already present, no-op"; fi
         ;;
-    query) $HCCN -route -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -route -g; fault_present' ;;
 esac

@@ -28,5 +28,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored gateway to $orig on chip $chip"
         else echo "gateway already at original, no-op"; fi
         ;;
-    query) $HCCN -gateway -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -gateway -g; fault_present' ;;
 esac

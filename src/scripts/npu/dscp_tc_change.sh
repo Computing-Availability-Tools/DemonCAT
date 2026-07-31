@@ -29,5 +29,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored dscp $dscp -> tc $orig on chip $chip"
         else echo "dscp_to_tc already at original, no-op"; fi
         ;;
-    query) $HCCN -dscp_to_tc -g dscp "$dscp"; fault_present ;;
+    query) npu_foreach_chip '$HCCN -dscp_to_tc -g dscp "$dscp"; fault_present' ;;
 esac

@@ -216,3 +216,47 @@ E2E-214,MISC-1,0,all,all,list,./build/dcat list,0,rCPU_overload,,,,list returns 
 E2E-215,MISC-2,0,all,all,help,./build/dcat --help,0,subcommand,,,,help works
 E2E-216,MISC-3,0,all,nope,inject,./build/dcat inject nope --cores=0,4,not found,,exitcode:4,,unknown uid code4
 E2E-217,MISC-4,0,all,rCPU_overload,inject_missing,./build/dcat inject rCPU_overload,3,missing required parameter,,exitcode:3,,missing required code3
+E2E-218,Q-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
+E2E-219,Q-1,1,cpu,rCPU_overload,query_active,./build/dcat query rCPU_overload --cores=0,0,,,"out_contains:""confirmed"":true",,query <uid> confirmed:true
+E2E-220,Q-1,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
+E2E-221,Q-1,3,cpu,rCPU_overload,query_gone,./build/dcat query rCPU_overload --cores=0,0,,,"out_contains:""confirmed"":false",,query <uid> confirmed:false after clean
+E2E-222,Q-2,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,inject
+E2E-223,Q-2,1,network,rNET_port_occupy,query_active,./build/dcat query rNET_port_occupy --port={port},0,,,"out_contains:""confirmed"":true",,query <uid> confirmed:true
+E2E-224,Q-2,2,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port={port},0,,,,,cleanup
+E2E-225,Q-2,3,network,rNET_port_occupy,query_gone,./build/dcat query rNET_port_occupy --port={port},0,,,"out_contains:""confirmed"":false",,query <uid> confirmed:false after clean
+E2E-226,Q-3,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",,,sleep_pid,inject
+E2E-227,Q-3,1,process,rPROC_hang,query_active,./build/dcat query rPROC_hang --pid={pid},0,,,"out_contains:""confirmed"":true",,query <uid> confirmed:true
+E2E-228,Q-3,2,process,rPROC_hang,clean,./build/dcat clean rPROC_hang --pid={pid},0,,,,,cleanup
+E2E-229,Q-3,3,process,rPROC_hang,query_gone,./build/dcat query rPROC_hang --pid={pid},0,,,"out_contains:""confirmed"":false",,query <uid> confirmed:false after clean
+E2E-230,Q-4,0,process,rPROC_zstate,inject,./build/dcat inject rPROC_zstate --pid={pid},0,"""status"":""ok""",,,sleep_pid,inject
+E2E-231,Q-4,1,process,rPROC_zstate,query_active,./build/dcat query rPROC_zstate --pid={pid},0,,,"out_contains:""confirmed"":true",,query <uid> confirmed:true
+E2E-232,Q-4,2,process,rPROC_zstate,clean,./build/dcat clean rPROC_zstate --pid={pid},0,,,,,cleanup
+E2E-233,Q-4,3,process,rPROC_zstate,query_gone,./build/dcat query rPROC_zstate --pid={pid},0,,,"out_contains:""confirmed"":false",,query <uid> confirmed:false after clean
+E2E-234,Q-5,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
+E2E-235,Q-5,1,cpu,rCPU_overload,query_noparam,./build/dcat query rCPU_overload,0,,,"out_contains:""confirmed"":true",,"query <uid> no-params shows all, confirmed:true"
+E2E-236,Q-5,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
+E2E-237,Q-5,3,cpu,rCPU_overload,query_gone,./build/dcat query rCPU_overload,0,,,"out_contains:""confirmed"":false",,query <uid> no-params confirmed:false
+E2E-238,PLG-1,0,plugin,rSAMPLE_test,inject,./build/dcat inject rSAMPLE_test,0,"""status"":""ok""",,,,plugin inject
+E2E-239,PLG-1,1,plugin,rSAMPLE_test,query_active,./build/dcat query rSAMPLE_test,0,,,out_contains:sample confirmed,,plugin query returns message
+E2E-240,PLG-1,2,plugin,rSAMPLE_test,clean,./build/dcat clean rSAMPLE_test,0,,,,,plugin clean
+E2E-241,PLG-1,3,plugin,rSAMPLE_test,query_empty,./build/dcat query,0,,,state_not_contains:rSAMPLE_test,,plugin query empty after clean
+E2E-242,CLI-1,0,cli,cli,negative,./build/dcat,2,subcommand,,exitcode:2,,dcat no args → help + exit2
+E2E-243,CLI-2,0,cli,cli,negative,./build/dcat injec rCPU_overload --cores=0,2,missing subcommand before,,exitcode:2,,unknown subcommand 'injec' → exit2
+E2E-244,CLI-3,0,cli,cli,negative,./build/dcat inject rCPU_overload --cores=0 --force=1,2,--force does not take a value,,exitcode:2,,--force=x parse error → exit2
+E2E-245,CLI-4,0,cli,cli,negative,./build/dcat inject --all rCPU_overload --cores=0,2,unexpected positional argument,,exitcode:2,,--all with non-clean → exit2
+E2E-246,CLI-5,0,cli,cli,negative,./build/dcat clean,2,uid required,,exitcode:2,,clean no uid → exit2
+E2E-247,CLI-6,0,cli,cli,negative,./build/dcat inject rCPU_overload --cores,2,missing '=value',,exitcode:2,,--key no =value → exit2
+E2E-248,CLI-7,0,cli,cli,negative,./build/dcat inject rCPU_overload cores=0,2,missing the '--' prefix,,exitcode:2,,key=value no -- prefix → exit2
+E2E-249,CLI-8,0,cli,cli,negative,./build/dcat inject rCPU_overload --=val,3,unknown parameter,,exitcode:3,,--=val empty name → exit3
+E2E-250,CLI-9,0,cli,cli,negative,./build/dcat query rCPU_overload --bogus=1,3,unknown parameter,,exitcode:3,,query unknown param → exit3
+E2E-251,CLI-10,0,cli,cli,negative,./build/dcat inject rPROC_exit,3,missing required parameter,,exitcode:3,,inject-only missing required → exit3
+E2E-252,SUBHELP-1,0,help,help,subhelp,./build/dcat inject --help,0,inject <uid>,,exitcode:0,,dcat inject --help works
+E2E-253,SUBHELP-2,0,help,help,subhelp,./build/dcat clean --help,0,clean,,exitcode:0,,dcat clean --help works
+E2E-254,SUBHELP-3,0,help,help,subhelp,./build/dcat query --help,0,query,,exitcode:0,,dcat query --help works
+E2E-255,SUBHELP-4,0,help,help,subhelp,./build/dcat list --help,0,list,,exitcode:0,,dcat list --help works
+E2E-256,CHAOS-1,0,chaos,state_full,fill_table,for p in $(seq 19000 19032); do ./build/dcat inject rNET_port_occupy --port=$p; done,1,,,out_contains:state table full,,33rd inject fails state table full
+E2E-257,CHAOS-1,1,chaos,state_full,query_has_records,./build/dcat query,0,,,state_contains:rNET_port_occupy,,state has 32 records
+E2E-258,CHAOS-1,2,chaos,state_full,clean_all,./build/dcat clean --all,0,,,,,clean --all clears all
+E2E-259,CHAOS-1,3,chaos,state_full,query_empty,./build/dcat query,0,,,state_empty,,state empty after clean --all
+E2E-260,CFG-1,0,config,config,custom,./build/dcat --config config/demoncat.conf list,0,rCPU_overload,,exitcode:0,,--config custom path works
+E2E-261,CFG-2,0,config,config,nonexistent,./build/dcat --config /nonexistent/dcat.conf list,1,config load failed,,exitcode:1,,--config nonexistent → exit1

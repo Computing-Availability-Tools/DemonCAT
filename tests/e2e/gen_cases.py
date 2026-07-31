@@ -429,6 +429,99 @@ def gen():
     add("MISC-3", 0, "all", "nope", "inject", "none", f"{DCAT} inject nope --cores=0", 4, 'not found', "", "exitcode:4", "", "unknown uid code4")
     add("MISC-4", 0, "all", "rCPU_overload", "inject_missing", "none", f"{DCAT} inject rCPU_overload", 3, 'missing required parameter', "", "exitcode:3", "", "missing required code3")
 
+    # ===== Q：dcat query <uid>（脚本 query 分支 + confirmed JSON） =====
+    # 每个代表性非 root 故障：inject → query <uid> --params 断言 confirmed:true → clean → query 断言 confirmed:false
+    s_q = 1
+    def q_case(uid, inject_args, query_args, provision, behavior):
+        nonlocal s_q
+        flow = f"Q-{s_q}"
+        add(flow, 0, OBS[uid]["module"], uid, "inject", "none",
+            f"{DCAT} inject {uid} {inject_args}", 0, '"status":"ok"', "", "", provision, "inject")
+        add(flow, 1, OBS[uid]["module"], uid, "query_active", "none",
+            f"{DCAT} query {uid} {query_args}", 0, "", "", 'out_contains:"confirmed":true', "", "query <uid> confirmed:true")
+        add(flow, 2, OBS[uid]["module"], uid, "clean", "none",
+            f"{DCAT} clean {uid} {inject_args}", 0, "", "", "", "", "cleanup")
+        add(flow, 3, OBS[uid]["module"], uid, "query_gone", "none",
+            f"{DCAT} query {uid} {query_args}", 0, "", "", 'out_contains:"confirmed":false', "", "query <uid> confirmed:false after clean")
+        s_q += 1
+    q_case("rCPU_overload", "--cores=0", "--cores=0", "", "rCPU_overload query <uid> --cores=0")
+    q_case("rNET_port_occupy", "--port={port}", "--port={port}", "free_port", "rNET_port_occupy query <uid> --port={port}")
+    q_case("rPROC_hang", "--pid={pid}", "--pid={pid}", "sleep_pid", "rPROC_hang query <uid> --pid={pid}")
+    q_case("rPROC_zstate", "--pid={pid}", "--pid={pid}", "sleep_pid", "rPROC_zstate query <uid> --pid={pid}")
+    # Q-6: query <uid> 无参变体（脚本展示全部）
+    flow = f"Q-{s_q}"
+    add(flow, 0, "cpu", "rCPU_overload", "inject", "none",
+        f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject")
+    add(flow, 1, "cpu", "rCPU_overload", "query_noparam", "none",
+        f"{DCAT} query rCPU_overload", 0, "", "", 'out_contains:"confirmed":true', "", "query <uid> no-params shows all, confirmed:true")
+    add(flow, 2, "cpu", "rCPU_overload", "clean", "none",
+        f"{DCAT} clean rCPU_overload --cores=0", 0, "", "", "", "", "cleanup")
+    add(flow, 3, "cpu", "rCPU_overload", "query_gone", "none",
+        f"{DCAT} query rCPU_overload", 0, "", "", 'out_contains:"confirmed":false', "", "query <uid> no-params confirmed:false")
+    s_q += 1
+
+    # ===== PLG：动态插件故障（libsample.so, uid rSAMPLE_test） =====
+    flow = "PLG-1"
+    add(flow, 0, "plugin", "rSAMPLE_test", "inject", "none",
+        f"{DCAT} inject rSAMPLE_test", 0, '"status":"ok"', "", "", "", "plugin inject")
+    add(flow, 1, "plugin", "rSAMPLE_test", "query_active", "none",
+        f"{DCAT} query rSAMPLE_test", 0, "", "", 'out_contains:sample confirmed', "", "plugin query returns message")
+    add(flow, 2, "plugin", "rSAMPLE_test", "clean", "none",
+        f"{DCAT} clean rSAMPLE_test", 0, "", "", "", "", "plugin clean")
+    add(flow, 3, "plugin", "rSAMPLE_test", "query_empty", "none",
+        f"{DCAT} query", 0, "", "", "state_not_contains:rSAMPLE_test", "", "plugin query empty after clean")
+
+    # ===== CLI：负面 CLI 鲁棒性（~10 路径） =====
+    s_cli = 1
+    def cli_case(cmd, exp_code, msg_substr, behavior):
+        nonlocal s_cli
+        add(f"CLI-{s_cli}", 0, "cli", "cli", "negative", "none",
+            cmd, exp_code, msg_substr, "", "exitcode:" + str(exp_code), "", behavior)
+        s_cli += 1
+    cli_case(f"{DCAT}", 2, "subcommand", "dcat no args → help + exit2")
+    cli_case(f"{DCAT} injec rCPU_overload --cores=0", 2, "missing subcommand before", "unknown subcommand 'injec' → exit2")
+    cli_case(f"{DCAT} inject rCPU_overload --cores=0 --force=1", 2, "--force does not take a value", "--force=x parse error → exit2")
+    cli_case(f"{DCAT} inject --all rCPU_overload --cores=0", 2, "unexpected positional argument", "--all with non-clean → exit2")
+    cli_case(f"{DCAT} clean", 2, "uid required", "clean no uid → exit2")
+    cli_case(f"{DCAT} inject rCPU_overload --cores", 2, "missing '=value'", "--key no =value → exit2")
+    cli_case(f"{DCAT} inject rCPU_overload cores=0", 2, "missing the '--' prefix", "key=value no -- prefix → exit2")
+    cli_case(f"{DCAT} inject rCPU_overload --=val", 3, "unknown parameter", "--=val empty name → exit3")
+    cli_case(f"{DCAT} query rCPU_overload --bogus=1", 3, "unknown parameter", "query unknown param → exit3")
+    cli_case(f"{DCAT} inject rPROC_exit", 3, "missing required parameter", "inject-only missing required → exit3")
+
+    # ===== SUBHELP：子命令帮助 =====
+    s_sh = 1
+    def subhelp_case(sub, msg_substr):
+        nonlocal s_sh
+        add(f"SUBHELP-{s_sh}", 0, "help", "help", "subhelp", "none",
+            f"{DCAT} {sub} --help", 0, msg_substr, "", "exitcode:0", "", f"dcat {sub} --help works")
+        s_sh += 1
+    subhelp_case("inject", "inject <uid>")
+    subhelp_case("clean", "clean")
+    subhelp_case("query", "query")
+    subhelp_case("list", "list")
+
+    # ===== CHAOS：state 表满（DCAT_MAX_RECORDS=32） =====
+    # 注入 33 个不同端口（不同资源）→ 第 33 条 state table full → clean --all 恢复
+    flow = "CHAOS-1"
+    add(flow, 0, "chaos", "state_full", "fill_table", "none",
+        "for p in $(seq 19000 19032); do ./build/dcat inject rNET_port_occupy --port=$p; done",
+        1, "", "", 'out_contains:state table full', "", "33rd inject fails state table full")
+    add(flow, 1, "chaos", "state_full", "query_has_records", "none",
+        f"{DCAT} query", 0, "", "", "state_contains:rNET_port_occupy", "", "state has 32 records")
+    add(flow, 2, "chaos", "state_full", "clean_all", "none",
+        f"{DCAT} clean --all", 0, "", "", "", "", "clean --all clears all")
+    add(flow, 3, "chaos", "state_full", "query_empty", "none",
+        f"{DCAT} query", 0, "", "", "state_empty", "", "state empty after clean --all")
+
+    # ===== CFG：--config 自定义路径 =====
+    s_cfg = 1
+    add(f"CFG-{s_cfg}", 0, "config", "config", "custom", "none",
+        f"{DCAT} --config config/demoncat.conf list", 0, "rCPU_overload", "", "exitcode:0", "", "--config custom path works")
+    s_cfg += 1
+    add(f"CFG-{s_cfg}", 0, "config", "config", "nonexistent", "none",
+        f"{DCAT} --config /nonexistent/dcat.conf list", 1, "config load failed", "", "exitcode:1", "", "--config nonexistent → exit1")
+
     return rows
 
 

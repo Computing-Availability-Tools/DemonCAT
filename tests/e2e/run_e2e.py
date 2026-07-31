@@ -241,6 +241,10 @@ def apply_assert(vassert, verify_out, cmd_rc, cmd_json):
     if vassert.startswith("contains:"):
         s = vassert[len("contains:"):]
         return (s in (verify_out or ""), f"contains '{s}'")
+    if vassert.startswith("out_contains:"):
+        # 作用于命令自身 stdout（cmd_json），用于 query <uid> 的 confirmed 等
+        s = vassert[len("out_contains:"):]
+        return (s in (cmd_json or ""), f"out contains '{s}'")
     if vassert.startswith("notcontains:"):
         s = vassert[len("notcontains:"):]
         return (s not in (verify_out or ""), f"notcontains '{s}'")
@@ -459,9 +463,9 @@ def _eval_step(s, rc, out, ctx, env):
     vcmd = substitute(s["verify_cmd"], ctx)
     vout = ""
     # 观测前留 settle 时间（注入/清除后系统状态需片刻稳定，如 python listen / dd / kill 生效）
-    if vcmd and not vasrt.startswith(("state_", "exitcode:")):
+    if vcmd and not vasrt.startswith(("state_", "exitcode:", "out_contains:")):
         time.sleep(0.6)
-    if vcmd and not vasrt.startswith(("state_", "exitcode:", "exists:", "notexists:")):
+    if vcmd and not vasrt.startswith(("state_", "exitcode:", "exists:", "notexists:", "out_contains:")):
         vrc, vout = sh(vcmd, env=env, timeout=30)
     elif vcmd and vasrt.startswith(("exists:", "notexists:")):
         vrc, vout = sh(vcmd, env=env, timeout=30)  # e.g. injection flag probe

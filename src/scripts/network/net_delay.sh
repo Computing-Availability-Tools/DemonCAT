@@ -48,7 +48,7 @@ case "${DCAT_OP:-inject}" in
             [ -n "$iface" ] || continue
             out=$(tc qdisc show dev "$iface" 2>/dev/null)
             # 只匹配纯 delay netem (delay 值在行尾), 排除 jitter/reorder; 不匹配则不输出 (查不到)
-            match=$(echo "$out" | grep -E "netem.*delay [0-9]+[a-z]*[[:space:]]*$")
+            match=$(echo "$out" | grep -E "netem.*delay [0-9.]+[a-z]*[[:space:]]*$")
             [ -n "$match" ] && { echo "$match"; found=1; }
         done
         [ "$found" = 1 ] && exit 0 || exit 1

@@ -8,7 +8,10 @@ ip=${DCAT_PARAM_IP:-}
 table=${DCAT_PARAM_TABLE:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { $HCCN -ip_rule -g 2>/dev/null | grep -F "$ip" | grep -Fq "$table"; }
+fault_present() {
+    if [ -n "$ip" ] && [ -n "$table" ]; then $HCCN -ip_rule -g 2>/dev/null | grep -F "$ip" | grep -Fq "$table"
+    else [ -f "/tmp/dcat-rNPU_iprule_add-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -18,6 +21,7 @@ case "${DCAT_OP:-inject}" in
         : ${table:?missing required param: table}
         npu_check_env
         $HCCN -ip_rule -a dir "$dir" ip "$ip" table "$table" || { echo "ip_rule add failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_iprule_add 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "added ip_rule $dir $ip -> table $table on chip $chip"
         ;;
     clean)
@@ -25,8 +29,9 @@ case "${DCAT_OP:-inject}" in
             echo "no active injection (chip required for ip_rule clean)"
         elif fault_present; then
             $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
+            sidecar_clear rNPU_iprule_add "$chip"
             echo "removed ip_rule $dir $ip on chip $chip"
         else echo "ip_rule not present, no-op"; fi
         ;;
-    query) $HCCN -ip_rule -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

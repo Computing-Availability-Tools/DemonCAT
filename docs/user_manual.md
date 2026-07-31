@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 37 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 36 条故障。
 > 完整规格见 [SPEC.md](../SPEC.md)，架构见 [DESIGN.md](../DESIGN.md)。
 
 ---
@@ -15,7 +15,7 @@
 | 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
 | 进程 | 3 | 进程退出 / 挂起 / 僵尸 |
 | NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / FEC / DSCP / PFC / RoCE 端口 |
-| **合计** | **37** | |
+| **合计** | **36** | |
 
 ---
 
@@ -60,11 +60,10 @@
   - [5.13 rNPU_iproute_del](#513-rnpu_iproute_del) — 删除 ip route
   - [5.14 rNPU_bw_limit](#514-rnpu_bw_limit) — RoCE 带宽限速
   - [5.15 rNPU_mtu_mismatch](#515-rnpu_mtu_mismatch) — RoCE MTU 变更
-  - [5.16 rNPU_fec_change](#516-rnpu_fec_change) — RoCE FEC 编码变更
-  - [5.17 rNPU_dscp_tc_change](#517-rnpu_dscp_tc_change) — DSCP→TC 映射变更
-  - [5.18 rNPU_prio_tc_change](#518-rnpu_prio_tc_change) — Prio→TC 映射变更
-  - [5.19 rNPU_pfc_change](#519-rnpu_pfc_change) — PFC 位图变更
-  - [5.20 rNPU_roce_port_change](#520-rnpu_roce_port_change) — RoCE UDP 端口变更
+  - [5.16 rNPU_dscp_tc_change](#516-rnpu_dscp_tc_change) — DSCP→TC 映射变更
+  - [5.17 rNPU_prio_tc_change](#517-rnpu_prio_tc_change) — Prio→TC 映射变更
+  - [5.18 rNPU_pfc_change](#518-rnpu_pfc_change) — PFC 位图变更
+  - [5.19 rNPU_roce_port_change](#519-rnpu_roce_port_change) — RoCE UDP 端口变更
 
 ---
 
@@ -593,7 +592,7 @@ dcat clean rPROC_zstate --pid=12345
 
 ---
 
-## 第五章 NPU 模块（20 条）
+## 第五章 NPU 模块（19 条）
 
 NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool` 对 RoCE 网口注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 
@@ -1016,34 +1015,7 @@ dcat clean rNPU_mtu_mismatch --chip=0
 
 ---
 
-### 5.16 rNPU_fec_change
-
-**UID**: `rNPU_fec_change`
-
-**描述**: 修改指定芯片 RoCE FEC 编码模式，影响链路纠错能力。
-
-**实现原理**: inject 先 `-fec -g` 取原 encoding 存 sidecar，再 `-fec -s encoding <enc>` 修改；clean 从 sidecar 还原（缺省 `rs`）；query 比对当前 encoding 与原值。
-
-**使用示例**:
-```bash
-dcat inject rNPU_fec_change --chip=0 --encoding=none
-dcat query rNPU_fec_change --chip=0
-dcat clean rNPU_fec_change --chip=0
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| encoding | 必填 | 字符串 | FEC 编码模式，如 rs、none、base-r |
-
-**危险等级**: 中 — 关闭/更改 FEC 后链路误码率上升，高负载下可能出现不可纠正错误导致丢包。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。可用 encoding 值取决于芯片与链路速率。
-
----
-
-### 5.17 rNPU_dscp_tc_change
+### 5.16 rNPU_dscp_tc_change
 
 **UID**: `rNPU_dscp_tc_change`
 
@@ -1071,7 +1043,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
 
 ---
 
-### 5.18 rNPU_prio_tc_change
+### 5.17 rNPU_prio_tc_change
 
 **UID**: `rNPU_prio_tc_change`
 
@@ -1098,7 +1070,7 @@ dcat clean rNPU_prio_tc_change --chip=0
 
 ---
 
-### 5.19 rNPU_pfc_change
+### 5.18 rNPU_pfc_change
 
 **UID**: `rNPU_pfc_change`
 
@@ -1125,7 +1097,7 @@ dcat clean rNPU_pfc_change --chip=0
 
 ---
 
-### 5.20 rNPU_roce_port_change
+### 5.19 rNPU_roce_port_change
 
 **UID**: `rNPU_roce_port_change`
 

@@ -9,7 +9,10 @@ table=${DCAT_PARAM_TABLE:-}
 HCCN="hccn_tool -i $chip"
 SIDECAR="/tmp/dcat-rNPU_iproute_del-$chip.bak"
 
-fault_present() { ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"; }
+fault_present() {
+    if [ -n "$ip" ] && [ -n "$table" ]; then ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"
+    else [ -f "/tmp/dcat-rNPU_iproute_del-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -23,6 +26,7 @@ case "${DCAT_OP:-inject}" in
         o_dev=$(echo "$cur" | grep -oE 'dev [a-z0-9]+' | awk '{print $2}')
         [ -n "$o_via" ] && printf 'via=%s\ndev=%s\n' "$o_via" "$o_dev" > "$SIDECAR"
         $HCCN -ip_route -d ip "$ip" ip_mask "$mask" table "$table" || { echo "ip_route del failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_iproute_del 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "deleted ip_route $ip/$mask table $table on chip $chip (was via $o_via dev $o_dev)"
         ;;
     clean)
@@ -36,5 +40,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored ip_route $ip/$mask via $via dev $dev table $table on chip $chip"
         else echo "ip_route already present, no-op"; fi
         ;;
-    query) $HCCN -ip_route -g table "$table"; fault_present ;;
+    query) npu_foreach_chip '$HCCN -ip_route -g table "$table"; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

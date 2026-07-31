@@ -6,8 +6,8 @@ chip=${DCAT_PARAM_CHIP:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cnt=$($HCCN -route -g 2>/dev/null | grep -cE 'address|gateway')
-    [ "$cnt" -eq 0 ] 2>/dev/null || [ -z "$cnt" ]
+    cnt=$($HCCN -route -g 2>/dev/null | grep -cE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+')
+    [ "$cnt" -eq 0 ] 2>/dev/null
 }
 
 case "${DCAT_OP:-inject}" in
@@ -15,6 +15,7 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         npu_check_env
         $HCCN -route -c || { echo "route clear failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_route_clear 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "cleared route table on chip $chip"
         ;;
     clean)
@@ -25,5 +26,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored routes via cfg recovery on chip $chip"
         else echo "routes already present, no-op"; fi
         ;;
-    query) $HCCN -route -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 static injection_record_t g_records[DCAT_MAX_RECORDS];
 static long long g_next_id = 1;
@@ -128,6 +129,28 @@ static void json_to_params(const cJSON *o, params_t *p) {
     }
 }
 
+/* Expand a leading "~/" (or "~") to $HOME. Falls back to the raw path. */
+static void expand_home_path(const char *in, char *out, size_t cap) {
+    if (in && in[0] == '~' && (in[1] == '/' || in[1] == '\0')) {
+        const char *home = getenv("HOME");
+        if (home && home[0]) { snprintf(out, cap, "%s%s", home, in + 1); return; }
+    }
+    snprintf(out, cap, "%s", in ? in : "");
+}
+
+/* mkdir -p for the parent directory of `path`. Best-effort, ignores EEXIST. */
+static void ensure_parent_dir(const char *path) {
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s", path);
+    char *slash = strrchr(buf, '/');
+    if (!slash || slash == buf) return;     /* no parent or root */
+    *slash = '\0';
+    for (char *p = buf + 1; *p; p++) {
+        if (*p == '/') { *p = '\0'; mkdir(buf, 0755); *p = '/'; }
+    }
+    mkdir(buf, 0755);
+}
+
 void state_save(void) {
     pthread_mutex_lock(&g_lock);
     cJSON *arr = cJSON_CreateArray();
@@ -148,22 +171,10 @@ void state_save(void) {
     pthread_mutex_unlock(&g_lock);
 
     if (!s) return;
-    /* 确保父目录存在 (mkdir -p 等价, 如 ~/.demoncat/), 否则 fopen 静默失败导致
-     * state 不持久化, 进而使 reinject/重注入检测在全新部署上失效。 */
-    {
-        char dirbuf[256];
-        strncpy(dirbuf, g_file, sizeof dirbuf - 1);
-        dirbuf[sizeof dirbuf - 1] = '\0';
-        char *slash = strrchr(dirbuf, '/');
-        if (slash) {
-            *slash = '\0';                          /* 截掉文件名, 得父目录 */
-            for (char *q = dirbuf + 1; *q; q++) {
-                if (*q == '/') { *q = '\0'; mkdir(dirbuf, 0700); *q = '/'; }
-            }
-            mkdir(dirbuf, 0700);                   /* 末级目录 (忽略 EEXIST) */
-        }
-    }
-    FILE *fp = fopen(g_file, "w");
+    char path[256];
+    expand_home_path(g_file, path, sizeof(path));
+    ensure_parent_dir(path);
+    FILE *fp = fopen(path, "w");
     if (fp) {
         if (fputs(s, fp) == EOF || fclose(fp) != 0) {
             fclose(fp);

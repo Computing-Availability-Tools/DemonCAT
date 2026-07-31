@@ -7,7 +7,7 @@ gw=${DCAT_PARAM_GATEWAY:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cur=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway [0-9.]+' | awk '{print $2}')
+    cur=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway:[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+')
     orig=$(sidecar_load rNPU_gw_change "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
@@ -17,9 +17,10 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         : ${gw:?missing required param: gateway}
         npu_check_env
-        orig=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway [0-9.]+' | awk '{print $2}')
+        orig=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway:[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+')
         [ -n "$orig" ] && sidecar_save rNPU_gw_change "$chip" "$orig"
         $HCCN -gateway -s gateway "$gw" || { echo "gateway set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_gw_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied gateway $gw on chip $chip (was $orig)"
         ;;
     clean)
@@ -38,5 +39,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored gateway to $orig on chip $chip"
         else echo "gateway already at original, no-op"; fi
         ;;
-    query) $HCCN -gateway -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -gateway -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

@@ -7,7 +7,10 @@ dev=${DCAT_PARAM_DEV:-}
 ip=${DCAT_PARAM_IP:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"; }
+fault_present() {
+    if [ -n "$ip" ]; then ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"
+    else [ -f "/tmp/dcat-rNPU_arp_del-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -15,9 +18,10 @@ case "${DCAT_OP:-inject}" in
         : ${dev:?missing required param: dev}
         : ${ip:?missing required param: ip}
         npu_check_env
-        orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'mac [0-9a-f:]+' | awk '{print $2}')
+        orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'at [0-9a-f:]+' | awk '{print $2}')
         [ -n "$orig_mac" ] && sidecar_save rNPU_arp_del "$chip" "$orig_mac"
         $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_arp_del 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "deleted arp $dev/$ip on chip $chip (was mac $orig_mac)"
         ;;
     clean)
@@ -30,5 +34,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored arp $dev/$ip -> $orig_mac on chip $chip"
         else echo "arp entry already present, no-op"; fi
         ;;
-    query) $HCCN -arp -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

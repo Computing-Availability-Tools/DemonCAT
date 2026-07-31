@@ -8,7 +8,10 @@ ip=${DCAT_PARAM_IP:-}
 mac=${DCAT_PARAM_MAC:-}
 HCCN="hccn_tool -i $chip"
 
-fault_present() { $HCCN -arp -g 2>/dev/null | grep -F "$ip" | grep -Fq "$mac"; }
+fault_present() {
+    if [ -n "$ip" ] && [ -n "$mac" ]; then $HCCN -arp -g 2>/dev/null | grep -F "$ip" | grep -Fq "$mac"
+    else [ -f "/tmp/dcat-rNPU_arp_poison-$chip.bak" ]; fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -18,6 +21,7 @@ case "${DCAT_OP:-inject}" in
         : ${mac:?missing required param: mac}
         npu_check_env
         $HCCN -arp -a dev "$dev" ip "$ip" mac "$mac" || { echo "arp add failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_arp_poison 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "poisoned arp $dev/$ip -> $mac on chip $chip"
         ;;
     clean)
@@ -25,8 +29,9 @@ case "${DCAT_OP:-inject}" in
             echo "no active injection (chip required for arp clean)"
         elif fault_present; then
             $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
+            sidecar_clear rNPU_arp_poison "$chip"
             echo "removed poisoned arp $dev/$ip on chip $chip"
         else echo "arp entry not present, no-op"; fi
         ;;
-    query) $HCCN -arp -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

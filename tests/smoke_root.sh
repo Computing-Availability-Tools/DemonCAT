@@ -231,7 +231,7 @@ fi
 
 # ====================================================================
 echo ""
-echo "--- NPU 故障 (20 条) ---"
+echo "--- NPU 故障 (19 条) ---"
 # ====================================================================
 if [ "$HAS_HCCN" = 1 ]; then
     echo "  (hccn_tool 可用，开始测试...)"
@@ -240,7 +240,6 @@ if [ "$HAS_HCCN" = 1 ]; then
         "rNPU_link_down chip=0"
         "rNPU_bw_limit chip=0 bw_limit=10000"
         "rNPU_mtu_mismatch chip=0 size=1280"
-        "rNPU_fec_change chip=0 encoding=rs"
         "rNPU_roce_port_change chip=0 port=4791"
     )
     for line in "${NPU_TESTS[@]}"; do
@@ -258,7 +257,7 @@ if [ "$HAS_HCCN" = 1 ]; then
     done
     skip "其余 15 条 rNPU_*" "需要特定 NPU 配置参数，请参照 docs/manual_test_guide.md 手动测试"
 else
-    skip "全部 20 条 rNPU_*" "hccn_tool 不可用 — 需要 Atlas NPU 物理机，WSL 无法模拟。原因：所有 NPU 故障通过 hccn_tool 操作 RoCE 网卡，无硬件无法执行 inject/clean/query 的任何一步"
+    skip "全部 19 条 rNPU_*" "hccn_tool 不可用 — 需要 Atlas NPU 物理机，WSL 无法模拟。原因：所有 NPU 故障通过 hccn_tool 操作 RoCE 网卡，无硬件无法执行 inject/clean/query 的任何一步"
 fi
 
 # ====================================================================

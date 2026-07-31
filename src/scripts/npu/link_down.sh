@@ -12,6 +12,7 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         npu_check_env
         $HCCN -link -s down || { echo "link down failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_link_down 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "link down on chip $chip"
         ;;
     clean)
@@ -22,5 +23,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored config (link up) on chip $chip"
         else echo "link already up, no-op"; fi
         ;;
-    query) $HCCN -link -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -link -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

@@ -7,7 +7,7 @@ size=${DCAT_PARAM_SIZE:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cur=$($HCCN -mtu -g 2>/dev/null | grep -oE 'mtu [0-9]+' | grep -oE '[0-9]+')
+    cur=$($HCCN -mtu -g 2>/dev/null | grep -oE 'mtu:[[:space:]]*[0-9]+' | grep -oE '[0-9]+')
     orig=$(sidecar_load rNPU_mtu_mismatch "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
@@ -17,9 +17,10 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         : ${size:?missing required param: size}
         npu_check_env
-        orig=$($HCCN -mtu -g 2>/dev/null | grep -oE 'mtu [0-9]+' | grep -oE '[0-9]+')
+        orig=$($HCCN -mtu -g 2>/dev/null | grep -oE 'mtu:[[:space:]]*[0-9]+' | grep -oE '[0-9]+')
         [ -n "$orig" ] && sidecar_save rNPU_mtu_mismatch "$chip" "$orig"
         $HCCN -mtu -s size "$size" || { echo "mtu set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_mtu_mismatch 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied mtu $size on chip $chip (was $orig)"
         ;;
     clean)
@@ -38,5 +39,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored mtu to $orig on chip $chip"
         else echo "mtu already at original, no-op"; fi
         ;;
-    query) $HCCN -mtu -g; fault_present ;;
+    query) npu_foreach_chip '$HCCN -mtu -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

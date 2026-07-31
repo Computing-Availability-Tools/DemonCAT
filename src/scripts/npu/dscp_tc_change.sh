@@ -8,7 +8,8 @@ tc=${DCAT_PARAM_TC:-}
 HCCN="hccn_tool -i $chip"
 
 fault_present() {
-    cur=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | grep -oE 'tc [0-9]+' | grep -oE '[0-9]+')
+    [ -n "${dscp:-}" ] || { [ -f "/tmp/dcat-rNPU_dscp_tc_change-$chip.bak" ]; return $?; }
+    cur=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | awk -v d="$dscp" '$1==d {print $2}')
     orig=$(sidecar_load rNPU_dscp_tc_change "$chip")
     [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
@@ -19,9 +20,10 @@ case "${DCAT_OP:-inject}" in
         : ${dscp:?missing required param: dscp}
         : ${tc:?missing required param: tc}
         npu_check_env
-        orig=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | grep -oE 'tc [0-9]+' | grep -oE '[0-9]+')
+        orig=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | awk -v d="$dscp" '$1==d {print $2}')
         [ -n "$orig" ] && sidecar_save rNPU_dscp_tc_change "$chip" "$orig"
         $HCCN -dscp_to_tc -s dscp "$dscp" tc "$tc" || { echo "dscp_to_tc set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_dscp_tc_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied dscp $dscp -> tc $tc on chip $chip (was $orig)"
         ;;
     clean)
@@ -34,5 +36,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored dscp $dscp -> tc $orig on chip $chip"
         else echo "dscp_to_tc already at original, no-op"; fi
         ;;
-    query) $HCCN -dscp_to_tc -g dscp "$dscp"; fault_present ;;
+    query) npu_foreach_chip '$HCCN -dscp_to_tc -g dscp "$dscp"; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

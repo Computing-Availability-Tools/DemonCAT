@@ -26,6 +26,7 @@ case "${DCAT_OP:-inject}" in
         o_dev=$(echo "$cur" | grep -oE 'dev [a-z0-9]+' | awk '{print $2}')
         [ -n "$o_via" ] && printf 'via=%s\ndev=%s\n' "$o_via" "$o_dev" > "$SIDECAR"
         $HCCN -ip_route -d ip "$ip" ip_mask "$mask" table "$table" || { echo "ip_route del failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_iproute_del 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "deleted ip_route $ip/$mask table $table on chip $chip (was via $o_via dev $o_dev)"
         ;;
     clean)

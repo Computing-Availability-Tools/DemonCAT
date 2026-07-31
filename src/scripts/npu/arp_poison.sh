@@ -21,7 +21,7 @@ case "${DCAT_OP:-inject}" in
         : ${mac:?missing required param: mac}
         npu_check_env
         $HCCN -arp -a dev "$dev" ip "$ip" mac "$mac" || { echo "arp add failed" >&2; exit 1; }
-        sidecar_save rNPU_arp_poison "$chip" "$ip"
+        fault_present || { echo "rNPU_arp_poison 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "poisoned arp $dev/$ip -> $mac on chip $chip"
         ;;
     clean)

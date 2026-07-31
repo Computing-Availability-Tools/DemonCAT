@@ -38,5 +38,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored roce udp port to $orig on chip $chip"
         else echo "udp port already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -udp -g; fault_present' ;;
+    query) npu_foreach_chip '$HCCN -udp -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
 esac

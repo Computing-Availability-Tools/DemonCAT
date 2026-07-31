@@ -45,5 +45,5 @@ case "${DCAT_OP:-inject}" in
             echo "restored ip to $address/$netmask on chip $chip"
         else echo "ip already at original, no-op"; fi
         ;;
-    query) npu_foreach_chip '$HCCN -ip -g; fault_present' ;;
+    query) npu_foreach_chip '$HCCN -ip -g; fault_present && echo "FAULT CONFIRMED" || echo "FAULT NOT ACTIVE"' ;;
 esac

@@ -342,3 +342,66 @@ DemonCAT v0.1.1 全部 **23** 个 CTest 测试通过，零失败。**36 条故�
 *测试执行时间: 2026-07-25（v0.1 基线）/ 2026-07-30（stateless clean 增量）*
 *测试执行人: Automated (CTest) + Manual*
 *总耗时: 13.85 秒 (v0.1 CTest) / 21.22 秒 (增量后 CTest 23 项) + 手动验证*
+
+
+
+## 10. E2E 测试（CSV 驱动，20260731_145902）
+
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`。
+
+
+- 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
+
+- 结果: **PASS 73 / FAIL 22 / SKIP 0 / TOTAL 95**，通过率 76%
+
+
+### 10.1 分类统计
+
+| 分类 | 说明 | PASS | FAIL | SKIP |
+|---|---|---|---|---|
+| B | 边界值(参数 valid/invalid) | 17 | 0 | 0 |
+| F | 功能基线(37故障 inject→verify→clean→query无幽灵) | 15 | 22 | 0 |
+| H | 主机安全(危险资源/路径穿越) | 4 | 0 | 0 |
+| I | 命令注入(良性载荷,验未执行) | 21 | 0 | 0 |
+| MISC | list/help/错误码 | 4 | 0 | 0 |
+| P | 权限边界(非root跑root故障,无半成品) | 2 | 0 | 0 |
+| R | 自愈/一键恢复(state删/坏/孤儿/幽灵/幂等) | 5 | 0 | 0 |
+| S | 状态一致性与幂等(clean×2/--force/query×2) | 5 | 0 | 0 |
+
+### 10.2 覆盖说明
+
+- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。
+
+- P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝（root 框架下仍测非 root 拒绝）。
+
+- rCPU_core_offline：默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。
+
+- H-3 写入边界：用 device=/tmp 安全路径（不污染 /etc）。
+
+
+### 10.4 失败用例
+
+| id | flow | phase | detail |
+|---|---|---|---|
+| E2E-001 | F-rCPU_core_offline | inject | exit 1 != 0 |
+| E2E-047 | F-rNET_service_stop | inject | exit 3 != 0 |
+| E2E-054 | F-rNPU_arp_del | inject | exit 1 != 0 |
+| E2E-057 | F-rNPU_arp_poison | inject | exit 1 != 0 |
+| E2E-060 | F-rNPU_bw_limit | inject | exit 1 != 0 |
+| E2E-063 | F-rNPU_dscp_tc_change | inject | exit 1 != 0 |
+| E2E-066 | F-rNPU_fec_change | inject | exit 1 != 0 |
+| E2E-069 | F-rNPU_gw_change | inject | exit 1 != 0 |
+| E2E-072 | F-rNPU_ip_change | inject | exit 1 != 0 |
+| E2E-075 | F-rNPU_iproute_add | inject | exit 1 != 0 |
+| E2E-078 | F-rNPU_iproute_del | inject | exit 1 != 0 |
+| E2E-081 | F-rNPU_iprule_add | inject | exit 1 != 0 |
+| E2E-084 | F-rNPU_iprule_del | inject | exit 1 != 0 |
+| E2E-087 | F-rNPU_link_down | inject | exit 1 != 0 |
+| E2E-090 | F-rNPU_mtu_mismatch | inject | exit 1 != 0 |
+| E2E-093 | F-rNPU_netdetect_change | inject | exit 1 != 0 |
+| E2E-096 | F-rNPU_pfc_change | inject | exit 1 != 0 |
+| E2E-099 | F-rNPU_prio_tc_change | inject | exit 1 != 0 |
+| E2E-102 | F-rNPU_roce_port_change | inject | exit 1 != 0 |
+| E2E-105 | F-rNPU_route_add | inject | exit 1 != 0 |
+| E2E-108 | F-rNPU_route_clear | inject | exit 1 != 0 |
+| E2E-111 | F-rNPU_route_del | inject | exit 1 != 0 |

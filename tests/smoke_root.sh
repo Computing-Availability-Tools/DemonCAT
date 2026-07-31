@@ -13,9 +13,13 @@ cd "$(dirname "$0")/.."
 [ -x build/dcat ] || { cmake -B build && cmake --build build; }
 DCAT=./build/dcat
 
-# 测试状态隔离
-export DCAT_STATE_FILE="/tmp/dcat_smoke_root.json"
-rm -f "$DCAT_STATE_FILE"
+# 测试状态隔离：dcat 不读 DCAT_STATE_FILE（main.c 只认 config 的 state_file/默认 ~/.demoncat）。
+# 生成临时 config，把 state_file 覆盖到 /tmp，避免污染 /root/.demoncat/state.json。
+TMP_CONF="/tmp/dcat_smoke_root.conf"
+STATE_FILE="/tmp/dcat_smoke_root.json"
+sed "s|^state_file = .*|state_file = $STATE_FILE|" config/demoncat.conf > "$TMP_CONF"
+rm -f "$STATE_FILE"
+DCAT_CONF="$TMP_CONF"
 
 # 创建测试用的虚拟网卡 (不影响真实网络)
 TEST_IFACE="dcat-test0"
@@ -30,7 +34,7 @@ fail() { echo "  FAIL: $1 — $2"; FAIL=$((FAIL+1)); }
 skip() { echo "  SKIP: $1 — $2"; SKIP=$((SKIP+1)); }
 
 cleanup_fault() {
-    $DCAT clean "$@" --config config/demoncat.conf >/dev/null 2>&1 || true
+    $DCAT clean "$@" --config "$DCAT_CONF" >/dev/null 2>&1 || true
     pkill -f 'dcat.dstate\|dcat.stress\|dcat.write' 2>/dev/null || true
     rm -f /tmp/dcat-*.pid /tmp/dcat-*.sidecar /tmp/dcat-*.bak /tmp/dcat-*.rule /tmp/dcat-*.list /tmp/dcat.dstate.* /tmp/dcat.write.* 2>/dev/null || true
 }
@@ -59,10 +63,10 @@ echo ""
 echo "--- rCPU_core_offline (sysfs) ---"
 # ====================================================================
 if [ -w /sys/devices/system/cpu/cpu1/online ]; then
-    if $DCAT inject rCPU_core_offline --cores=1 --config config/demoncat.conf >/dev/null 2>&1; then
+    if $DCAT inject rCPU_core_offline --cores=1 --config "$DCAT_CONF" >/dev/null 2>&1; then
         state=$(cat /sys/devices/system/cpu/cpu1/online 2>/dev/null)
         if [ "$state" = "0" ]; then
-            $DCAT clean rCPU_core_offline --cores=1 --config config/demoncat.conf >/dev/null 2>&1
+            $DCAT clean rCPU_core_offline --cores=1 --config "$DCAT_CONF" >/dev/null 2>&1
             state2=$(cat /sys/devices/system/cpu/cpu1/online 2>/dev/null)
             [ "$state2" = "1" ] && pass "rCPU_core_offline" || fail "rCPU_core_offline" "clean 后 cpu1 未恢复 (state=$state2)"
         else
@@ -88,11 +92,11 @@ test_tc_fault() {
         return
     fi
     # inject
-    if $DCAT inject "$uid" --config config/demoncat.conf "$@" >/dev/null 2>&1; then
+    if $DCAT inject "$uid" --config "$DCAT_CONF" "$@" >/dev/null 2>&1; then
         # verify qdisc exists
         if tc qdisc show dev "$TEST_IFACE" 2>/dev/null | grep -qE "qdisc"; then
             # clean
-            $DCAT clean "$uid" --config config/demoncat.conf "$@" >/dev/null 2>&1
+            $DCAT clean "$uid" --config "$DCAT_CONF" "$@" >/dev/null 2>&1
             # verify qdisc removed
             if ! tc qdisc show dev "$TEST_IFACE" 2>/dev/null | grep -qE "netem|tbf"; then
                 pass "$uid"
@@ -120,10 +124,10 @@ echo ""
 echo "--- rNET_down (ip link) ---"
 # ====================================================================
 if [ "$HAS_IP" = 1 ] && [ "$HAS_TEST_IFACE" = 1 ]; then
-    if $DCAT inject rNET_down --iface=$TEST_IFACE --config config/demoncat.conf >/dev/null 2>&1; then
+    if $DCAT inject rNET_down --iface=$TEST_IFACE --config "$DCAT_CONF" >/dev/null 2>&1; then
         state=$(ip -o link show dev "$TEST_IFACE" 2>/dev/null | grep -o "state [A-Z]*" | awk '{print $2}')
         if [ "$state" = "DOWN" ]; then
-            $DCAT clean rNET_down --iface=$TEST_IFACE --config config/demoncat.conf >/dev/null 2>&1
+            $DCAT clean rNET_down --iface=$TEST_IFACE --config "$DCAT_CONF" >/dev/null 2>&1
             state2=$(ip -o link show dev "$TEST_IFACE" 2>/dev/null | grep -o "state [A-Z]*" | awk '{print $2}')
             [ "$state2" != "DOWN" ] && pass "rNET_down" || fail "rNET_down" "clean 后仍 DOWN"
         else
@@ -142,8 +146,8 @@ echo ""
 echo "--- rNET_degrade (ethtool) ---"
 # ====================================================================
 if [ "$HAS_ETHTOOL" = 1 ] && [ "$HAS_TEST_IFACE" = 1 ]; then
-    if $DCAT inject rNET_degrade --iface=$TEST_IFACE --speed_mbps=10 --config config/demoncat.conf >/dev/null 2>&1; then
-        $DCAT clean rNET_degrade --iface=$TEST_IFACE --speed_mbps=10 --config config/demoncat.conf >/dev/null 2>&1
+    if $DCAT inject rNET_degrade --iface=$TEST_IFACE --speed_mbps=10 --config "$DCAT_CONF" >/dev/null 2>&1; then
+        $DCAT clean rNET_degrade --iface=$TEST_IFACE --speed_mbps=10 --config "$DCAT_CONF" >/dev/null 2>&1
         pass "rNET_degrade"
     else
         # ethtool 可能不支持 dummy 网卡，这是预期的
@@ -158,9 +162,9 @@ echo ""
 echo "--- rNET_link_flap (ip link) ---"
 # ====================================================================
 if [ "$HAS_IP" = 1 ] && [ "$HAS_TEST_IFACE" = 1 ]; then
-    if $DCAT inject rNET_link_flap --iface=$TEST_IFACE --cycle_sec=1 --count=2 --config config/demoncat.conf >/dev/null 2>&1; then
+    if $DCAT inject rNET_link_flap --iface=$TEST_IFACE --cycle_sec=1 --count=2 --config "$DCAT_CONF" >/dev/null 2>&1; then
         sleep 5
-        $DCAT clean rNET_link_flap --iface=$TEST_IFACE --cycle_sec=1 --count=2 --config config/demoncat.conf >/dev/null 2>&1
+        $DCAT clean rNET_link_flap --iface=$TEST_IFACE --cycle_sec=1 --count=2 --config "$DCAT_CONF" >/dev/null 2>&1
         state=$(ip -o link show dev "$TEST_IFACE" 2>/dev/null | grep -o "state [A-Z]*" | awk '{print $2}')
         [ "$state" != "DOWN" ] && pass "rNET_link_flap" || fail "rNET_link_flap" "clean 后仍 DOWN"
     else
@@ -175,9 +179,9 @@ echo ""
 echo "--- rNET_tcp_loss (iptables) ---"
 # ====================================================================
 if [ "$HAS_IPTABLES" = 1 ]; then
-    if $DCAT inject rNET_tcp_loss --port=19998 --config config/demoncat.conf >/dev/null 2>&1; then
+    if $DCAT inject rNET_tcp_loss --port=19998 --config "$DCAT_CONF" >/dev/null 2>&1; then
         if iptables -L INPUT -n 2>/dev/null | grep -q "dpt:19998"; then
-            $DCAT clean rNET_tcp_loss --port=19998 --config config/demoncat.conf >/dev/null 2>&1
+            $DCAT clean rNET_tcp_loss --port=19998 --config "$DCAT_CONF" >/dev/null 2>&1
             if ! iptables -L INPUT -n 2>/dev/null | grep -q "dpt:19998"; then
                 pass "rNET_tcp_loss"
             else
@@ -206,13 +210,13 @@ if [ "$HAS_SYSTEMCTL" = 1 ] && timeout 5 systemctl is-system-running >/dev/null 
         systemctl is-active "$svc" >/dev/null 2>&1 && TEST_SVC="$svc" && break
     done
     if [ -n "$TEST_SVC" ]; then
-        if $DCAT inject rNET_service_stop --service=$TEST_SVC --config config/demoncat.conf >/dev/null 2>&1; then
+        if $DCAT inject rNET_service_stop --service=$TEST_SVC --config "$DCAT_CONF" >/dev/null 2>&1; then
             state=$(timeout 3 systemctl is-active "$TEST_SVC" 2>/dev/null)
             if [ "$state" = "inactive" ] || [ "$state" = "failed" ]; then
-                $DCAT clean rNET_service_stop --service=$TEST_SVC --config config/demoncat.conf >/dev/null 2>&1
+                $DCAT clean rNET_service_stop --service=$TEST_SVC --config "$DCAT_CONF" >/dev/null 2>&1
                 pass "rNET_service_stop"
             else
-                $DCAT clean rNET_service_stop --service=$TEST_SVC --config config/demoncat.conf >/dev/null 2>&1
+                $DCAT clean rNET_service_stop --service=$TEST_SVC --config "$DCAT_CONF" >/dev/null 2>&1
                 fail "rNET_service_stop" "inject 后服务仍 active (state=$state)"
             fi
         else
@@ -244,8 +248,8 @@ if [ "$HAS_HCCN" = 1 ]; then
         # 构造 --key=value 参数
         args=""
         for kv in $params; do args="$args --${kv}"; done
-        if $DCAT inject "$uid" --config config/demoncat.conf $args >/dev/null 2>&1; then
-            $DCAT clean "$uid" --config config/demoncat.conf $args >/dev/null 2>&1
+        if $DCAT inject "$uid" --config "$DCAT_CONF" $args >/dev/null 2>&1; then
+            $DCAT clean "$uid" --config "$DCAT_CONF" $args >/dev/null 2>&1
             pass "$uid"
         else
             fail "$uid" "inject 失败 (hccn_tool 可能需要特定芯片状态)"
@@ -260,7 +264,7 @@ fi
 # 清理
 # ====================================================================
 ip link del "$TEST_IFACE" 2>/dev/null || true
-rm -f "$DCAT_STATE_FILE" /tmp/dcat-* 2>/dev/null || true
+rm -f "$STATE_FILE" "$TMP_CONF" /tmp/dcat-* 2>/dev/null || true
 
 # ====================================================================
 # 汇总

@@ -20,6 +20,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -netdetect -g 2>/dev/null | grep -oE 'address:[[:space:]]*[0-9.]+' | awk '{print $NF}')
         [ -n "$orig" ] && sidecar_save rNPU_netdetect_change "$chip" "$orig"
         $HCCN -netdetect -s address "$addr" || { echo "netdetect set failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_netdetect_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied netdetect $addr on chip $chip (was $orig)"
         ;;
     clean)

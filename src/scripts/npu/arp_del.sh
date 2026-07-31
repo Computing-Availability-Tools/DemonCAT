@@ -21,6 +21,7 @@ case "${DCAT_OP:-inject}" in
         orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'at [0-9a-f:]+' | awk '{print $2}')
         [ -n "$orig_mac" ] && sidecar_save rNPU_arp_del "$chip" "$orig_mac"
         $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
+        fault_present || { echo "rNPU_arp_del 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "deleted arp $dev/$ip on chip $chip (was mac $orig_mac)"
         ;;
     clean)

@@ -1,7 +1,7 @@
 #!/bin/sh
 # rNPU_route_clear: clear route table. Clean = -cfg recovery.
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
+chip=${DCAT_PARAM_CHIP:-}
 npu_validate_chip "$chip"
 HCCN="hccn_tool -i $chip"
 

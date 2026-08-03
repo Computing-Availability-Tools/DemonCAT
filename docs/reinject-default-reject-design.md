@@ -13,13 +13,13 @@ base: develop (4924f66)
 
 ## 2. 范围 (v1)
 
-- **CNF 路径**(config 驱动 36 故障,`registry_find` 命中):apply。
+- **CNF 路径**(config 驱动 33 故障,`registry_find` 命中):apply。
 - inject-only 故障(supported_ops="inject",不写 state):天然 0 overlap → 自然免检,无需特殊处理。
 - 插件路径(`plugin_dispatch`)、legacy injector 路径(`injector_find`):deferred,本期不动。
 
 ## 3. 资源键 (设计决策 i)
 
-- **资源键 = `f->clean_required` 各参数值**(grep 已验 36 条均纯资源标识:cores/device/iface/port/service/pid/chip*),零新增 config 字段。
+- **资源键 = `f->clean_required` 各参数值**(grep 已验 33 条均纯资源标识:cores/device/iface/port/service/pid/chip*),零新增 config 字段。
 - **`cores` 硬编码为集合语义参数**(唯一集合参数):走集合交集;其余参数(device/iface/port/service/pid/chip/dev/ip/...)走精确串等;多参键(NPU chip,dev,ip)= 各参精确 AND。
 - 备选 (ii) 新增 conf `resource_key` 字段:YAGNI(clean_required 已等价)。
 
@@ -99,6 +99,6 @@ error code 5 = reinject conflict。
 
 ## 10. deferred
 
-- 插件 / legacy injector 路径未接入 reinject(CNF 路径覆盖 36 故障)。
+- 插件 / legacy injector 路径未接入 reinject(CNF 路径覆盖 33 故障)。
 - clean_required 为空且写 state 的故审(无此 fault):保守判 overlap(任意活动=冲突)。
 - 真原子性:两步脚本有窗口,未做事务回滚。

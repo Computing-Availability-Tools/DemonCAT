@@ -13,6 +13,18 @@ case "${DCAT_OP:-inject}" in
         dev=${DCAT_PARAM_DEVICE:?missing required param: device}
         workers=${DCAT_PARAM_WORKERS:-4}
         size=${DCAT_PARAM_SIZE_MB:-200}
+
+        case "$workers" in ''|*[!0-9]*) echo "workers must be a positive integer, got: '$workers'" >&2; exit 1 ;; esac
+        [ "$workers" -ge 1 ] 2>/dev/null || { echo "workers must be >= 1, got: $workers" >&2; exit 1; }
+        case "$size" in ''|*[!0-9]*) echo "size_mb must be a positive integer, got: '$size'" >&2; exit 1 ;; esac
+        [ "$size" -ge 1 ] 2>/dev/null || { echo "size_mb must be >= 1, got: $size" >&2; exit 1; }
+        [ -d "$dev" ] || { echo "device path not found: $dev" >&2; exit 1; }
+        # symlink protection: reject symlinks and resolve real path
+        if [ -L "$dev" ]; then
+            real=$(readlink -f "$dev" 2>/dev/null || echo "$dev")
+            echo "device path must not be a symlink: '$dev' -> '$real'" >&2; exit 1
+        fi
+
         dev_clean=$(echo "$dev" | tr '/' '_')
         PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
 
@@ -63,18 +75,25 @@ case "${DCAT_OP:-inject}" in
             PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
             if [ -f "$PIDFILE" ]; then
                 for pid in $(cat "$PIDFILE"); do
-                    kill "$pid" 2>/dev/null
+                    kill -TERM "$pid" 2>/dev/null
+                done
+                sleep 0.5
+                for pid in $(cat "$PIDFILE"); do
                     kill -9 "$pid" 2>/dev/null
                 done
                 rm -f "$PIDFILE"
-                sleep 0.2
+                sleep 0.3
                 pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.stress" 2>/dev/null
+                pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.write" 2>/dev/null
                 [ -d "$dev" ] && rm -f "${dev}/dcat.stress."* 2>/dev/null
+                rm -f "${dev}/dcat.write."* 2>/dev/null
                 cleaned=1
             fi
         done
-        pkill -9 -f "dd if=/dev/zero of=/tmp/dcat.write" 2>/dev/null
-        rm -f /tmp/dcat.write.* 2>/dev/null
+        pkill -9 -f 'dd if=/dev/zero of=/tmp/dcat.write' 2>/dev/null
+        pkill -9 -f 'dd if=/dev/zero of=/tmp/dcat.stress' 2>/dev/null
+        rm -f /tmp/dcat.write.* /tmp/dcat.stress.* 2>/dev/null
+        rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
         if [ "$cleaned" = 1 ]; then echo "cleaned";
         else echo "cleaned (no active injection)"; fi
         ;;

@@ -6,6 +6,9 @@ SIDECAR="/tmp/dcat-rPROC_hang-${pid}.sidecar"
 case "${DCAT_OP:-inject}" in
     inject)
         pid=${DCAT_PARAM_PID:?missing required param: pid}
+        case "$pid" in 0|*[!0-9]*|-*)
+            echo "pid must be a positive integer, got: '$pid'" >&2; exit 1 ;;
+        esac
         SIDECAR="/tmp/dcat-rPROC_hang-${pid}.sidecar"
         kill -STOP "$pid" || { echo "kill -STOP $pid failed" >&2; exit 1; }
         echo "$pid" > "$SIDECAR"

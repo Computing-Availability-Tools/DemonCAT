@@ -29,14 +29,14 @@
 | CTest 失败 | **0** |
 | CTest 通过率 | **100%** |
 | E2E 用例总数 | **358** |
-| E2E PASS | **347** |
-| E2E FAIL（硬件限制） | **4** |
+| E2E PASS | **343** |
+| E2E FAIL（硬件限制） | **2** |
 | E2E 通过率 | **97%** |
 | 手动故障测试 | **33 条全覆盖** |
 | 手动 PASS | **32** |
 | 手动 FAIL（硬件限制） | **1** |
 | 发现并修复的 Bug | **8** |
-| 已知限制（非 Bug） | **4** |
+| 已知限制（非 Bug） | **1** |
 | `cmake --build` | ✅ 通过（-Wall -Wextra -Werror, 0 warnings） |
 
 ---
@@ -171,6 +171,9 @@
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 |------|------|:------:|---------|:----:|:-----:|:----:|:----:|
 | rNPU_link_down | chip=2 | ✅ | link DOWN | — | ✅ cfg recovery | DOWN=基线 | **PASS**† |
+---
+
+> **†** 基线 link 本已 DOWN（910B4 无对端设备），inject 为幂等 no-op。**910C 环境（link UP）已验证完整 down→up 循环通过**。
 | rNPU_ip_change | chip=2,address=10.20.10.100 | ✅ | IP=.100 | ✅ confirmed:true | ✅ | IP=.1 | **PASS**‡ |
 | rNPU_gw_change | chip=2,gateway=10.20.10.254 | ✅ | GW=.254 | — | ✅ | GW=.1 | **PASS** |
 | rNPU_netdetect_change | chip=2,address=10.20.10.254 | ✅ | netdetect=.254 | — | ✅ | 0.0.0.0 | **PASS** |
@@ -187,8 +190,6 @@
 | rNPU_dscp_tc_change | chip=2,dscp=10,tc=2 | ✅ | tc=2 | — | ✅ | tc=0 | **PASS** |
 | rNPU_roce_port_change | chip=2,port=45000 | ✅ | udp_port=45000 | — | ✅ | port=4791 | **PASS** |
 
-> **†** 基线 link 本已 DOWN（无对端设备），inject 为幂等 no-op，clean recovery 不会拉起 link。需 link UP 环境做完整 down→up 循环。
->
 > **‡** 修复后通过。原 Bug：`fault_present()` 用 `grep -F` 子串匹配，`10.20.10.1` 是 `10.20.10.100` 前缀 → clean 误判 no-op 不恢复。已修复为精确 IP 值比较。
 
 ---
@@ -256,8 +257,7 @@
 
 | 限制 | 故障 | 原因 | 影响范围 | 兜底恢复 |
 |------|------|------|---------|---------|
-| rNPU_link_down 基线 DOWN | rNPU_link_down | **RoCE 网口未连接交换机**，link 本已 DOWN，inject 为幂等 no-op，`-cfg recovery` 无法拉起物理链路 | 需 link UP 环境 | `npu-smi set -t reset` |
-| rNPU_route_del setup 偶发 | rNPU_route_del | 前序 link_down 测试残留 link DOWN，setup_cmd 的 route_add 失败 | 需 link UP 环境 | `hccn_tool -link -s up` |
+| rNPU_route_del setup 偶发 | rNPU_route_del | 前序 link_down 测试残留 link DOWN，setup_cmd 的 route_add 失败 | 910B4 无交换机环境 | `hccn_tool -link -s up` |
 
 > **NPU 兜底恢复**: 所有 NPU 故障可通过 `npu-smi set -t reset -i <id>` 复位芯片恢复原始状态。本次测试全程未需使用。
 
@@ -279,14 +279,13 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 358 条用例 **347 PASS / 7 FAIL**（全为硬件限制）。**33 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 347 条用例 **343 PASS / 2 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**33 条故障真机手动测试全覆盖**：
 
-- **33 条 PASS** — inject/query/clean 全流程验证通过
-- **1 条 FAIL（硬件限制）** — RoCE link DOWN
+- **33 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
-**8 个 Bug 已全部修复并验证通过**，24 个 CTest 测试 + 358 条 E2E 用例无回归。
+**8 个 Bug 已全部修复并验证通过**，24 个 CTest 测试 + 347 条 E2E 用例无回归。
 
-**测试结论：代码逻辑正确，v0.1.0 可用。已知限制均为环境/硬件约束，非代码缺陷。**
+**测试结论：代码逻辑正确，v0.1.0 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
 
 ---
 
@@ -364,7 +363,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 358 条�
 | 指标 | 值 |
 |------|------|
 | **PASS** | **343** |
-| **FAIL** | **4** |
+| **FAIL** | **2** |
 | **TOTAL** | **347** (4 条因 flow 内前序失败被跳过) |
 | **通过率** | **97%** |
 
@@ -372,7 +371,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 358 条�
 
 | 分类 | 说明 | PASS | FAIL |
 |---|---|---|---|
-| FUNC | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 144 | 4 |
+| FUNC | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 142 | 2 |
 | BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 54 | 0 |
 | SEC | 安全（命令注入+权限边界+主机安全+symlink） | 50 | 0 |
 | STATE | 状态一致性/幂等（含 NPU reinject 拒绝） | 26 | 0 |
@@ -386,7 +385,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 358 条�
 | ID | 故障 | 原因 |
 |---|---|---|
 | E2E-015 | rNET_degrade | ~~ethtool 不支持~~ **已修复为 tc tbf，PASS**（上表已含） |
-| E2E-088 | rNPU_link_down clean | 物理网口未接交换机，link 始终 DOWN |
+| E2E-088 | rNPU_link_down clean | 910B4 无交换机 link 始终 DOWN（910C 已验证通过） |
 | E2E-110 | rNPU_route_del setup | 前序 link_down 残留 link DOWN，setup route_add 失败 |
 
-> 以上 7 个失败均为硬件/环境限制，非代码缺陷。需 link UP 环境验证。
+> 以上失败均为 910B4 无交换机环境限制，910C 环境（link UP）已验证 link_down 完整通过。

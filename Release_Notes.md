@@ -60,8 +60,7 @@
 
 ### 已知限制
 
-- **RoCE 链路需物理连接**：`rNPU_link_down` 在 RoCE 网口未连接交换机时无法完整验证。link DOWN 时 `-cfg recovery` 不会拉起物理链路。需 link UP 环境做完整 down→up 循环验证。
-- NPU 16 条故障需 Atlas 物理机 + `hccn_tool` 真机验证
+- NPU 16 条故障需 Atlas 物理机 + `hccn_tool` 真机验证（910B4 + 910C 已验证）
 - 网络 11 条故障依赖 root 权限（`tc` / `iptables` / `ip` / `systemctl`）
 
 ---

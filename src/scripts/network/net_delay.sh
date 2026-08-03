@@ -7,6 +7,7 @@ case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
         delay=${DCAT_PARAM_DELAY_MS:?missing required param: delay_ms}
+        case "$delay" in ''|*[!0-9]*) echo "delay_ms must be a positive integer, got: '$delay'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_delay-${iface}.sidecar"
         tc qdisc add dev "$iface" root netem delay "${delay}ms" || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

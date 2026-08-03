@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 36 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 33 条故障。
 > 完整规格见 [SPEC.md](../SPEC.md)，架构见 [DESIGN.md](../DESIGN.md)。
 
 ---
@@ -14,7 +14,7 @@
 | 存储 | 1 | 磁盘写压（dd 多实例） |
 | 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
 | 进程 | 3 | 进程退出 / 挂起 / 僵尸 |
-| NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / FEC / DSCP / PFC / RoCE 端口 |
+| NPU | 16 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 |
 | **合计** | **36** | |
 
 ---
@@ -33,7 +33,7 @@
   - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包（tc netem）
   - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序（tc netem）
   - [3.4 rNET_down](#34-rnet_down) — 网卡 down（ip link）
-  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速（ethtool）
+  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速（tc tbf）
   - [3.6 rNET_port_occupy](#36-rnet_port_occupy) — 端口占用（socket holder）
   - [3.7 rNET_service_stop](#37-rnet_service_stop) — 服务停止（systemctl）
   - [3.8 rNET_link_flap](#38-rnet_link_flap) — 链路闪断（ip link 循环）
@@ -44,7 +44,7 @@
   - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出（kill -9，inject-only）
   - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起（SIGSTOP）
   - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程（kill 目标 → 僵尸）
-- [第五章 NPU 模块](#第五章-npu-模块20-条)
+- [第五章 NPU 模块](#第五章-npu-模块16-条)
   - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
   - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
   - [5.3 rNPU_gw_change](#53-rnpu_gw_change) — RoCE 网关变更
@@ -53,17 +53,14 @@
   - [5.6 rNPU_arp_del](#56-rnpu_arp_del) — ARP 条目删除
   - [5.7 rNPU_route_add](#57-rnpu_route_add) — 添加 RoCE 路由
   - [5.8 rNPU_route_del](#58-rnpu_route_del) — 删除 RoCE 路由
-  - [5.9 rNPU_route_clear](#59-rnpu_route_clear) — 清空路由表
-  - [5.10 rNPU_iprule_add](#510-rnpu_iprule_add) — 添加 ip rule
-  - [5.11 rNPU_iprule_del](#511-rnpu_iprule_del) — 删除 ip rule
-  - [5.12 rNPU_iproute_add](#512-rnpu_iproute_add) — 添加 ip route
-  - [5.13 rNPU_iproute_del](#513-rnpu_iproute_del) — 删除 ip route
-  - [5.14 rNPU_bw_limit](#514-rnpu_bw_limit) — RoCE 带宽限速
-  - [5.15 rNPU_mtu_mismatch](#515-rnpu_mtu_mismatch) — RoCE MTU 变更
-  - [5.16 rNPU_dscp_tc_change](#516-rnpu_dscp_tc_change) — DSCP→TC 映射变更
-  - [5.17 rNPU_prio_tc_change](#517-rnpu_prio_tc_change) — Prio→TC 映射变更
-  - [5.18 rNPU_pfc_change](#518-rnpu_pfc_change) — PFC 位图变更
-  - [5.19 rNPU_roce_port_change](#519-rnpu_roce_port_change) — RoCE UDP 端口变更
+  - [5.9 rNPU_iprule_add](#59-rnpu_iprule_add) — 添加 ip rule
+  - [5.10 rNPU_iprule_del](#510-rnpu_iprule_del) — 删除 ip rule
+  - [5.11 rNPU_iproute_add](#511-rnpu_iproute_add) — 添加 ip route
+  - [5.12 rNPU_iproute_del](#512-rnpu_iproute_del) — 删除 ip route
+  - [5.13 rNPU_bw_limit](#513-rnpu_bw_limit) — RoCE 带宽限速
+  - [5.14 rNPU_mtu_mismatch](#514-rnpu_mtu_mismatch) — RoCE MTU 变更
+  - [5.15 rNPU_dscp_tc_change](#515-rnpu_dscp_tc_change) — DSCP→TC 映射变更
+  - [5.16 rNPU_roce_port_change](#516-rnpu_roce_port_change) — RoCE UDP 端口变更
 
 ---
 
@@ -203,7 +200,7 @@ dcat clean rDISK_write_overload --device=/data
 
 ## 第三章 网络模块（11 条）
 
-本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`ethtool`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
+本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
 
 所有故障均支持 `inject`（注入）、`clean`（清理）、`query`（查询）三个操作。注入时通过 sidecar 文件（`/tmp/dcat-rNET_*`）或 PID 文件记录状态，便于后续清理与查询。
 
@@ -320,9 +317,9 @@ dcat clean rNET_down --iface=eth0
 
 **UID**: `rNET_degrade`
 
-**描述**: 通过 `ethtool` 降低指定网卡的协商速率（speed），模拟网卡性能降级。
+**描述**: 通过 `tc tbf` 限速模拟网卡性能降级。
 
-**实现原理**: `inject` 执行 `ethtool -s <iface> speed <speed_mbps>`，将网卡速率设置为指定值（默认 10Mbps），关闭自协商以强制降速；将 `iface speed` 写入 sidecar 文件 `/tmp/dcat-rNET_degrade-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `ethtool -s <iface> speed 1000 autoneg on` 恢复为 1000Mbps 并开启自协商，删除 sidecar 文件。`query` 执行 `ethtool <iface>`，解析 `Speed:` 行提取当前速率，与预期 `speed_mbps`（默认 10）比较，一致则退出码 0。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root tbf rate <speed_mbps>mbit burst <speed_mbps>kbit latency 400ms`，将网卡出向带宽限制为指定速率（默认 10Mbps）；将 `iface speed` 写入 sidecar 文件 `/tmp/dcat-rNET_degrade-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除限速规则，删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，检查是否存在 tbf 规则。
 
 **使用示例**:
 ```bash
@@ -334,12 +331,12 @@ dcat clean rNET_degrade --iface=eth0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33 |
-| speed_mbps | 可选 | 整数 | 目标速率（Mbps），默认 10。常用值：10、100、1000。需网卡及驱动支持该速率 |
+| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33、dummy 网卡 |
+| speed_mbps | 可选 | 整数 | 目标速率（Mbps），默认 10。需 ≥ 1 |
 
-**危险等级**: 中 — 降速后网卡带宽大幅降低（如从 1000Mbps 降至 10Mbps），大流量场景下可能导致拥塞、丢包和应用超时。降速过程中网卡会短暂断开重连。
+**危险等级**: 中 — 限速后网卡带宽大幅降低（如从 1000Mbps 降至 10Mbps），大流量场景下可能导致拥塞、丢包和应用超时。
 
-**补充说明**: 需要 root 权限；依赖 `ethtool` 命令；网卡驱动必须支持目标速率，否则 `ethtool -s` 会失败；虚拟网卡（如 veth、bridge）通常不支持速率设置；clean 恢复为 1000Mbps + autoneg on，若网卡原生速率非 1000Mbps 需手动调整；部分云环境虚拟网卡不支持 ethtool 速率修改。
+**补充说明**: 需要 root 权限；依赖 `tc` 命令；与 `rNET_bw_limit` 同为 tc tbf 机制但语义不同（degrade=模拟慢网卡，bw_limit=模拟带宽拥塞）；dummy 虚拟网卡和真实物理网卡均可测试。
 
 ---
 
@@ -592,7 +589,7 @@ dcat clean rPROC_zstate --pid=12345
 
 ---
 
-## 第五章 NPU 模块（19 条）
+## 第五章 NPU 模块（16 条）
 
 NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool` 对 RoCE 网口注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 
@@ -656,11 +653,15 @@ dcat clean rNPU_ip_change --chip=0
 
 **描述**: 修改指定芯片 RoCE 网关地址，导致跨网段路由失效。
 
-**实现原理**: inject 先 `-gateway -g` 取原值存 sidecar，再 `-gateway -s gateway <gw>` 修改；clean 从 sidecar 还原（缺省 `0.0.0.0`）；query 比对当前网关与原值。
+**实现原理**: inject 先 `-gateway -g` 取原值存 sidecar（无原网关时存 `none`），再 `-gateway -s gateway <gw>` 修改；clean 从 sidecar 还原（原为 `none` 时跳过恢复）；query 比对当前网关与原值。
 
 **使用示例**:
 ```bash
-dcat inject rNPU_gw_change --chip=0 --gateway=10.0.0.254
+# 先查询当前 NPU IP 确定网段
+hccn_tool -i 0 -ip -g   # 假设输出 ipaddr:10.20.10.1
+
+# 网关必须与 NPU IP 同网段
+dcat inject rNPU_gw_change --chip=0 --gateway=10.20.10.254
 dcat query rNPU_gw_change --chip=0
 dcat clean rNPU_gw_change --chip=0
 ```
@@ -669,11 +670,11 @@ dcat clean rNPU_gw_change --chip=0
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| gateway | 必填 | IPv4 | 新网关地址 |
+| gateway | 必填 | IPv4 | 新网关地址，**必须与 NPU 当前 IP 同网段**，否则 `hccn_tool` 报 "segment doesn't match" |
 
 **危险等级**: 高 — 网关错误后所有跨网段 RoCE 流量无法转发。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**网关网段匹配**：注入前用 `hccn_tool -i <chip> -ip -g` 查询当前 NPU IP，网关必须在该 IP 的网段内。若 NPU 未设网关，inject 时原值保存为 `none`，clean 时跳过恢复（不设回任何网关）。
 
 ---
 
@@ -739,25 +740,33 @@ dcat clean rNPU_arp_poison --chip=0 --dev=eth0 --ip=192.168.1.10 --mac=00:11:22:
 
 **描述**: 删除指定芯片 ARP 表项，导致对应 IP 流量停滞。
 
-**实现原理**: inject 先 `-arp -g` 取原 MAC 存 sidecar，再 `-arp -d` 删除；clean 从 sidecar 取原 MAC 执行 `-arp -a` 重新添加（缺省 `00:00:00:00:00:00`）；query 检查指定 ip 是否已不存在。
+**实现原理**: inject 先 `-arp -g` 查询原 MAC 并存 sidecar，再 `-arp -d` 删除；clean 从 sidecar 取原 MAC 执行 `-arp -a` 重新添加（缺省 `00:00:00:00:00:00`）；query 检查指定 ip 是否已不存在。
 
 **使用示例**:
 ```bash
-dcat inject rNPU_arp_del --chip=0 --dev=eth0 --ip=192.168.1.10
-dcat query rNPU_arp_del --chip=0 --dev=eth0 --ip=192.168.1.10
-dcat clean rNPU_arp_del --chip=0 --dev=eth0 --ip=192.168.1.10
+# 前提：该 ARP 条目必须已存在！
+hccn_tool -i 0 -arp -g | grep 10.20.10.200   # 确认 ARP 条目存在
+
+# 或者先用 arp_poison 创建一个 ARP 条目
+dcat inject rNPU_arp_poison --chip=0 --dev=eth0 --ip=10.20.10.200 --mac=de:ad:be:ef:00:01
+
+# 删除 ARP 条目
+dcat inject rNPU_arp_del --chip=0 --dev=eth0 --ip=10.20.10.200
+dcat query rNPU_arp_del --chip=0 --dev=eth0 --ip=10.20.10.200
+# clean 从 sidecar 恢复原 MAC
+dcat clean rNPU_arp_del --chip=0 --dev=eth0 --ip=10.20.10.200
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| dev | 必填 | 字符串 | 网卡设备名 |
+| dev | 必填 | 字符串 | NPU 内部网卡设备名（通常 `eth0`） |
 | ip | 必填 | IPv4 | 要删除 ARP 表项的 IP |
 
 **危险等级**: 中 — 删除后流量短暂停滞，通常可通过 ARP 重新学习自愈。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。sidecar 丢失时 clean 回退到全零 MAC。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ARP 条目必须已存在，否则 `hccn_tool -arp -d` 报 "The configuration does not exist"。建议先用 `rNPU_arp_poison` 创建 ARP 条目，再用 `rNPU_arp_del` 删除。clean 从 sidecar 读取原 MAC 恢复；若 sidecar 丢失则恢复为全零 MAC。
 
 ---
 
@@ -771,22 +780,26 @@ dcat clean rNPU_arp_del --chip=0 --dev=eth0 --ip=192.168.1.10
 
 **使用示例**:
 ```bash
-dcat inject rNPU_route_add --chip=0 --address=10.1.0.0 --netmask=255.255.0.0 --gateway=10.0.0.1
+# 先查询 NPU 当前 IP 和网段
+hccn_tool -i 0 -ip -g   # 假设输出 ipaddr:10.20.10.1 netmask:255.255.255.0
+
+# gateway 必须与 NPU IP 同网段；address 可以是任意目标网段
+dcat inject rNPU_route_add --chip=0 --address=10.20.11.0 --netmask=255.255.255.0 --gateway=10.20.10.1
 dcat query rNPU_route_add --chip=0
-dcat clean rNPU_route_add --chip=0 --address=10.1.0.0 --netmask=255.255.0.0 --gateway=10.0.0.1
+dcat clean rNPU_route_add --chip=0 --address=10.20.11.0 --netmask=255.255.255.0
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| address | 必填 | IPv4 | 目标网段地址 |
-| netmask | 必填 | IPv4 | 子网掩码 |
-| gateway | 必填 | IPv4 | 下一跳网关 |
+| address | 必填 | IPv4 | 目标网段地址（如 `10.20.11.0`） |
+| netmask | 必填 | IPv4 | 子网掩码（如 `255.255.255.0`） |
+| gateway | 必填 | IPv4 | 下一跳网关，**必须与 NPU 当前 IP 同网段** |
 
 **危险等级**: 中 — 错误路由可能将流量导向不可达网关。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**网关网段匹配**：gateway 必须与 `hccn_tool -i <chip> -ip -g` 输出的 IP 同网段，否则 `hccn_tool` 报 "segment doesn't match"。**link 状态**：若 RoCE link 为 DOWN，需先 `hccn_tool -i <chip> -link -s up` 设置管理 UP（物理 link 可仍为 DOWN），否则 `route -a` 报 "Command execute failed"。
 
 ---
 
@@ -796,13 +809,18 @@ dcat clean rNPU_route_add --chip=0 --address=10.1.0.0 --netmask=255.255.0.0 --ga
 
 **描述**: 删除指定芯片路由，导致对应网段不可达。
 
-**实现原理**: inject 先 `-route -g` 取原 gateway 存 sidecar，再 `-route -d` 删除；clean 从 sidecar 取原 gateway 执行 `-route -a` 重新添加（缺省 `0.0.0.0`）；query 检查该地址是否已不存在。
+**实现原理**: inject 先 `-route -g` 查询原路由的 gateway 并存 sidecar，再 `-route -d` 删除；clean 从 sidecar 取原 gateway 执行 `-route -a` 重新添加（缺省 `0.0.0.0`）；query 检查该地址是否已不存在。
 
 **使用示例**:
 ```bash
-dcat inject rNPU_route_del --chip=0 --address=10.1.0.0 --netmask=255.255.0.0
+# 前提：该路由必须已存在！先用 route_add 创建，或确认路由表已有
+hccn_tool -i 0 -route -g | grep 10.20.12.0   # 确认路由存在
+
+# 删除路由（inject 会自动保存原 gateway 到 sidecar）
+dcat inject rNPU_route_del --chip=0 --address=10.20.12.0 --netmask=255.255.255.0
 dcat query rNPU_route_del --chip=0
-dcat clean rNPU_route_del --chip=0 --address=10.1.0.0 --netmask=255.255.0.0
+# clean 会从 sidecar 读取原 gateway 自动恢复
+dcat clean rNPU_route_del --chip=0 --address=10.20.12.0 --netmask=255.255.255.0
 ```
 
 **参数可选范围**:
@@ -814,37 +832,11 @@ dcat clean rNPU_route_del --chip=0 --address=10.1.0.0 --netmask=255.255.0.0
 
 **危险等级**: 高 — 删除关键路由后对应网段立即不可达。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标路由必须已存在，否则 `hccn_tool -route -d` 报 "Route not exist in routing table, can not delete!"。建议先用 `rNPU_route_add` 创建路由，再用 `rNPU_route_del` 删除。clean 会从 sidecar 读取原 gateway 自动恢复路由；若 sidecar 丢失则恢复为 `0.0.0.0`。
 
 ---
 
-### 5.9 rNPU_route_clear
-
-**UID**: `rNPU_route_clear`
-
-**描述**: 清空指定芯片整张路由表，导致全部 RoCE 路由失效。
-
-**实现原理**: inject 执行 `-route -c` 清空整张路由表；clean 执行 `-cfg recovery` 恢复全部路由；query 检查路由条目计数是否为 0。
-
-**使用示例**:
-```bash
-dcat inject rNPU_route_clear --chip=0
-dcat query rNPU_route_clear --chip=0
-dcat clean rNPU_route_clear --chip=0
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-
-**危险等级**: 高 — 清空整张路由表后该芯片所有跨网段 RoCE 流量中断。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 完全依赖配置文件，若配置丢失则无法恢复。
-
----
-
-### 5.10 rNPU_iprule_add
+### 5.9 rNPU_iprule_add
 
 **UID**: `rNPU_iprule_add`
 
@@ -873,7 +865,7 @@ dcat clean rNPU_iprule_add --chip=0 --dir=from --ip=192.168.1.100 --table=100
 
 ---
 
-### 5.11 rNPU_iprule_del
+### 5.10 rNPU_iprule_del
 
 **UID**: `rNPU_iprule_del`
 
@@ -901,38 +893,42 @@ dcat clean rNPU_iprule_del --chip=0 --dir=from --ip=192.168.1.100
 
 ---
 
-### 5.12 rNPU_iproute_add
+### 5.11 rNPU_iproute_add
 
 **UID**: `rNPU_iproute_add`
 
-**描述**: 向指定芯片路由表添加一条路由，可能误导流量。
+**描述**: 向指定芯片策略路由表添加一条路由，可能误导流量。
 
 **实现原理**: inject 执行 `-ip_route -a ip <ip> ip_mask <mask> via <via> dev <dev> table <table>`；clean 执行 `-ip_route -d ip <ip> ip_mask <mask> table <table>` 删除；query 检查该 table 是否包含指定 ip。
 
 **使用示例**:
 ```bash
-dcat inject rNPU_iproute_add --chip=0 --ip=10.2.0.0 --ip_mask=255.255.0.0 --via=10.0.0.1 --dev=eth0 --table=100
-dcat query rNPU_iproute_add --chip=0 --table=100
-dcat clean rNPU_iproute_add --chip=0 --ip=10.2.0.0 --ip_mask=255.255.0.0 --via=10.0.0.1 --dev=eth0 --table=100
+# 先查询 NPU 当前 IP 确定网段
+hccn_tool -i 0 -ip -g   # 假设输出 ipaddr:10.20.10.1
+
+# via 必须与 NPU IP 同网段；ip_mask 是 CIDR 位数（不是点分十进制）；dev 是 NPU 内部名
+dcat inject rNPU_iproute_add --chip=0 --ip=10.20.13.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100
+dcat query rNPU_iproute_add --chip=0
+dcat clean rNPU_iproute_add --chip=0 --ip=10.20.13.0 --ip_mask=24 --table=100
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| ip | 必填 | IPv4 | 目标网段地址 |
-| ip_mask | 必填 | IPv4 | 子网掩码 |
-| via | 必填 | IPv4 | 下一跳地址 |
-| dev | 必填 | 字符串 | 出接口设备名 |
-| table | 必填 | 整数 | 路由表编号 |
+| ip | 必填 | IPv4 | 目标网段地址（如 `10.20.13.0`） |
+| ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24），不是点分掩码 |
+| via | 必填 | IPv4 | 下一跳地址，**必须与 NPU 当前 IP 同网段** |
+| dev | 必填 | 字符串 | NPU 内部网卡名（通常 `eth0`，非 Linux 接口名） |
+| table | 必填 | 整数 0-255 | 路由表编号 |
 
 **危险等级**: 中 — 添加路由可能改变选路结果。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。参数较多，注入前需确认 via/dev 在该芯片可达。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**ip_mask 是 CIDR 位数**（0-32），不是点分十进制掩码（如 `255.255.255.0`→`24`）。**via 网段匹配**：via 必须与 NPU IP 同网段。**dev 是 NPU 内部名**：通常是 `eth0`，不是 Linux 系统接口名（如 `enp125s0f1`）。
 
 ---
 
-### 5.13 rNPU_iproute_del
+### 5.12 rNPU_iproute_del
 
 **UID**: `rNPU_iproute_del`
 
@@ -942,9 +938,14 @@ dcat clean rNPU_iproute_add --chip=0 --ip=10.2.0.0 --ip_mask=255.255.0.0 --via=1
 
 **使用示例**:
 ```bash
-dcat inject rNPU_iproute_del --chip=0 --ip=10.2.0.0 --ip_mask=255.255.0.0 --table=100
+# 前提：该 ip_route 必须已存在！先用 iproute_add 创建
+dcat inject rNPU_iproute_add --chip=0 --ip=10.20.14.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100
+
+# 删除 ip_route
+dcat inject rNPU_iproute_del --chip=0 --ip=10.20.14.0 --ip_mask=24 --table=100
 dcat query rNPU_iproute_del --chip=0 --table=100
-dcat clean rNPU_iproute_del --chip=0 --ip=10.2.0.0 --ip_mask=255.255.0.0 --table=100
+# clean 从 sidecar 恢复原路由
+dcat clean rNPU_iproute_del --chip=0 --ip=10.20.14.0 --ip_mask=24 --table=100
 ```
 
 **参数可选范围**:
@@ -952,16 +953,16 @@ dcat clean rNPU_iproute_del --chip=0 --ip=10.2.0.0 --ip_mask=255.255.0.0 --table
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
 | ip | 必填 | IPv4 | 要删除路由的目标网段 |
-| ip_mask | 必填 | IPv4 | 子网掩码 |
-| table | 必填 | 整数 | 路由表编号 |
+| ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24） |
+| table | 必填 | 整数 0-255 | 路由表编号 |
 
 **危险等级**: 高 — 删除路由后对应网段立即不可达，clean 依赖 sidecar 中的原 via/dev。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。sidecar 为多行键值格式，若 /tmp 被清理将无法精确还原。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip_route 必须已存在，否则 `hccn_tool -ip_route -d` 报 "configuration does not exist"。建议先用 `rNPU_iproute_add` 创建路由。**ip_mask 是 CIDR 位数**（0-32），不是点分掩码。clean 从 sidecar 读取原 via/dev/table 恢复。
 
 ---
 
-### 5.14 rNPU_bw_limit
+### 5.13 rNPU_bw_limit
 
 **UID**: `rNPU_bw_limit`
 
@@ -988,7 +989,7 @@ dcat clean rNPU_bw_limit --chip=0
 
 ---
 
-### 5.15 rNPU_mtu_mismatch
+### 5.14 rNPU_mtu_mismatch
 
 **UID**: `rNPU_mtu_mismatch`
 
@@ -1015,7 +1016,7 @@ dcat clean rNPU_mtu_mismatch --chip=0
 
 ---
 
-### 5.16 rNPU_dscp_tc_change
+### 5.15 rNPU_dscp_tc_change
 
 **UID**: `rNPU_dscp_tc_change`
 
@@ -1043,61 +1044,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
 
 ---
 
-### 5.17 rNPU_prio_tc_change
-
-**UID**: `rNPU_prio_tc_change`
-
-**描述**: 修改指定芯片优先级到 TC 映射，打乱 QoS 调度。
-
-**实现原理**: inject 先 `-prio_tc -g` 取原 8 元 map 存 sidecar，再 `-prio_tc -s map <map>` 整体替换；clean 从 sidecar 还原（缺省 `0,0,0,0,0,0,0,0`）；query 比对当前 map 与原值。
-
-**使用示例**:
-```bash
-dcat inject rNPU_prio_tc_change --chip=0 --map=7,6,5,4,3,2,1,0
-dcat query rNPU_prio_tc_change --chip=0
-dcat clean rNPU_prio_tc_change --chip=0
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| map | 必填 | 8 元逗号分隔 | 8 个优先级到 TC 的映射，如 `0,1,2,3,4,5,6,7` |
-
-**危险等级**: 中 — 映射整体替换后所有优先级的 TC 调度改变，QoS 完全失序，但链路仍通。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。map 必须为 8 个逗号分隔整数。
-
----
-
-### 5.18 rNPU_pfc_change
-
-**UID**: `rNPU_pfc_change`
-
-**描述**: 修改指定芯片 PFC 位图，影响优先级流量控制。
-
-**实现原理**: inject 先 `-pfc -g` 取原 8 元 bitmap 存 sidecar，再 `-pfc -s bitmap <bitmap>` 整体替换；clean 从 sidecar 还原（缺省 `0,0,0,0,0,0,0,0`）；query 比对当前 bitmap 与原值。
-
-**使用示例**:
-```bash
-dcat inject rNPU_pfc_change --chip=0 --bitmap=0,0,0,0,0,0,0,0
-dcat query rNPU_pfc_change --chip=0
-dcat clean rNPU_pfc_change --chip=0
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| bitmap | 必填 | 8 元逗号分隔 | 8 个优先级的 PFC 使能位图，0/1，如 `1,1,1,1,0,0,0,0` |
-
-**危险等级**: 中 — 关闭 PFC 后对应优先级拥塞时不再反压，可能引发丢包。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。bitmap 必须为 8 个逗号分隔的 0/1 值。
-
----
-
-### 5.19 rNPU_roce_port_change
+### 5.16 rNPU_roce_port_change
 
 **UID**: `rNPU_roce_port_change`
 

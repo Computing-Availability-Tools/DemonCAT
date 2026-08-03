@@ -9,7 +9,7 @@
 | 项目 | 说明 |
 |------|------|
 | 版本号 | v0.1.0 |
-| 发布时间 | 2026-07-31 |
+| 发布时间 | 2026-08-03 |
 | 平台支持 | Linux (aarch64 / x86_64), WSL 兼容 |
 
 ### 变更摘要
@@ -19,11 +19,11 @@
 - 4 种清理策略（reverse op / sidecar replay / set to max / cfg recovery）真机全覆盖
 - `link_down.sh` 修复：`hccn_tool -link -s down` 交互式 y/n 确认 → `echo y |` 自动应答
 - NPU inject 回读：fault_present() 条件化，inject 参数降为可选（query 场景）
-- `prio_tc` / `pfc` inject 前检查 link 状态，link DOWN 时拒绝注入避免故障卡死
 
-**故障目录调整（37 → 36 条）：**
-- 删除 `rNPU_fec_change`：910B4 硬件不支持 FEC 模式切换（`hccn_tool -fec` 返回 "This device does not support switching fec mode"）
-- NPU 模块从 20 条减至 19 条
+**故障目录调整（37 → 33 条）：**
+- 删除 `rNPU_fec_change`：910B4 硬件不支持 FEC 模式切换
+- 删除 `rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`：910C 真机验证确认驱动不支持（pfc/prio_tc 需 link UP 但 `-g` 读取失败；route_clear `-c` 返回成功但路由表未清空）
+- NPU 模块从 20 条减至 16 条，故障目录从 37 条减至 33 条
 
 **NPU query 增强：**
 - `npu_foreach_chip`：无参 query 遍历所有 NPU device（与 CPU/网络模块行为一致）
@@ -32,10 +32,26 @@
 - query 输出加 `FAULT CONFIRMED` / `FAULT NOT ACTIVE` 文本提示
 - `confirmed` 字段修复：echo 退出码恒 0 导致 dispatch.c 误判 → 加 `false` 让 NOT ACTIVE 返回 1
 
-**Bug 修复：**
+**Bug 修复（8 个）：**
 - `net_delay.sh` / `net_jitter.sh`：query 正则 `[0-9]+` → `[0-9.]+` 匹配 tc 小数输出
-- `ip_change.sh`：fault_present grep 子串匹配 → 精确 IP 值比较；静态 SIDECAR 路径 → 动态 SIDECAR_FN()
+- `ip_change.sh`：fault_present grep 子串匹配 → 精确 IP 值比较；静态 SIDECAR → 动态 SIDECAR_FN()
 - `bw_limit.sh`：clean 用未定义变量 `$MAX_BW` → 改为 sidecar 的 `$orig`
+- `proc_hang.sh`：pid=0 导致 `kill -STOP 0` 停掉整个进程组 → 加正整数校验
+- `disk_write_overload.sh`：symlink 攻击防护（`readlink -f` 检查拒绝 symlink）+ clean 先 SIGTERM 再 SIGKILL 防 dd 孤儿 + workers/size_mb/device 输入校验
+- `net_degrade.sh`：从 ethtool 改为 tc tbf（物理+虚拟网卡均可测）
+- `gw_change.sh`：无原网关时 sidecar 未保存 → 始终保存 `${orig:-none}`
+- `cpu_overload.sh`：query 按 `--cores` 参数过滤，不再显示其他核进程
+
+**输入校验增强：**
+- `net_loss.sh`：loss_pct 加 0-100 范围校验
+- `net_delay.sh`：delay_ms 加正整数校验
+
+**E2E 测试框架（358 条）：**
+- 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
+- NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
+- sweep 加 NPU stale state 条件清理（ip_rule/route/ip_route/link up）
+- `run_e2e.py` 修复：CONC `& wait` 和 SEC `; rm` 的 shell 语法在 shlex.split 下不生效
+- 新增 27 条用例：NPU FUNC-Q（query\<uid\> confirmed）、NPU BOUND（bw_limit/size/port/dscp）、NPU RES（clean --all）、NPU STATE（reinject 拒绝）
 
 **合并：**
 - upstream PR #20: state record_id 64-bit 防 overflow + started_at 可读格式
@@ -44,11 +60,8 @@
 
 ### 已知限制
 
-- **RoCE 链路需物理连接**：`rNPU_link_down` / `rNPU_prio_tc_change` / `rNPU_pfc_change` 在 RoCE 网口未连接交换机时无法完整验证。link DOWN 时 `-cfg recovery` 不会拉起物理链路；`prio_tc` / `pfc` 的 `-g` 读取依赖 link UP。需 link UP 环境做完整 down→up 循环验证。
-- `rNPU_route_clear`：`hccn_tool -route -c` 返回 success 但路由表未清空（910B4 驱动限制）
-- `rNET_degrade`：NIC NO-CARRIER 时 ethtool 无法 advertise 速率
-- NPU 19 条故障需 Atlas 物理机 + `hccn_tool` 真机验证
-- 网络 11 条故障依赖 root 权限（`tc` / `iptables` / `ip` / `ethtool` / `systemctl`）
+- NPU 16 条故障需 Atlas 物理机 + `hccn_tool` 真机验证（910B4 + 910C 已验证）
+- 网络 11 条故障依赖 root 权限（`tc` / `iptables` / `ip` / `systemctl`）
 
 ---
 

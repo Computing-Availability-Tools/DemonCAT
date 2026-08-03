@@ -26,7 +26,6 @@
 | **CPU** | `perl`, `taskset` | `perl`, `util-linux` | `perl`, `util-linux` | core_offline 需要 |
 | **存储** | `dd` | `coreutils` | `coreutils` | — |
 | **网络** | `tc`, `ip` | `iproute2` | `iproute` | ✅ |
-| | `ethtool` | `ethtool` | `ethtool` | ✅ |
 | | `iptables` | `iptables` | `iptables` | ✅ |
 | | `systemctl` | `systemd` | `systemd` | ✅ |
 | | `python3` | `python3` | `python3` | — |
@@ -104,7 +103,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rNET_loss` | iface, loss_pct | — | 网络丢包（tc netem） |
 | `rNET_reorder` | iface, reorder_pct | — | 网络乱序（tc netem） |
 | `rNET_down` | iface | — | 网卡 down（ip link） |
-| `rNET_degrade` | iface | speed_mbps(默认10) | 网卡降速（ethtool） |
+| `rNET_degrade` | iface | speed_mbps(默认10) | 网卡降速（tc tbf） |
 | `rNET_port_occupy` | port | protocol(默认tcp) | 端口占用（socket holder） |
 | `rNET_service_stop` | service | — | 服务停止（systemctl） |
 | `rNET_link_flap` | iface | cycle_sec(默认2), count(默认10) | 链路闪断（ip link 循环） |
@@ -163,7 +162,7 @@ E2E 测试采用 **CSV 驱动 + 8 类分类** 的混沌工程测试矩阵，用�
 
 | 分类 | 前缀 | 覆盖内容 | 混沌工程维度 |
 |---|---|---|---|
-| **FUNC** | `FUNC-` | 37 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
+| **FUNC** | `FUNC-` | 36 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
 | **BOUND** | `BOUND-` | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法） | 边界值 |
 | **SEC** | `SEC-` | 命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击 | 安全 |
 | **STATE** | `STATE-` | clean×2/--force/reinject 拒绝/query 幂等/并发 inject 同/不同资源 | 状态一致性 |
@@ -175,7 +174,7 @@ E2E 测试采用 **CSV 驱动 + 8 类分类** 的混沌工程测试矩阵，用�
 ### 运行 E2E 测试
 
 ```bash
-# 生成用例（329 条）
+# 生成用例（358 条）
 python3 tests/e2e/gen_cases.py
 
 # 执行（需要 root 权限以覆盖全部用例）
@@ -189,7 +188,7 @@ sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 
 | 分类 | 用例数（约） | 说明 |
 |---|---|---|
-| FUNC | ~150 | 37 故障 × 3-4 步 + query\<uid\> × 5 + 插件 × 4 |
+| FUNC | ~160 | 36 故障 × 3-4 步 + query\<uid\> × 7 + 插件 × 4 |
 | BOUND | ~40 | 每参数类型 2-4 条边界 |
 | SEC | ~45 | inject × 21 + clean × 9 + 权限 × 4 + 主机安全 × 5 + symlink × 2 |
 | STATE | ~25 | 幂等性 × 5 + 并发 inject × 6 |
@@ -197,7 +196,7 @@ sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 | CLI | ~25 | 负面 CLI × 12 + 帮助 × 5 + config × 2 + list × 1 |
 | CONC | ~9 | 并发场景 × 3 flow |
 | INTER | ~15 | 故障交互 × 3 flow |
-| **总计** | **~329** | |
+| **总计** | **~358** | |
 
 详细测试设计见 [DESIGN.md §10](DESIGN.md) 和 [tests/e2e/README.md](tests/e2e/README.md)。
 

@@ -80,7 +80,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
 
-## 当前故障目录（36 条）
+## 当前故障目录（33 条）
 
 ### CPU 模块（2 条）
 
@@ -119,7 +119,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rPROC_hang` | pid | — | 进程挂起（SIGSTOP） |
 | `rPROC_zstate` | pid | — | 僵尸进程（kill 目标进程 → 僵尸，clean 杀父进程回收，不可恢复） |
 
-### NPU 模块（19 条）
+### NPU 模块（16 条）
 
 | UID | 必填 | 可选 | 说明 |
 |---|---|---|---|
@@ -131,7 +131,6 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rNPU_arp_del` | chip, dev, ip | — | ARP 条目删除（sidecar 回放） |
 | `rNPU_route_add` | chip, address, netmask, gateway | — | 添加 RoCE 路由（del 清理） |
 | `rNPU_route_del` | chip, address, netmask | — | 删除 RoCE 路由（sidecar 回放） |
-| `rNPU_route_clear` | chip | — | 清空路由表（-cfg recovery） |
 | `rNPU_iprule_add` | chip, dir, ip, table | — | 添加 ip rule（del 清理） |
 | `rNPU_iprule_del` | chip, dir, ip | — | 删除 ip rule（sidecar 回放） |
 | `rNPU_iproute_add` | chip, ip, ip_mask, via, dev, table | — | 添加 ip route（del 清理） |
@@ -139,8 +138,6 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `rNPU_bw_limit` | chip, bw_limit | — | RoCE 带宽限速（设回 max） |
 | `rNPU_mtu_mismatch` | chip, size | — | RoCE MTU 变更（sidecar 回放） |
 | `rNPU_dscp_tc_change` | chip, dscp, tc | — | DSCP→TC 映射变更（sidecar 回放） |
-| `rNPU_prio_tc_change` | chip, map | — | Prio→TC 映射变更（sidecar 回放） |
-| `rNPU_pfc_change` | chip, bitmap | — | PFC 位图变更（sidecar 回放） |
 | `rNPU_roce_port_change` | chip, port | — | RoCE UDP 端口变更（sidecar 回放） |
 
 ## 退出码
@@ -162,7 +159,7 @@ E2E 测试采用 **CSV 驱动 + 8 类分类** 的混沌工程测试矩阵，用�
 
 | 分类 | 前缀 | 覆盖内容 | 混沌工程维度 |
 |---|---|---|---|
-| **FUNC** | `FUNC-` | 36 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
+| **FUNC** | `FUNC-` | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
 | **BOUND** | `BOUND-` | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法） | 边界值 |
 | **SEC** | `SEC-` | 命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击 | 安全 |
 | **STATE** | `STATE-` | clean×2/--force/reinject 拒绝/query 幂等/并发 inject 同/不同资源 | 状态一致性 |
@@ -188,7 +185,7 @@ sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 
 | 分类 | 用例数（约） | 说明 |
 |---|---|---|
-| FUNC | ~160 | 36 故障 × 3-4 步 + query\<uid\> × 7 + 插件 × 4 |
+| FUNC | ~160 | 33 故障 × 3-4 步 + query\<uid\> × 7 + 插件 × 4 |
 | BOUND | ~40 | 每参数类型 2-4 条边界 |
 | SEC | ~45 | inject × 21 + clean × 9 + 权限 × 4 + 主机安全 × 5 + symlink × 2 |
 | STATE | ~25 | 幂等性 × 5 + 并发 inject × 6 |

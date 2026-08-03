@@ -101,7 +101,7 @@ OBS = {
         clean_args="", provision="sleep_pid", precondition="none", inject_only=True,
         v_cmd="awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null || echo NONE", v_assert="eq:Z",
         c_cmd="", c_assert=""),
-    # NPU (19 faults)
+    # NPU (16 faults)
     "rNPU_link_down": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -link -g 2>/dev/null", v_assert="contains:DOWN",
@@ -137,10 +137,6 @@ OBS = {
         setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; " + f"{DCAT} inject rNPU_route_add --chip=2 --address=10.20.12.0 --netmask=255.255.255.0 --gateway=10.20.10.1",
         v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="notcontains:10.20.12.0",
         c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="contains:10.20.12.0"),
-    "rNPU_route_clear": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
-        provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null | grep -cE 'address|gateway'", v_assert="==0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null | grep -cE 'address|gateway'", c_assert=">=1"),
     "rNPU_iprule_add": dict(module="npu", inject_args="--chip=2 --dir=from --ip=192.168.1.100 --table=100",
         clean_args="--chip=2 --dir=from --ip=192.168.1.100", provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="contains:192.168.1.100",
@@ -171,14 +167,6 @@ OBS = {
         provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", v_assert="eq:1",
         c_cmd="hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", c_assert="eq:0"),
-    "rNPU_prio_tc_change": dict(module="npu", inject_args="--chip=2 --map=0,0,0,0,0,0,0,0", clean_args="--chip=2",
-        provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -prio_tc -g 2>/dev/null | grep -oE 'map [0-9,]+'", v_assert="contains:0,0,0,0,0,0,0,0",
-        c_cmd="hccn_tool -i 2 -prio_tc -g 2>/dev/null | grep -oE 'map [0-9,]+'", c_assert="nonempty"),
-    "rNPU_pfc_change": dict(module="npu", inject_args="--chip=2 --bitmap=1,1,1,1,1,1,1,1", clean_args="--chip=2",
-        provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -pfc -g 2>/dev/null | grep -oE 'bitmap [0-9,]+'", v_assert="contains:1,1,1,1,1,1,1,1",
-        c_cmd="hccn_tool -i 2 -pfc -g 2>/dev/null | grep -oE 'bitmap [0-9,]+'", c_assert="nonempty"),
     "rNPU_roce_port_change": dict(module="npu", inject_args="--chip=2 --port=4792", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", v_assert="contains:4792",
@@ -205,7 +193,7 @@ def gen():
         })
 
     # ================================================================
-    # FUNC: 功能基线 (36 faults × inject→verify→clean→query + query<uid> + plugin)
+    # FUNC: 功能基线 (33 faults × inject→verify→clean→query + query<uid> + plugin)
     # ================================================================
     for uid in sorted(OBS):
         o = OBS[uid]
@@ -342,8 +330,6 @@ def gen():
     # encoding (enum)
     b_reject("rNPU_ip_change", "--chip=2 --address=invalid --netmask=255.255.255.0", 1, '', "address: invalid format")
     # bitmap (comma-separated digits)
-    b_reject("rNPU_pfc_change", "--chip=2 --bitmap=abc", 1, '', "bitmap: non-numeric")
-    b_reject("rNPU_pfc_change", "--chip=2 --bitmap=", 3, 'missing required parameter', "bitmap: empty")
     # bw_limit (positive integer)
     b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=0", 1, '', "bw_limit: 0 invalid")
     b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=-1", 1, '', "bw_limit: negative")

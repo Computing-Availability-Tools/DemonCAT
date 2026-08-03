@@ -54,14 +54,13 @@
   - [5.7 rNPU_route_add](#57-rnpu_route_add) — 添加 RoCE 路由
   - [5.8 rNPU_route_del](#58-rnpu_route_del) — 删除 RoCE 路由
   - [5.9 rNPU_iprule_add](#59-rnpu_iprule_add) — 添加 ip rule
-  - [5.10 rNPU_iprule_add](#510-rnpu_iprule_add) — 添加 ip rule
-  - [5.11 rNPU_iprule_del](#511-rnpu_iprule_del) — 删除 ip rule
-  - [5.12 rNPU_iproute_add](#512-rnpu_iproute_add) — 添加 ip route
-  - [5.13 rNPU_iproute_del](#513-rnpu_iproute_del) — 删除 ip route
-  - [5.14 rNPU_bw_limit](#514-rnpu_bw_limit) — RoCE 带宽限速
-  - [5.15 rNPU_mtu_mismatch](#515-rnpu_mtu_mismatch) — RoCE MTU 变更
-  - [5.16 rNPU_dscp_tc_change](#516-rnpu_dscp_tc_change) — DSCP→TC 映射变更
-  - [5.17 rNPU_roce_port_change](#517-rnpu_roce_port_change) — RoCE UDP 端口变更
+  - [5.10 rNPU_iprule_del](#510-rnpu_iprule_del) — 删除 ip rule
+  - [5.11 rNPU_iproute_add](#511-rnpu_iproute_add) — 添加 ip route
+  - [5.12 rNPU_iproute_del](#512-rnpu_iproute_del) — 删除 ip route
+  - [5.13 rNPU_bw_limit](#513-rnpu_bw_limit) — RoCE 带宽限速
+  - [5.14 rNPU_mtu_mismatch](#514-rnpu_mtu_mismatch) — RoCE MTU 变更
+  - [5.15 rNPU_dscp_tc_change](#515-rnpu_dscp_tc_change) — DSCP→TC 映射变更
+  - [5.16 rNPU_roce_port_change](#516-rnpu_roce_port_change) — RoCE UDP 端口变更
 
 ---
 
@@ -837,7 +836,7 @@ dcat clean rNPU_route_del --chip=0 --address=10.20.12.0 --netmask=255.255.255.0
 
 ---
 
-### 5.10 rNPU_iprule_add
+### 5.9 rNPU_iprule_add
 
 **UID**: `rNPU_iprule_add`
 
@@ -866,7 +865,7 @@ dcat clean rNPU_iprule_add --chip=0 --dir=from --ip=192.168.1.100 --table=100
 
 ---
 
-### 5.11 rNPU_iprule_del
+### 5.10 rNPU_iprule_del
 
 **UID**: `rNPU_iprule_del`
 
@@ -894,7 +893,7 @@ dcat clean rNPU_iprule_del --chip=0 --dir=from --ip=192.168.1.100
 
 ---
 
-### 5.12 rNPU_iproute_add
+### 5.11 rNPU_iproute_add
 
 **UID**: `rNPU_iproute_add`
 
@@ -929,7 +928,7 @@ dcat clean rNPU_iproute_add --chip=0 --ip=10.20.13.0 --ip_mask=24 --table=100
 
 ---
 
-### 5.13 rNPU_iproute_del
+### 5.12 rNPU_iproute_del
 
 **UID**: `rNPU_iproute_del`
 
@@ -963,7 +962,7 @@ dcat clean rNPU_iproute_del --chip=0 --ip=10.20.14.0 --ip_mask=24 --table=100
 
 ---
 
-### 5.14 rNPU_bw_limit
+### 5.13 rNPU_bw_limit
 
 **UID**: `rNPU_bw_limit`
 
@@ -990,7 +989,7 @@ dcat clean rNPU_bw_limit --chip=0
 
 ---
 
-### 5.15 rNPU_mtu_mismatch
+### 5.14 rNPU_mtu_mismatch
 
 **UID**: `rNPU_mtu_mismatch`
 
@@ -1017,7 +1016,7 @@ dcat clean rNPU_mtu_mismatch --chip=0
 
 ---
 
-### 5.16 rNPU_dscp_tc_change
+### 5.15 rNPU_dscp_tc_change
 
 **UID**: `rNPU_dscp_tc_change`
 
@@ -1045,7 +1044,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
 
 ---
 
-### 5.17 rNPU_roce_port_change
+### 5.16 rNPU_roce_port_change
 
 **UID**: `rNPU_roce_port_change`
 

@@ -1,4 +1,4 @@
-/* tests/test_faults_npu.c — Tier 1: mock table-driven tests for NPU (17) */
+/* tests/test_faults_npu.c — Tier 1: mock table-driven tests for NPU (16) */
 #include "test_faults_common.h"
 
 int main(void) {
@@ -137,6 +137,6 @@ int main(void) {
     }
 
     faults_teardown();
-    printf("test_faults_npu: all 17 faults passed\n");
+    printf("test_faults_npu: all 16 faults passed\n");
     return 0;
 }

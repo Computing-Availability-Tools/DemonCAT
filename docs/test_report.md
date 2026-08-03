@@ -325,7 +325,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 358 条�
 
 | 模式 | 脚本 | 无参 clean 行为 |
 |---|---|---|
-| **glob /tmp 工件**（stateless 可枚举） | cpu_overload / cpu_core_offline / disk_write_overload / net_(delay\|loss\|reorder\|down\|degrade\|port_occupy\|service_stop\|link_flap\|bw_limit\|jitter\|tcp_loss) / proc_hang / proc_zstate / npu_(ip_change\|gw_change\|netdetect_change\|mtu_mismatch\|pfc_change\|prio_tc_change\|roce_port_change\|fec_change) | 枚举 `/tmp/dcat-<uid>-*` 工件逐个清理；无工件输出 "no active injection" 退出 0 |
+| **glob /tmp 工件**（stateless 可枚举） | cpu_overload / cpu_core_offline / disk_write_overload / net_(delay\|loss\|reorder\|down\|degrade\|port_occupy\|service_stop\|link_flap\|bw_limit\|jitter\|tcp_loss) / proc_hang / proc_zstate / npu_(ip_change\|gw_change\|netdetect_change\|mtu_mismatch\|pfc_change\|prio_tc_change\|roce_port_change) | 枚举 `/tmp/dcat-<uid>-*` 工件逐个清理；无工件输出 "no active injection" 退出 0 |
 | **no-op**（无 /tmp 工件可枚举） | npu_(link_down\|route_clear\|bw_limit\|dscp_tc_change\|arp_del\|arp_poison\|route_add\|route_del\|iprule_add\|iprule_del\|iproute_add\|iproute_del) | 无参输出 "no active injection (chip required)" 退出 0；带参走原 fault_present 清理 |
 
 > 所有 NPU 脚本顶部 `chip=${DCAT_PARAM_CHIP:?...}` 改为 `:-`（非致命），`npu_validate_chip` 仅在有值时校验；inject-required 参数的 `:?` 强制移入 `inject)` 分支，保证 query/clean 无参不崩、inject 仍拒绝缺参。

@@ -14,7 +14,7 @@
 | 存储 | 1 | 磁盘写压（dd 多实例） |
 | 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
 | 进程 | 3 | 进程退出 / 挂起 / 僵尸 |
-| NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / FEC / DSCP / PFC / RoCE 端口 |
+| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / PFC / RoCE 端口 |
 | **合计** | **36** | |
 
 ---
@@ -33,7 +33,7 @@
   - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包（tc netem）
   - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序（tc netem）
   - [3.4 rNET_down](#34-rnet_down) — 网卡 down（ip link）
-  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速（ethtool）
+  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速（tc tbf）
   - [3.6 rNET_port_occupy](#36-rnet_port_occupy) — 端口占用（socket holder）
   - [3.7 rNET_service_stop](#37-rnet_service_stop) — 服务停止（systemctl）
   - [3.8 rNET_link_flap](#38-rnet_link_flap) — 链路闪断（ip link 循环）
@@ -44,7 +44,7 @@
   - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出（kill -9，inject-only）
   - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起（SIGSTOP）
   - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程（kill 目标 → 僵尸）
-- [第五章 NPU 模块](#第五章-npu-模块20-条)
+- [第五章 NPU 模块](#第五章-npu-模块19-条)
   - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
   - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
   - [5.3 rNPU_gw_change](#53-rnpu_gw_change) — RoCE 网关变更
@@ -203,7 +203,7 @@ dcat clean rDISK_write_overload --device=/data
 
 ## 第三章 网络模块（11 条）
 
-本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`ethtool`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
+本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
 
 所有故障均支持 `inject`（注入）、`clean`（清理）、`query`（查询）三个操作。注入时通过 sidecar 文件（`/tmp/dcat-rNET_*`）或 PID 文件记录状态，便于后续清理与查询。
 
@@ -320,9 +320,9 @@ dcat clean rNET_down --iface=eth0
 
 **UID**: `rNET_degrade`
 
-**描述**: 通过 `ethtool` 降低指定网卡的协商速率（speed），模拟网卡性能降级。
+**描述**: 通过 `tc tbf` 限速模拟网卡性能降级。
 
-**实现原理**: `inject` 执行 `ethtool -s <iface> speed <speed_mbps>`，将网卡速率设置为指定值（默认 10Mbps），关闭自协商以强制降速；将 `iface speed` 写入 sidecar 文件 `/tmp/dcat-rNET_degrade-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `ethtool -s <iface> speed 1000 autoneg on` 恢复为 1000Mbps 并开启自协商，删除 sidecar 文件。`query` 执行 `ethtool <iface>`，解析 `Speed:` 行提取当前速率，与预期 `speed_mbps`（默认 10）比较，一致则退出码 0。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root tbf rate <speed_mbps>mbit burst <speed_mbps>kbit latency 400ms`，将网卡出向带宽限制为指定速率（默认 10Mbps）；将 `iface speed` 写入 sidecar 文件 `/tmp/dcat-rNET_degrade-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除限速规则，删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，检查是否存在 tbf 规则。
 
 **使用示例**:
 ```bash
@@ -334,12 +334,12 @@ dcat clean rNET_degrade --iface=eth0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33 |
-| speed_mbps | 可选 | 整数 | 目标速率（Mbps），默认 10。常用值：10、100、1000。需网卡及驱动支持该速率 |
+| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33、dummy 网卡 |
+| speed_mbps | 可选 | 整数 | 目标速率（Mbps），默认 10。需 ≥ 1 |
 
-**危险等级**: 中 — 降速后网卡带宽大幅降低（如从 1000Mbps 降至 10Mbps），大流量场景下可能导致拥塞、丢包和应用超时。降速过程中网卡会短暂断开重连。
+**危险等级**: 中 — 限速后网卡带宽大幅降低（如从 1000Mbps 降至 10Mbps），大流量场景下可能导致拥塞、丢包和应用超时。
 
-**补充说明**: 需要 root 权限；依赖 `ethtool` 命令；网卡驱动必须支持目标速率，否则 `ethtool -s` 会失败；虚拟网卡（如 veth、bridge）通常不支持速率设置；clean 恢复为 1000Mbps + autoneg on，若网卡原生速率非 1000Mbps 需手动调整；部分云环境虚拟网卡不支持 ethtool 速率修改。
+**补充说明**: 需要 root 权限；依赖 `tc` 命令；与 `rNET_bw_limit` 同为 tc tbf 机制但语义不同（degrade=模拟慢网卡，bw_limit=模拟带宽拥塞）；dummy 虚拟网卡和真实物理网卡均可测试。
 
 ---
 

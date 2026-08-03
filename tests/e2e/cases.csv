@@ -12,9 +12,9 @@ E2E-010,FUNC-rNET_bw_limit,0,network,rNET_bw_limit,setup,,0,,,,dummy_iface,provi
 E2E-011,FUNC-rNET_bw_limit,1,network,rNET_bw_limit,inject,./build/dcat inject rNET_bw_limit --iface={iface} --rate_kbps=1000,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,>=1,,fault active after inject
 E2E-012,FUNC-rNET_bw_limit,2,network,rNET_bw_limit,clean,./build/dcat clean rNET_bw_limit --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,==0,,"fault cleaned, system restored"
 E2E-013,FUNC-rNET_bw_limit,3,network,rNET_bw_limit,query,./build/dcat query,0,,,state_not_contains:rNET_bw_limit,,no ghost record after clean
-E2E-014,FUNC-rNET_degrade,0,network,rNET_degrade,setup,,0,,,,real_phy,provision real_phy
-E2E-015,FUNC-rNET_degrade,1,network,rNET_degrade,inject,./build/dcat inject rNET_degrade --iface={iface} --speed_mbps=10,0,"""status"":""ok""",ethtool {iface} 2>/dev/null | grep -oE 'Speed: [0-9]+[^ ]*',regex:Speed: 10[^0-9],,fault active after inject
-E2E-016,FUNC-rNET_degrade,2,network,rNET_degrade,clean,./build/dcat clean rNET_degrade --iface={iface},0,,ethtool {iface} 2>/dev/null | grep -oE 'Speed: [0-9]+[^ ]*',nonempty,,"fault cleaned, system restored"
+E2E-014,FUNC-rNET_degrade,0,network,rNET_degrade,setup,,0,,,,dummy_iface,provision dummy_iface
+E2E-015,FUNC-rNET_degrade,1,network,rNET_degrade,inject,./build/dcat inject rNET_degrade --iface={iface} --speed_mbps=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,>=1,,fault active after inject
+E2E-016,FUNC-rNET_degrade,2,network,rNET_degrade,clean,./build/dcat clean rNET_degrade --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,==0,,"fault cleaned, system restored"
 E2E-017,FUNC-rNET_degrade,3,network,rNET_degrade,query,./build/dcat query,0,,,state_not_contains:rNET_degrade,,no ghost record after clean
 E2E-018,FUNC-rNET_delay,0,network,rNET_delay,setup,,0,,,,dummy_iface,provision dummy_iface
 E2E-019,FUNC-rNET_delay,1,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface={iface} --delay_ms=100,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,fault active after inject

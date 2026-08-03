@@ -55,11 +55,15 @@ def sh(cmd, env=None, timeout=60):
 def run_step_cmd(cmd, env, timeout=120, priv_user=None):
     """dcat 命令用 argv 列表执行（不带 shell），使注入载荷原样进入 dcat cli_parse
     （否则 shell=True 会把 ';touch ...' 当命令分隔符，框架自身执行载荷=假阳性）。
+    但 CONC 测试用 & wait 做并发，必须 shell=True。
     辅助 shell 命令(rm/echo/pkill/for/$VAR) 仍用 shell=True。
     priv_user: 非 None 时用 runuser 降权到该用户执行（P 类验证非 root 拒绝）。"""
     cs = cmd.strip()
     dcat_rel = "./build/dcat"
-    if cs.startswith(DCAT) or cs.startswith(dcat_rel):
+    # CONC 测试含 & wait、SEC-S1 clean 含 ; rm 需要 shell；
+    # SEC-I 注入含 ;touch（无空格）必须用 argv 防止载荷执行
+    needs_shell = ('&' in cs and 'wait' in cs) or ('; ' in cs)
+    if (cs.startswith(DCAT) or cs.startswith(dcat_rel)) and not needs_shell:
         try:
             argv = shlex.split(cs)
             if priv_user:
@@ -86,11 +90,14 @@ SWEEP_SCRIPT = r'''
 set +e
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null
-pkill -f 'dd if=/dev/zero of=/tmp/dcat' 2>/dev/null
+pkill -9 -f 'dd if=/dev/zero of=.*dcat' 2>/dev/null
+sleep 0.5
+pkill -9 -f 'dd if=/dev/zero of=.*dcat' 2>/dev/null
 pkill -f 'dcat-rNET_port_occupy' 2>/dev/null
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
+rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f "{home}/.demoncat/state.json" 2>/dev/null
 tc qdisc del dev {iface} root 2>/dev/null
 ip link set {iface} up 2>/dev/null
@@ -103,6 +110,18 @@ for f in /tmp/dcat-rCPU_core_offline-c*; do
   n=${f##*/dcat-rCPU_core_offline-c}
   echo 1 > /sys/devices/system/cpu/cpu$n/online 2>/dev/null
 done
+# NPU stale state cleanup (only when NPU artifacts exist, to avoid 4s+ per sweep)
+if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
+  for c in 2 5; do
+    hccn_tool -i $c -ip_rule -d dir from ip 192.168.1.100 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.99 2>/dev/null
+    hccn_tool -i $c -route -d address 10.20.11.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -route -d address 10.20.12.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.20.13.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.20.14.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -link -s up 2>/dev/null
+  done
+fi
 true
 '''
 

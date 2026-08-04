@@ -77,8 +77,77 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless） | `dcat clean --all` |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查全部活跃记录；有 uid：验证故障生效 | `dcat query` / `dcat query rCPU_overload` |
 | `list` | 列出故障目录 | `dcat list` |
+| `serve [--port N] [--bind ADDR] [--webroot DIR] [--allow-write]` | 启动 HTTP 控制平面（长驻）：静态前端 + `/api/*`；默认只读，`--allow-write` 开注入/清理 | `dcat serve --port 8080 --allow-write` |
 
 详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
+
+## Web 控制台（dcat serve）
+
+`dcat serve` 在二进制内内置一个 HTTP 控制平面 + 静态前端（`features/showcase/`），把故障目录、活跃注入、历史记录搬到浏览器：远程查看状态、构造命令、（可选）直接注入/清理。无外部 HTTP 依赖，手写 HTTP/1.1。
+
+### 启动
+
+```bash
+# 只读模式（默认）：浏览器查看 + 复制命令到 SSH 终端执行
+./build/dcat serve --port 8080
+
+# 可写模式：浏览器可直接注入/清理（注入前二次确认）
+./build/dcat serve --port 8080 --allow-write
+
+# 后台长驻（setsid 脱离终端）
+setsid ./build/dcat serve --port 8080 --allow-write &
+
+# 停止
+pkill -f 'dcat serve'
+```
+
+### 远程访问（SSH 隧道）
+
+serve 默认绑 `127.0.0.1`（明文，不对外暴露）。本机通过 SSH 端口转发访问：
+
+```bash
+ssh -L 8080:localhost:8080 user@server
+# 然后本机浏览器打开 http://localhost:8080
+```
+
+### 选项
+
+| 选项 | 默认 | 说明 |
+|---|---|---|
+| `--port <n>` | 8080 | 监听端口 |
+| `--bind <addr>` | 127.0.0.1 | 绑定地址（明文，安全由 SSH 隧道兜底；不要绑 0.0.0.0） |
+| `--webroot <dir>` | `<exe>/../features/showcase` | 静态前端根目录 |
+| `--allow-write` | 关 | 开 POST /api/inject\|clean（默认只读：GET 200，POST 403） |
+
+### HTTP API
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/health` | 只读 | `{"writable": bool}` 探活 |
+| GET | `/api/catalog` | 只读 | 故障目录 |
+| GET | `/api/state` | 只读 | 活跃注入记录 |
+| GET | `/api/history` | 只读 | 全部历史记录 |
+| POST | `/api/inject` | `--allow-write` | body `{"uid":"...","params":{...}}` |
+| POST | `/api/clean` | `--allow-write` | body `{"uid":"...","params":{...}}` |
+
+> 所有响应带 `Cache-Control: no-store`；只读模式下 POST 返回 403。
+
+### 安全模型
+
+- **默认只读**：不开 `--allow-write` 时，POST /api/inject\|clean 返回 403，只能查看 + 复制命令到终端执行。
+- **`--allow-write` opt-in**：显式开启才允许浏览器注入/清理（前端注入前 `confirm()` 二次确认）。
+- **明文 + 本机绑定**：默认 `127.0.0.1`，不对外暴露；远程访问走 SSH 隧道（加密 + 认证由 SSH 兜底）。
+- 不要用 `--bind 0.0.0.0` 对公网暴露明文服务。
+
+### 前端仪表盘
+
+打开 `http://localhost:8080`：
+
+- **连接状态**：顶栏连接 pill（已连接·可写/只读 / 未连接），3 秒轮询探活。
+- **摘要卡**：活跃注入数 / 历史总数 / 已清理数 / 故障总数。
+- **活跃注入**：当前系统上的活跃故障（含参数 + 命令预览 + 清理按钮）。
+- **历史记录**：最近 5 条历史（含命令 + 状态 pill）。
+- **故障目录**：全部故障（含简介），点「构造命令」打开命令构造器（参数中文提示 + 实时命令预览）。
 
 ## 当前故障目录（33 条）
 

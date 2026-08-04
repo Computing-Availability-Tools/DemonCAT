@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="DemonCAT (dcat) — Demon Computing Availability Tools,专注于计算故障注入工具,覆盖 CPU/存储/网络/进程/NPU 模块。" />
+  <title>DemonCAT · 故障注入工具</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="#top">
+        <span class="brand-logo">◣</span>
+        <span class="brand-name">DemonCAT</span>
+        <span class="brand-tag">dcat</span>
+      </a>
+      <nav class="topnav">
+        <a href="#features">特性</a>
+        <a href="#quickstart">快速开始</a>
+        <a href="#catalog">故障目录</a>
+        <a href="#npu">NPU 验证</a>
+        <a href="#e2e">E2E 矩阵</a>
+        <a href="#modules">模块</a>
+      </nav>
+      <a class="topbar-gh" href="https://github.com/Computing-Availability-Tools" target="_blank" rel="noopener">GitHub ↗</a>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ① Hero -->
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-eyebrow">
+          <span class="dot dot-ok"></span> v0.1.0 · 稳定版 · Linux aarch64/x86_64
+        </div>
+        <h1 class="hero-title">DemonCAT</h1>
+        <p class="hero-subtitle">Demon Computing Availability Tools</p>
+        <p class="hero-tagline">
+          专注于计算故障注入工具。覆盖 <strong>CPU / 存储 / 网络 / 进程 / NPU</strong> 五大模块,
+          提供统一命令面、预检护栏、状态跟踪。<br />
+          <span class="muted">加一个故障 = 加一个脚本 + 配置文件一行,<strong>免重新编译</strong>。</span>
+        </p>
+        <div class="hero-badges">
+          <span class="badge badge-blue">36 故障</span>
+          <span class="badge badge-green">5 模块</span>
+          <span class="badge badge-purple">E2E 329 用例</span>
+          <span class="badge badge-amber">NPU 真机验证</span>
+          <span class="badge badge-plain">C11 + CMake</span>
+        </div>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="#quickstart">快速开始 →</a>
+          <a class="btn btn-ghost" href="#catalog">浏览故障目录</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ② 特性卡 -->
+    <section id="features" class="section">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">核心特性</h2>
+          <p class="section-sub">从故障注入到真机验证,一个工具覆盖计算可用性测试全链路。</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <div class="feature-icon icon-blue">⚙</div>
+            <h3>5 模块覆盖</h3>
+            <p>CPU / 存储 / 网络 / 进程 / NPU,共 36 条故障,横跨系统栈各层。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon icon-green">🔌</div>
+            <h3>插件化故障</h3>
+            <p>外部脚本 + 声明式配置接入。<strong>加一个故障 = 加一个脚本 + 配置一行</strong>,免重新编译。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon icon-purple">🛡</div>
+            <h3>预检护栏</h3>
+            <p>注入前参数校验、操作合法性检查、同资源重注入拒绝,避免误操作。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon icon-amber">📊</div>
+            <h3>状态跟踪</h3>
+            <p>state.json 持久化、query 幂等、clean --all 批量清理,断电不丢状态。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon icon-red">🧪</div>
+            <h3>E2E 混沌矩阵</h3>
+            <p>8 类分类(功能/边界/安全/状态/韧性/CLI/并发/交互),329 用例,CSV 驱动自动生成。</p>
+          </article>
+          <article class="feature-card">
+            <div class="feature-icon icon-cyan">⚡</div>
+            <h3>极简依赖</h3>
+            <p>纯 C11 + CMake,cJSON 单文件库,最小 Linux 环境 + bash 即可运行。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ 快速开始 -->
+    <section id="quickstart" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">快速开始</h2>
+          <p class="section-sub">4 步上手,从编译到第一次故障注入。</p>
+        </div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <div class="step-title">安装依赖(可选)</div>
+              <pre class="code-block"><code>bash scripts/install_deps.sh</code><button class="copy-btn" data-copy="bash scripts/install_deps.sh">复制</button></pre>
+              <p class="step-note">Debian/Ubuntu/RHEL/CentOS 自动识别。</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <div class="step-title">编译(8 核并行)</div>
+              <pre class="code-block"><code>cmake -B build &amp;&amp; cmake --build build -j8</code><button class="copy-btn" data-copy="cmake -B build && cmake --build build -j8">复制</button></pre>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <div class="step-title">列出故障目录</div>
+              <pre class="code-block"><code>./build/dcat list</code><button class="copy-btn" data-copy="./build/dcat list">复制</button></pre>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <div class="step-title">注入 + 查询 + 清除</div>
+              <pre class="code-block"><code>./build/dcat inject rCPU_overload --cores=0,1
+./build/dcat query rCPU_overload --cores=0,1
+./build/dcat clean rCPU_overload --cores=0,1</code><button class="copy-btn" data-copy="./build/dcat inject rCPU_overload --cores=0,1
+./build/dcat query rCPU_overload --cores=0,1
+./build/dcat clean rCPU_overload --cores=0,1">复制</button></pre>
+            </div>
+          </div>
+        </div>
+        <div class="quick-cta">
+          <span>详细使用 →</span>
+          <a href="../../README.md">README</a> ·
+          <a href="../../docs/user_manual.md">用户手册</a> ·
+          <a href="../../SPEC.md">SPEC</a> ·
+          <a href="../../DESIGN.md">DESIGN</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ④ 故障目录(JS 渲染) -->
+    <section id="catalog" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">故障目录</h2>
+          <p class="section-sub">36 条故障,按模块浏览 / 搜索 / 复制命令。点行展开命令构造器。</p>
+        </div>
+        <div class="catalog-controls">
+          <div class="catalog-tabs" id="catalogTabs"><!-- JS render --></div>
+          <div class="catalog-search">
+            <input id="catalogSearch" type="search" placeholder="搜索 UID / 说明 / 参数(如 cores, iface, chip)..." />
+            <span class="catalog-count" id="catalogCount"></span>
+          </div>
+        </div>
+        <div class="catalog-table-wrap">
+          <table class="catalog-table" id="catalogTable">
+            <!-- JS render -->
+          </table>
+          <div class="catalog-empty" id="catalogEmpty" hidden>没有匹配的故障。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ⑤ NPU 真机验证(紧凑横幅,信任信号) -->
+    <section id="npu" class="section">
+      <div class="container">
+        <div class="npu-banner">
+          <div class="npu-banner-icon">🛡</div>
+          <div class="npu-banner-body">
+            <div class="npu-banner-title">
+              NPU 真机验证
+              <span class="npu-banner-version">v0.1.0</span>
+            </div>
+            <p class="npu-banner-summary">
+              在 <strong>Atlas 910B4</strong> 上完成 <strong>19 条 rNPU_* 故障</strong>真机回归(<code>device 2 &amp; 5</code>),
+              4 种清理策略(<code>reverse op</code> / <code>sidecar replay</code> / <code>set to max</code> / <code>cfg recovery</code>)全覆盖。
+            </p>
+          </div>
+          <a class="npu-banner-link" href="../../Release_Notes.md">Release Notes →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ⑥ E2E 测试矩阵(JS 渲染) -->
+    <section id="e2e" class="section">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">E2E 测试矩阵</h2>
+          <p class="section-sub">8 类混沌工程分类,329 用例,CSV 驱动自动生成 + 串行执行。</p>
+        </div>
+        <div class="e2e-grid" id="e2eGrid"><!-- JS render --></div>
+      </div>
+    </section>
+
+    <!-- ⑦ 模块概览(JS 渲染, 类 CATMonitor) -->
+    <section id="modules" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">模块概览</h2>
+          <p class="section-sub">5 个模块的状态卡片,点击跳转到故障目录对应模块。</p>
+        </div>
+        <div class="module-grid" id="moduleGrid"><!-- JS render --></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <span class="brand-logo">◣</span> DemonCAT · <span class="muted">dcat</span>
+      </div>
+      <div class="footer-links">
+        <a href="../../README.md">README</a>
+        <a href="../../SPEC.md">SPEC</a>
+        <a href="../../DESIGN.md">DESIGN</a>
+        <a href="../../Release_Notes.md">Release Notes</a>
+        <a href="../../docs/user_manual.md">用户手册</a>
+        <a href="../../docs/test_report.md">测试报告</a>
+      </div>
+      <div class="footer-meta">
+        <span>v0.1.0</span> · <span>C11 + CMake</span> · <span>Linux aarch64/x86_64</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- 命令构造器 modal -->
+  <div class="modal" id="cmdModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-uid" id="cmdUid"></div>
+          <div class="modal-desc" id="cmdDesc"></div>
+        </div>
+        <button class="modal-close" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body" id="cmdBody"><!-- JS render --></div>
+    </div>
+  </div>
+
+  <!-- toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

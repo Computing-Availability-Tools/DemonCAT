@@ -5,6 +5,7 @@
 #include "output.h"
 #include "cli.h"
 #include "help.h"
+#include "serve.h"
 #include "plugins/plugin_manager.h"
 #include <stdio.h>
 #include <string.h>
@@ -78,6 +79,10 @@ int main(int argc, char **argv) {
         plugindir = defplugins;
     }
     plugin_load_dir(plugindir);
+
+    if (pc.op && strcmp(pc.op, "serve") == 0) {
+        return serve_run(pc.port, pc.bind, pc.webroot, pc.allow_write);
+    }
 
     result_t *r;
     if (pc.all) {

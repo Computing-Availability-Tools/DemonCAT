@@ -510,3 +510,68 @@ code, pre, .mono { font-family: var(--mono); }
   .catalog-table td { padding: 2px 0; }
   .uid-cell::before { content: "UID: "; color: var(--text-muted); font-family: var(--font); font-weight: 400; }
 }
+
+/* ============================================================
+ * 远程控制台
+ * ============================================================ */
+.dot-off { background: var(--crit); box-shadow: 0 0 0 3px rgba(239, 68, 68, .15); }
+.remote-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; margin-bottom: 18px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+  font-size: 14px; color: var(--text-sub);
+}
+.remote-status .remote-dot { width: 9px; height: 9px; }
+.remote-meta { margin-left: auto; font-size: 12px; }
+.remote-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.remote-panel {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 16px 18px;
+}
+.remote-panel-title {
+  margin: 0 0 12px; font-size: 14px; color: var(--text-sub);
+  display: flex; align-items: center; gap: 8px;
+}
+.remote-count {
+  background: var(--bg-alt); color: var(--text-muted);
+  font-size: 12px; padding: 1px 8px; border-radius: 999px; font-weight: 600;
+}
+.remote-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.remote-empty { padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.remote-row {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 6px 12px; align-items: center;
+  padding: 10px 12px; background: var(--bg-alt); border-radius: var(--r-sm); font-size: 13px;
+}
+.remote-row-hist { grid-template-columns: 1fr auto; }
+.remote-row-main { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.remote-uid { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.remote-rid { font-size: 11px; color: var(--text-muted); }
+.remote-row-params { font-family: var(--mono); font-size: 11px; color: var(--text-sub); }
+.remote-row-time { font-size: 11px; color: var(--text-muted); }
+.remote-row-action { text-align: right; }
+.pill { font-size: 10px; padding: 1px 7px; border-radius: 999px; font-weight: 600; }
+.pill-on { background: rgba(16,185,129,.15); color: var(--ok); }
+.pill-off { background: var(--card); color: var(--text-muted); border: 1px solid var(--border); }
+.btn-sm { font-size: 12px; padding: 4px 10px; }
+.btn-warn { background: var(--warn); color: #fff; border-color: var(--warn); }
+.btn-warn:hover { filter: brightness(.95); }
+.modal-exec {
+  background: var(--accent); color: #fff; border: 1px solid var(--accent);
+  padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;
+  font-family: var(--font); margin-left: 6px;
+}
+.modal-exec:hover { background: var(--accent-hover); }
+.remote-off .remote-grid { opacity: .45; pointer-events: none; }
+
+/* 报告页:摘要卡 */
+.report-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.rep-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 16px 18px; text-align: center;
+}
+.rep-card-num { font-size: 28px; font-weight: 700; color: var(--text); }
+.rep-card-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+@media (max-width: 900px) {
+  .remote-grid { grid-template-columns: 1fr; }
+  .report-summary { grid-template-columns: 1fr; }
+}

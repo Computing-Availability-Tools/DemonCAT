@@ -16,7 +16,7 @@ const MODULES = [
 
 const MODULE_MAP = Object.fromEntries(MODULES.map(m => [m.key, m]));
 
-/* ----------- 故障目录(36 条, 来自 README) ----------- */
+/* ----------- 故障目录(33 条, 来自 README) ----------- */
 // 字段: module, uid, required[], optional[{name, default}], desc, cleanup(可选)
 const FAULT_CATALOG = [
   /* CPU 2 */
@@ -66,7 +66,7 @@ const FAULT_CATALOG = [
   { module:"proc", uid:"rPROC_zstate", required:["pid"], optional:[],
     desc:"僵尸进程(kill 目标进程 → 僵尸,clean 杀父进程回收,不可恢复)" },
 
-  /* NPU 19 */
+  /* NPU 16 */
   { module:"npu", uid:"rNPU_link_down", required:["chip"], optional:[],
     desc:"RoCE 链路 down", cleanup:"cfg recovery" },
   { module:"npu", uid:"rNPU_ip_change", required:["chip","address","netmask"], optional:[],
@@ -83,8 +83,6 @@ const FAULT_CATALOG = [
     desc:"添加 RoCE 路由", cleanup:"reverse op" },
   { module:"npu", uid:"rNPU_route_del", required:["chip","address","netmask"], optional:[],
     desc:"删除 RoCE 路由", cleanup:"sidecar replay" },
-  { module:"npu", uid:"rNPU_route_clear", required:["chip"], optional:[],
-    desc:"清空路由表", cleanup:"cfg recovery" },
   { module:"npu", uid:"rNPU_iprule_add", required:["chip","dir","ip","table"], optional:[],
     desc:"添加 ip rule", cleanup:"reverse op" },
   { module:"npu", uid:"rNPU_iprule_del", required:["chip","dir","ip"], optional:[],
@@ -99,40 +97,8 @@ const FAULT_CATALOG = [
     desc:"RoCE MTU 变更", cleanup:"sidecar replay" },
   { module:"npu", uid:"rNPU_dscp_tc_change", required:["chip","dscp","tc"], optional:[],
     desc:"DSCP→TC 映射变更", cleanup:"sidecar replay" },
-  { module:"npu", uid:"rNPU_prio_tc_change", required:["chip","map"], optional:[],
-    desc:"Prio→TC 映射变更", cleanup:"sidecar replay" },
-  { module:"npu", uid:"rNPU_pfc_change", required:["chip","bitmap"], optional:[],
-    desc:"PFC 位图变更", cleanup:"sidecar replay" },
   { module:"npu", uid:"rNPU_roce_port_change", required:["chip","port"], optional:[],
     desc:"RoCE UDP 端口变更", cleanup:"sidecar replay" },
-];
-
-/* ----------- E2E 8 类分类(来自 README) ----------- */
-const E2E_CATEGORIES = [
-  { prefix:"FUNC",  name:"功能基线",   count:150,
-    desc:"37 故障 inject→verify→clean→query 全链路 + query<uid> confirmed + 插件",
-    dim:"功能基线" },
-  { prefix:"BOUND", name:"边界值",     count:40,
-    desc:"每参数类型系统性覆盖(整数越界/空值/格式错误/枚举非法)",
-    dim:"边界值" },
-  { prefix:"SEC",   name:"安全",       count:45,
-    desc:"命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击",
-    dim:"安全" },
-  { prefix:"STATE", name:"状态一致性", count:25,
-    desc:"clean×2/--force/reinject 拒绝/query 幂等/并发 inject 同/不同资源",
-    dim:"状态一致性" },
-  { prefix:"RES",   name:"韧性/自愈",  count:20,
-    desc:"state 丢失/损坏/孤儿/幽灵/clean --all 幂等/state 表满",
-    dim:"韧性" },
-  { prefix:"CLI",   name:"CLI 接口",   count:25,
-    desc:"解析错误 + 帮助 + 退出码 + --config + 未知 uid",
-    dim:"接口" },
-  { prefix:"CONC",  name:"并发竞争",   count:9,
-    desc:"同时 inject+clean / 双进程写 state / clean --all + inject",
-    dim:"并发" },
-  { prefix:"INTER", name:"故障交互",   count:15,
-    desc:"多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify",
-    dim:"交互" },
 ];
 
 /* ============================================================
@@ -264,7 +230,7 @@ function openCmdBuilder(uid) {
       </div>
     ` : `<p class="muted" style="font-size:13px">该故障无需参数。</p>`}
     <h4>命令预览</h4>
-    <div class="modal-cmd" id="modalCmd"><button class="modal-copy" id="modalCopy">复制</button><div id="cmdText"></div></div>
+    <div class="modal-cmd" id="modalCmd"><button class="modal-copy" id="modalCopy">复制</button><button class="modal-exec" id="modalExec" type="button">执行注入</button><div id="cmdText"></div></div>
     ${f.cleanup ? `<p class="muted" style="font-size:12px;margin-top:10px">清理策略: <code>${f.cleanup}</code></p>` : ""}
   `;
 
@@ -284,6 +250,25 @@ function openCmdBuilder(uid) {
     inp.addEventListener("input", updateCmd);
   });
   updateCmd();
+
+  /* 执行注入按钮:收集参数 → POST /api/inject(仅连 dcat serve 时可用) */
+  const execBtn = document.getElementById("modalExec");
+  if (execBtn) {
+    execBtn.onclick = () => {
+      if (!remoteConnected) { showToast("未连接 dcat serve(需经 SSH 隧道访问本页)"); return; }
+      const requiredSet = new Set(f.required);
+      const inputs = body.querySelectorAll("input[data-param]");
+      const paramsObj = {};
+      let missing = false;
+      inputs.forEach(inp => {
+        const val = inp.value.trim();
+        if (val) paramsObj[inp.dataset.param] = val;
+        else if (requiredSet.has(inp.dataset.param)) missing = true;
+      });
+      if (missing) { showToast("必填参数不能为空"); return; }
+      doInject(f.uid, paramsObj).then(ok => { if (ok) modal.hidden = true; });
+    };
+  }
 
   modal.hidden = false;
 }
@@ -334,65 +319,6 @@ document.addEventListener("keydown", (e) => {
     document.getElementById("cmdModal").hidden = true;
   }
 });
-
-/* ============================================================
- * E2E 矩阵渲染
- * ============================================================ */
-function renderE2E() {
-  const grid = document.getElementById("e2eGrid");
-  const total = E2E_CATEGORIES.reduce((s, c) => s + c.count, 0);
-  grid.innerHTML = E2E_CATEGORIES.map(c => `
-    <div class="e2e-card">
-      <div class="e2e-card-head">
-        <span class="e2e-card-prefix">${c.prefix}-</span>
-        <span class="e2e-card-count">${c.count}</span>
-      </div>
-      <h3 class="e2e-card-title">${c.name}</h3>
-      <p class="e2e-card-desc">${c.desc}</p>
-      <div class="e2e-card-dim">${c.dim}</div>
-    </div>
-  `).join("") + `
-    <div class="e2e-card" style="border-left-color:var(--text-sub);background:linear-gradient(135deg,#f8fafc 0%,#eef2ff 100%)">
-      <div class="e2e-card-head">
-        <span class="e2e-card-prefix" style="color:var(--text-sub);background:var(--bg-alt)">Σ</span>
-        <span class="e2e-card-count">${total}</span>
-      </div>
-      <h3 class="e2e-card-title">总计</h3>
-      <p class="e2e-card-desc">CSV 驱动自动生成 + 串行执行</p>
-      <div class="e2e-card-dim">8 类混沌工程矩阵</div>
-    </div>
-  `;
-}
-
-/* ============================================================
- * 模块概览渲染(类 CATMonitor)
- * ============================================================ */
-function renderModules() {
-  const grid = document.getElementById("moduleGrid");
-  grid.innerHTML = MODULES.map(m => {
-    const faults = FAULT_CATALOG.filter(f => f.module === m.key);
-    const preview = faults.slice(0, 4).map(f => `<code>${f.uid.replace(/^r(NET|NPU|CPU|DISK|PROC)_/, "")}</code>`).join(" · ");
-    const more = faults.length > 4 ? ` +${faults.length - 4}` : "";
-    return `
-      <div class="module-card" data-module="${m.key}" style="--module-color:${m.color}">
-        <div class="module-head">
-          <span class="module-name">${m.name}</span>
-          <span class="module-chip"><span class="chip-dot"></span>稳定</span>
-        </div>
-        <div class="module-count" style="color:${m.color}">${faults.length}</div>
-        <div class="module-faults">${preview}<span class="muted">${more}</span></div>
-      </div>
-    `;
-  }).join("");
-  grid.querySelectorAll(".module-card").forEach(card => {
-    card.addEventListener("click", () => {
-      currentModule = card.dataset.module;
-      renderCatalogTabs();
-      renderCatalog();
-      document.getElementById("catalog").scrollIntoView({ behavior:"smooth" });
-    });
-  });
-}
 
 /* ============================================================
  * 复制 / toast
@@ -448,5 +374,237 @@ document.getElementById("catalogSearch").addEventListener("input", (e) => {
  * ============================================================ */
 renderCatalogTabs();
 renderCatalog();
-renderE2E();
-renderModules();
+
+/* ============================================================
+ * 远程控制(API 客户端 + 活跃/历史面板 + 执行/清理)
+ * 仅当页面由 dcat serve 同源提供(/api/health 可达)时激活;
+ * 静态打开(file:// 或无后端)时降级为原展示页,不报错。
+ * ============================================================ */
+const DCAT_API = {
+  async get(path) {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  },
+  async post(path, body) {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return r.json();   /* dcat error 也返 200 + status:error */
+  },
+  health:  () => DCAT_API.get("/api/health"),
+  state:   () => DCAT_API.get("/api/state"),
+  history: () => DCAT_API.get("/api/history"),
+  inject:  (uid, params, force) => DCAT_API.post("/api/inject", { uid, params, force: !!force }),
+  clean:   (uid, params) => DCAT_API.post("/api/clean", uid ? { uid, params } : {}),
+};
+
+let remoteConnected = false;
+let remoteWritable = false;
+let pollTimer = null;
+
+async function initRemote() {
+  const sec = document.getElementById("remote");
+  if (!sec) return;
+  const dot = document.getElementById("remoteDot");
+  const txt = document.getElementById("remoteStatusText");
+  const meta = document.getElementById("remoteMeta");
+  try {
+    const h = await DCAT_API.health();
+    remoteConnected = true;
+    remoteWritable = !!h.writable;
+    if (dot) dot.className = "dot dot-ok remote-dot";
+    if (txt) txt.textContent = remoteWritable ? "已连接 dcat serve(可写)" : "已连接 dcat serve(只读)";
+    if (meta) meta.textContent = `v${h.version} · ${h.faults} 故障 · ${h.active} 活跃 · ${remoteWritable ? "可注入/清理" : "只读 — 复制命令到终端执行"}`;
+    sec.classList.add("remote-on");
+    document.querySelectorAll(".modal-exec").forEach(b => b.style.display = remoteWritable ? "" : "none");
+    await refreshRemote();
+    pollTimer = setInterval(refreshRemote, 3000);
+  } catch (e) {
+    remoteConnected = false;
+    if (dot) dot.className = "dot dot-off remote-dot";
+    if (txt) txt.textContent = "未连接(静态展示模式)";
+    if (meta) meta.textContent = "运行 dcat serve 并经 SSH 隧道访问以启用远程控制";
+    sec.classList.add("remote-off");
+    document.querySelectorAll(".modal-exec").forEach(b => b.style.display = "none");
+    const repEmpty = document.getElementById("repEmpty");
+    if (repEmpty) { repEmpty.hidden = false; repEmpty.textContent = "未连接 dcat serve,无报告数据。"; }
+  }
+}
+
+async function refreshRemote() {
+  if (!remoteConnected) return;
+  try {
+    const [st, hi] = await Promise.all([DCAT_API.state(), DCAT_API.history()]);
+    renderActive(st.data || []);
+    renderHistory(hi.data || []);
+    renderReport(hi.data || []);
+  } catch (e) {
+    const txt = document.getElementById("remoteStatusText");
+    if (txt) txt.textContent = "刷新失败:" + e.message;
+  }
+}
+
+function recParamsToText(rec) {
+  const p = rec.params || {};
+  return Object.keys(p).map(k => `${k}=${p[k]}`).join(" ");
+}
+function recParamsToObj(rec) {
+  return rec.params ? { ...rec.params } : {};
+}
+function activeBadge(active) {
+  return active ? '<span class="pill pill-on">活跃</span>'
+               : '<span class="pill pill-off">已清理</span>';
+}
+
+function renderActive(records) {
+  const el = document.getElementById("activeList");
+  if (!el) return;
+  document.getElementById("activeCount").textContent = records.length;
+  if (!records.length) {
+    el.innerHTML = '<div class="remote-empty">无活跃注入。</div>';
+    return;
+  }
+  el.innerHTML = records.map(r => `
+    <div class="remote-row" data-uid="${escapeHtml(r.uid)}" data-rid="${r.record_id}">
+      <div class="remote-row-main">
+        <code class="remote-uid">${escapeHtml(r.uid)}</code>
+        <span class="remote-rid">#${r.record_id}</span>
+      </div>
+      <div class="remote-row-params">${escapeHtml(recParamsToText(r)) || '—'}</div>
+      <div class="remote-row-time">${escapeHtml(r.started_at || '')}</div>
+      <div class="remote-row-action">
+        ${remoteWritable
+          ? `<button class="btn btn-sm btn-warn remote-clean" data-uid="${escapeHtml(r.uid)}" type="button">清理</button>`
+          : `<span class="muted" style="font-size:11px">只读</span>`}
+      </div>
+    </div>
+  `).join("");
+  el.querySelectorAll(".remote-clean").forEach(btn => {
+    btn.onclick = () => {
+      const rec = records.find(x => x.uid === btn.dataset.uid);
+      doClean(btn.dataset.uid, recParamsToObj(rec));
+    };
+  });
+}
+
+function renderHistory(records) {
+  const el = document.getElementById("historyList");
+  if (!el) return;
+  document.getElementById("historyCount").textContent = records.length;
+  if (!records.length) {
+    el.innerHTML = '<div class="remote-empty">无历史记录。</div>';
+    return;
+  }
+  el.innerHTML = records.map(r => `
+    <div class="remote-row remote-row-hist">
+      <div class="remote-row-main">
+        <code class="remote-uid">${escapeHtml(r.uid)}</code>
+        <span class="remote-rid">#${r.record_id}</span>
+        ${activeBadge(r.active)}
+      </div>
+      <div class="remote-row-params">${escapeHtml(recParamsToText(r)) || '—'}</div>
+      <div class="remote-row-time">${escapeHtml(r.started_at || '')}</div>
+    </div>
+  `).join("");
+}
+
+/* ---- 注入报告(摘要卡 + 历史表,重构 inject/clean 命令) ---- */
+function recToInjectCmd(r) {
+  const p = r.params || {};
+  const args = Object.keys(p).map(k => `--${k}=${p[k]}`).join(" ");
+  return `dcat inject ${r.uid}${args ? " " + args : ""}`;
+}
+function recToCleanCmd(r) {
+  const p = r.params || {};
+  const args = Object.keys(p).map(k => `--${k}=${p[k]}`).join(" ");
+  return `dcat clean ${r.uid}${args ? " " + args : ""}`;
+}
+function renderReport(records) {
+  const active = records.filter(r => r.active).length;
+  const cleaned = records.length - active;
+  const sumEl = document.getElementById("repSummary");
+  if (sumEl) {
+    sumEl.innerHTML = `
+      <div class="rep-card"><div class="rep-card-num">${records.length}</div><div class="rep-card-label">总注入</div></div>
+      <div class="rep-card"><div class="rep-card-num" style="color:var(--ok)">${active}</div><div class="rep-card-label">活跃</div></div>
+      <div class="rep-card"><div class="rep-card-num" style="color:var(--text-muted)">${cleaned}</div><div class="rep-card-label">已清理</div></div>
+    `;
+  }
+  const table = document.getElementById("repTable");
+  const empty = document.getElementById("repEmpty");
+  if (!table) return;
+  document.getElementById("repCount").textContent = records.length;
+  if (!records.length) {
+    table.innerHTML = "";
+    if (empty) { empty.hidden = false; empty.textContent = "暂无注入记录。"; }
+    return;
+  }
+  if (empty) empty.hidden = true;
+  table.innerHTML = `
+    <thead>
+      <tr><th>#</th><th>UID</th><th>注入命令</th><th>清理命令</th><th>时间</th><th>状态</th></tr>
+    </thead>
+    <tbody>
+      ${records.map(r => `
+        <tr>
+          <td>${r.record_id}</td>
+          <td class="uid-cell"><code>${escapeHtml(r.uid)}</code></td>
+          <td class="param-cell"><code style="font-size:11px">${escapeHtml(recToInjectCmd(r))}</code>
+            <button class="copy-btn" data-copy="${escapeHtml(recToInjectCmd(r))}">复制</button></td>
+          <td class="param-cell"><code style="font-size:11px">${escapeHtml(recToCleanCmd(r))}</code>
+            <button class="copy-btn" data-copy="${escapeHtml(recToCleanCmd(r))}">复制</button></td>
+          <td class="remote-row-time">${escapeHtml(r.started_at || "")}</td>
+          <td>${r.active ? '<span class="pill pill-on">活跃</span>' : '<span class="pill pill-off">已清理</span>'}</td>
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+}
+
+/* 返回 true=注入成功(供调用方关闭 modal) */
+async function doInject(uid, paramsObj) {
+  if (!remoteConnected) { showToast("未连接 dcat serve"); return false; }
+  if (!remoteWritable) { showToast("只读模式 — 用「复制」按钮拷命令到 SSH 终端执行"); return false; }
+  const paramStr = Object.keys(paramsObj).map(k => `${k}=${paramsObj[k]}`).join(" ");
+  if (!confirm(`确认在服务器注入故障:\n  ${uid}\n参数: ${paramStr}\n\n点击「确定」执行,「取消」放弃。`)) return false;
+  try {
+    const r = await DCAT_API.inject(uid, paramsObj);
+    if (r.status === "ok") {
+      const rid = (r.data && r.data.record_id) ? r.data.record_id : "-";
+      showToast(`注入成功:${uid} (rid=${rid})`);
+      await refreshRemote();
+      return true;
+    }
+    const msg = (r.error && r.error.message) ? r.error.message : "unknown";
+    showToast(`注入失败:${msg}`);
+    return false;
+  } catch (e) {
+    showToast("注入请求失败:" + e.message);
+    return false;
+  }
+}
+
+async function doClean(uid, paramsObj) {
+  if (!remoteConnected) { showToast("未连接 dcat serve"); return; }
+  try {
+    const r = await DCAT_API.clean(uid, paramsObj);
+    if (r.status === "ok") {
+      showToast(`清理成功:${uid}`);
+      await refreshRemote();
+    } else {
+      const msg = (r.error && r.error.message) ? r.error.message : "unknown";
+      showToast(`清理失败:${msg}`);
+    }
+  } catch (e) {
+    showToast("清理请求失败:" + e.message);
+  }
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "remoteRefresh") refreshRemote();
+});
+
+initRemote();

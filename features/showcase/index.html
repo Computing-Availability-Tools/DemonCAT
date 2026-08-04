@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="DemonCAT (dcat) — Demon Computing Availability Tools,专注于计算故障注入工具,覆盖 CPU/存储/网络/进程/NPU 模块。" />
-  <title>DemonCAT · 故障注入工具</title>
+  <meta name="description" content="DemonCAT (dcat) — Demon Computing Availability Tools,远程故障注入控制台。" />
+  <title>DemonCAT · 远程控制台</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -18,11 +18,9 @@
       </a>
       <nav class="topnav">
         <a href="#features">特性</a>
-        <a href="#quickstart">快速开始</a>
+        <a href="#remote">控制台</a>
         <a href="#catalog">故障目录</a>
-        <a href="#npu">NPU 验证</a>
-        <a href="#e2e">E2E 矩阵</a>
-        <a href="#modules">模块</a>
+        <a href="#report">报告</a>
       </nav>
       <a class="topbar-gh" href="https://github.com/Computing-Availability-Tools" target="_blank" rel="noopener">GitHub ↗</a>
     </div>
@@ -44,14 +42,13 @@
           <span class="muted">加一个故障 = 加一个脚本 + 配置文件一行,<strong>免重新编译</strong>。</span>
         </p>
         <div class="hero-badges">
-          <span class="badge badge-blue">36 故障</span>
+          <span class="badge badge-blue">33 故障</span>
           <span class="badge badge-green">5 模块</span>
-          <span class="badge badge-purple">E2E 329 用例</span>
-          <span class="badge badge-amber">NPU 真机验证</span>
+          <span class="badge badge-amber">远程控制台</span>
           <span class="badge badge-plain">C11 + CMake</span>
         </div>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="#quickstart">快速开始 →</a>
+          <a class="btn btn-primary" href="#remote">远程控制台 →</a>
           <a class="btn btn-ghost" href="#catalog">浏览故障目录</a>
         </div>
       </div>
@@ -62,13 +59,13 @@
       <div class="container">
         <div class="section-head">
           <h2 class="section-title">核心特性</h2>
-          <p class="section-sub">从故障注入到真机验证,一个工具覆盖计算可用性测试全链路。</p>
+          <p class="section-sub">从故障注入到远程控制,一个工具覆盖计算可用性测试全链路。</p>
         </div>
         <div class="feature-grid">
           <article class="feature-card">
             <div class="feature-icon icon-blue">⚙</div>
             <h3>5 模块覆盖</h3>
-            <p>CPU / 存储 / 网络 / 进程 / NPU,共 36 条故障,横跨系统栈各层。</p>
+            <p>CPU / 存储 / 网络 / 进程 / NPU,共 33 条故障,横跨系统栈各层。</p>
           </article>
           <article class="feature-card">
             <div class="feature-icon icon-green">🔌</div>
@@ -86,9 +83,9 @@
             <p>state.json 持久化、query 幂等、clean --all 批量清理,断电不丢状态。</p>
           </article>
           <article class="feature-card">
-            <div class="feature-icon icon-red">🧪</div>
-            <h3>E2E 混沌矩阵</h3>
-            <p>8 类分类(功能/边界/安全/状态/韧性/CLI/并发/交互),329 用例,CSV 驱动自动生成。</p>
+            <div class="feature-icon icon-red">🌐</div>
+            <h3>远程控制台</h3>
+            <p>dcat serve 长驻 HTTP,经 SSH 隧道远程查看/注入/清理;默认只读,--allow-write 开写。</p>
           </article>
           <article class="feature-card">
             <div class="feature-icon icon-cyan">⚡</div>
@@ -99,64 +96,41 @@
       </div>
     </section>
 
-    <!-- ③ 快速开始 -->
-    <section id="quickstart" class="section section-alt">
+    <!-- ③ 远程控制台(JS 渲染,连 dcat serve 时激活) -->
+    <section id="remote" class="section section-alt">
       <div class="container">
         <div class="section-head">
-          <h2 class="section-title">快速开始</h2>
-          <p class="section-sub">4 步上手,从编译到第一次故障注入。</p>
+          <h2 class="section-title">远程控制台</h2>
+          <p class="section-sub">连接 dcat serve 后,实时查看活跃注入 + 历史记录,一键远程注入/清理(可写模式)。</p>
         </div>
-        <div class="steps">
-          <div class="step">
-            <div class="step-num">1</div>
-            <div class="step-body">
-              <div class="step-title">安装依赖(可选)</div>
-              <pre class="code-block"><code>bash scripts/install_deps.sh</code><button class="copy-btn" data-copy="bash scripts/install_deps.sh">复制</button></pre>
-              <p class="step-note">Debian/Ubuntu/RHEL/CentOS 自动识别。</p>
-            </div>
+        <div class="remote-status">
+          <span class="dot remote-dot" id="remoteDot"></span>
+          <span id="remoteStatusText">检测连接中…</span>
+          <span class="remote-meta muted" id="remoteMeta"></span>
+          <button class="btn btn-ghost btn-sm" id="remoteRefresh" type="button">手动刷新</button>
+        </div>
+        <div class="remote-grid">
+          <div class="remote-panel">
+            <h3 class="remote-panel-title">活跃注入 <span class="remote-count" id="activeCount">0</span></h3>
+            <div id="activeList" class="remote-list"></div>
           </div>
-          <div class="step">
-            <div class="step-num">2</div>
-            <div class="step-body">
-              <div class="step-title">编译(8 核并行)</div>
-              <pre class="code-block"><code>cmake -B build &amp;&amp; cmake --build build -j8</code><button class="copy-btn" data-copy="cmake -B build && cmake --build build -j8">复制</button></pre>
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-num">3</div>
-            <div class="step-body">
-              <div class="step-title">列出故障目录</div>
-              <pre class="code-block"><code>./build/dcat list</code><button class="copy-btn" data-copy="./build/dcat list">复制</button></pre>
-            </div>
-          </div>
-          <div class="step">
-            <div class="step-num">4</div>
-            <div class="step-body">
-              <div class="step-title">注入 + 查询 + 清除</div>
-              <pre class="code-block"><code>./build/dcat inject rCPU_overload --cores=0,1
-./build/dcat query rCPU_overload --cores=0,1
-./build/dcat clean rCPU_overload --cores=0,1</code><button class="copy-btn" data-copy="./build/dcat inject rCPU_overload --cores=0,1
-./build/dcat query rCPU_overload --cores=0,1
-./build/dcat clean rCPU_overload --cores=0,1">复制</button></pre>
-            </div>
+          <div class="remote-panel">
+            <h3 class="remote-panel-title">历史记录 <span class="remote-count" id="historyCount">0</span></h3>
+            <div id="historyList" class="remote-list"></div>
           </div>
         </div>
-        <div class="quick-cta">
-          <span>详细使用 →</span>
-          <a href="../../README.md">README</a> ·
-          <a href="../../docs/user_manual.md">用户手册</a> ·
-          <a href="../../SPEC.md">SPEC</a> ·
-          <a href="../../DESIGN.md">DESIGN</a>
-        </div>
+        <p class="muted" style="font-size:12px;margin-top:14px;text-align:center">
+          完整注入报告(含命令历史)见下方 <a href="#report">「报告」</a> 区段。
+        </p>
       </div>
     </section>
 
     <!-- ④ 故障目录(JS 渲染) -->
-    <section id="catalog" class="section section-alt">
+    <section id="catalog" class="section">
       <div class="container">
         <div class="section-head">
           <h2 class="section-title">故障目录</h2>
-          <p class="section-sub">36 条故障,按模块浏览 / 搜索 / 复制命令。点行展开命令构造器。</p>
+          <p class="section-sub">33 条故障,按模块浏览 / 搜索 / 复制命令。点行展开命令构造器(可写模式可直接执行)。</p>
         </div>
         <div class="catalog-controls">
           <div class="catalog-tabs" id="catalogTabs"><!-- JS render --></div>
@@ -174,45 +148,21 @@
       </div>
     </section>
 
-    <!-- ⑤ NPU 真机验证(紧凑横幅,信任信号) -->
-    <section id="npu" class="section">
+    <!-- ⑤ 注入报告(JS 渲染,随控制台自动刷新) -->
+    <section id="report" class="section section-alt">
       <div class="container">
-        <div class="npu-banner">
-          <div class="npu-banner-icon">🛡</div>
-          <div class="npu-banner-body">
-            <div class="npu-banner-title">
-              NPU 真机验证
-              <span class="npu-banner-version">v0.1.0</span>
-            </div>
-            <p class="npu-banner-summary">
-              在 <strong>Atlas 910B4</strong> 上完成 <strong>19 条 rNPU_* 故障</strong>真机回归(<code>device 2 &amp; 5</code>),
-              4 种清理策略(<code>reverse op</code> / <code>sidecar replay</code> / <code>set to max</code> / <code>cfg recovery</code>)全覆盖。
-            </p>
+        <div class="section-head">
+          <h2 class="section-title">注入报告</h2>
+          <p class="section-sub">全部注入记录(活跃 + 已清理)+ 重构 inject/clean 命令,随控制台自动刷新。</p>
+        </div>
+        <div class="report-summary" id="repSummary"></div>
+        <div class="remote-panel" style="margin-top:18px">
+          <h3 class="remote-panel-title">注入历史(按 record_id 倒序)<span class="remote-count" id="repCount">0</span></h3>
+          <div class="catalog-table-wrap">
+            <table class="catalog-table" id="repTable"></table>
+            <div class="catalog-empty" id="repEmpty" hidden>暂无注入记录。</div>
           </div>
-          <a class="npu-banner-link" href="../../Release_Notes.md">Release Notes →</a>
         </div>
-      </div>
-    </section>
-
-    <!-- ⑥ E2E 测试矩阵(JS 渲染) -->
-    <section id="e2e" class="section">
-      <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">E2E 测试矩阵</h2>
-          <p class="section-sub">8 类混沌工程分类,329 用例,CSV 驱动自动生成 + 串行执行。</p>
-        </div>
-        <div class="e2e-grid" id="e2eGrid"><!-- JS render --></div>
-      </div>
-    </section>
-
-    <!-- ⑦ 模块概览(JS 渲染, 类 CATMonitor) -->
-    <section id="modules" class="section section-alt">
-      <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">模块概览</h2>
-          <p class="section-sub">5 个模块的状态卡片,点击跳转到故障目录对应模块。</p>
-        </div>
-        <div class="module-grid" id="moduleGrid"><!-- JS render --></div>
       </div>
     </section>
 
@@ -230,7 +180,6 @@
         <a href="../../DESIGN.md">DESIGN</a>
         <a href="../../Release_Notes.md">Release Notes</a>
         <a href="../../docs/user_manual.md">用户手册</a>
-        <a href="../../docs/test_report.md">测试报告</a>
       </div>
       <div class="footer-meta">
         <span>v0.1.0</span> · <span>C11 + CMake</span> · <span>Linux aarch64/x86_64</span>

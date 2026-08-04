@@ -201,6 +201,43 @@ function renderCatalog() {
   });
 }
 
+/* 参数中文提示(命令构造器用;未列出的参数只显示参数名) */
+const PARAM_HINTS = {
+  cores: "CPU 核心编号,如 0,1 或 0-3",
+  device: "磁盘设备,如 /dev/sda 或 sda",
+  workers: "并发 worker 数(默认 4)",
+  size_mb: "单次写入大小 MB(默认 200)",
+  iface: "网卡名,如 eth0 / enp3s0",
+  delay_ms: "延迟毫秒数,如 100",
+  loss_pct: "丢包率 %,如 5",
+  reorder_pct: "乱序率 %,如 10",
+  speed_mbps: "限速 Mbps,如 10",
+  protocol: "协议:tcp / udp",
+  port: "端口号,如 8080",
+  service: "服务名,如 nginx",
+  cycle_sec: "闪断周期秒,如 2",
+  count: "闪断次数,如 10",
+  rate_kbps: "限速 kbps,如 1000",
+  jitter_ms: "抖动毫秒,如 20",
+  direction: "方向:in / out / both",
+  pid: "进程 PID,如 1234",
+  chip: "NPU 芯片编号,如 0 / 1",
+  address: "IP 地址,如 192.168.1.10",
+  netmask: "子网掩码,如 255.255.255.0",
+  gateway: "网关 IP,如 192.168.1.1",
+  dev: "网卡设备名,如 eth0",
+  ip: "IP 地址",
+  mac: "MAC 地址,如 aa:bb:cc:dd:ee:ff",
+  dir: "方向:in / out",
+  table: "路由表编号,如 100",
+  ip_mask: "IP/掩码,如 192.168.1.0/24",
+  via: "下一跳 IP,如 192.168.1.1",
+  bw_limit: "带宽上限,如 100",
+  size: "MTU 大小,如 1500",
+  dscp: "DSCP 值,如 46",
+  tc: "TC 值,如 3",
+};
+
 /* ============================================================
  * 命令构造器 modal
  * ============================================================ */
@@ -221,12 +258,15 @@ function openCmdBuilder(uid) {
     ${params.length ? `
       <h4>参数 ${f.required.length ? `<span style="color:var(--crit)">* 必填</span>` : ""}</h4>
       <div class="modal-params">
-        ${params.map(p => `
+        ${params.map(p => {
+          const hint = PARAM_HINTS[p.name] || "";
+          return `
           <div class="modal-param">
             <div class="modal-param-name">${p.name}<span class="${p.required ? "req" : "opt"}">${p.required ? "*必填" : "可选"}</span></div>
-            <input data-param="${p.name}" value="${p.default}" placeholder="${p.required ? "必填" : "默认 "+p.default}" />
-          </div>
-        `).join("")}
+            ${hint ? `<div class="modal-param-hint">${hint}</div>` : ""}
+            <input data-param="${p.name}" value="${p.default}" placeholder="${hint || (p.required ? "必填" : "默认 "+p.default)}" />
+          </div>`;
+        }).join("")}
       </div>
     ` : `<p class="muted" style="font-size:13px">该故障无需参数。</p>`}
     <h4>命令预览</h4>
@@ -279,32 +319,9 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-// 结构化拆分,不走正则拼 HTML(避免 class 属性里的 = 被误匹配导致 HTML 破坏)
-// 输出多行:主命令一行,每个 --flag=val 独立一行缩进展示
+// 单行命令预览(可整行复制到终端执行)
 function renderCmdPreview(cmd) {
-  const tokens = cmd.split(/\s+/).filter(Boolean);
-  if (tokens.length < 3) {
-    return `<div class="cmd-main"><span class="cmd-prefix">${escapeHtml(cmd)}</span></div>`;
-  }
-  const prefix = `${tokens[0]} ${tokens[1]}`;
-  const uid   = tokens[2];
-  const args  = tokens.slice(3);
-
-  const mainHtml = `<div class="cmd-main"><span class="cmd-prefix">${escapeHtml(prefix)}</span> <span class="cmd-uid">${escapeHtml(uid)}</span></div>`;
-
-  let argsHtml = "";
-  if (args.length) {
-    argsHtml = `<div class="cmd-args">${args.map(arg => {
-      const eq = arg.indexOf("=");
-      if (eq === -1) {
-        return `<div class="cmd-arg"><span class="cmd-flag">${escapeHtml(arg)}</span></div>`;
-      }
-      const flag = arg.slice(0, eq);
-      const val  = arg.slice(eq + 1);
-      return `<div class="cmd-arg"><span class="cmd-flag">${escapeHtml(flag)}</span><span class="cmd-eq">=</span><span class="cmd-val">${escapeHtml(val)}</span></div>`;
-    }).join("")}</div>`;
-  }
-  return mainHtml + argsHtml;
+  return `<code class="cmd-line">${escapeHtml(cmd)}</code>`;
 }
 
 document.addEventListener("click", (e) => {
@@ -405,46 +422,65 @@ let remoteConnected = false;
 let remoteWritable = false;
 let pollTimer = null;
 
+/* ---- 连接状态 pill(顶栏)---- */
+function setConn(state, text) {
+  const pill = document.getElementById("connPill");
+  const txt = document.getElementById("connText");
+  if (!pill || !txt) return;
+  const dot = pill.querySelector(".dot");
+  if (dot) dot.className = "dot " + (state === "off" ? "dot-off" : "dot-ok");
+  pill.className = "conn-pill " + (state === "off" ? "conn-off" : (remoteWritable ? "conn-rw" : "conn-ro"));
+  txt.textContent = text + (state === "off" ? "" : (remoteWritable ? " · 可写" : " · 只读"));
+}
+
 async function initRemote() {
-  const sec = document.getElementById("remote");
-  if (!sec) return;
-  const dot = document.getElementById("remoteDot");
-  const txt = document.getElementById("remoteStatusText");
-  const meta = document.getElementById("remoteMeta");
   try {
     const h = await DCAT_API.health();
     remoteConnected = true;
     remoteWritable = !!h.writable;
-    if (dot) dot.className = "dot dot-ok remote-dot";
-    if (txt) txt.textContent = remoteWritable ? "已连接 dcat serve(可写)" : "已连接 dcat serve(只读)";
-    if (meta) meta.textContent = `v${h.version} · ${h.faults} 故障 · ${h.active} 活跃 · ${remoteWritable ? "可注入/清理" : "只读 — 复制命令到终端执行"}`;
-    sec.classList.add("remote-on");
+    setConn("on", "已连接");
     document.querySelectorAll(".modal-exec").forEach(b => b.style.display = remoteWritable ? "" : "none");
-    await refreshRemote();
-    pollTimer = setInterval(refreshRemote, 3000);
+    await refreshDash();
+    pollTimer = setInterval(refreshDash, 3000);
   } catch (e) {
     remoteConnected = false;
-    if (dot) dot.className = "dot dot-off remote-dot";
-    if (txt) txt.textContent = "未连接(静态展示模式)";
-    if (meta) meta.textContent = "运行 dcat serve 并经 SSH 隧道访问以启用远程控制";
-    sec.classList.add("remote-off");
+    setConn("off", "未连接");
     document.querySelectorAll(".modal-exec").forEach(b => b.style.display = "none");
-    const repEmpty = document.getElementById("repEmpty");
-    if (repEmpty) { repEmpty.hidden = false; repEmpty.textContent = "未连接 dcat serve,无报告数据。"; }
+    renderSummary(0, 0);
+    renderActive([]);
+    renderHistoryTable([]);
   }
 }
 
-async function refreshRemote() {
+async function refreshDash() {
   if (!remoteConnected) return;
   try {
     const [st, hi] = await Promise.all([DCAT_API.state(), DCAT_API.history()]);
-    renderActive(st.data || []);
-    renderHistory(hi.data || []);
-    renderReport(hi.data || []);
+    const active = st.data || [];
+    const hist = hi.data || [];
+    renderSummary(active.length, hist.length);
+    renderActive(active);
+    renderHistoryTable(hist);
   } catch (e) {
-    const txt = document.getElementById("remoteStatusText");
-    if (txt) txt.textContent = "刷新失败:" + e.message;
+    setConn("off", "刷新失败:" + e.message);
   }
+}
+
+function renderSummary(activeN, histN) {
+  const cleaned = histN - activeN;
+  const el = document.getElementById("statCards");
+  if (el) {
+    el.innerHTML = `
+      <div class="stat-card"><div class="stat-num" style="color:var(--ok)">${activeN}</div><div class="stat-label">活跃注入</div></div>
+      <div class="stat-card"><div class="stat-num">${histN}</div><div class="stat-label">总历史</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--text-muted)">${cleaned}</div><div class="stat-label">已清理</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--accent)">${FAULT_CATALOG.length}</div><div class="stat-label">故障总数</div></div>
+    `;
+  }
+  const ac = document.getElementById("activeCount");
+  const hc = document.getElementById("historyCount");
+  if (ac) ac.textContent = activeN;
+  if (hc) hc.textContent = histN;
 }
 
 function recParamsToText(rec) {
@@ -454,28 +490,33 @@ function recParamsToText(rec) {
 function recParamsToObj(rec) {
   return rec.params ? { ...rec.params } : {};
 }
-function activeBadge(active) {
-  return active ? '<span class="pill pill-on">活跃</span>'
-               : '<span class="pill pill-off">已清理</span>';
+function recToInjectCmd(r) {
+  const p = r.params || {};
+  const a = Object.keys(p).map(k => `--${k}=${p[k]}`).join(" ");
+  return `dcat inject ${r.uid}${a ? " " + a : ""}`;
+}
+function recToCleanCmd(r) {
+  const p = r.params || {};
+  const a = Object.keys(p).map(k => `--${k}=${p[k]}`).join(" ");
+  return `dcat clean ${r.uid}${a ? " " + a : ""}`;
 }
 
 function renderActive(records) {
   const el = document.getElementById("activeList");
   if (!el) return;
-  document.getElementById("activeCount").textContent = records.length;
   if (!records.length) {
-    el.innerHTML = '<div class="remote-empty">无活跃注入。</div>';
+    el.innerHTML = '<div class="empty-hint">无活跃注入 — 点下方「故障目录」选故障注入。</div>';
     return;
   }
   el.innerHTML = records.map(r => `
-    <div class="remote-row" data-uid="${escapeHtml(r.uid)}" data-rid="${r.record_id}">
-      <div class="remote-row-main">
-        <code class="remote-uid">${escapeHtml(r.uid)}</code>
-        <span class="remote-rid">#${r.record_id}</span>
+    <div class="active-row" data-uid="${escapeHtml(r.uid)}">
+      <div class="active-row-main">
+        <code class="active-uid">${escapeHtml(r.uid)}</code>
+        <span class="active-rid">#${r.record_id}</span>
       </div>
-      <div class="remote-row-params">${escapeHtml(recParamsToText(r)) || '—'}</div>
-      <div class="remote-row-time">${escapeHtml(r.started_at || '')}</div>
-      <div class="remote-row-action">
+      <div class="active-row-params">${escapeHtml(recParamsToText(r)) || '—'}</div>
+      <div class="active-row-time">${escapeHtml(r.started_at || '')}</div>
+      <div class="active-row-action">
         ${remoteWritable
           ? `<button class="btn btn-sm btn-warn remote-clean" data-uid="${escapeHtml(r.uid)}" type="button">清理</button>`
           : `<span class="muted" style="font-size:11px">只读</span>`}
@@ -490,65 +531,21 @@ function renderActive(records) {
   });
 }
 
-function renderHistory(records) {
-  const el = document.getElementById("historyList");
-  if (!el) return;
-  document.getElementById("historyCount").textContent = records.length;
-  if (!records.length) {
-    el.innerHTML = '<div class="remote-empty">无历史记录。</div>';
-    return;
-  }
-  el.innerHTML = records.map(r => `
-    <div class="remote-row remote-row-hist">
-      <div class="remote-row-main">
-        <code class="remote-uid">${escapeHtml(r.uid)}</code>
-        <span class="remote-rid">#${r.record_id}</span>
-        ${activeBadge(r.active)}
-      </div>
-      <div class="remote-row-params">${escapeHtml(recParamsToText(r)) || '—'}</div>
-      <div class="remote-row-time">${escapeHtml(r.started_at || '')}</div>
-    </div>
-  `).join("");
-}
-
-/* ---- 注入报告(摘要卡 + 历史表,重构 inject/clean 命令) ---- */
-function recToInjectCmd(r) {
-  const p = r.params || {};
-  const args = Object.keys(p).map(k => `--${k}=${p[k]}`).join(" ");
-  return `dcat inject ${r.uid}${args ? " " + args : ""}`;
-}
-function recToCleanCmd(r) {
-  const p = r.params || {};
-  const args = Object.keys(p).map(k => `--${k}=${p[k]}`).join(" ");
-  return `dcat clean ${r.uid}${args ? " " + args : ""}`;
-}
-function renderReport(records) {
-  const active = records.filter(r => r.active).length;
-  const cleaned = records.length - active;
-  const sumEl = document.getElementById("repSummary");
-  if (sumEl) {
-    sumEl.innerHTML = `
-      <div class="rep-card"><div class="rep-card-num">${records.length}</div><div class="rep-card-label">总注入</div></div>
-      <div class="rep-card"><div class="rep-card-num" style="color:var(--ok)">${active}</div><div class="rep-card-label">活跃</div></div>
-      <div class="rep-card"><div class="rep-card-num" style="color:var(--text-muted)">${cleaned}</div><div class="rep-card-label">已清理</div></div>
-    `;
-  }
-  const table = document.getElementById("repTable");
-  const empty = document.getElementById("repEmpty");
+function renderHistoryTable(records) {
+  const table = document.getElementById("historyTable");
+  const empty = document.getElementById("historyEmpty");
   if (!table) return;
-  document.getElementById("repCount").textContent = records.length;
   if (!records.length) {
     table.innerHTML = "";
-    if (empty) { empty.hidden = false; empty.textContent = "暂无注入记录。"; }
+    if (empty) { empty.hidden = false; empty.textContent = "暂无历史记录。"; }
     return;
   }
   if (empty) empty.hidden = true;
+  const shown = records.slice(0, 5);   /* 仅最近 5 条,防页面过长 */
   table.innerHTML = `
-    <thead>
-      <tr><th>#</th><th>UID</th><th>注入命令</th><th>清理命令</th><th>时间</th><th>状态</th></tr>
-    </thead>
+    <thead><tr><th>#</th><th>UID</th><th>注入命令</th><th>清理命令</th><th>时间</th><th>状态</th></tr></thead>
     <tbody>
-      ${records.map(r => `
+      ${shown.map(r => `
         <tr>
           <td>${r.record_id}</td>
           <td class="uid-cell"><code>${escapeHtml(r.uid)}</code></td>
@@ -556,18 +553,17 @@ function renderReport(records) {
             <button class="copy-btn" data-copy="${escapeHtml(recToInjectCmd(r))}">复制</button></td>
           <td class="param-cell"><code style="font-size:11px">${escapeHtml(recToCleanCmd(r))}</code>
             <button class="copy-btn" data-copy="${escapeHtml(recToCleanCmd(r))}">复制</button></td>
-          <td class="remote-row-time">${escapeHtml(r.started_at || "")}</td>
+          <td class="active-row-time">${escapeHtml(r.started_at || "")}</td>
           <td>${r.active ? '<span class="pill pill-on">活跃</span>' : '<span class="pill pill-off">已清理</span>'}</td>
-        </tr>
-      `).join("")}
-    </tbody>
-  `;
+        </tr>`).join("")}
+    </tbody>`;
+  const note = document.getElementById("historyNote");
+  if (note) note.textContent = records.length > 5 ? `仅显示最近 5 条(共 ${records.length} 条)` : "";
 }
 
-/* 返回 true=注入成功(供调用方关闭 modal) */
 async function doInject(uid, paramsObj) {
   if (!remoteConnected) { showToast("未连接 dcat serve"); return false; }
-  if (!remoteWritable) { showToast("只读模式 — 用「复制」按钮拷命令到 SSH 终端执行"); return false; }
+  if (!remoteWritable) { showToast("只读模式 — 用「复制」按钮拷命令到终端执行"); return false; }
   const paramStr = Object.keys(paramsObj).map(k => `${k}=${paramsObj[k]}`).join(" ");
   if (!confirm(`确认在服务器注入故障:\n  ${uid}\n参数: ${paramStr}\n\n点击「确定」执行,「取消」放弃。`)) return false;
   try {
@@ -575,7 +571,7 @@ async function doInject(uid, paramsObj) {
     if (r.status === "ok") {
       const rid = (r.data && r.data.record_id) ? r.data.record_id : "-";
       showToast(`注入成功:${uid} (rid=${rid})`);
-      await refreshRemote();
+      await refreshDash();
       return true;
     }
     const msg = (r.error && r.error.message) ? r.error.message : "unknown";
@@ -593,7 +589,7 @@ async function doClean(uid, paramsObj) {
     const r = await DCAT_API.clean(uid, paramsObj);
     if (r.status === "ok") {
       showToast(`清理成功:${uid}`);
-      await refreshRemote();
+      await refreshDash();
     } else {
       const msg = (r.error && r.error.message) ? r.error.message : "unknown";
       showToast(`清理失败:${msg}`);
@@ -603,8 +599,26 @@ async function doClean(uid, paramsObj) {
   }
 }
 
-document.addEventListener("click", (e) => {
-  if (e.target && e.target.id === "remoteRefresh") refreshRemote();
-});
+/* 特性 strip(上下文简介,不抢主视觉) */
+const FEATURES = [
+  { icon: "⚙", name: "5 模块覆盖", desc: "CPU/存储/网络/进程/NPU 共 33 条故障" },
+  { icon: "🔌", name: "插件化故障", desc: "加一个故障 = 加脚本 + 配置一行" },
+  { icon: "🛡", name: "预检护栏", desc: "参数校验 + 同资源重注入拒绝" },
+  { icon: "📊", name: "状态跟踪", desc: "state.json 持久化,断电不丢" },
+  { icon: "🌐", name: "远程控制", desc: "dcat serve + SSH 隧道远程注入/查看" },
+  { icon: "⚡", name: "极简依赖", desc: "纯 C11 + CMake + bash" },
+];
+function renderFeatureStrip() {
+  const el = document.getElementById("featureStrip");
+  if (!el) return;
+  el.innerHTML = FEATURES.map(f =>
+    `<div class="feature-chip"><span class="feature-chip-icon">${f.icon}</span><div class="feature-chip-text"><div class="feature-chip-name">${f.name}</div><div class="feature-chip-desc">${f.desc}</div></div></div>`
+  ).join("");
+}
 
+/* 手动刷新按钮(dash-header) */
+const _dashRefresh = document.getElementById("dashRefresh");
+if (_dashRefresh) _dashRefresh.addEventListener("click", refreshDash);
+
+renderFeatureStrip();
 initRemote();

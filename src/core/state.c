@@ -40,21 +40,27 @@ long long state_add(const char *uid, const params_t *params) {
         pthread_mutex_unlock(&g_lock);
         return -1;
     }
+    int slot = -1;
+    /* 优先取从未用过的空槽(record_id==0),保留已清理记录的历史; */
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-        if (!g_records[i].active) {
-            g_records[i].record_id = g_next_id++;
-            strncpy(g_records[i].uid, uid, sizeof(g_records[i].uid)-1);
-            g_records[i].uid[sizeof(g_records[i].uid)-1]='\0';
-            g_records[i].params = *params;
-            fmt_started_at(time(NULL), g_records[i].started_at, sizeof(g_records[i].started_at));
-            g_records[i].active = 1;
-            long long id = g_records[i].record_id;
-            pthread_mutex_unlock(&g_lock);
-            return id;
+        if (g_records[i].record_id == 0) { slot = i; break; }
+    }
+    if (slot < 0) {
+        /* 空槽耗尽才回退到最旧的 inactive(已清理)槽 — 历史会被覆盖 */
+        for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+            if (!g_records[i].active) { slot = i; break; }
         }
     }
+    if (slot < 0) { pthread_mutex_unlock(&g_lock); return -1; }   /* 表满(全活跃) */
+    g_records[slot].record_id = g_next_id++;
+    strncpy(g_records[slot].uid, uid, sizeof(g_records[slot].uid)-1);
+    g_records[slot].uid[sizeof(g_records[slot].uid)-1]='\0';
+    g_records[slot].params = *params;
+    fmt_started_at(time(NULL), g_records[slot].started_at, sizeof(g_records[slot].started_at));
+    g_records[slot].active = 1;
+    long long id = g_records[slot].record_id;
     pthread_mutex_unlock(&g_lock);
-    return -1;
+    return id;
 }
 
 int state_find_by_params(const char *uid, const params_t *query, long long *ids, int max_ids) {
@@ -114,6 +120,13 @@ void state_for_each_active(state_visit_fn fn, void *ctx) {
     pthread_mutex_unlock(&g_lock);
 }
 
+void state_for_each_all(state_visit_fn fn, void *ctx) {
+    pthread_mutex_lock(&g_lock);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++)
+        if (g_records[i].record_id != 0) fn(&g_records[i], ctx);
+    pthread_mutex_unlock(&g_lock);
+}
+
 static cJSON *params_to_json(const params_t *p) {
     cJSON *o = cJSON_CreateObject();
     for (int i = 0; i < p->count; i++)
@@ -155,7 +168,7 @@ void state_save(void) {
     pthread_mutex_lock(&g_lock);
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-        if (!g_records[i].active) continue;
+        if (g_records[i].record_id == 0) continue;   /* 写全部已用记录(活跃+已清理),保留历史 */
         cJSON *o = cJSON_CreateObject();
         cJSON_AddNumberToObject(o, "record_id", (double)g_records[i].record_id);
         cJSON_AddStringToObject(o, "uid", g_records[i].uid);

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static const char *valid_subcommands[] = {"inject", "clean", "query", "list", NULL};
+static const char *valid_subcommands[] = {"inject", "clean", "query", "list", "serve", NULL};
 static char g_cli_error[256] = "";
 
 const char *cli_get_error(void) { return g_cli_error; }
@@ -72,6 +72,10 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             out->all = 1;
             continue;
         }
+        if (strcmp(argv[i], "--allow-write") == 0) {
+            out->allow_write = 1;
+            continue;
+        }
         if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--plugins") == 0) {
             if (i + 1 < argc) {
                 if (strcmp(argv[i], "--config") == 0) out->config  = argv[i + 1];
@@ -80,6 +84,22 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             }
             continue;
         }
+        /* serve 选项:--port/--bind/--webroot (空格 + 等号两种形式) */
+        if (strcmp(argv[i], "--port") == 0) {
+            if (i + 1 < argc) { out->port = atoi(argv[i + 1]); i++; }
+            continue;
+        }
+        if (strncmp(argv[i], "--port=", 7) == 0) { out->port = atoi(argv[i] + 7); continue; }
+        if (strcmp(argv[i], "--bind") == 0) {
+            if (i + 1 < argc) { out->bind = argv[i + 1]; i++; }
+            continue;
+        }
+        if (strncmp(argv[i], "--bind=", 7) == 0) { out->bind = argv[i] + 7; continue; }
+        if (strcmp(argv[i], "--webroot") == 0) {
+            if (i + 1 < argc) { out->webroot = argv[i + 1]; i++; }
+            continue;
+        }
+        if (strncmp(argv[i], "--webroot=", 10) == 0) { out->webroot = argv[i] + 10; continue; }
         /* subcommand may appear after global options (e.g. dcat --config x.conf inject ...) */
         if (!out->op && is_subcommand(argv[i])) {
             out->op = argv[i];

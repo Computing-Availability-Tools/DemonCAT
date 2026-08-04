@@ -5,5 +5,8 @@
 result_t *result_ok(const char *op, const char *uid, long long record_id, const char *message);
 result_t *result_err(const char *op, const char *uid, int code, const char *msg);
 void output_print(result_t *r);
+/* 返回 result_t 的 JSON 字符串(malloc'd,加 timestamp;调用方 free)。
+ * r 为空或 json 为空返回 NULL。JSON 解析失败时返回 r->json 的 strdup 副本。 */
+char *output_to_json(result_t *r);
 void result_free(result_t *r);
 #endif

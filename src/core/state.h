@@ -14,6 +14,8 @@ void state_save(void);
 void state_load(void);
 typedef void (*state_visit_fn)(const injection_record_t *r, void *ctx);
 void state_for_each_active(state_visit_fn fn, void *ctx);
+/* 访问全部已用记录(活跃 + 已清理,record_id>0)。history/审计用。 */
+void state_for_each_all(state_visit_fn fn, void *ctx);
 /* state 文件缺失或 JSON 解析失败(损坏/截断)时为真：clean 据此决定是否回退脚本清理 */
 int  state_is_lost(void);
 #endif

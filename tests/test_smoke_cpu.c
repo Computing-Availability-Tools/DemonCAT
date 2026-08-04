@@ -9,18 +9,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <glob.h>
 
 #define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
 
-static int count_proc(const char *name) {
-    char cmd[256];
-    snprintf(cmd, sizeof cmd, "pgrep -x '%s' 2>/dev/null | wc -l", name);
-    FILE *f = popen(cmd, "r");
-    if (!f) return -1;
-    int n = 0;
-    fscanf(f, "%d", &n);
-    pclose(f);
-    return n;
+/* Count alive rCPU_overload burn processes by scanning dcat pidfiles
+ * (/tmp/dcat-rCPU_overload-c<core>.pid, one PID per file) + kill -0 probe.
+ * Immune to stray perl from interrupted runs / serve / unrelated processes. */
+static int count_burn(void) {
+    glob_t g;
+    if (glob("/tmp/dcat-rCPU_overload-c*.pid", 0, NULL, &g) != 0) {
+        globfree(&g);
+        return 0;
+    }
+    int count = 0;
+    for (size_t i = 0; i < g.gl_pathc; i++) {
+        FILE *f = fopen(g.gl_pathv[i], "r");
+        if (!f) continue;
+        int pid = 0;
+        if (fscanf(f, "%d", &pid) == 1 && pid > 0 && kill(pid, 0) == 0) count++;
+        fclose(f);
+    }
+    globfree(&g);
+    return count;
 }
 
 static void smoke_setup(void) {
@@ -53,7 +66,7 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        int n = count_proc("perl");
+        int n = count_burn();
         CK(n >= 2);
 
         r = dispatch_route("rCPU_overload", "clean", &p);
@@ -61,7 +74,7 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        n = count_proc("perl");
+        n = count_burn();
         CK(n == 0);
     }
 
@@ -74,19 +87,19 @@ int main(void) {
         CK(r && r->code == 0); result_free(r);
 
         sleep(1);
-        CK(count_proc("perl") >= 2);
+        CK(count_burn() >= 2);
 
         /* 同规格重注入: 默认拒绝 (code 5), 旧进程仍在 */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
         CK(r && r->code == 5); result_free(r);
         sleep(1);
-        CK(count_proc("perl") >= 2);
+        CK(count_burn() >= 2);
 
         /* --force 原子替换: 旧清掉再注入, 不应翻倍 (<4) */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
         CK(r && r->code == 0); result_free(r);
         sleep(1);
-        int n = count_proc("perl");
+        int n = count_burn();
         CK(n >= 2);
         CK(n < 4);
 
@@ -94,7 +107,7 @@ int main(void) {
         CK(r && r->code == 0); result_free(r);
 
         sleep(1);
-        CK(count_proc("perl") == 0);
+        CK(count_burn() == 0);
     }
 
     /* ---- rCPU_overload 重叠核集: 默认拒绝 + --force 替换 ---- */
@@ -108,7 +121,7 @@ int main(void) {
         CK(r && r->code == 0); result_free(r);
 
         sleep(1);
-        CK(count_proc("perl") >= 2);
+        CK(count_burn() >= 2);
 
         /* 重叠核 0 (含于 0-1): 默认拒绝 */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 0);
@@ -118,14 +131,14 @@ int main(void) {
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 1);
         CK(r && r->code == 0); result_free(r);
         sleep(1);
-        int n = count_proc("perl");
+        int n = count_burn();
         CK(n >= 1);
         CK(n < 3);
 
         r = dispatch_route_force("rCPU_overload", "clean", &p2, 0); CK(r && r->code == 0); result_free(r);
 
         sleep(1);
-        CK(count_proc("perl") == 0);
+        CK(count_burn() == 0);
     }
 
     smoke_teardown();

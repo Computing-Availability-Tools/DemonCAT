@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="DemonCAT (dcat) — Demon Computing Availability Tools,远程故障注入控制台。" />
-  <title>DemonCAT · 远程控制台</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="DemonCAT (dcat) — 远程故障注入控制台。" />
+  <title>DemonCAT · 控制台</title>
+  <link rel="stylesheet" href="style.css?v=20260804f" />
 </head>
 <body>
-  <!-- 顶栏 -->
   <header class="topbar">
     <div class="container topbar-inner">
       <a class="brand" href="#top">
@@ -17,173 +16,93 @@
         <span class="brand-tag">dcat</span>
       </a>
       <nav class="topnav">
-        <a href="#features">特性</a>
-        <a href="#remote">控制台</a>
+        <a href="#console">控制台</a>
         <a href="#catalog">故障目录</a>
-        <a href="#report">报告</a>
       </nav>
-      <a class="topbar-gh" href="https://github.com/Computing-Availability-Tools" target="_blank" rel="noopener">GitHub ↗</a>
+      <div class="topbar-right">
+        <span class="conn-pill conn-off" id="connPill"><span class="dot dot-off"></span><span id="connText">检测中</span></span>
+        <a class="topbar-gh" href="https://github.com/Computing-Availability-Tools" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
     </div>
   </header>
 
   <main id="top">
-
-    <!-- ① Hero -->
-    <section class="hero">
-      <div class="container hero-inner">
-        <div class="hero-eyebrow">
-          <span class="dot dot-ok"></span> v0.1.0 · 稳定版 · Linux aarch64/x86_64
+    <!-- 紧凑 header -->
+    <section class="dash-header">
+      <div class="container dash-header-inner">
+        <div>
+          <h1 class="dash-title">DemonCAT <span class="muted">远程控制台</span></h1>
+          <p class="dash-sub">实时查看 + 远程注入/清理故障(默认只读,--allow-write 开写)。</p>
         </div>
-        <h1 class="hero-title">DemonCAT</h1>
-        <p class="hero-subtitle">Demon Computing Availability Tools</p>
-        <p class="hero-tagline">
-          专注于计算故障注入工具。覆盖 <strong>CPU / 存储 / 网络 / 进程 / NPU</strong> 五大模块,
-          提供统一命令面、预检护栏、状态跟踪。<br />
-          <span class="muted">加一个故障 = 加一个脚本 + 配置文件一行,<strong>免重新编译</strong>。</span>
-        </p>
-        <div class="hero-badges">
-          <span class="badge badge-blue">33 故障</span>
-          <span class="badge badge-green">5 模块</span>
-          <span class="badge badge-amber">远程控制台</span>
-          <span class="badge badge-plain">C11 + CMake</span>
-        </div>
-        <div class="hero-cta">
-          <a class="btn btn-primary" href="#remote">远程控制台 →</a>
-          <a class="btn btn-ghost" href="#catalog">浏览故障目录</a>
+        <div class="dash-stats">
+          <span><strong>33</strong> 故障</span>
+          <span><strong>5</strong> 模块</span>
+          <span><strong>v0.1.0</strong></span>
+          <button class="btn btn-ghost btn-sm" id="dashRefresh" type="button">↻ 刷新</button>
         </div>
       </div>
     </section>
 
-    <!-- ② 特性卡 -->
-    <section id="features" class="section">
+    <!-- 特性介绍(置顶) -->
+    <section class="section section-alt">
       <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">核心特性</h2>
-          <p class="section-sub">从故障注入到远程控制,一个工具覆盖计算可用性测试全链路。</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature-card">
-            <div class="feature-icon icon-blue">⚙</div>
-            <h3>5 模块覆盖</h3>
-            <p>CPU / 存储 / 网络 / 进程 / NPU,共 33 条故障,横跨系统栈各层。</p>
-          </article>
-          <article class="feature-card">
-            <div class="feature-icon icon-green">🔌</div>
-            <h3>插件化故障</h3>
-            <p>外部脚本 + 声明式配置接入。<strong>加一个故障 = 加一个脚本 + 配置一行</strong>,免重新编译。</p>
-          </article>
-          <article class="feature-card">
-            <div class="feature-icon icon-purple">🛡</div>
-            <h3>预检护栏</h3>
-            <p>注入前参数校验、操作合法性检查、同资源重注入拒绝,避免误操作。</p>
-          </article>
-          <article class="feature-card">
-            <div class="feature-icon icon-amber">📊</div>
-            <h3>状态跟踪</h3>
-            <p>state.json 持久化、query 幂等、clean --all 批量清理,断电不丢状态。</p>
-          </article>
-          <article class="feature-card">
-            <div class="feature-icon icon-red">🌐</div>
-            <h3>远程控制台</h3>
-            <p>dcat serve 长驻 HTTP,经 SSH 隧道远程查看/注入/清理;默认只读,--allow-write 开写。</p>
-          </article>
-          <article class="feature-card">
-            <div class="feature-icon icon-cyan">⚡</div>
-            <h3>极简依赖</h3>
-            <p>纯 C11 + CMake,cJSON 单文件库,最小 Linux 环境 + bash 即可运行。</p>
-          </article>
-        </div>
+        <div class="feature-strip" id="featureStrip"></div>
       </div>
     </section>
 
-    <!-- ③ 远程控制台(JS 渲染,连 dcat serve 时激活) -->
-    <section id="remote" class="section section-alt">
+    <!-- 控制台:摘要卡 + 两列(活跃 | 历史) -->
+    <section id="console" class="section">
       <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">远程控制台</h2>
-          <p class="section-sub">连接 dcat serve 后,实时查看活跃注入 + 历史记录,一键远程注入/清理(可写模式)。</p>
-        </div>
-        <div class="remote-status">
-          <span class="dot remote-dot" id="remoteDot"></span>
-          <span id="remoteStatusText">检测连接中…</span>
-          <span class="remote-meta muted" id="remoteMeta"></span>
-          <button class="btn btn-ghost btn-sm" id="remoteRefresh" type="button">手动刷新</button>
-        </div>
-        <div class="remote-grid">
-          <div class="remote-panel">
-            <h3 class="remote-panel-title">活跃注入 <span class="remote-count" id="activeCount">0</span></h3>
-            <div id="activeList" class="remote-list"></div>
+        <div class="stat-cards" id="statCards"></div>
+        <div class="dash-stack">
+          <div class="dash-col">
+            <h3 class="dash-col-title">活跃注入 <span class="dash-count" id="activeCount">0</span></h3>
+            <div id="activeList" class="active-list"></div>
           </div>
-          <div class="remote-panel">
-            <h3 class="remote-panel-title">历史记录 <span class="remote-count" id="historyCount">0</span></h3>
-            <div id="historyList" class="remote-list"></div>
+          <div class="dash-col">
+            <h3 class="dash-col-title">历史记录 <span class="dash-count" id="historyCount">0</span></h3>
+            <div class="catalog-table-wrap">
+              <table class="catalog-table" id="historyTable"></table>
+              <div class="catalog-empty" id="historyEmpty" hidden>暂无历史记录。</div>
+            </div>
+            <p class="muted" id="historyNote" style="font-size:11px;margin-top:8px"></p>
           </div>
         </div>
-        <p class="muted" style="font-size:12px;margin-top:14px;text-align:center">
-          完整注入报告(含命令历史)见下方 <a href="#report">「报告」</a> 区段。
-        </p>
       </div>
     </section>
 
-    <!-- ④ 故障目录(JS 渲染) -->
-    <section id="catalog" class="section">
+    <!-- 故障目录(调色板:选故障注入) -->
+    <section id="catalog" class="section section-alt">
       <div class="container">
         <div class="section-head">
           <h2 class="section-title">故障目录</h2>
-          <p class="section-sub">33 条故障,按模块浏览 / 搜索 / 复制命令。点行展开命令构造器(可写模式可直接执行)。</p>
+          <p class="section-sub">选故障注入:点行或「构造命令」按钮展开命令构造器(可写模式可直接执行)。</p>
         </div>
         <div class="catalog-controls">
-          <div class="catalog-tabs" id="catalogTabs"><!-- JS render --></div>
+          <div class="catalog-tabs" id="catalogTabs"></div>
           <div class="catalog-search">
             <input id="catalogSearch" type="search" placeholder="搜索 UID / 说明 / 参数(如 cores, iface, chip)..." />
             <span class="catalog-count" id="catalogCount"></span>
           </div>
         </div>
         <div class="catalog-table-wrap">
-          <table class="catalog-table" id="catalogTable">
-            <!-- JS render -->
-          </table>
+          <table class="catalog-table" id="catalogTable"></table>
           <div class="catalog-empty" id="catalogEmpty" hidden>没有匹配的故障。</div>
         </div>
       </div>
     </section>
-
-    <!-- ⑤ 注入报告(JS 渲染,随控制台自动刷新) -->
-    <section id="report" class="section section-alt">
-      <div class="container">
-        <div class="section-head">
-          <h2 class="section-title">注入报告</h2>
-          <p class="section-sub">全部注入记录(活跃 + 已清理)+ 重构 inject/clean 命令,随控制台自动刷新。</p>
-        </div>
-        <div class="report-summary" id="repSummary"></div>
-        <div class="remote-panel" style="margin-top:18px">
-          <h3 class="remote-panel-title">注入历史(按 record_id 倒序)<span class="remote-count" id="repCount">0</span></h3>
-          <div class="catalog-table-wrap">
-            <table class="catalog-table" id="repTable"></table>
-            <div class="catalog-empty" id="repEmpty" hidden>暂无注入记录。</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
   </main>
 
-  <!-- 页脚 -->
   <footer class="footer">
     <div class="container footer-inner">
-      <div class="footer-brand">
-        <span class="brand-logo">◣</span> DemonCAT · <span class="muted">dcat</span>
-      </div>
+      <div class="footer-brand"><span class="brand-logo">◣</span> DemonCAT · <span class="muted">dcat</span></div>
       <div class="footer-links">
         <a href="../../README.md">README</a>
         <a href="../../SPEC.md">SPEC</a>
         <a href="../../DESIGN.md">DESIGN</a>
-        <a href="../../Release_Notes.md">Release Notes</a>
         <a href="../../docs/user_manual.md">用户手册</a>
       </div>
-      <div class="footer-meta">
-        <span>v0.1.0</span> · <span>C11 + CMake</span> · <span>Linux aarch64/x86_64</span>
-      </div>
+      <div class="footer-meta"><span>v0.1.0</span> · <span>C11 + CMake</span> · <span>Linux aarch64/x86_64</span></div>
     </div>
   </footer>
 
@@ -198,13 +117,11 @@
         </div>
         <button class="modal-close" data-close aria-label="关闭">×</button>
       </div>
-      <div class="modal-body" id="cmdBody"><!-- JS render --></div>
+      <div class="modal-body" id="cmdBody"></div>
     </div>
   </div>
 
-  <!-- toast -->
   <div class="toast" id="toast" hidden></div>
-
-  <script src="app.js"></script>
+  <script src="app.js?v=20260804f"></script>
 </body>
 </html>

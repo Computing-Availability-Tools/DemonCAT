@@ -255,6 +255,7 @@ function openCmdBuilder(uid) {
 
   const body = document.getElementById("cmdBody");
   body.innerHTML = `
+    <div class="modal-error" id="modalError" hidden></div>
     ${params.length ? `
       <h4>参数 ${f.required.length ? `<span style="color:var(--crit)">* 必填</span>` : ""}</h4>
       <div class="modal-params">
@@ -270,10 +271,18 @@ function openCmdBuilder(uid) {
       </div>
     ` : `<p class="muted" style="font-size:13px">该故障无需参数。</p>`}
     <h4>命令预览</h4>
-    <div class="modal-cmd" id="modalCmd"><button class="modal-copy" id="modalCopy">复制</button><button class="modal-exec" id="modalExec" type="button">执行注入</button><div id="cmdText"></div></div>
+    <div class="modal-cmd-bar">
+      <label class="modal-force"><input type="checkbox" id="modalForce" /> 强制替换(覆盖同资源)</label>
+      <span class="modal-cmd-actions">
+        <button class="modal-copy" id="modalCopy">复制</button>
+        <button class="modal-exec" id="modalExec" type="button">执行注入</button>
+      </span>
+    </div>
+    <div class="modal-cmd" id="modalCmd"><div id="cmdText"></div></div>
     ${f.cleanup ? `<p class="muted" style="font-size:12px;margin-top:10px">清理策略: <code>${f.cleanup}</code></p>` : ""}
   `;
 
+  const forceChk = document.getElementById("modalForce");
   const updateCmd = () => {
     const inputs = body.querySelectorAll("input[data-param]");
     const args = [];
@@ -281,7 +290,8 @@ function openCmdBuilder(uid) {
       const val = inp.value.trim();
       if (val) args.push(`--${inp.dataset.param}=${val}`);
     });
-    const cmd = `dcat inject ${f.uid}${args.length ? " " + args.join(" ") : ""}`;
+    const force = forceChk && forceChk.checked;
+    const cmd = `dcat inject ${f.uid}${force ? " --force" : ""}${args.length ? " " + args.join(" ") : ""}`;
     document.getElementById("cmdText").innerHTML = renderCmdPreview(cmd);
     document.getElementById("modalCopy").onclick = () => copyText(cmd, "已复制命令");
   };
@@ -289,6 +299,7 @@ function openCmdBuilder(uid) {
   body.querySelectorAll("input[data-param]").forEach(inp => {
     inp.addEventListener("input", updateCmd);
   });
+  if (forceChk) forceChk.addEventListener("change", updateCmd);
   updateCmd();
 
   /* 执行注入按钮:收集参数 → POST /api/inject(仅连 dcat serve 时可用) */
@@ -306,7 +317,9 @@ function openCmdBuilder(uid) {
         else if (requiredSet.has(inp.dataset.param)) missing = true;
       });
       if (missing) { showToast("必填参数不能为空"); return; }
-      doInject(f.uid, paramsObj).then(ok => { if (ok) modal.hidden = true; });
+      const force = !!(forceChk && forceChk.checked);
+      hideModalError();
+      doInject(f.uid, paramsObj, force).then(ok => { if (ok) modal.hidden = true; });
     };
   }
 
@@ -434,18 +447,21 @@ function setConn(state, text) {
 }
 
 async function initRemote() {
+  const cleanAllBtn = document.getElementById("cleanAllBtn");
   try {
     const h = await DCAT_API.health();
     remoteConnected = true;
     remoteWritable = !!h.writable;
     setConn("on", "已连接");
     document.querySelectorAll(".modal-exec").forEach(b => b.style.display = remoteWritable ? "" : "none");
+    if (cleanAllBtn) { cleanAllBtn.hidden = !remoteWritable; cleanAllBtn.onclick = doCleanAll; }
     await refreshDash();
     pollTimer = setInterval(refreshDash, 3000);
   } catch (e) {
     remoteConnected = false;
     setConn("off", "未连接");
     document.querySelectorAll(".modal-exec").forEach(b => b.style.display = "none");
+    if (cleanAllBtn) cleanAllBtn.hidden = true;
     renderSummary(0, 0);
     renderActive([]);
     renderHistoryTable([]);
@@ -561,26 +577,50 @@ function renderHistoryTable(records) {
   if (note) note.textContent = records.length > 5 ? `仅显示最近 5 条(共 ${records.length} 条)` : "";
 }
 
-async function doInject(uid, paramsObj) {
+async function doInject(uid, paramsObj, force) {
   if (!remoteConnected) { showToast("未连接 dcat serve"); return false; }
   if (!remoteWritable) { showToast("只读模式 — 用「复制」按钮拷命令到终端执行"); return false; }
   const paramStr = Object.keys(paramsObj).map(k => `${k}=${paramsObj[k]}`).join(" ");
-  if (!confirm(`确认在服务器注入故障:\n  ${uid}\n参数: ${paramStr}\n\n点击「确定」执行,「取消」放弃。`)) return false;
+  if (!confirm(`确认在服务器注入故障:\n  ${uid}${force ? " (--force)" : ""}\n参数: ${paramStr}\n\n点击「确定」执行,「取消」放弃。`)) return false;
   try {
-    const r = await DCAT_API.inject(uid, paramsObj);
+    const r = await DCAT_API.inject(uid, paramsObj, force);
     if (r.status === "ok") {
       const rid = (r.data && r.data.record_id) ? r.data.record_id : "-";
       showToast(`注入成功:${uid} (rid=${rid})`);
+      hideModalError();
       await refreshDash();
       return true;
     }
+    const code = r.error && r.error.code;
     const msg = (r.error && r.error.message) ? r.error.message : "unknown";
-    showToast(`注入失败:${msg}`);
+    if (code === 5) {
+      showModalError(uid, paramsObj, msg);
+    } else {
+      showToast(`注入失败:${msg}`);
+    }
     return false;
   } catch (e) {
     showToast("注入请求失败:" + e.message);
     return false;
   }
+}
+
+/* 冲突错误横幅(modal 内,code 5 时显示;带「强制替换」一键重试) */
+function showModalError(uid, paramsObj, msg) {
+  const el = document.getElementById("modalError");
+  if (!el) { showToast("注入失败:" + msg); return; }
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="modal-error-msg">⚠ 该资源已注入,需 --force 替换。<span class="modal-error-detail">${escapeHtml(msg)}</span></div>
+    <button class="modal-error-btn" type="button">强制替换</button>
+  `;
+  el.querySelector(".modal-error-btn").onclick = () => {
+    doInject(uid, paramsObj, true).then(ok => { if (ok) document.getElementById("cmdModal").hidden = true; });
+  };
+}
+function hideModalError() {
+  const el = document.getElementById("modalError");
+  if (el) { el.hidden = true; el.innerHTML = ""; }
 }
 
 async function doClean(uid, paramsObj) {
@@ -589,6 +629,24 @@ async function doClean(uid, paramsObj) {
     const r = await DCAT_API.clean(uid, paramsObj);
     if (r.status === "ok") {
       showToast(`清理成功:${uid}`);
+      await refreshDash();
+    } else {
+      const msg = (r.error && r.error.message) ? r.error.message : "unknown";
+      showToast(`清理失败:${msg}`);
+    }
+  } catch (e) {
+    showToast("清理请求失败:" + e.message);
+  }
+}
+
+/* 清理全部活跃注入(clean --all,无 uid → 后端 dispatch_clean_all) */
+async function doCleanAll() {
+  if (!remoteConnected || !remoteWritable) return;
+  if (!confirm("确定清理全部活跃注入?")) return;
+  try {
+    const r = await DCAT_API.clean("", {});
+    if (r.status === "ok") {
+      showToast("已清理全部活跃注入");
       await refreshDash();
     } else {
       const msg = (r.error && r.error.message) ? r.error.message : "unknown";

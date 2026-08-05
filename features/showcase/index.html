@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="DemonCAT (dcat) — 远程故障注入控制台。" />
   <title>DemonCAT · 控制台</title>
-  <link rel="stylesheet" href="style.css?v=20260804f" />
+  <link rel="stylesheet" href="style.css?v=20260805a" />
 </head>
 <body>
   <header class="topbar">
@@ -56,7 +56,9 @@
         <div class="stat-cards" id="statCards"></div>
         <div class="dash-stack">
           <div class="dash-col">
-            <h3 class="dash-col-title">活跃注入 <span class="dash-count" id="activeCount">0</span></h3>
+            <h3 class="dash-col-title">活跃注入 <span class="dash-count" id="activeCount">0</span>
+              <button class="btn btn-sm btn-warn clean-all-btn" id="cleanAllBtn" type="button" hidden>清理全部</button>
+            </h3>
             <div id="activeList" class="active-list"></div>
           </div>
           <div class="dash-col">
@@ -122,6 +124,6 @@
   </div>
 
   <div class="toast" id="toast" hidden></div>
-  <script src="app.js?v=20260804f"></script>
+  <script src="app.js?v=20260805a"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 """tests/e2e/gen_cases.py — dcat e2e 测试用例自动生成器
 
 8 类分类（混沌工程 + 测试矩阵）：
-  FUNC  : 功能基线 — 37 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
+  FUNC  : 功能基线 — 33 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
   BOUND : 边界值 — 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法）
   SEC   : 安全 — 命令注入(inject+clean+query) + 权限边界 + 主机安全(路径穿越/symlink)
   STATE : 状态一致性 — clean×2/--force/reinject 拒绝/query 幂等/并发 inject

@@ -668,3 +668,45 @@ code, pre, .mono { font-family: var(--mono); }
   .stat-cards { grid-template-columns: 1fr; }
   .dash-header-inner { flex-direction: column; align-items: flex-start; }
 }
+
+/* ============================================================
+ * 命令构造器:命令栏(force 复选框 + 复制/执行)+ 冲突红横幅
+ * ============================================================ */
+.modal-cmd-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 8px; flex-wrap: wrap;
+}
+.modal-cmd-actions { display: flex; gap: 6px; align-items: center; }
+.modal-force {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--text-sub); cursor: pointer; user-select: none;
+}
+.modal-force input { margin: 0; cursor: pointer; accent-color: var(--accent); }
+/* bar 里的复制按钮:浅色风格(非 absolute) */
+.modal-cmd-bar .modal-copy {
+  position: static; opacity: 1;
+  background: var(--card); color: var(--text-sub);
+  border: 1px solid var(--border-strong);
+  padding: 4px 10px; font-size: 12px; transition: all .15s;
+}
+.modal-cmd-bar .modal-copy:hover { border-color: var(--accent); color: var(--accent); background: var(--card); }
+
+/* 冲突红横幅(code 5):持久显示 + 一键强制替换 */
+.modal-error {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid var(--crit);
+  border-radius: var(--r-sm); padding: 10px 12px; margin-bottom: 14px;
+  animation: toast-in .2s ease;
+}
+.modal-error[hidden] { display: none; }
+.modal-error-msg { flex: 1; min-width: 0; font-size: 12.5px; color: #991b1b; line-height: 1.5; font-weight: 500; }
+.modal-error-detail { display: block; color: #b91c1c; font-family: var(--mono); font-size: 11px; margin-top: 3px; word-break: break-all; font-weight: 400; }
+.modal-error-btn {
+  flex-shrink: 0; background: var(--crit); color: #fff; border: 1px solid var(--crit);
+  padding: 5px 12px; border-radius: var(--r-sm); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: var(--font); white-space: nowrap; transition: filter .15s;
+}
+.modal-error-btn:hover { filter: brightness(1.1); }
+
+/* 活跃区块标题行的「清理全部」按钮靠右 */
+.clean-all-btn { margin-left: auto; }

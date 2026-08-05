@@ -72,10 +72,6 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             out->all = 1;
             continue;
         }
-        if (strcmp(argv[i], "--allow-write") == 0) {
-            out->allow_write = 1;
-            continue;
-        }
         if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--plugins") == 0) {
             if (i + 1 < argc) {
                 if (strcmp(argv[i], "--config") == 0) out->config  = argv[i + 1];
@@ -84,22 +80,29 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             }
             continue;
         }
-        /* serve 选项:--port/--bind/--webroot (空格 + 等号两种形式) */
-        if (strcmp(argv[i], "--port") == 0) {
-            if (i + 1 < argc) { out->port = atoi(argv[i + 1]); i++; }
-            continue;
+        /* serve 专用选项:仅 serve 子命令解析(--port/--bind/--webroot/--allow-write)。
+         * 避免 --port 全局吞掉 rNET_port_occupy/rNET_tcp_loss 的 port 参数(撞名致 exit 3)。 */
+        if (out->op && strcmp(out->op, "serve") == 0) {
+            if (strcmp(argv[i], "--allow-write") == 0) {
+                out->allow_write = 1;
+                continue;
+            }
+            if (strcmp(argv[i], "--port") == 0) {
+                if (i + 1 < argc) { out->port = atoi(argv[i + 1]); i++; }
+                continue;
+            }
+            if (strncmp(argv[i], "--port=", 7) == 0) { out->port = atoi(argv[i] + 7); continue; }
+            if (strcmp(argv[i], "--bind") == 0) {
+                if (i + 1 < argc) { out->bind = argv[i + 1]; i++; }
+                continue;
+            }
+            if (strncmp(argv[i], "--bind=", 7) == 0) { out->bind = argv[i] + 7; continue; }
+            if (strcmp(argv[i], "--webroot") == 0) {
+                if (i + 1 < argc) { out->webroot = argv[i + 1]; i++; }
+                continue;
+            }
+            if (strncmp(argv[i], "--webroot=", 10) == 0) { out->webroot = argv[i] + 10; continue; }
         }
-        if (strncmp(argv[i], "--port=", 7) == 0) { out->port = atoi(argv[i] + 7); continue; }
-        if (strcmp(argv[i], "--bind") == 0) {
-            if (i + 1 < argc) { out->bind = argv[i + 1]; i++; }
-            continue;
-        }
-        if (strncmp(argv[i], "--bind=", 7) == 0) { out->bind = argv[i] + 7; continue; }
-        if (strcmp(argv[i], "--webroot") == 0) {
-            if (i + 1 < argc) { out->webroot = argv[i + 1]; i++; }
-            continue;
-        }
-        if (strncmp(argv[i], "--webroot=", 10) == 0) { out->webroot = argv[i] + 10; continue; }
         /* subcommand may appear after global options (e.g. dcat --config x.conf inject ...) */
         if (!out->op && is_subcommand(argv[i])) {
             out->op = argv[i];

@@ -3,10 +3,20 @@
 port="${DCAT_PARAM_PORT:-}"
 SIDECAR="/tmp/dcat-rNET_tcp_loss-${port}.rule"
 
+# Validate port: must be numeric 1-65535
+validate_port() {
+    case "$1" in
+        ''|*[!0-9]*) echo "port must be numeric, got: '$1'" >&2; return 1 ;;
+        0) echo "port must be 1-65535, got: 0" >&2; return 1 ;;
+        *) [ "$1" -ge 1 ] && [ "$1" -le 65535 ] || { echo "port must be 1-65535, got: '$1'" >&2; return 1; } ;;
+    esac
+}
+
 case "${DCAT_OP:-inject}" in
     inject)
         port=${DCAT_PARAM_PORT:?missing required param: port}
         dir=${DCAT_PARAM_DIRECTION:-both}
+        validate_port "$port" || exit 1
         SIDECAR="/tmp/dcat-rNET_tcp_loss-${port}.rule"
         rc=0
         if [ "$dir" = "in" ] || [ "$dir" = "both" ]; then

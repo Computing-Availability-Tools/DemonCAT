@@ -81,10 +81,10 @@ int test_dispatch_clean_no_match(void) {
 int test_dispatch_list(void) {
     setup();
     result_t *r = dispatch_route(NULL, "list", NULL);
-    ASSERT_STR_CONTAINS(r->json, "\"status\":\"ok\"");
-    ASSERT_STR_CONTAINS(r->json, "\"op\":\"list\"");
+    ASSERT_INT_EQ(r->code, 0);
     ASSERT_STR_CONTAINS(r->json, "rNET_delay");
     ASSERT_STR_CONTAINS(r->json, "rPROC_exit");
+    ASSERT_STR_CONTAINS(r->json, "uid");     /* 文本表头 */
     result_free(r); return 0;
 }
 

@@ -3,9 +3,23 @@
 svc="${DCAT_PARAM_SERVICE:-}"
 SIDECAR="/tmp/dcat-rNET_service_stop-${svc}.sidecar"
 
+# Validate service name: alphanumeric + underscore/hyphen only (no command injection)
+validate_service() {
+    case "$1" in
+        ''|*[!a-zA-Z0-9_-]*) echo "invalid service name: '$1' (alphanumeric, underscore, hyphen only)" >&2; return 1 ;;
+    esac
+    # Reject dangerous system services (stop/start could break host connectivity or security)
+    case "$1" in
+        sshd|sshd-test|network|NetworkManager|firewalld|iptables|systemd|dbus|docker|containerd)
+            echo "service '$1' is not allowed to be stopped" >&2; return 1 ;;
+    esac
+    return 0
+}
+
 case "${DCAT_OP:-inject}" in
     inject)
         svc=${DCAT_PARAM_SERVICE:?missing required param: service}
+        validate_service "$svc" || exit 1
         SIDECAR="/tmp/dcat-rNET_service_stop-${svc}.sidecar"
         if command -v systemctl >/dev/null 2>&1; then
             systemctl stop "$svc" || { echo "systemctl stop $svc failed" >&2; exit 1; }

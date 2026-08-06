@@ -85,11 +85,19 @@ if [ "$PKG" = "apt" ]; then
     sudo apt-get install -y $RUNTIME_PKGS_APT
 else
     # yum / dnf
-    echo "[1/2] 安装编译依赖..."
-    $PKG_INVOKE install -y $BUILD_PKGS_YUM
-    echo ""
-    echo "[2/2] 安装运行时依赖..."
-    $PKG_INVOKE install -y $RUNTIME_PKGS_YUM
+    # 幂等：已安装的包跳过，只安装缺失的（避免网络不可达时重复安装反复报错）
+    MISSING=""
+    for p in $BUILD_PKGS_YUM $RUNTIME_PKGS_YUM; do
+        if ! rpm -q "$p" >/dev/null 2>&1; then
+            MISSING="$MISSING $p"
+        fi
+    done
+    if [ -z "$MISSING" ]; then
+        echo "[1/2] 依赖已全部满足，跳过 yum 安装"
+    else
+        echo "[1/2] 安装缺失依赖:$MISSING ..."
+        $PKG_INVOKE install -y $MISSING
+    fi
 fi
 
 # ---- 检查 NPU 工具 ----

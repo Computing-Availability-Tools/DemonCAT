@@ -19,10 +19,11 @@ case "${DCAT_OP:-inject}" in
         case "$size" in ''|*[!0-9]*) echo "size_mb must be a positive integer, got: '$size'" >&2; exit 1 ;; esac
         [ "$size" -ge 1 ] 2>/dev/null || { echo "size_mb must be >= 1, got: $size" >&2; exit 1; }
 
-        # Validate device path: must be absolute, start with /tmp or /var/tmp only
+        # Validate device path: any absolute directory is allowed (no /tmp whitelist).
+        # Reject non-absolute paths (avoids relative-path ambiguity and `;`/meta injection via `$dev`).
         case "$dev" in
-            /tmp|/tmp/*|/var/tmp|/var/tmp/*) ;;
-            *) echo "device must be under /tmp or /var/tmp, got: '$dev'" >&2; exit 1 ;;
+            /*) ;;
+            *) echo "device path must be absolute, got: '$dev'" >&2; exit 1 ;;
         esac
         [ -d "$dev" ] || { echo "device path not found: $dev" >&2; exit 1; }
         # symlink protection: reject symlinks and resolve real path

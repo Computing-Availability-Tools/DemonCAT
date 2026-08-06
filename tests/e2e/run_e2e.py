@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -113,12 +114,12 @@ done
 # NPU stale state cleanup (only when NPU artifacts exist, to avoid 4s+ per sweep)
 if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
   for c in 2 5; do
-    hccn_tool -i $c -ip_rule -d dir from ip 192.168.1.100 2>/dev/null
-    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.99 2>/dev/null
-    hccn_tool -i $c -route -d address 10.20.11.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -route -d address 10.20.12.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.20.13.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.20.14.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.30.12.210 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.30.12.211 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
     hccn_tool -i $c -link -s up 2>/dev/null
   done
 fi
@@ -338,6 +339,17 @@ def main():
             sweep(E2E_HOME, TEST_IFACE, tracked_pids)
             if os.geteuid() == 0:
                 sh(f"ip link del {TEST_IFACE} 2>/dev/null", timeout=15)
+            # 无条件清理 NPU 测试残留（route/ip_route/ip_rule 由 *_del 的 clean 恢复导致）
+            if shutil.which("hccn_tool") or os.path.exists("/usr/bin/hccn_tool") or os.path.exists("/usr/local/Ascend/driver/tools/hccn_tool"):
+                for c in ("2", "5"):
+                    sh(f"hccn_tool -i {c} -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.30.12.210 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.30.12.211 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -mtu -s size 1500 2>/dev/null")
+                print("[phase] atexit NPU cleanup done", flush=True)
             print("[phase] atexit cleanup done", flush=True)
         except Exception as e:
             print(f"[phase] atexit cleanup error: {e}", flush=True)

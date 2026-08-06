@@ -16,7 +16,7 @@ result_t *result_ok(const char *op, const char *uid, long long record_id, const 
     char *s = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     result_t *r = malloc(sizeof(result_t));
-    r->code = 0; r->json = s; return r;
+    r->code = 0; r->json = s; r->raw = 0; return r;
 }
 
 result_t *result_err(const char *op, const char *uid, int code, const char *msg) {
@@ -30,7 +30,7 @@ result_t *result_err(const char *op, const char *uid, int code, const char *msg)
     char *s = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     result_t *r = malloc(sizeof(result_t));
-    r->code = code; r->json = s; return r;
+    r->code = code; r->json = s; r->raw = 0; return r;
 }
 
 char *output_to_json(result_t *r) {
@@ -51,7 +51,16 @@ char *output_to_json(result_t *r) {
     return strdup(r->json);
 }
 
+/* raw 结果：payload 已是最终文本，不附加 timestamp、不改写。 */
+result_t *result_raw(const char *text, int code) {
+    result_t *r = malloc(sizeof(result_t));
+    r->code = code; r->json = text ? strdup(text) : NULL; r->raw = 1;
+    return r;
+}
+
 void output_print(result_t *r) {
+    if (!r) return;
+    if (r->raw) { if (r->json) { printf("%s", r->json); if (r->json[0] && r->json[strlen(r->json)-1] != '\n') printf("\n"); } return; }
     char *s = output_to_json(r);
     if (s) { printf("%s\n", s); free(s); }
 }

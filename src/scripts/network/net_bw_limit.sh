@@ -6,7 +6,10 @@ SIDECAR="/tmp/dcat-rNET_bw_limit-${iface}.sidecar"
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
+        # Validate iface: alphanumeric, underscore, hyphen only
+        case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         rate=${DCAT_PARAM_RATE_KBPS:?missing required param: rate_kbps}
+        case "$rate" in ''|*[!0-9]*) echo "rate_kbps must be a positive integer, got: '$rate'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_bw_limit-${iface}.sidecar"
         tc qdisc add dev "$iface" root tbf rate "${rate}kbit" burst 32kbit latency 400ms || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

@@ -496,11 +496,14 @@ def _write_report(path, results, counters, cat_stats, findings, ts, ipt):
     lines = []
     lines.append(f"# DemonCAT E2E 测试报告\n\n生成时间: {ts}  |  root: {ipt}  |  dcat: {DCAT}\n")
     lines.append(f"## 汇总\n\n| 指标 | 值 |\n|---|---|")
-    lines.append(f"| PASS | {counters['PASS']} |")
-    lines.append(f"| FAIL | {counters['FAIL']} |")
-    lines.append(f"| SKIP | {counters['SKIP']} |")
-    lines.append(f"| TOTAL | {sum(counters.values())} |")
-    lines.append(f"| 通过率 | {counters['PASS']*100//max(1,sum(counters.values()))}% |\n")
+    lines.append(f"| 流程(flow)总数 | {sum(counters.values())} |")
+    lines.append(f"| PASS(流程) | {counters['PASS']} |")
+    lines.append(f"| FAIL(流程) | {counters['FAIL']} |")
+    lines.append(f"| SKIP(流程) | {counters['SKIP']} |")
+    lines.append(f"| 执行步骤(step)数 | {len(results)} |")
+    lines.append(f"| 通过率(按流程) | {counters['PASS']*100//max(1,sum(counters.values()))}% |")
+    lines.append("\n> 说明：`cases.csv` 以\"步骤(step)\"计数（每 flow 含 inject/clean/query 多步），"
+                 "报告汇总按\"流程(flow)\"计数（每 flow 一个 PASS/FAIL）。两者不等属正常。\n")
     lines.append("## 分类统计\n\n| 分类 | PASS | FAIL | SKIP |\n|---|---|---|---|")
     for cat in sorted(cat_stats):
         c = cat_stats[cat]

@@ -1,4 +1,5 @@
 /* tests/test_smoke_cpu.c — Tier 3: real execution tests for CPU faults */
+#define _GNU_SOURCE
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"
@@ -12,8 +13,22 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <glob.h>
+#include <sched.h>
 
 #define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
+
+/* 找到两个相邻、且当前进程 affinity 允许的核 (a, a+1)。
+ * 共享容器里会用 taskset/cpuset 屏蔽某些核(例如此环境 0,2-639 不含核1),
+ * 对这些核 taskset -c 会 EINVAL, 故不能硬编码 "0,1"。失败返回 -1。 */
+static int find_adjacent_cores(int *a) {
+    cpu_set_t set;
+    if (sched_getaffinity(0, sizeof set, &set) != 0) return -1;
+    int max = (int)sysconf(_SC_NPROCESSORS_CONF) + 64;
+    for (int i = 0; i < max; i++) {
+        if (CPU_ISSET(i, &set) && CPU_ISSET(i + 1, &set)) { *a = i; return 0; }
+    }
+    return -1;
+}
 
 /* Count alive rCPU_overload burn processes by scanning dcat pidfiles
  * (/tmp/dcat-rCPU_overload-c<core>.pid, one PID per file) + kill -0 probe.
@@ -55,10 +70,21 @@ static void smoke_teardown(void) {
 int main(void) {
     smoke_setup();
 
+    int base;
+    if (find_adjacent_cores(&base) != 0) {
+        /* 连两个相邻可调度核都没有 → 环境无法支撑本测试, 明确报错 */
+        fprintf(stderr, "FAIL: no two adjacent schedulable cores available\n");
+        return 1;
+    }
+    char cores2[16], cores_range[16], core1[8];
+    snprintf(cores2, sizeof cores2, "%d,%d", base, base + 1);
+    snprintf(cores_range, sizeof cores_range, "%d-%d", base, base + 1);
+    snprintf(core1, sizeof core1, "%d", base);
+
     /* ---- rCPU_overload (perl) ---- */
     {
         params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, "0,1"); p.count = 1;
+        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, cores2); p.count = 1;
 
         result_t *r = dispatch_route("rCPU_overload", "inject", &p);
         CK(r && r->code == 0);
@@ -81,7 +107,7 @@ int main(void) {
     /* ---- rCPU_overload re-inject: 默认拒绝 + --force 原子替换 ---- */
     {
         params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, "0,1"); p.count = 1;
+        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, cores2); p.count = 1;
 
         result_t *r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
         CK(r && r->code == 0); result_free(r);
@@ -113,9 +139,9 @@ int main(void) {
     /* ---- rCPU_overload 重叠核集: 默认拒绝 + --force 替换 ---- */
     {
         params_t p1; memset(&p1, 0, sizeof p1);
-        strcpy(p1.items[0].key, "cores"); strcpy(p1.items[0].value, "0-1"); p1.count = 1;
+        strcpy(p1.items[0].key, "cores"); strcpy(p1.items[0].value, cores_range); p1.count = 1;
         params_t p2; memset(&p2, 0, sizeof p2);
-        strcpy(p2.items[0].key, "cores"); strcpy(p2.items[0].value, "0"); p2.count = 1;
+        strcpy(p2.items[0].key, "cores"); strcpy(p2.items[0].value, core1); p2.count = 1;
 
         result_t *r = dispatch_route_force("rCPU_overload", "inject", &p1, 0);
         CK(r && r->code == 0); result_free(r);
@@ -123,11 +149,11 @@ int main(void) {
         sleep(1);
         CK(count_burn() >= 2);
 
-        /* 重叠核 0 (含于 0-1): 默认拒绝 */
+        /* 重叠核 base (含于 base-(base+1)): 默认拒绝 */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 0);
         CK(r && r->code == 5); result_free(r);
 
-        /* --force 替换: 0-1 清掉, 注入 0 (perl 数从 2 降为 1) */
+        /* --force 替换: base-(base+1) 清掉, 注入 base (perl 数从 2 降为 1) */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 1);
         CK(r && r->code == 0); result_free(r);
         sleep(1);

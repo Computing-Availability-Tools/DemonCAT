@@ -2,7 +2,7 @@
 # rNPU_link_down: RoCE link down. Clean = -cfg recovery.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
 HCCN="hccn_tool -i $chip"
 
 fault_present() { $HCCN -link -g 2>/dev/null | grep -qi 'down'; }

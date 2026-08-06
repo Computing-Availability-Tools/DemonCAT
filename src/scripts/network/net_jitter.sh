@@ -6,8 +6,12 @@ SIDECAR="/tmp/dcat-rNET_jitter-${iface}.sidecar"
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
+        # Validate iface: alphanumeric, underscore, hyphen only
+        case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         delay=${DCAT_PARAM_DELAY_MS:?missing required param: delay_ms}
         jitter=${DCAT_PARAM_JITTER_MS:?missing required param: jitter_ms}
+        case "$delay" in ''|*[!0-9]*) echo "delay_ms must be a positive integer, got: '$delay'" >&2; exit 1 ;; esac
+        case "$jitter" in ''|*[!0-9]*) echo "jitter_ms must be a positive integer, got: '$jitter'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_jitter-${iface}.sidecar"
         tc qdisc add dev "$iface" root netem delay "${delay}ms" "${jitter}ms" || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

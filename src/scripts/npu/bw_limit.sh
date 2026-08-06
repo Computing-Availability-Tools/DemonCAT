@@ -2,7 +2,7 @@
 # rNPU_bw_limit: RoCE shaping bandwidth limit. Clean = restore original bw_limit from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
 bw=${DCAT_PARAM_BW_LIMIT:-}
 HCCN="hccn_tool -i $chip"
 

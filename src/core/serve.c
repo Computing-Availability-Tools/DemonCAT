@@ -1,3 +1,4 @@
+#define _GNU_SOURCE  /* realpath */
 /* serve.c — dcat HTTP 控制平面(长驻模式)
  *
  * 单端口双职:静态前端 + /api 端点(包装 dispatch_route 与 state)。
@@ -160,10 +161,20 @@ static void serve_static(int fd, const char *webroot, const char *raw_path) {
     if (plen == 0 || plen >= sizeof(path)) { send_response(fd, 404, "text/plain", "bad path", 8); return; }
     memcpy(path, raw_path, plen); path[plen] = '\0';
     if (strcmp(path, "/") == 0) strcpy(path, "/index.html");
-    if (strstr(path, "..")) { send_response(fd, 403, "text/plain", "forbidden", 9); return; }
+    /* Path traversal check: literal ".." and URL-encoded variants */
+    if (strstr(path, "..") || strstr(path, "%2e") || strstr(path, "%2E")) {
+        send_response(fd, 403, "text/plain", "forbidden", 9); return;
+    }
     char full[1536];
     int n = snprintf(full, sizeof full, "%s%s", webroot, path);
     if (n <= 0 || (size_t)n >= sizeof full) { send_response(fd, 404, "text/plain", "path too long", 13); return; }
+    /* Verify resolved path is under webroot */
+    char real_full[1536], real_webroot[1536];
+    if (realpath(full, real_full) && realpath(webroot, real_webroot)) {
+        if (strncmp(real_full, real_webroot, strlen(real_webroot)) != 0) {
+            send_response(fd, 403, "text/plain", "forbidden", 9); return;
+        }
+    }
     FILE *fp = fopen(full, "rb");
     if (!fp) { send_response(fd, 404, "text/plain", "not found", 9); return; }
     fseek(fp, 0, SEEK_END); long sz = ftell(fp); fseek(fp, 0, SEEK_SET);

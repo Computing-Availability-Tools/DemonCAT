@@ -17,42 +17,68 @@ static int is_inject_only(const fault_def_t *f) {
     return strcmp(f->supported_ops, "inject") == 0;
 }
 
+/* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非裸 JSON。 */
+typedef struct { const char *uid; const char *module; const char *ops; const char *desc; } list_row_t;
+#define MAX_LIST_ROWS 128
+
 static result_t *dispatch_list(void) {
+    list_row_t rows[MAX_LIST_ROWS];
+    char opsbuf[MAX_LIST_ROWS][64];
+    int m = 0;
+
     int n = 0; const fault_def_t *list = registry_list(&n);
-    cJSON *arr = cJSON_CreateArray();
-    for (int i = 0; i < n; i++) {
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "uid", list[i].uid);
-        cJSON_AddStringToObject(o, "module", list[i].module);
-        cJSON *ops = cJSON_CreateArray();
+    for (int i = 0; i < n && m < MAX_LIST_ROWS; i++) {
+        rows[m].uid = list[i].uid;
+        rows[m].module = list[i].module;
         char buf[64]; strncpy(buf, list[i].supported_ops, sizeof(buf)-1); buf[sizeof(buf)-1]='\0';
-        char *save = NULL, *tok = strtok_r(buf, ",", &save);
-        while (tok) { cJSON_AddItemToArray(ops, cJSON_CreateString(tok)); tok = strtok_r(NULL, ",", &save); }
-        cJSON_AddItemToObject(o, "supported_ops", ops);
-        if (list[i].desc[0]) cJSON_AddStringToObject(o, "desc", list[i].desc);
-        cJSON_AddItemToArray(arr, o);
+        strncpy(opsbuf[m], buf, sizeof(opsbuf[m])-1); opsbuf[m][sizeof(opsbuf[m])-1]='\0';
+        rows[m].ops = opsbuf[m];
+        rows[m].desc = list[i].desc;
+        m++;
     }
     /* 动态插件纳入 list */
     int pc = 0;
     const dcat_plugin_t *const *plugs = plugin_list(&pc);
-    for (int i = 0; i < pc; i++) {
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "uid", plugs[i]->uid);
-        cJSON_AddStringToObject(o, "module", plugs[i]->name ? plugs[i]->name : "");
-        cJSON *ops = cJSON_CreateArray();
+    for (int i = 0; i < pc && m < MAX_LIST_ROWS; i++) {
+        rows[m].uid = plugs[i]->uid;
+        rows[m].module = plugs[i]->name ? plugs[i]->name : "";
         char pbuf[64]; strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf)-1); pbuf[sizeof(pbuf)-1]='\0';
-        char *psave = NULL, *ptok = strtok_r(pbuf, ",", &psave);
-        while (ptok) { cJSON_AddItemToArray(ops, cJSON_CreateString(ptok)); ptok = strtok_r(NULL, ",", &psave); }
-        cJSON_AddItemToObject(o, "supported_ops", ops);
-        if (plugs[i]->description && plugs[i]->description[0]) cJSON_AddStringToObject(o, "desc", plugs[i]->description);
-        cJSON_AddItemToArray(arr, o);
+        strncpy(opsbuf[m], pbuf, sizeof(opsbuf[m])-1); opsbuf[m][sizeof(opsbuf[m])-1]='\0';
+        rows[m].ops = opsbuf[m];
+        rows[m].desc = (plugs[i]->description && plugs[i]->description[0]) ? plugs[i]->description : "";
+        m++;
     }
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "status", "ok");
-    cJSON_AddStringToObject(root, "op", "list");
-    cJSON_AddItemToObject(root, "data", arr);
-    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
+
+    /* 计算各列最大宽度(含表头) */
+    int w_uid = 4, w_mod = 6, w_ops = 3, w_desc = 4;
+    for (int i = 0; i < m; i++) {
+        int lu=(int)strlen(rows[i].uid), lm=(int)strlen(rows[i].module),
+            lo=(int)strlen(rows[i].ops), ld=(int)strlen(rows[i].desc);
+        if (lu > w_uid) w_uid = lu;
+        if (lm > w_mod) w_mod = lm;
+        if (lo > w_ops) w_ops = lo;
+        if (ld > w_desc) w_desc = ld;
+    }
+    if (w_desc > 60) w_desc = 60;   /* 描述列过长则截断，保持可读 */
+
+    size_t cap = (size_t)(m + 2) * (size_t)(w_uid + w_mod + w_ops + w_desc + 4) + 64;
+    char *out = malloc(cap);
+    if (!out) return result_err("list", NULL, 1, "out of memory");
+    size_t off = 0;
+#define LF_APPEND(...) do { \
+        int lf = snprintf(out + off, cap - off, __VA_ARGS__); \
+        if (lf < 0) { off = 0; break; } \
+        off += (size_t)lf; if (off >= cap) { off = cap - 2; break; } } while (0)
+    const char *dash = "----------------------------------------------------------------------------------------------------";
+    LF_APPEND("%-*s  %-*s  %-*s  %s\n", w_uid, "uid", w_mod, "module", w_ops, "ops", "desc");
+    LF_APPEND("%.*s  %.*s  %.*s  %.*s\n", w_uid, dash, w_mod, dash, w_ops, dash, w_desc, dash);
+    for (int i = 0; i < m; i++) {
+        char d[61]; strncpy(d, rows[i].desc, sizeof(d)-1); d[sizeof(d)-1]='\0';
+        LF_APPEND("%-*s  %-*s  %-*s  %s\n", w_uid, rows[i].uid, w_mod, rows[i].module, w_ops, rows[i].ops, d);
+    }
+#undef LF_APPEND
+    out[off] = '\0';
+    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = out; r->raw = 1; return r;
 }
 
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
@@ -160,7 +186,7 @@ result_t *dispatch_clean_all(void) {
     cJSON_AddStringToObject(root, "mode", "all");
     cJSON_AddItemToObject(root, "data", arr);
     char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
+    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; r->raw = 0; return r;
 }
 
 /* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */
@@ -250,7 +276,7 @@ static result_t *dispatch_query_all(void) {
     cJSON_AddStringToObject(root, "op", "query");
     cJSON_AddItemToObject(root, "data", arr);
     char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
+    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; r->raw = 0; return r;
 }
 
 result_t *dispatch_route_force(const char *uid, const char *op, const params_t *params, int force) {
@@ -322,7 +348,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
             cJSON *data = cJSON_AddObjectToObject(root, "data");
             cJSON_AddBoolToObject(data, "confirmed", rc == 0);
             char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-            result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; return r;
+            result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; r->raw = 0; return r;
         }
     }
     const injector_t *inj = injector_find(uid);

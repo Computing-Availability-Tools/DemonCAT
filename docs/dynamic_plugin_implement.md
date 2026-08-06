@@ -14,7 +14,7 @@ DemonCAT dispatch 三层扩展机制，前两层分别为 cnf 数据驱动（脚
 
 ```
 dispatch_route(uid, op, params)
-  ├─ op == "list"        → dispatch_list（cnf + 动态插件 納入 JSON 数组）     [dispatch.c:19-55]
+  ├─ op == "list"        → dispatch_list（cnf + 动态插件 納入文本表格）     [dispatch.c:19-55]
   ├─ uid 空（非 list）   → exit 2 "uid required (use 'dcat list' to see available faults)"
   ├─ 第1层 registry_find(uid)   → cnf 数据驱动（precheck + cnf_inject/clean/query raw）
   ├─ 第2层 injector_find(uid)   → 编译注入器（inj->precheck + inj->inject/clean/query + state）
@@ -140,7 +140,7 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
 
 ### 6.2 `dispatch_list`（`dispatch.c:19-55`）
 
-list 输出 JSON 数组：
+list 输出文本表格：
 - cnf 故障：`uid` / `module` / `supported_ops`（按逗号拆数组）/ `desc`（非空才输出）
 - 动态插件：`uid` / `module`(=`p->name`，空则 `""`) / `supported_ops` / `desc`(=`p->description`，非空才输出)
 
@@ -212,7 +212,7 @@ const dcat_plugin_t *dcat_plugin_get(void) {
 |---|---|---|
 | `test_plugin_manager` | `tests/test_plugin_manager.c` | `plugin_find("nope")==NULL`、`plugin_count()==0`；`plugin_load_dir("/tmp/dcat-no-plugins-here-xyz")==0` |
 | `test_plugin_integration` | `tests/test_plugin_integration.c` | `plugin_load_dir("plugins")>=1`；`plugin_find("rSAMPLE_test")!=NULL`；`dispatch_route inject` 返回 ok + 含 `record_id` + `state_list_active()==1`；`dispatch_route clean` 返回 ok + `state_list_active()==0` |
-| 全 ctest 22 项 | — | precheck 重构保持行为（per-op 字段对齐 fault_def）；cnf/injector/plugin 三级优先级不变 |
+| 全 ctest 24 项 | — | precheck 重构保持行为（per-op 字段对齐 fault_def）；cnf/injector/plugin 三级优先级不变 |
 
 CMake 注册（`CMakeLists.txt:45-47`）：
 - Tier 0b：`test_plugin_manager`、`test_plugin_integration`

@@ -143,7 +143,7 @@ query_optional   = dimm
    │                    cnf:    executor_run_raw(DCAT_OP=query)
    │                    注入器:  inj->query(params)
    │              → output
-   └── list  ──→ registry_list → output catalog JSON
+   └── list  ──→ registry_list → output catalog 文本表格
 ```
 
 ### 1.4 与编译注入器的关系
@@ -299,7 +299,7 @@ INI 解析 `demoncat.conf`：
 | `tc netem` | `tc qdisc add/replace dev <iface> root netem ...` | delay / loss / reorder / jitter | `tc qdisc del dev <iface> root`（幂等） |
 | `tc tbf` | `tc qdisc add dev <iface> root tbf rate <rate>...` | bw_limit | `tc qdisc del` |
 | `ip link` | `ip link set dev <iface> down/up` | down / link_flap | `ip link set up` |
-| `ethtool` | `ethtool -s <iface> speed <n>` | degrade | `ethtool -s <iface> speed 1000`（或 autoneg on） |
+| `tc` | `tc qdisc add/dev … tbf` | degrade | `tc qdisc del dev … root` |
 | `iptables` | `iptables -I/-D INPUT/OUTPUT -p tcp --dport <port> -j DROP` | tcp_loss | `iptables -D` 删规则 |
 | socket 占用 | python/socket 持有端口 | port_occupy | kill 持有进程（脚本读 pidfile） |
 | systemctl | `systemctl stop/start <service>` | service_stop | `systemctl start` |
@@ -314,7 +314,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | `rNET_loss` | iface,loss_pct | — | `tc qdisc del` | `netem loss random <pct>%` |
 | `rNET_reorder` | iface,reorder_pct | — | `tc qdisc del` | `netem reorder <pct>%` |
 | `rNET_down` | iface | — | `ip link set up` | clean 后保证 up |
-| `rNET_degrade` | iface | speed_mbps(默认10) | `ethtool -s speed 1000` 或 autoneg | speed_mbps 可选默认 10 |
+| `rNET_degrade` | iface | speed_mbps(默认10) | `tc qdisc add … tbf rate` | speed_mbps 可选默认 10 |
 | `rNET_port_occupy` | port | protocol(默认tcp) | kill 持有进程 | 脚本 spawn socket holder + pidfile，立即返回 |
 | `rNET_service_stop` | service | — | `systemctl start <service>` | — |
 | `rNET_link_flap` | iface | cycle_sec(默认2),count(默认10) | kill 闪断循环进程 + `ip link set up` | 脚本 spawn 循环进程 + pidfile，按 count 自结束 |
@@ -324,7 +324,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 
 #### 4.1.3 错误处理
 
-- `tc` / `iptables` / `ethtool` / `systemctl` 不存在或无权限时，脚本非 0 退出，stderr 报错，dcat 纳入 `error.message`，退出码 1。
+- `tc` / `iptables` / `systemctl` 不存在或无权限时，脚本非 0 退出，stderr 报错，dcat 纳入 `error.message`，退出码 1。
 - `iface` 不存在时 `tc qdisc add` 报错，脚本退出非 0。
 - 长驻型故障（port_occupy / link_flap）脚本 clean 时读 pidfile kill 子进程后清理。
 
@@ -385,9 +385,9 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | clean 策略 | 适用 UID | 机制 |
 |---|---|---|
 | 反向操作 | arp_poison, route_add, iprule_add, iproute_add | del 加的 / add 删的 |
-| sidecar 回放 | ip_change, gw_change, netdetect_change, arp_del, route_del, iprule_del, iproute_del, mtu, fec, dscp_tc, prio_tc, pfc, roce_port | inject 前 -g 存原值；clean 回放 |
+| sidecar 回放 | ip_change, gw_change, netdetect_change, arp_del, route_del, iprule_del, iproute_del, mtu, dscp_tc, roce_port | inject 前 -g 存原值；clean 回放 |
 | 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
-| -cfg recovery | link_down, route_clear | hccn_tool 内置恢复 |
+| -cfg recovery | link_down | hccn_tool 内置恢复 |
 
 #### 4.5.2 故障差异表
 
@@ -453,7 +453,7 @@ parse → registry_find(uid)
   - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
   - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
   - **query 不强制必填参数**：precheck 对 query 不做必填校验（与 inject/clean 不同）。无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤；query 参数声明在 `query_optional`。`query_required` 已弃用（解析兼容保留，留空）。
-- **list**：`registry_list()`，输出 cnf fault 目录 JSON（含 supported_ops / 6 个 per-op required/optional 字段 / desc）。注入器故障本期不纳入 list 输出。
+- **list**：`registry_list()`，输出 cnf fault 目录文本表格（含 supported_ops / 6 个 per-op required/optional 字段 / desc）。注入器故障本期不纳入 list 输出。
 
 ---
 
@@ -698,7 +698,6 @@ CAT/
 │           ├── arp_del.sh
 │           ├── route_add.sh
 │           ├── route_del.sh
-│           ├── route_clear.sh
 │           ├── iprule_add.sh
 │           ├── iprule_del.sh
 │           ├── iproute_add.sh
@@ -706,8 +705,6 @@ CAT/
 │           ├── bw_limit.sh
 │           ├── mtu_mismatch.sh
 │           ├── dscp_tc_change.sh
-│           ├── prio_tc_change.sh
-│           ├── pfc_change.sh
 │           └── roce_port_change.sh
 ├── config/
 │   └── demoncat.conf           # 故障目录配置
@@ -724,7 +721,7 @@ CAT/
     ├── test_faults_common.h     # 通用 mock + 断言宏
     ├── test_faults_cpu_storage.c  # 3 条 CPU + 1 条存储
     ├── test_faults_network.c      # 11 条网络
-    ├── test_faults_process.c      # 4 条进程
+    ├── test_faults_process.c      # 3 条进程
     ├── test_faults_npu.c          # 19 条 NPU
     ├── check_syntax.sh            # sh -n 全脚本语法检查
     ├── smoke_root.sh             # root 级自动化测试
@@ -765,7 +762,7 @@ CAT/
 |---|:---:|:---:|:---:|---|---|
 | rNET_loss / reorder / bw_limit / jitter | ✓ | ✓ | ✓ | 命令串含 `tc qdisc add ... netem/tbf`；env 含 iface/... | 可选（需 root + iface） |
 | rNET_down | ✓ | ✓ | ✓ | 命令串含 `ip link set down` | 可选 |
-| rNET_degrade | ✓ | ✓ | ✓ | 命令串含 `ethtool -s` | 可选 |
+| rNET_degrade | ✓ | ✓ | ✓ | 命令串含 `tc qdisc … tbf` | 可选 |
 | rNET_port_occupy | ✓ | ✓ | ✓ | env 含 port/protocol；脚本 spawn holder + pidfile | 可选 |
 | rNET_service_stop | ✓ | ✓ | ✓ | 命令含 `systemctl stop` | 可选 |
 | rNET_link_flap | ✓ | ✓ | ✓ | 脚本 spawn 循环进程 + pidfile；按 count 自结束 | 可选 |
@@ -775,7 +772,7 @@ CAT/
 | rPROC_zstate | ✓ | ✓ | ✓ | 脚本 spawn 僵尸父进程 + pidfile | 可选 |
 | rCPU_core_offline | ✓ | ✓ | ✓ | 命令串含 `echo 0 > .../online` | 可选（需 root） |
 | rDISK_write_overload | ✓ | ✓ | ✓ | 脚本 spawn dd/fio + pidfile；clean 读 pidfile kill | 可选 |
-| 全部 19 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
+| 全部 16 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
 | 注入器（builtin_injectors[]） | — | — | — | 本期为空，无覆盖；启用后用 `inj->op` 返回值断言 | — |
 
 ### 10.4 真实环境冒烟
@@ -863,7 +860,7 @@ dcat list                            # 故障目录
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
 - **决策5（必/选参数区分）**：按 op 分 required/optional 字段（`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`）；precheck 按 op 取对应 `*_required` 校验，`*_optional` 缺省走脚本默认（§2 + §3.5 + SPEC §3.3）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1 起步（核心框架 + 36 条故障），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1 起步（核心框架 + 33 条故障），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。

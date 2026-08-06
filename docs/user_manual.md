@@ -161,7 +161,7 @@ dcat clean rCPU_core_offline --cores=2,3
 
 **危险等级**: 高 — 直接将 CPU 核下线，减少系统可用算力；下线多核可能触发调度器重平衡与 NUMA 重排。
 
-**补充说明**: 需要 root 权限写 sysfs；依赖内核 `CONFIG_HOTPLUG_CPU` 支持。部分虚拟化/容器环境不支持核下线。clean 仅恢复实际下线成功的核。
+**补充说明**: 需要 root 权限写 sysfs；依赖内核 `CONFIG_HOTPLUG_CPU` 支持。部分虚拟化/容器环境不支持核下线。clean 仅恢复实际下线成功的核。核离线在部分内核版本上可能引起系统宕机，请谨慎使用；另外 **cpu0（0 号核心）在很多内核/平台上无法离线**，脚本会自动跳过并告警，这是正常现象，不代表故障注入失败。
 
 ---
 
@@ -229,7 +229,7 @@ dcat clean rNET_delay --iface=eth0
 
 **危险等级**: 低 — 仅增加网络延迟，不中断连接，不影响其他网卡。但大延迟值可能导致依赖低延迟的应用（如心跳、实时通信）超时。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡若已有 root qdisc 则 `tc qdisc add` 会失败，需先 clean 或手动删除；clean 操作会删除网卡上所有 root qdisc，注意与手动配置的冲突。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡若已有 qdisc 或注入了其他 qdisc 故障，则 `tc qdisc add` 会失败，需先 clean 或手动删除；clean 操作会删除网卡上所有 root qdisc，注意与手动配置的冲突。
 
 ---
 
@@ -256,7 +256,7 @@ dcat clean rNET_loss --iface=eth0
 
 **危险等级**: 中 — 丢包率过高会导致 TCP 连接重传甚至超时断开，UDP 应用丢数据，影响所有经过该网卡的流量。建议测试时从低值（1–5%）开始。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡已有 root qdisc 时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡已有 qdisc 或注入了其他 qdisc 故障时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc。
 
 ---
 
@@ -283,7 +283,7 @@ dcat clean rNET_reorder --iface=eth0
 
 **危险等级**: 低 — 主要影响 TCP 性能（触发乱序检测与快速重传），通常不中断连接。注意 netem reorder 需配合 delay 参数，脚本内部固定为 10ms 延迟和 50% correlation，不可通过参数修改。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；乱序的 delay 基准（10ms）和 correlation（50%）为脚本硬编码值，无法通过参数调整；同一网卡已有 root qdisc 时注入会失败。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；乱序的 delay 基准（10ms）和 correlation（50%）为脚本硬编码值，无法通过参数调整；同一网卡已有 qdisc 或注入了其他 qdisc 故障时注入会失败。
 
 ---
 
@@ -444,7 +444,7 @@ dcat clean rNET_bw_limit --iface=eth0
 
 **危险等级**: 低 — 仅限制出向带宽，不中断连接。低速率值会导致大文件传输、视频流等高带宽应用明显卡顿或超时。burst 和 latency 为固定值（32kbit / 400ms），极端低速率下可能不够精细。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_tbf` 模块；同一网卡已有 root qdisc 时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc；TBF 为出向限速，入向不限速。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_tbf` 模块；同一网卡已有 qdisc 或注入了其他 qdisc 故障时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc；TBF 为出向限速，入向不限速。
 
 ---
 
@@ -472,7 +472,7 @@ dcat clean rNET_jitter --iface=eth0
 
 **危险等级**: 低 — 主要影响实时音视频、在线游戏等对抖动敏感的应用，通常不中断 TCP 连接。大 jitter 值可能导致 TCP 超时重传。注意 delay 与 jitter 均作用于出向流量。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡已有 root qdisc 时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc；query 的正则要求 delay 行有两个数值（delay + jitter），仅有一个数值的纯延迟规则不会匹配。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡已有 qdisc 或注入了其他 qdisc 故障时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc；query 的正则要求 delay 行有两个数值（delay + jitter），仅有一个数值的纯延迟规则不会匹配。
 
 ---
 

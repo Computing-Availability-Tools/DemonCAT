@@ -3,10 +3,19 @@
 iface="${DCAT_PARAM_IFACE:-}"
 SIDECAR="/tmp/dcat-rNET_delay-${iface}.sidecar"
 
+# Validate iface: alphanumeric, underscore, hyphen only (no command injection)
+validate_iface() {
+    case "$1" in
+        ''|*[!a-zA-Z0-9_-]*) echo "invalid iface name: '$1' (alphanumeric, underscore, hyphen only)" >&2; return 1 ;;
+    esac
+    return 0
+}
+
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
         delay=${DCAT_PARAM_DELAY_MS:?missing required param: delay_ms}
+        validate_iface "$iface" || exit 1
         case "$delay" in ''|*[!0-9]*) echo "delay_ms must be a positive integer, got: '$delay'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_delay-${iface}.sidecar"
         tc qdisc add dev "$iface" root netem delay "${delay}ms" || { echo "tc add failed (need root?)" >&2; exit 1; }
@@ -48,9 +57,16 @@ case "${DCAT_OP:-inject}" in
         for iface in $ifaces; do
             [ -n "$iface" ] || continue
             out=$(tc qdisc show dev "$iface" 2>/dev/null)
-            # 只匹配纯 delay netem (delay 值在行尾), 排除 jitter/reorder; 不匹配则不输出 (查不到)
+            # 只匹配纯 delay netem (delay 在行尾), 排除 jitter/reorder
             match=$(echo "$out" | grep -E "netem.*delay [0-9.]+[a-z]*[[:space:]]*$")
-            [ -n "$match" ] && { echo "$match"; found=1; }
+            if [ -n "$match" ]; then
+                # 归一化: 去掉 qdisc 头/refcnt/limit 等 tc 内部噪音, 只留 "delay <值>"
+                val=$(echo "$match" | sed -n 's/.*delay \([0-9.]*[a-z]*\).*/\1/p')
+                echo "iface=$iface delay=${val}"
+                found=1
+            else
+                echo "iface=$iface (no delay injection)"
+            fi
         done
         [ "$found" = 1 ] && exit 0 || exit 1
         ;;

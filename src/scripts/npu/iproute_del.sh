@@ -2,7 +2,7 @@
 # rNPU_iproute_del: delete ip route. Clean = re-add with original via/dev from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
 ip=${DCAT_PARAM_IP:-}
 mask=${DCAT_PARAM_IP_MASK:-}
 table=${DCAT_PARAM_TABLE:-}

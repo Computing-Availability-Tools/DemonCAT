@@ -4,12 +4,16 @@
 
 #define DCAT_REINJECT_CONFLICT 5   /* error code: 同资源已注入 */
 
-/* cores 规格解析：spec="0,1"|"0-3"|"0,1,4-6"|"0" → bits[16] 位图(核 0-127)。
+/* 理论上限需覆盖真实主机核数(如 640 核的 aarch64 服务器)。 */
+#define DCAT_MAX_CORES 1024
+#define DCAT_CORES_BYTES (DCAT_MAX_CORES / 8)   /* 128 字节位图 */
+
+/* cores 规格解析：spec="0,1"|"0-3"|"0,1,4-6"|"0" → bits[DCAT_CORES_BYTES] 位图(核 0-1023)。
  * 成功返回 0，非法(空/非数字/越界/lo>hi/尾随逗号)返回 -1。 */
-int cores_parse(const char *spec, unsigned char bits[16]);
+int cores_parse(const char *spec, unsigned char bits[DCAT_CORES_BYTES]);
 
 /* 集合交集非空 → 1，否则 0。 */
-int cores_intersect(const unsigned char a[16], const unsigned char b[16]);
+int cores_intersect(const unsigned char a[DCAT_CORES_BYTES], const unsigned char b[DCAT_CORES_BYTES]);
 
 /* 判定 new inject 与已有活动记录的资源重叠。
  * 资源键 = f->clean_required 各参数；cores 走集合交集，其余精确等。

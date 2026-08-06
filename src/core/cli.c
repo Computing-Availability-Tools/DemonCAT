@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static const char *valid_subcommands[] = {"inject", "clean", "query", "list", NULL};
+static const char *valid_subcommands[] = {"inject", "clean", "query", "list", "serve", NULL};
 static char g_cli_error[256] = "";
 
 const char *cli_get_error(void) { return g_cli_error; }
@@ -20,6 +20,22 @@ static int has_param_after(int argc, char **argv, int from) {
         if (argv[j][0] == '-') return 1;
         if (strchr(argv[j], '=')) return 1;
     }
+    return 0;
+}
+
+/* 严格解析端口:1-65535 整数,否则 -1 并写入 g_cli_error */
+static int parse_port_arg(const char *s, int *out) {
+    if (!s || !*s) {
+        snprintf(g_cli_error, sizeof g_cli_error, "--port requires a numeric value 1-65535, got: '%s'", s ? s : "");
+        return -1;
+    }
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    if (end == s || *end != '\0' || v < 1 || v > 65535) {
+        snprintf(g_cli_error, sizeof g_cli_error, "--port requires a numeric value 1-65535, got: '%s'", s);
+        return -1;
+    }
+    *out = (int)v;
     return 0;
 }
 
@@ -79,6 +95,35 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 i++;
             }
             continue;
+        }
+        /* serve 专用选项:仅 serve 子命令解析(--port/--bind/--webroot/--allow-write)。
+         * 避免 --port 全局吞掉 rNET_port_occupy/rNET_tcp_loss 的 port 参数(撞名致 exit 3)。 */
+        if (out->op && strcmp(out->op, "serve") == 0) {
+            if (strcmp(argv[i], "--allow-write") == 0) {
+                out->allow_write = 1;
+                continue;
+            }
+            if (strcmp(argv[i], "--port") == 0) {
+                if (i + 1 < argc) {
+                    if (parse_port_arg(argv[i + 1], &out->port) != 0) return -1;
+                    i++;
+                }
+                continue;
+            }
+            if (strncmp(argv[i], "--port=", 7) == 0) {
+                if (parse_port_arg(argv[i] + 7, &out->port) != 0) return -1;
+                continue;
+            }
+            if (strcmp(argv[i], "--bind") == 0) {
+                if (i + 1 < argc) { out->bind = argv[i + 1]; i++; }
+                continue;
+            }
+            if (strncmp(argv[i], "--bind=", 7) == 0) { out->bind = argv[i] + 7; continue; }
+            if (strcmp(argv[i], "--webroot") == 0) {
+                if (i + 1 < argc) { out->webroot = argv[i + 1]; i++; }
+                continue;
+            }
+            if (strncmp(argv[i], "--webroot=", 10) == 0) { out->webroot = argv[i] + 10; continue; }
         }
         /* subcommand may appear after global options (e.g. dcat --config x.conf inject ...) */
         if (!out->op && is_subcommand(argv[i])) {

@@ -6,32 +6,33 @@ CSV 驱动的 `dcat` 二进制端到端测试框架：**混沌工程 8 类测试
 
 | 文件 | 说明 |
 |---|---|
-| `gen_cases.py` | 从故障目录 + 观测/边界/安全知识自动生成 `cases.csv`（347 条） |
-| `cases.csv` | 用例表（347 条，8 类分类） |
+| `gen_cases.py` | 从故障目录 + 观测/边界/安全知识自动生成 `cases.csv`（354 步骤 / 165 流程） |
+| `cases.csv` | 用例表（354 步骤 / 165 流程，8 类分类） |
 | `run_e2e.py` | 执行框架（读 cases.csv → 串行执行 → 写 results/report） |
 | `results_<时间戳>.csv` | 每次运行产物（含实际结果列，已 gitignore） |
 | `report.md` | 每次运行的逐用例报告（已 gitignore） |
 
 ## 8 类混沌工程测试矩阵
 
-| 分类 | 前缀 | 用例数 | 覆盖内容 | 混沌工程维度 |
-|---|---|---|---|---|
-| **FUNC** | `FUNC-` | ~150 | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed × 7 + 插件 | 功能基线 |
-| **BOUND** | `BOUND-` | ~50 | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法），含 NPU bw_limit/size/port/dscp | 边界值 |
-| **SEC** | `SEC-` | ~45 | 命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击 | 安全 |
-| **STATE** | `STATE-` | ~25 | clean×2/--force/reinject 拒绝/query 幂等/并发 inject 同/不同资源 | 状态一致性 |
-| **RES** | `RES-` | ~20 | state 丢失/损坏/孤儿/幽灵/clean --all 幂等/state 表满 | 韧性/自愈 |
-| **CLI** | `CLI-` | ~25 | 解析错误 + 帮助 + 退出码 + --config + 未知 uid | CLI 接口 |
-| **CONC** | `CONC-` | 9 | 同时 inject+clean / 双进程写 state / clean --all + inject | **并发竞争** |
-| **INTER** | `INTER-` | 14 | 多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify | **故障交互** |
-| **总计** | | *347* | | |
+| 分类 | 前缀 | 用例数(步骤) | 流程数 | 覆盖内容 | 混沌工程维度 |
+|---|---|---|---|---|---|
+| **FUNC** | `FUNC-` | 149 | 41 | 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
+| **BOUND** | `BOUND-` | 49 | 46 | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法），含 NPU bw_limit/size/port/dscp | 边界值 |
+| **SEC** | `SEC-` | 50 | 37 | 命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击 | 安全 |
+| **STATE** | `STATE-` | 26 | 7 | clean×2/--force/reinject 拒绝/query 幂等/并发 inject 同/不同资源 | 状态一致性 |
+| **RES** | `RES-` | 27 | 7 | state 丢失/损坏/孤儿/幽灵/clean --all 幂等/state 表满 | 韧性/自愈 |
+| **CLI** | `CLI-` | 28 | 21 | 解析错误 + 帮助 + 退出码 + --config + 未知 uid + serve | CLI 接口 |
+| **CONC** | `CONC-` | 9 | 3 | 同时 inject+clean / 双进程写 state / clean --all + inject | **并发竞争** |
+| **INTER** | `INTER-` | 14 | 3 | 多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify | **故障交互** |
+| **总计（步骤）** | | *354* | | | |
+| **总计（流程）** | | | *165* | | | |
 
 ### 分类演进（v1 → v2）
 
 | 旧分类（14 类） | 新分类（8 类） | 说明 |
 |---|---|---|
 | F + Q + PLG | **FUNC** | 功能基线合并：故障全链路 + query\<uid\> confirmed + 插件 |
-| B | **BOUND** | 边界值扩展：从 17 条（rCPU_overload 独占 11 条）→ 40 条系统性覆盖 |
+| B | **BOUND** | 边界值扩展：从 17 条（rCPU_overload 独占 11 条）→ 49 条系统性覆盖 |
 | I + P + H | **SEC** | 安全合并：命令注入(inject+clean+query) + 权限边界 + symlink 攻击 |
 | S | **STATE** | 状态一致性：clean×2/--force/reinject/并发 inject |
 | R + CHAOS | **RES** | 韧性合并：state 丢失/损坏/孤儿/幽灵/state 表满 |

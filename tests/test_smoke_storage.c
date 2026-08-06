@@ -9,23 +9,33 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <poll.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <glob.h>
 
 #define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
 
-static int count_proc(const char *name) {
-    char cmd[256];
-    snprintf(cmd, sizeof cmd, "pgrep -x '%s' 2>/dev/null | wc -l", name);
-    for (int retry = 0; retry < 5; retry++) {
-        FILE *f = popen(cmd, "r");
-        if (!f) return -1;
-        int n = 0;
-        fscanf(f, "%d", &n);
-        pclose(f);
-        if (n > 0) return n;
-        poll(NULL, 0, 100);
+/* Count alive rDISK_write_overload worker subshells by scanning dcat pidfiles
+ * (/tmp/dcat-rDISK_write_overload-<dev>.pid, space-separated PIDs per file) + kill -0 probe.
+ * Immune to stray dd processes from other sources. */
+static int count_writers(void) {
+    glob_t g;
+    if (glob("/tmp/dcat-rDISK_write_overload-*.pid", 0, NULL, &g) != 0) {
+        globfree(&g);
+        return 0;
     }
-    return 0;
+    int count = 0;
+    for (size_t i = 0; i < g.gl_pathc; i++) {
+        FILE *f = fopen(g.gl_pathv[i], "r");
+        if (!f) continue;
+        int pid = 0;
+        while (fscanf(f, "%d", &pid) == 1) {
+            if (pid > 0 && kill(pid, 0) == 0) count++;
+        }
+        fclose(f);
+    }
+    globfree(&g);
+    return count;
 }
 
 static void smoke_setup(void) {
@@ -42,9 +52,10 @@ static void smoke_teardown(void) {
     state_reset();
     state_set_file("");
     unlink("/tmp/dcat_smoke_storage.json");
-    unlink("/tmp/dcat-rDISK_write_overload-*.pid");
-    unlink("/tmp/dcat.write.*");
-    unlink("/tmp/dcat-rNET_port_occupy-*.pid");
+    /* unlink() 不支持 glob,需用 shell 通配清理 */
+    system("rm -f /tmp/dcat-rDISK_write_overload-*.pid");
+    system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*");
+    system("rm -f /tmp/dcat-rNET_port_occupy-*.pid");
 }
 
 int main(void) {
@@ -62,7 +73,7 @@ int main(void) {
         result_free(r);
 
         sleep(2);
-        int n = count_proc("dd");
+        int n = count_writers();
         CK(n >= 2);
 
         r = dispatch_route("rDISK_write_overload", "clean", &p);
@@ -70,7 +81,7 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        n = count_proc("dd if=/dev/zero");
+        n = count_writers();
         CK(n == 0);
     }
 

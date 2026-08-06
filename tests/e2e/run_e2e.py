@@ -17,6 +17,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -113,12 +114,12 @@ done
 # NPU stale state cleanup (only when NPU artifacts exist, to avoid 4s+ per sweep)
 if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
   for c in 2 5; do
-    hccn_tool -i $c -ip_rule -d dir from ip 192.168.1.100 2>/dev/null
-    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.99 2>/dev/null
-    hccn_tool -i $c -route -d address 10.20.11.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -route -d address 10.20.12.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.20.13.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.20.14.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.30.12.210 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.30.12.211 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
     hccn_tool -i $c -link -s up 2>/dev/null
   done
 fi
@@ -338,6 +339,17 @@ def main():
             sweep(E2E_HOME, TEST_IFACE, tracked_pids)
             if os.geteuid() == 0:
                 sh(f"ip link del {TEST_IFACE} 2>/dev/null", timeout=15)
+            # 无条件清理 NPU 测试残留（route/ip_route/ip_rule 由 *_del 的 clean 恢复导致）
+            if shutil.which("hccn_tool") or os.path.exists("/usr/bin/hccn_tool") or os.path.exists("/usr/local/Ascend/driver/tools/hccn_tool"):
+                for c in ("2", "5"):
+                    sh(f"hccn_tool -i {c} -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.30.12.210 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.30.12.211 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -mtu -s size 1500 2>/dev/null")
+                print("[phase] atexit NPU cleanup done", flush=True)
             print("[phase] atexit cleanup done", flush=True)
         except Exception as e:
             print(f"[phase] atexit cleanup error: {e}", flush=True)
@@ -496,11 +508,14 @@ def _write_report(path, results, counters, cat_stats, findings, ts, ipt):
     lines = []
     lines.append(f"# DemonCAT E2E 测试报告\n\n生成时间: {ts}  |  root: {ipt}  |  dcat: {DCAT}\n")
     lines.append(f"## 汇总\n\n| 指标 | 值 |\n|---|---|")
-    lines.append(f"| PASS | {counters['PASS']} |")
-    lines.append(f"| FAIL | {counters['FAIL']} |")
-    lines.append(f"| SKIP | {counters['SKIP']} |")
-    lines.append(f"| TOTAL | {sum(counters.values())} |")
-    lines.append(f"| 通过率 | {counters['PASS']*100//max(1,sum(counters.values()))}% |\n")
+    lines.append(f"| 流程(flow)总数 | {sum(counters.values())} |")
+    lines.append(f"| PASS(流程) | {counters['PASS']} |")
+    lines.append(f"| FAIL(流程) | {counters['FAIL']} |")
+    lines.append(f"| SKIP(流程) | {counters['SKIP']} |")
+    lines.append(f"| 执行步骤(step)数 | {len(results)} |")
+    lines.append(f"| 通过率(按流程) | {counters['PASS']*100//max(1,sum(counters.values()))}% |")
+    lines.append("\n> 说明：`cases.csv` 以\"步骤(step)\"计数（每 flow 含 inject/clean/query 多步），"
+                 "报告汇总按\"流程(flow)\"计数（每 flow 一个 PASS/FAIL）。两者不等属正常。\n")
     lines.append("## 分类统计\n\n| 分类 | PASS | FAIL | SKIP |\n|---|---|---|---|")
     for cat in sorted(cat_stats):
         c = cat_stats[cat]

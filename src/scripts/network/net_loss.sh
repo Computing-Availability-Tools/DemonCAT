@@ -3,10 +3,19 @@
 iface="${DCAT_PARAM_IFACE:-}"
 SIDECAR="/tmp/dcat-rNET_loss-${iface}.sidecar"
 
+# Validate iface: alphanumeric, underscore, hyphen only (no command injection)
+validate_iface() {
+    case "$1" in
+        ''|*[!a-zA-Z0-9_-]*) echo "invalid iface name: '$1' (alphanumeric, underscore, hyphen only)" >&2; return 1 ;;
+    esac
+    return 0
+}
+
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
         pct=${DCAT_PARAM_LOSS_PCT:?missing required param: loss_pct}
+        validate_iface "$iface" || exit 1
         case "$pct" in ''|*[!0-9]*) echo "loss_pct must be a number 0-100, got: '$pct'" >&2; exit 1 ;; esac
         [ "$pct" -ge 0 ] 2>/dev/null && [ "$pct" -le 100 ] 2>/dev/null || { echo "loss_pct must be 0-100, got: $pct" >&2; exit 1; }
         SIDECAR="/tmp/dcat-rNET_loss-${iface}.sidecar"

@@ -23,6 +23,22 @@ static int has_param_after(int argc, char **argv, int from) {
     return 0;
 }
 
+/* 严格解析端口:1-65535 整数,否则 -1 并写入 g_cli_error */
+static int parse_port_arg(const char *s, int *out) {
+    if (!s || !*s) {
+        snprintf(g_cli_error, sizeof g_cli_error, "--port requires a numeric value 1-65535, got: '%s'", s ? s : "");
+        return -1;
+    }
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    if (end == s || *end != '\0' || v < 1 || v > 65535) {
+        snprintf(g_cli_error, sizeof g_cli_error, "--port requires a numeric value 1-65535, got: '%s'", s);
+        return -1;
+    }
+    *out = (int)v;
+    return 0;
+}
+
 const char *cli_subcommand(int argc, char **argv) {
     if (argc < 2 || !is_subcommand(argv[1])) return NULL;
     return argv[1];
@@ -88,10 +104,16 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 continue;
             }
             if (strcmp(argv[i], "--port") == 0) {
-                if (i + 1 < argc) { out->port = atoi(argv[i + 1]); i++; }
+                if (i + 1 < argc) {
+                    if (parse_port_arg(argv[i + 1], &out->port) != 0) return -1;
+                    i++;
+                }
                 continue;
             }
-            if (strncmp(argv[i], "--port=", 7) == 0) { out->port = atoi(argv[i] + 7); continue; }
+            if (strncmp(argv[i], "--port=", 7) == 0) {
+                if (parse_port_arg(argv[i] + 7, &out->port) != 0) return -1;
+                continue;
+            }
             if (strcmp(argv[i], "--bind") == 0) {
                 if (i + 1 < argc) { out->bind = argv[i + 1]; i++; }
                 continue;

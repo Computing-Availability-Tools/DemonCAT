@@ -21,7 +21,7 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 | 第三方依赖 | 仅 cJSON 单文件库（vendored 进仓库 `third_party/cjson/`） |
 | 线程 | pthread（状态锁） |
 | 配置文件 | INI（`demoncat.conf`） |
-| 数据输出 | stdout JSON |
+| 数据输出 | stdout JSON（list 为文本表格） |
 
 ### 1.3 核心需求
 
@@ -153,7 +153,6 @@ dcat list
 | `rNPU_arp_del` | npu | inject,clean,query | chip,dev,ip | — |
 | `rNPU_route_add` | npu | inject,clean,query | chip,address,netmask,gateway | — |
 | `rNPU_route_del` | npu | inject,clean,query | chip,address,netmask | — |
-| `rNPU_route_clear` | npu | inject,clean,query | chip | — |
 | `rNPU_iprule_add` | npu | inject,clean,query | chip,dir,ip,table | — |
 | `rNPU_iprule_del` | npu | inject,clean,query | chip,dir,ip | — |
 | `rNPU_iproute_add` | npu | inject,clean,query | chip,ip,ip_mask,via,dev,table | — |
@@ -161,8 +160,6 @@ dcat list
 | `rNPU_bw_limit` | npu | inject,clean,query | chip,bw_limit | — |
 | `rNPU_mtu_mismatch` | npu | inject,clean,query | chip,size | — |
 | `rNPU_dscp_tc_change` | npu | inject,clean,query | chip,dscp,tc | — |
-| `rNPU_prio_tc_change` | npu | inject,clean,query | chip,map | — |
-| `rNPU_pfc_change` | npu | inject,clean,query | chip,bitmap | — |
 | `rNPU_roce_port_change` | npu | inject,clean,query | chip,port | — |
 
 ### 3.4 扩展约定
@@ -399,7 +396,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 
 | 批次 | 范围 | 状态 |
 |---|---|---|
-| **v0.1** | 核心框架 + 36 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 19）+ 测试 | ✅ 已完成 |
+| **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 19）+ 测试 | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
@@ -421,7 +418,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 单元测试 | cli 解析、registry 查找、预检全路径、state 记录 | CTest + mock_executor | test_cli / test_registry / test_precheck / test_state |
 | 执行器 mock | executor_run/run_raw 的 mock 钩子 | CTest | test_executor_mock |
 | 输出格式 | result_t 构建/打印/释放 | CTest | test_output |
-| 表驱动故障 | 36 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
+| 表驱动故障 | 33 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
 | 真实脚本测试 | 2 个示例故障用 mock（不断言真 CPU / 真 tc） | CTest | 同上 |
 | 端到端冒烟 | 真实 dcat 二进制：inject→query→clean→query→无残留 | 手工冒烟 | — |
 
@@ -439,7 +436,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 错误隔离 | 单个故障 inject/clean 失败不影响 dcat 主流程与其他故障 |
 | 资源占用 | 静态二进制；核心路径零动态分配 |
 | 跨平台 | Linux（glibc/musl）；WSL 兼容；不要求 Windows |
-| 可测 | mock_executor + 表驱动；无硬件可测全部 36 故障的下发命令串 |
+| 可测 | mock_executor + 表驱动；无硬件可测全部 33 故障的下发命令串 |
 | 状态持久化 | state 变更后写 `~/.demoncat/state.json`（cJSON 序列化），启动加载恢复 record_id 计数与未清理记录 |
 
 ---

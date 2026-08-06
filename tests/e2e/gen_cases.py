@@ -110,51 +110,52 @@ OBS = {
         clean_args="--chip=2", provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -ip -g 2>/dev/null", v_assert="contains:10.0.0.99",
         c_cmd="hccn_tool -i 2 -ip -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
-    "rNPU_gw_change": dict(module="npu", inject_args="--chip=2 --gateway=10.20.10.250",
+    "rNPU_gw_change": dict(module="npu", inject_args="--chip=2 --gateway=10.30.12.1",
         clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; hccn_tool -i 2 -gateway -s gateway 10.20.10.1 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", v_assert="contains:10.20.10.250",
-        c_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", c_assert="notcontains:10.20.10.250"),
+        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; hccn_tool -i 2 -gateway -g 2>/dev/null | grep -q '10.30.12.254' || hccn_tool -i 2 -gateway -s gateway 10.30.12.254 2>/dev/null",
+        v_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", v_assert="contains:10.30.12.1",
+        c_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", c_assert="notcontains:10.30.12.1"),
     "rNPU_netdetect_change": dict(module="npu", inject_args="--chip=2 --address=10.0.0.99",
         clean_args="--chip=2", provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -netdetect -g 2>/dev/null", v_assert="contains:10.0.0.99",
         c_cmd="hccn_tool -i 2 -netdetect -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
-    "rNPU_arp_poison": dict(module="npu", inject_args="--chip=2 --dev=eth0 --ip=10.0.0.99 --mac=de:ad:be:ef:00:99",
-        clean_args="--chip=2 --dev=eth0 --ip=10.0.0.99", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="contains:de:ad:be:ef:00:99",
-        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="notcontains:de:ad:be:ef:00:99"),
-    "rNPU_arp_del": dict(module="npu", inject_args="--chip=2 --dev=eth0 --ip=10.0.0.99",
-        clean_args="--chip=2 --dev=eth0 --ip=10.0.0.99", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="notcontains:10.0.0.99",
-        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="contains:10.0.0.99"),
-    "rNPU_route_add": dict(module="npu", inject_args="--chip=2 --address=10.20.11.0 --netmask=255.255.255.0 --gateway=10.20.10.1",
-        clean_args="--chip=2 --address=10.20.11.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
+    "rNPU_arp_poison": dict(module="npu", inject_args="--chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55",
+        clean_args="--chip=2 --dev=eth2 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="contains:00:11:22:33:44:55",
+        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="notcontains:00:11:22:33:44:55"),
+    "rNPU_arp_del": dict(module="npu", inject_args="--chip=2 --dev=eth2 --ip=10.30.12.200",
+        clean_args="--chip=2 --dev=eth2 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i 2 -arp -a dev eth2 ip 10.30.12.200 mac 00:11:22:33:44:55 2>/dev/null",
+        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="notcontains:10.30.12.200",
+        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="contains:10.30.12.200"),
+    "rNPU_route_add": dict(module="npu", inject_args="--chip=2 --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.30.12.254",
+        clean_args="--chip=2 --address=10.30.40.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
         setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="contains:10.20.11.0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="notcontains:10.20.11.0"),
-    "rNPU_route_del": dict(module="npu", inject_args="--chip=2 --address=10.20.12.0 --netmask=255.255.255.0",
-        clean_args="--chip=2 --address=10.20.12.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; " + f"{DCAT} inject rNPU_route_add --chip=2 --address=10.20.12.0 --netmask=255.255.255.0 --gateway=10.20.10.1",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="notcontains:10.20.12.0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="contains:10.20.12.0"),
-    "rNPU_iprule_add": dict(module="npu", inject_args="--chip=2 --dir=from --ip=192.168.1.100 --table=100",
-        clean_args="--chip=2 --dir=from --ip=192.168.1.100", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="contains:192.168.1.100",
-        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="notcontains:192.168.1.100"),
-    "rNPU_iprule_del": dict(module="npu", inject_args="--chip=2 --dir=from --ip=192.168.1.100",
-        clean_args="--chip=2 --dir=from --ip=192.168.1.100", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -ip_rule -d dir from ip 192.168.1.100 2>/dev/null; " + f"{DCAT} inject rNPU_iprule_add --chip=2 --dir=from --ip=192.168.1.100 --table=100",
-        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="notcontains:192.168.1.100",
-        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="contains:192.168.1.100"),
-    "rNPU_iproute_add": dict(module="npu", inject_args="--chip=2 --ip=10.20.13.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100",
-        clean_args="--chip=2 --ip=10.20.13.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="contains:10.20.13.0",
-        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="notcontains:10.20.13.0"),
-    "rNPU_iproute_del": dict(module="npu", inject_args="--chip=2 --ip=10.20.14.0 --ip_mask=24 --table=100",
-        clean_args="--chip=2 --ip=10.20.14.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
-        setup_cmd=f"{DCAT} inject rNPU_iproute_add --chip=2 --ip=10.20.14.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100",
-        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="notcontains:10.20.14.0",
-        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="contains:10.20.14.0"),
+        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="contains:10.30.40.0",
+        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="notcontains:10.30.40.0"),
+    "rNPU_route_del": dict(module="npu", inject_args="--chip=2 --address=10.30.41.0 --netmask=255.255.255.0",
+        clean_args="--chip=2 --address=10.30.41.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; " + f"{DCAT} inject rNPU_route_add --chip=2 --address=10.30.41.0 --netmask=255.255.255.0 --gateway=10.30.12.254",
+        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="notcontains:10.30.41.0",
+        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="contains:10.30.41.0"),
+    "rNPU_iprule_add": dict(module="npu", inject_args="--chip=2 --dir=from --ip=10.30.12.210 --table=150",
+        clean_args="--chip=2 --dir=from --ip=10.30.12.210", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="contains:10.30.12.210",
+        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="notcontains:10.30.12.210"),
+    "rNPU_iprule_del": dict(module="npu", inject_args="--chip=2 --dir=from --ip=10.30.12.211",
+        clean_args="--chip=2 --dir=from --ip=10.30.12.211", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i 2 -ip_rule -d dir from ip 10.30.12.211 2>/dev/null; " + f"{DCAT} inject rNPU_iprule_add --chip=2 --dir=from --ip=10.30.12.211 --table=150",
+        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="notcontains:10.30.12.211",
+        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="contains:10.30.12.211"),
+    "rNPU_iproute_add": dict(module="npu", inject_args="--chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100",
+        clean_args="--chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="contains:10.30.50.0",
+        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="notcontains:10.30.50.0"),
+    "rNPU_iproute_del": dict(module="npu", inject_args="--chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100",
+        clean_args="--chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
+        setup_cmd=f"{DCAT} inject rNPU_iproute_add --chip=2 --ip=10.30.51.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100",
+        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="notcontains:10.30.51.0",
+        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="contains:10.30.51.0"),
     "rNPU_bw_limit": dict(module="npu", inject_args="--chip=2 --bw_limit=50000", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", v_assert="contains:50000",
@@ -236,7 +237,7 @@ def gen():
     q_case("rPROC_hang", "--pid={pid}", "--pid={pid}", "sleep_pid")
     q_case("rPROC_zstate", "--pid={pid}", "--pid={pid}", "sleep_pid")
     # FUNC-Q6: NPU query<uid> confirmed (mtu_mismatch)
-    q_case("rNPU_mtu_mismatch", "--chip=2 --size=1500", "--chip=2", "")
+    q_case("rNPU_mtu_mismatch", "--chip=2 --size=1280", "--chip=2", "")
     # FUNC-Q7: NPU query<uid> confirmed (bw_limit)
     q_case("rNPU_bw_limit", "--chip=2 --bw_limit=50000", "--chip=2", "")
     # FUNC-Q5: query<uid> no-params
@@ -475,10 +476,13 @@ def gen():
     add(flow, 4, "cpu", "rCPU_overload", "clean_b", "none", f"{DCAT} clean rCPU_overload --cores=2", 0, "", "", "", "", "clean cores=2")
     s_s += 1
     # S7: NPU reinject 拒绝 code5
+    # 前置 setup 重置 MTU 到默认 1500，确保 inject(1280) 始终生效，
+    # 避免受前序 flow（如 RES-7 clean --all 丢 state 后）残留 MTU=1280 的影响。
     flow = f"STATE-{s_s}"
-    add(flow, 0, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1500", 0, '"status":"ok"', "", "", "", "inject1 NPU")
-    add(flow, 1, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1500", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
-    add(flow, 2, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip=2", 0, "", "", "", "", "cleanup NPU")
+    add(flow, 0, "npu", "rNPU_mtu_mismatch", "setup", "none", "hccn_tool -i 2 -mtu -s size 1500 2>/dev/null", 0, "", "", "", "", "reset MTU baseline 1500")
+    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject1 NPU")
+    add(flow, 2, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
+    add(flow, 3, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip=2", 0, "", "", "", "", "cleanup NPU")
     s_s += 1
 
     # ================================================================
@@ -526,7 +530,7 @@ def gen():
     # R7: NPU + CPU 多故障 → 删 state → clean --all
     flow = "RES-7"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject CPU fault")
-    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1500", 0, '"status":"ok"', "", "", "", "inject NPU fault")
+    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject NPU fault")
     add(flow, 2, "mixed", "all", "lose_state", "none", "rm -f $E2E_HOME/.demoncat/state.json", 0, "", "", "", "", "simulate state deletion")
     add(flow, 3, "mixed", "all", "clean_all", "none", f"{DCAT} clean --all", 0, "", "pgrep -x perl | wc -l", "==0", "", "one-click recovery (CPU+NPU)")
     add(flow, 4, "mixed", "all", "query_empty", "none", f"{DCAT} query", 0, "", "", "state_empty", "", "no ghost")

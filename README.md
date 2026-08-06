@@ -83,7 +83,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 ## Web 控制台（dcat serve）
 
-`dcat serve` 在二进制内内置一个 HTTP 控制平面 + 静态前端（`features/showcase/`），把故障目录、活跃注入、历史记录搬到浏览器：远程查看状态、构造命令、（可选）直接注入/清理。无外部 HTTP 依赖，手写 HTTP/1.1。
+`dcat serve` 在二进制内内置一个 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器：远程查看状态、构造命令、（可选）直接注入/清理。无外部 HTTP 依赖，手写 HTTP/1.1。
 
 ### 启动
 
@@ -116,7 +116,7 @@ ssh -L 8080:localhost:8080 user@server
 |---|---|---|
 | `--port <n>` | 8080 | 监听端口 |
 | `--bind <addr>` | 127.0.0.1 | 绑定地址（明文，安全由 SSH 隧道兜底；不要绑 0.0.0.0） |
-| `--webroot <dir>` | `<exe>/../features/showcase` | 静态前端根目录 |
+| `--webroot <dir>` | `<exe>/../src/web` | 静态前端根目录 |
 | `--allow-write` | 关 | 开 POST /api/inject\|clean（默认只读：GET 200，POST 403） |
 
 ### HTTP API

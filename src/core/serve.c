@@ -377,10 +377,10 @@ static void derive_default_webroot(char *out, size_t cap) {
         char *slash = strrchr(out, '/');
         if (slash) *slash = '\0';   /* strip "dcat" → exe_dir (build/) */
         size_t len = strlen(out);
-        snprintf(out + len, cap - len, "/../features/showcase");
+        snprintf(out + len, cap - len, "/../src/web");
         return;
     }
-    snprintf(out, cap, "features/showcase");
+    snprintf(out, cap, "src/web");
 }
 
 int serve_run(int port, const char *bind_addr, const char *webroot_in, int allow_write) {

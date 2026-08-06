@@ -151,7 +151,7 @@ char *help_render_subcommand(const char *op, const char *uid) {
     if (strcmp(op, "serve") == 0) {
         sb_addf(&s, "  --port <n>                 监听端口（默认 8080）\n");
         sb_addf(&s, "  --bind <addr>              绑定地址（默认 127.0.0.1;明文,安全由 SSH 隧道兜底）\n");
-        sb_addf(&s, "  --webroot <dir>            静态前端根目录（默认 <exe>/../features/showcase）\n");
+        sb_addf(&s, "  --webroot <dir>            静态前端根目录（默认 <exe>/../src/web）\n");
         sb_addf(&s, "  --allow-write              开 POST /api/inject|clean(默认只读:仅查看+复制命令到终端执行)\n");
         sb_addf(&s, "  典型(只读):`dcat serve --port 8080` → 浏览器查看 + 复制命令到 SSH 执行\n");
         sb_addf(&s, "  典型(可写):`dcat serve --port 8080 --allow-write` → 浏览器直接注入/清理\n");

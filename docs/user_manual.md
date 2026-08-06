@@ -15,7 +15,7 @@
 | 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
 | 进程 | 3 | 进程退出 / 挂起 / 僵尸 |
 | NPU | 16 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 |
-| **合计** | **36** | |
+| **合计** | **33** | |
 
 ---
 
@@ -24,26 +24,26 @@
 - [故障能力清单](#故障能力清单)
 - [通用约定：重注入与 --force](#通用约定重注入与---force)
 - [第一章 CPU 模块](#第一章-cpu-模块2-条)
-  - [1.1 rCPU_overload](#11-rcpu_overload) — 核满载（perl 纯用户态）
-  - [1.2 rCPU_core_offline](#12-rcpu_core_offline) — 核离线（sysfs）
+  - [1.1 rCPU_overload](#11-rcpu_overload) — 核满载
+  - [1.2 rCPU_core_offline](#12-rcpu_core_offline) — 核离线
 - [第二章 存储模块](#第二章-存储模块1-条)
-  - [2.1 rDISK_write_overload](#21-rdisk_write_overload) — 磁盘写压（dd 多实例）
+  - [2.1 rDISK_write_overload](#21-rdisk_write_overload) — 磁盘写压
 - [第三章 网络模块](#第三章-网络模块11-条)
-  - [3.1 rNET_delay](#31-rnet_delay) — 网络延迟（tc netem）
-  - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包（tc netem）
-  - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序（tc netem）
-  - [3.4 rNET_down](#34-rnet_down) — 网卡 down（ip link）
-  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速（tc tbf）
-  - [3.6 rNET_port_occupy](#36-rnet_port_occupy) — 端口占用（socket holder）
-  - [3.7 rNET_service_stop](#37-rnet_service_stop) — 服务停止（systemctl）
-  - [3.8 rNET_link_flap](#38-rnet_link_flap) — 链路闪断（ip link 循环）
-  - [3.9 rNET_bw_limit](#39-rnet_bw_limit) — 带宽限制（tc tbf）
-  - [3.10 rNET_jitter](#310-rnet_jitter) — 延迟抖动（tc netem）
-  - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包（iptables DROP）
-- [第四章 进程模块](#第四章-进程模块4-条)
-  - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出（kill -9，inject-only）
-  - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起（SIGSTOP）
-  - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程（kill 目标 → 僵尸）
+  - [3.1 rNET_delay](#31-rnet_delay) — 网络延迟
+  - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包
+  - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序
+  - [3.4 rNET_down](#34-rnet_down) — 网卡 down
+  - [3.5 rNET_degrade](#35-rnet_degrade) — 网卡降速
+  - [3.6 rNET_port_occupy](#36-rnet_port_occupy) — 端口占用
+  - [3.7 rNET_service_stop](#37-rnet_service_stop) — 服务停止
+  - [3.8 rNET_link_flap](#38-rnet_link_flap) — 链路闪断
+  - [3.9 rNET_bw_limit](#39-rnet_bw_limit) — 带宽限制
+  - [3.10 rNET_jitter](#310-rnet_jitter) — 延迟抖动
+  - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包
+- [第四章 进程模块](#第四章-进程模块3-条)
+  - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出
+  - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起
+  - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程
 - [第五章 NPU 模块](#第五章-npu-模块16-条)
   - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
   - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
@@ -106,7 +106,7 @@ dcat clean --all                      # 清全部故障（stateless，state.json
 
 ## 第一章 CPU 模块（2 条）
 
-### 1.1 rCPU_overload
+### 1.1 rCPU_overload — 核满载（perl 纯用户态）
 
 **UID**: `rCPU_overload`
 
@@ -136,7 +136,7 @@ dcat clean  rCPU_overload --cores=0,1
 
 ---
 
-### 1.2 rCPU_core_offline
+### 1.2 rCPU_core_offline — 核离线（sysfs）
 
 **UID**: `rCPU_core_offline`
 
@@ -167,7 +167,7 @@ dcat clean rCPU_core_offline --cores=2,3
 
 ## 第二章 存储模块（1 条）
 
-### 2.1 rDISK_write_overload
+### 2.1 rDISK_write_overload — 磁盘写压（dd 多实例）
 
 **UID**: `rDISK_write_overload`
 
@@ -206,7 +206,7 @@ dcat clean rDISK_write_overload --device=/data
 
 ---
 
-### 3.1 rNET_delay
+### 3.1 rNET_delay — 网络延迟（tc netem）
 
 **UID**: `rNET_delay`
 
@@ -233,7 +233,7 @@ dcat clean rNET_delay --iface=eth0
 
 ---
 
-### 3.2 rNET_loss
+### 3.2 rNET_loss — 网络丢包（tc netem）
 
 **UID**: `rNET_loss`
 
@@ -260,7 +260,7 @@ dcat clean rNET_loss --iface=eth0
 
 ---
 
-### 3.3 rNET_reorder
+### 3.3 rNET_reorder — 网络乱序（tc netem）
 
 **UID**: `rNET_reorder`
 
@@ -287,7 +287,7 @@ dcat clean rNET_reorder --iface=eth0
 
 ---
 
-### 3.4 rNET_down
+### 3.4 rNET_down — 网卡 down（ip link）
 
 **UID**: `rNET_down`
 
@@ -313,7 +313,7 @@ dcat clean rNET_down --iface=eth0
 
 ---
 
-### 3.5 rNET_degrade
+### 3.5 rNET_degrade — 网卡降速（tc tbf）
 
 **UID**: `rNET_degrade`
 
@@ -340,7 +340,7 @@ dcat clean rNET_degrade --iface=eth0
 
 ---
 
-### 3.6 rNET_port_occupy
+### 3.6 rNET_port_occupy — 端口占用（socket holder）
 
 **UID**: `rNET_port_occupy`
 
@@ -367,7 +367,7 @@ dcat clean rNET_port_occupy --port=8080
 
 ---
 
-### 3.7 rNET_service_stop
+### 3.7 rNET_service_stop — 服务停止（systemctl）
 
 **UID**: `rNET_service_stop`
 
@@ -393,7 +393,7 @@ dcat clean rNET_service_stop --service=nginx
 
 ---
 
-### 3.8 rNET_link_flap
+### 3.8 rNET_link_flap — 链路闪断（ip link 循环）
 
 **UID**: `rNET_link_flap`
 
@@ -421,7 +421,7 @@ dcat clean rNET_link_flap --iface=eth0
 
 ---
 
-### 3.9 rNET_bw_limit
+### 3.9 rNET_bw_limit — 带宽限制（tc tbf）
 
 **UID**: `rNET_bw_limit`
 
@@ -448,7 +448,7 @@ dcat clean rNET_bw_limit --iface=eth0
 
 ---
 
-### 3.10 rNET_jitter
+### 3.10 rNET_jitter — 延迟抖动（tc netem）
 
 **UID**: `rNET_jitter`
 
@@ -476,7 +476,7 @@ dcat clean rNET_jitter --iface=eth0
 
 ---
 
-### 3.11 rNET_tcp_loss
+### 3.11 rNET_tcp_loss — TCP 丢包（iptables DROP）
 
 **UID**: `rNET_tcp_loss`
 
@@ -503,7 +503,7 @@ dcat clean rNET_tcp_loss --port=8080 --direction=both
 
 ## 第四章 进程模块（3 条）
 
-### 4.1 rPROC_exit
+### 4.1 rPROC_exit — 进程退出（kill -9，inject-only）
 
 **UID**: `rPROC_exit`
 
@@ -529,7 +529,7 @@ dcat inject rPROC_exit --pid=12345
 
 
 
-### 4.2 rPROC_hang
+### 4.2 rPROC_hang — 进程挂起（SIGSTOP）
 
 **UID**: `rPROC_hang`
 
@@ -560,7 +560,7 @@ dcat clean rPROC_hang --pid=12345
 
 ---
 
-### 4.3 rPROC_zstate
+### 4.3 rPROC_zstate — 僵尸进程（kill 目标 → 僵尸）
 
 **UID**: `rPROC_zstate`
 
@@ -593,7 +593,7 @@ dcat clean rPROC_zstate --pid=12345
 
 NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool` 对 RoCE 网口注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 
-### 5.1 rNPU_link_down
+### 5.1 rNPU_link_down — RoCE 链路 down
 
 **UID**: `rNPU_link_down`
 
@@ -619,7 +619,7 @@ dcat clean rNPU_link_down --chip=0
 
 ---
 
-### 5.2 rNPU_ip_change
+### 5.2 rNPU_ip_change — RoCE IP 变更
 
 **UID**: `rNPU_ip_change`
 
@@ -647,7 +647,7 @@ dcat clean rNPU_ip_change --chip=0
 
 ---
 
-### 5.3 rNPU_gw_change
+### 5.3 rNPU_gw_change — RoCE 网关变更
 
 **UID**: `rNPU_gw_change`
 
@@ -678,7 +678,7 @@ dcat clean rNPU_gw_change --chip=0
 
 ---
 
-### 5.4 rNPU_netdetect_change
+### 5.4 rNPU_netdetect_change — Netdetect IP 变更
 
 **UID**: `rNPU_netdetect_change`
 
@@ -705,7 +705,7 @@ dcat clean rNPU_netdetect_change --chip=0
 
 ---
 
-### 5.5 rNPU_arp_poison
+### 5.5 rNPU_arp_poison — ARP 毒化
 
 **UID**: `rNPU_arp_poison`
 
@@ -734,7 +734,7 @@ dcat clean rNPU_arp_poison --chip=0 --dev=eth0 --ip=192.168.1.10 --mac=00:11:22:
 
 ---
 
-### 5.6 rNPU_arp_del
+### 5.6 rNPU_arp_del — ARP 条目删除
 
 **UID**: `rNPU_arp_del`
 
@@ -770,7 +770,7 @@ dcat clean rNPU_arp_del --chip=0 --dev=eth0 --ip=10.20.10.200
 
 ---
 
-### 5.7 rNPU_route_add
+### 5.7 rNPU_route_add — 添加 RoCE 路由
 
 **UID**: `rNPU_route_add`
 
@@ -803,7 +803,7 @@ dcat clean rNPU_route_add --chip=0 --address=10.20.11.0 --netmask=255.255.255.0
 
 ---
 
-### 5.8 rNPU_route_del
+### 5.8 rNPU_route_del — 删除 RoCE 路由
 
 **UID**: `rNPU_route_del`
 
@@ -836,7 +836,7 @@ dcat clean rNPU_route_del --chip=0 --address=10.20.12.0 --netmask=255.255.255.0
 
 ---
 
-### 5.9 rNPU_iprule_add
+### 5.9 rNPU_iprule_add — 添加 ip rule
 
 **UID**: `rNPU_iprule_add`
 
@@ -865,7 +865,7 @@ dcat clean rNPU_iprule_add --chip=0 --dir=from --ip=192.168.1.100 --table=100
 
 ---
 
-### 5.10 rNPU_iprule_del
+### 5.10 rNPU_iprule_del — 删除 ip rule
 
 **UID**: `rNPU_iprule_del`
 
@@ -893,7 +893,7 @@ dcat clean rNPU_iprule_del --chip=0 --dir=from --ip=192.168.1.100
 
 ---
 
-### 5.11 rNPU_iproute_add
+### 5.11 rNPU_iproute_add — 添加 ip route
 
 **UID**: `rNPU_iproute_add`
 
@@ -928,7 +928,7 @@ dcat clean rNPU_iproute_add --chip=0 --ip=10.20.13.0 --ip_mask=24 --table=100
 
 ---
 
-### 5.12 rNPU_iproute_del
+### 5.12 rNPU_iproute_del — 删除 ip route
 
 **UID**: `rNPU_iproute_del`
 
@@ -962,7 +962,7 @@ dcat clean rNPU_iproute_del --chip=0 --ip=10.20.14.0 --ip_mask=24 --table=100
 
 ---
 
-### 5.13 rNPU_bw_limit
+### 5.13 rNPU_bw_limit — RoCE 带宽限速
 
 **UID**: `rNPU_bw_limit`
 
@@ -989,7 +989,7 @@ dcat clean rNPU_bw_limit --chip=0
 
 ---
 
-### 5.14 rNPU_mtu_mismatch
+### 5.14 rNPU_mtu_mismatch — RoCE MTU 变更
 
 **UID**: `rNPU_mtu_mismatch`
 
@@ -1016,7 +1016,7 @@ dcat clean rNPU_mtu_mismatch --chip=0
 
 ---
 
-### 5.15 rNPU_dscp_tc_change
+### 5.15 rNPU_dscp_tc_change — DSCP→TC 映射变更
 
 **UID**: `rNPU_dscp_tc_change`
 
@@ -1044,7 +1044,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
 
 ---
 
-### 5.16 rNPU_roce_port_change
+### 5.16 rNPU_roce_port_change — RoCE UDP 端口变更
 
 **UID**: `rNPU_roce_port_change`
 

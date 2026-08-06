@@ -240,7 +240,7 @@ E2E 测试采用 **CSV 驱动 + 8 类分类** 的混沌工程测试矩阵，用�
 ### 运行 E2E 测试
 
 ```bash
-# 生成用例（347 条）
+# 生成用例（352 步骤 / 165 流程）
 python3 tests/e2e/gen_cases.py
 
 # 执行（需要 root 权限以覆盖全部用例）
@@ -252,17 +252,17 @@ sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 
 ### 用例统计
 
-| 分类 | 用例数（约） | 说明 |
-|---|---|---|
-| FUNC | ~160 | 33 故障 × 3-4 步 + query\<uid\> × 7 + 插件 × 4 |
-| BOUND | ~40 | 每参数类型 2-4 条边界 |
-| SEC | ~45 | inject × 21 + clean × 9 + 权限 × 4 + 主机安全 × 5 + symlink × 2 |
-| STATE | ~25 | 幂等性 × 5 + 并发 inject × 6 |
-| RES | ~20 | 韧性场景 × 5 flow |
-| CLI | ~25 | 负面 CLI × 12 + 帮助 × 5 + config × 2 + list × 1 |
-| CONC | ~9 | 并发场景 × 3 flow |
-| INTER | ~15 | 故障交互 × 3 flow |
-| **总计** | **~358** | |
+| 分类 | 步骤数 | 流程数 | 说明 |
+|---|:---:|:---:|---|
+| FUNC | 149 | 41 | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 |
+| BOUND | 49 | 46 | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法） |
+| SEC | 50 | 37 | 命令注入 + 权限边界 + 主机安全 + symlink 攻击 |
+| STATE | 26 | 7 | clean×2/--force/reinject 拒绝/query 幂等/并发 inject |
+| RES | 27 | 7 | state 丢失/损坏/孤儿/幽灵/clean --all/state 表满 |
+| CLI | 28 | 21 | 解析错误 + 帮助 + 退出码 + --config + serve |
+| CONC | 9 | 3 | 同时 inject+clean / 双进程写 state / clean --all + inject |
+| INTER | 14 | 3 | 多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify |
+| **总计** | **352** | **165** | |
 
 详细测试设计见 [DESIGN.md §10](DESIGN.md) 和 [tests/e2e/README.md](tests/e2e/README.md)。
 
@@ -272,4 +272,4 @@ sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 - cJSON（vendored 单文件库）
 - pthread（状态锁）
 - INI 配置文件（`demoncat.conf`）
-- 输出格式：JSON
+- 输出格式：JSON（`list` 为可读文本表格）

@@ -6,7 +6,11 @@ SIDECAR="/tmp/dcat-rNET_reorder-${iface}.sidecar"
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
+        # Validate iface: alphanumeric, underscore, hyphen only
+        case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         pct=${DCAT_PARAM_REORDER_PCT:?missing required param: reorder_pct}
+        case "$pct" in ''|*[!0-9]*) echo "reorder_pct must be a number 0-100, got: '$pct'" >&2; exit 1 ;; esac
+        [ "$pct" -ge 0 ] 2>/dev/null && [ "$pct" -le 100 ] 2>/dev/null || { echo "reorder_pct must be 0-100, got: $pct" >&2; exit 1; }
         SIDECAR="/tmp/dcat-rNET_reorder-${iface}.sidecar"
         tc qdisc add dev "$iface" root netem delay 10ms reorder "${pct}%" 50% || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

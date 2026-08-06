@@ -6,6 +6,8 @@ PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
+        # Validate iface: alphanumeric, underscore, hyphen only
+        case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         cycle=${DCAT_PARAM_CYCLE_SEC:-2}
         count=${DCAT_PARAM_COUNT:-10}
         PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"

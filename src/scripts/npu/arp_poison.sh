@@ -2,7 +2,7 @@
 # rNPU_arp_poison: add wrong ARP entry. Clean = delete the added entry.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip"
+[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
 dev=${DCAT_PARAM_DEV:-}
 ip=${DCAT_PARAM_IP:-}
 mac=${DCAT_PARAM_MAC:-}

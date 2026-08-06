@@ -18,7 +18,7 @@
 | `rNET_service_stop` | network | 若停止 sshd/networking 服务，完全失联 | 物理登录重启服务 |
 | `rNET_degrade` | network | 限速后带宽大幅降低，大流量场景下可能导致拥塞 | `tc qdisc del dev <iface> root` |
 
-> 其余 29 条故障均由自动化测试覆盖（`ctest` 14 项 + `smoke_root.sh` 10+ 项）。
+> 其余 25 条故障均由自动化测试覆盖（`ctest` 24 项 + `smoke_root.sh` 10+ 项）。
 > NPU 硬件就绪时，16 条 rNPU_* 也可纳入 `smoke_root.sh` 自动化测试。
 
 ## 手动测试流程

@@ -77,8 +77,77 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless） | `dcat clean --all` |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查全部活跃记录；有 uid：验证故障生效 | `dcat query` / `dcat query rCPU_overload` |
 | `list` | 列出故障目录 | `dcat list` |
+| `serve [--port N] [--bind ADDR] [--webroot DIR] [--allow-write]` | 启动 HTTP 控制平面（长驻）：静态前端 + `/api/*`；默认只读，`--allow-write` 开注入/清理 | `dcat serve --port 8080 --allow-write` |
 
 详细使用手册见 [docs/user_manual.md](docs/user_manual.md)，技术规格见 [SPEC.md](SPEC.md)，架构设计见 [DESIGN.md](DESIGN.md)。
+
+## Web 控制台（dcat serve）
+
+`dcat serve` 在二进制内内置一个 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器：远程查看状态、构造命令、（可选）直接注入/清理。无外部 HTTP 依赖，手写 HTTP/1.1。
+
+### 启动
+
+```bash
+# 只读模式（默认）：浏览器查看 + 复制命令到 SSH 终端执行
+./build/dcat serve --port 8080
+
+# 可写模式：浏览器可直接注入/清理（注入前二次确认）
+./build/dcat serve --port 8080 --allow-write
+
+# 后台长驻（setsid 脱离终端）
+setsid ./build/dcat serve --port 8080 --allow-write &
+
+# 停止
+pkill -f 'dcat serve'
+```
+
+### 远程访问（SSH 隧道）
+
+serve 默认绑 `127.0.0.1`（明文，不对外暴露）。本机通过 SSH 端口转发访问：
+
+```bash
+ssh -L 8080:localhost:8080 user@server
+# 然后本机浏览器打开 http://localhost:8080
+```
+
+### 选项
+
+| 选项 | 默认 | 说明 |
+|---|---|---|
+| `--port <n>` | 8080 | 监听端口 |
+| `--bind <addr>` | 127.0.0.1 | 绑定地址（明文，安全由 SSH 隧道兜底；不要绑 0.0.0.0） |
+| `--webroot <dir>` | `<exe>/../src/web` | 静态前端根目录 |
+| `--allow-write` | 关 | 开 POST /api/inject\|clean（默认只读：GET 200，POST 403） |
+
+### HTTP API
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | `/api/health` | 只读 | `{"writable": bool}` 探活 |
+| GET | `/api/catalog` | 只读 | 故障目录 |
+| GET | `/api/state` | 只读 | 活跃注入记录 |
+| GET | `/api/history` | 只读 | 全部历史记录 |
+| POST | `/api/inject` | `--allow-write` | body `{"uid":"...","params":{...}}` |
+| POST | `/api/clean` | `--allow-write` | body `{"uid":"...","params":{...}}` |
+
+> 所有响应带 `Cache-Control: no-store`；只读模式下 POST 返回 403。
+
+### 安全模型
+
+- **默认只读**：不开 `--allow-write` 时，POST /api/inject\|clean 返回 403，只能查看 + 复制命令到终端执行。
+- **`--allow-write` opt-in**：显式开启才允许浏览器注入/清理（前端注入前 `confirm()` 二次确认）。
+- **明文 + 本机绑定**：默认 `127.0.0.1`，不对外暴露；远程访问走 SSH 隧道（加密 + 认证由 SSH 兜底）。
+- 不要用 `--bind 0.0.0.0` 对公网暴露明文服务。
+
+### 前端仪表盘
+
+打开 `http://localhost:8080`：
+
+- **连接状态**：顶栏连接 pill（已连接·可写/只读 / 未连接），3 秒轮询探活。
+- **摘要卡**：活跃注入数 / 历史总数 / 已清理数 / 故障总数。
+- **活跃注入**：当前系统上的活跃故障（含参数 + 命令预览 + 清理按钮）。
+- **历史记录**：最近 5 条历史（含命令 + 状态 pill）。
+- **故障目录**：全部故障（含简介），点「构造命令」打开命令构造器（参数中文提示 + 实时命令预览）。
 
 ## 当前故障目录（33 条）
 
@@ -171,7 +240,7 @@ E2E 测试采用 **CSV 驱动 + 8 类分类** 的混沌工程测试矩阵，用�
 ### 运行 E2E 测试
 
 ```bash
-# 生成用例（347 条）
+# 生成用例（354 步骤 / 165 流程）
 python3 tests/e2e/gen_cases.py
 
 # 执行（需要 root 权限以覆盖全部用例）
@@ -181,19 +250,21 @@ sudo python3 tests/e2e/run_e2e.py
 sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 ```
 
+> **⚠️ NPU 测试参数需按实机拓扑调整**：`tests/e2e/gen_cases.py` 中 `rNPU_*` 故障的 `inject_args`/`clean_args`/`setup_cmd`/`v_cmd` 采用**示例拓扑值**（如 `--chip=2`、网关 `10.30.12.254`、接口 `eth2`、测试子网 `10.30.40.0/10.30.50.0` 等）。这些值是**机器相关**的：不同 NPU 物理机的 IP/网关/接口名/静态 ARP/ip_rule 可能不同，直接照搬会在其他机器上 FAIL。部署到新机器前，请先用 `hccn_tool` 查询实际参数（`-ip -g`/`-gateway -g`/`-route -g`/`-arp -g`/`-ip_rule -g`/`-ip_route -g table <n>` 及网口名 `-status -g`）并同步更新 `gen_cases.py`；`run_e2e.py` 的 atexit NPU 清理地址也需对应修改。详见 [docs/user_manual.md 第五章](docs/user_manual.md#第五章-npu-模块16-条)。
+
 ### 用例统计
 
-| 分类 | 用例数（约） | 说明 |
-|---|---|---|
-| FUNC | ~160 | 33 故障 × 3-4 步 + query\<uid\> × 7 + 插件 × 4 |
-| BOUND | ~40 | 每参数类型 2-4 条边界 |
-| SEC | ~45 | inject × 21 + clean × 9 + 权限 × 4 + 主机安全 × 5 + symlink × 2 |
-| STATE | ~25 | 幂等性 × 5 + 并发 inject × 6 |
-| RES | ~20 | 韧性场景 × 5 flow |
-| CLI | ~25 | 负面 CLI × 12 + 帮助 × 5 + config × 2 + list × 1 |
-| CONC | ~9 | 并发场景 × 3 flow |
-| INTER | ~15 | 故障交互 × 3 flow |
-| **总计** | **~358** | |
+| 分类 | 步骤数 | 流程数 | 说明 |
+|---|:---:|:---:|---|
+| FUNC | 150 | 41 | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 |
+| BOUND | 49 | 46 | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法） |
+| SEC | 50 | 37 | 命令注入 + 权限边界 + 主机安全 + symlink 攻击 |
+| STATE | 27 | 7 | clean×2/--force/reinject 拒绝/query 幂等/并发 inject |
+| RES | 27 | 7 | state 丢失/损坏/孤儿/幽灵/clean --all/state 表满 |
+| CLI | 28 | 21 | 解析错误 + 帮助 + 退出码 + --config + serve |
+| CONC | 9 | 3 | 同时 inject+clean / 双进程写 state / clean --all + inject |
+| INTER | 14 | 3 | 多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify |
+| **总计** | **354** | **165** | |
 
 详细测试设计见 [DESIGN.md §10](DESIGN.md) 和 [tests/e2e/README.md](tests/e2e/README.md)。
 
@@ -203,4 +274,4 @@ sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 - cJSON（vendored 单文件库）
 - pthread（状态锁）
 - INI 配置文件（`demoncat.conf`）
-- 输出格式：JSON
+- 输出格式：JSON（`list` 为可读文本表格）

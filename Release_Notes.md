@@ -4,6 +4,44 @@
 
 ---
 
+## v0.2.0 (web 分支)
+
+| 项目 | 说明 |
+|------|------|
+| 版本 | v0.2.0 |
+| 日期 | 2026-08-06 |
+| 故障目录 | 33 条（CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16） |
+| CTest | 24/24 全通过 |
+| E2E | 354 步骤 / 165 流程 |
+
+### 新增功能
+
+- **`dcat serve` — Web 控制平面**：HTTP 长驻服务，浏览器远程查看 active/history/catalog + 注入/清理故障。默认只读（`--allow-write` 开启写操作），绑定 `127.0.0.1`（SSH 隧道访问），支持 `--port`/`--bind`/`--webroot` 参数
+- **`dcat list` 文本表格**：从 JSON 数组改为对齐的文本表格输出，更易读
+- **CPU 核心上限 127→1024**：`DCAT_MAX_CORES` 宏 + 128 字节位图，覆盖 640 核 aarch64 服务器
+
+### 改进
+
+- **NPU E2E 参数改为实机真值**：9 条 NPU 故障的 inject/clean/setup 参数从合成假值改为实机真实拓扑值，新增 `§0 前置参数查询` 章节指导用户适配
+- **输入校验加固**：7 个网络脚本加 iface 白名单（防注入）、port/rate/delay/jitter 数值校验、disk device 限制 `/tmp`/`/var/tmp`
+- **serve 安全加固**：`realpath()` 路径穿越防护 + `%2e` URL 编码检测 + `--port` CLI 校验
+- **test_smoke_cpu 亲和性感知**：用 `sched_getaffinity` 自动选核，修复容器 cpuset 屏蔽问题
+- **NPU 文档完善**：`user_manual.md` 第五章新增 §0 前置准备（7 步参数查询）、10 个 NPU 用例补充实机示例与适配说明
+
+### Bug 修复
+
+- `net_delay.sh`/`net_jitter.sh`：query 正则匹配小数
+- `net_degrade.sh`：从 ethtool 改为 tc tbf（物理+虚拟网卡均可测）
+- `ip_change.sh`：fault_present 精确 IP 比较
+- `proc_hang.sh`：pid=0 进程组安全
+- `disk_write_overload.sh`：symlink 防护 + clean 改进
+- `gw_change.sh`：sidecar 保存
+- `cpu_overload.sh`：query 按 cores 过滤
+- `net_loss.sh`/`net_delay.sh`：输入校验
+- `STATE-7 rNPU_mtu_mismatch`：`--size=1500` 在 MTU=1500 机器上是 no-op → 改为 1280
+
+---
+
 ## v0.1.0
 
 | 项目 | 说明 |
@@ -15,7 +53,7 @@
 ### 变更摘要
 
 **NPU 真机验证（Atlas 910B4）：**
-- 19 条 rNPU_* 故障全部通过真机 inject/clean/query 验证（device 2 & 5）
+- 16 条 rNPU_* 故障全部通过真机 inject/clean/query 验证（device 2 & 5）
 - 4 种清理策略（reverse op / sidecar replay / set to max / cfg recovery）真机全覆盖
 - `link_down.sh` 修复：`hccn_tool -link -s down` 交互式 y/n 确认 → `echo y |` 自动应答
 - NPU inject 回读：fault_present() 条件化，inject 参数降为可选（query 场景）
@@ -46,7 +84,7 @@
 - `net_loss.sh`：loss_pct 加 0-100 范围校验
 - `net_delay.sh`：delay_ms 加正整数校验
 
-**E2E 测试框架（358 条）：**
+**E2E 测试框架（354 步骤 / 165 流程）：**
 - 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
 - NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
 - sweep 加 NPU stale state 条件清理（ip_rule/route/ip_route/link up）

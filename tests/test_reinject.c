@@ -24,7 +24,7 @@ static int bitset(const unsigned char *b, int n) { return (b[n / 8] >> (n % 8)) 
 
 /* ---- cores_parse ---- */
 int test_cores_parse_list_range_mixed_single(void) {
-    unsigned char b[16];
+    unsigned char b[DCAT_CORES_BYTES];
     memset(b, 0, sizeof b);
     ASSERT_INT_EQ(cores_parse("0,1", b), 0);
     ASSERT_TRUE(bitset(b, 0) && bitset(b, 1) && !bitset(b, 2));
@@ -45,19 +45,36 @@ int test_cores_parse_list_range_mixed_single(void) {
 }
 
 int test_cores_parse_invalid(void) {
-    unsigned char b[16];
+    unsigned char b[DCAT_CORES_BYTES];
     ASSERT_INT_EQ(cores_parse("", b), -1);
     ASSERT_INT_EQ(cores_parse("abc", b), -1);
-    ASSERT_INT_EQ(cores_parse("0-999", b), -1);       /* 越界 (>127) */
-    ASSERT_INT_EQ(cores_parse("3-1", b), -1);          /* lo>hi */
-    ASSERT_INT_EQ(cores_parse("0,1,", b), -1);         /* 尾随逗号 */
-    ASSERT_INT_EQ(cores_parse("12345", b), -1);        /* 5 位 token → atoi 溢出防护 */
+    ASSERT_INT_EQ(cores_parse("0-2000", b), -1);        /* 越界 (≥DCAT_MAX_CORES) */
+    ASSERT_INT_EQ(cores_parse("3-1", b), -1);           /* lo>hi */
+    ASSERT_INT_EQ(cores_parse("0,1,", b), -1);          /* 尾随逗号 */
+    ASSERT_INT_EQ(cores_parse("12345", b), -1);         /* 5 位 token → atoi 溢出防护 */
+    return 0;
+}
+
+/* 大范围核集(如 640 核主机)可解析, 且与低位核正确判重叠。 */
+int test_cores_parse_large_range_overlap(void) {
+    unsigned char b[DCAT_CORES_BYTES];
+    ASSERT_INT_EQ(cores_parse("0-155", b), 0);
+    ASSERT_TRUE(bitset(b, 0) && bitset(b, 155) && !bitset(b, 156));
+
+    unsigned char single[DCAT_CORES_BYTES];
+    ASSERT_INT_EQ(cores_parse("0", single), 0);
+    ASSERT_TRUE(cores_intersect(b, single));            /* {0..155} ∩ {0} = {0} */
+
+    unsigned char hi[DCAT_CORES_BYTES];
+    ASSERT_INT_EQ(cores_parse("300-400", hi), 0);
+    ASSERT_TRUE(bitset(hi, 300) && bitset(hi, 400));
+    ASSERT_TRUE(!cores_intersect(b, hi));               /* {0..155} ∩ {300..400} = ∅ */
     return 0;
 }
 
 /* ---- cores_intersect ---- */
 int test_cores_intersect_overlap_disjoint(void) {
-    unsigned char a[16], c[16];
+    unsigned char a[DCAT_CORES_BYTES], c[DCAT_CORES_BYTES];
     memset(a, 0, sizeof a); cores_parse("0,1", a);
     memset(c, 0, sizeof c); cores_parse("0,2", c);
     ASSERT_TRUE(cores_intersect(a, c));                /* 交集={0} */
@@ -266,6 +283,7 @@ int test_reinject_force_partial_clean_failure(void) {
 int main(void) {
     RUN_TEST(test_cores_parse_list_range_mixed_single);
     RUN_TEST(test_cores_parse_invalid);
+    RUN_TEST(test_cores_parse_large_range_overlap);
     RUN_TEST(test_cores_intersect_overlap_disjoint);
     RUN_TEST(test_reinject_reject_exact_same_cpu);
     RUN_TEST(test_reinject_reject_cores_overlap_set);

@@ -46,7 +46,7 @@
 - `net_loss.sh`：loss_pct 加 0-100 范围校验
 - `net_delay.sh`：delay_ms 加正整数校验
 
-**E2E 测试框架（358 条）：**
+**E2E 测试框架（352 步骤 / 165 流程）：**
 - 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
 - NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
 - sweep 加 NPU stale state 条件清理（ip_rule/route/ip_route/link up）

@@ -32,7 +32,7 @@ CSV 驱动的 `dcat` 二进制端到端测试框架：**混沌工程 8 类测试
 | 旧分类（14 类） | 新分类（8 类） | 说明 |
 |---|---|---|
 | F + Q + PLG | **FUNC** | 功能基线合并：故障全链路 + query\<uid\> confirmed + 插件 |
-| B | **BOUND** | 边界值扩展：从 17 条（rCPU_overload 独占 11 条）→ 40 条系统性覆盖 |
+| B | **BOUND** | 边界值扩展：从 17 条（rCPU_overload 独占 11 条）→ 49 条系统性覆盖 |
 | I + P + H | **SEC** | 安全合并：命令注入(inject+clean+query) + 权限边界 + symlink 攻击 |
 | S | **STATE** | 状态一致性：clean×2/--force/reinject/并发 inject |
 | R + CHAOS | **RES** | 韧性合并：state 丢失/损坏/孤儿/幽灵/state 表满 |

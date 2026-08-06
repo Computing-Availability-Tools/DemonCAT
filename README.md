@@ -250,7 +250,7 @@ sudo python3 tests/e2e/run_e2e.py
 sudo python3 tests/e2e/run_e2e.py --flows FUNC,BOUND,SEC
 ```
 
-> **⚠️ NPU 测试参数需按实机拓扑调整**：`tests/e2e/gen_cases.py` 中 `rNPU_*` 故障的 `inject_args`/`clean_args`/`setup_cmd`/`v_cmd` 采用**示例拓扑值**（如 `--chip=2`、网关 `10.30.12.254`、接口 `eth2`、测试子网 `10.30.40.0/10.30.50.0` 等）。这些值是**机器相关**的：不同 NPU 物理机的 IP/网关/接口名/静态 ARP/ip_rule 可能不同，直接照搬会在其他机器上 FAIL。部署到新机器前，请先用 `hccn_tool` 查询实际参数（`-ip -g`/`-gateway -g`/`-route -g`/`-arp -g`/`-ip_rule -g`/`-ip_route -g table <n>`）并同步更新 `gen_cases.py`；`run_e2e.py` 的 atexit NPU 清理地址也需对应修改。详见 [docs/user_manual.md 第五章](docs/user_manual.md#第五章-npu-模块16-条)。
+> **⚠️ NPU 测试参数需按实机拓扑调整**：`tests/e2e/gen_cases.py` 中 `rNPU_*` 故障的 `inject_args`/`clean_args`/`setup_cmd`/`v_cmd` 采用**示例拓扑值**（如 `--chip=2`、网关 `10.30.12.254`、接口 `eth0`、测试子网 `10.30.40.0/10.30.50.0` 等）。这些值是**机器相关**的：不同 NPU 物理机的 IP/网关/接口名/静态 ARP/ip_rule 可能不同，直接照搬会在其他机器上 FAIL。部署到新机器前，请先用 `hccn_tool` 查询实际参数（`-ip -g`/`-gateway -g`/`-route -g`/`-arp -g`/`-ip_rule -g`/`-ip_route -g table <n>`）并同步更新 `gen_cases.py`；`run_e2e.py` 的 atexit NPU 清理地址也需对应修改。详见 [docs/user_manual.md 第五章](docs/user_manual.md#第五章-npu-模块16-条)。
 
 ### 用例统计
 

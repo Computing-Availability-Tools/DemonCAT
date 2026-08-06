@@ -90,7 +90,7 @@ dcat inject rNET_delay --iface=eth0 --delay_ms=200 --force   # 替换
 
 除 `clean <uid> --params`（按参数匹配 state 记录逐条清理）外，clean 还支持两种 **stateless** 形式，不依赖 `state.json`，脚本自行 glob `/tmp` 工件清理：
 
-- **`dcat clean <uid>`（无参）**：清该 uid 全部 `/tmp/dcat-<uid>-*` 工件（pidfile/sidecar/.bak），不查 state。`state.json` 丢失/损坏时仍可用。
+- **`dcat clean <uid>`（无参）**：清该 uid 全部 `/tmp/dcat-<uid>-*` 工件（PID 文件、sidecar 临时状态文件、.bak 备份），不查 state。`state.json` 丢失/损坏时仍可用。
 - **`dcat clean --all`**：对全部支持 clean 的故障 fan-out 无参 clean，聚合返回 `{uid,status}` 数组。
 
 ```bash
@@ -202,7 +202,7 @@ dcat clean rDISK_write_overload --device=/data
 
 本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
 
-所有故障均支持 `inject`（注入）、`clean`（清理）、`query`（查询）三个操作。注入时通过 sidecar 文件（`/tmp/dcat-rNET_*`）或 PID 文件记录状态，便于后续清理与查询。
+所有故障均支持 `inject`（注入）、`clean`（清理）、`query`（查询）三个操作。注入时通过 sidecar 临时状态文件（`/tmp/dcat-rNET_*`，用于记录注入前的原始值，便于 clean 时恢复）或 PID 文件记录状态，便于后续清理与查询。
 
 ---
 
@@ -593,7 +593,7 @@ dcat clean rPROC_zstate --pid=12345
 
 NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool` 对 RoCE 网口注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 
-> ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「④ 前置参数查询」查出本机实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth2 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
+> ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「④ 前置参数查询」查出本机实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth0 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
 
 ### 0 前置准备：实机参数查询与调整
 
@@ -603,11 +603,10 @@ NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool` 对 RoCE 网
 
 ```bash
 npu-smi info                      # 查看本机 NPU 拓扑，确认 0-7 内可用的芯片
-hccn_tool -i 2 -t                 # 查询芯片 2 的 RoCE 网口名，输出形如 eth2
-ip addr show | grep -A2 "eth2"    # 在内核侧确认该网口存在
+hccn_tool -i 2 -status -g          # 查询芯片 2 的网口名，输出 "Settings for eth0:" → dev 为 eth0
 ```
 
-> **关键**：`hccn_tool` 的 `dev` 是 **NPU 内部网卡名（如 chip2 → `eth2`）**，不是 Linux 系统接口名（如 `enp125s0f1`）。错误使用 `eth0` 会导致 `-arp -a` 等命令注入失败。务必用 `hccn_tool -i <chip> -t` 查出真实网口名。
+> **关键**：`hccn_tool` 的 `dev` 是 **NPU 内部网卡名**（通常为 `eth0`），不是 Linux 系统接口名（如 `enp125s0f1`）。用 `hccn_tool -i <chip> -status -g` 可查询，输出中 "Settings for eth0" 的 `eth0` 即为 dev 值。
 
 **② 查询 NPU IP 与掩码（确定网段）**
 
@@ -648,7 +647,7 @@ hccn_tool -i 2 -mtu -g                         # 当前 MTU（mtu_mismatch 用�
 
 **⑦ 状态残留与多用例串接**
 
-NPU 注入会**真实改动芯片配置**。`_del` 类用例的 clean 依赖 sidecar 中的原值，若 sidecar 丢失或进程被 kill，可能残留路由/IP rule。执行完一批用例后建议用 ④ 的命令核对并清理；run_e2e.py 在进程退出时会对 chip 2/5 做路由、arp、ip_rule、mtu 的自动清理。
+NPU 注入会**真实改动芯片配置**。`_del` 类用例的 clean 依赖临时状态文件（sidecar）中保存的原值，若该文件丢失或进程被 kill，可能残留路由/IP rule。执行完一批用例后建议用 ④ 的命令核对并清理；run_e2e.py 在进程退出时会对 chip 2/5 做路由、arp、ip_rule、mtu 的自动清理。
 
 ---
 
@@ -684,7 +683,7 @@ dcat clean rNPU_link_down --chip=0
 
 **描述**: 修改指定芯片 RoCE 端口 IP 地址与掩码，导致连接中断。
 
-**实现原理**: inject 先 `-ip -g` 取原值存入 sidecar，再 `-ip -s address <addr> netmask <mask>` 覆盖；clean 从 sidecar 还原（缺省 `0.0.0.0/255.255.255.0`）；query 比对当前 IP 与原值。
+**实现原理**: inject 先 `-ip -g` 取原值存入临时状态文件（sidecar，位于 `/tmp/dcat-<uid>-<chip>.bak`），再 `-ip -s address <addr> netmask <mask>` 覆盖；clean 从 sidecar 还原（缺省 `0.0.0.0/255.255.255.0`）；query 比对当前 IP 与原值。
 
 **使用示例**:
 ```bash
@@ -702,7 +701,7 @@ dcat clean rNPU_ip_change --chip=0
 
 **危险等级**: 高 — IP 变更后该芯片所有 RoCE 连接立即失效。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。sidecar 存于 /tmp，重启或清理 /tmp 后无法 clean。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。临时状态文件存于 /tmp，重启或清理 /tmp 后无法 clean。
 
 ---
 
@@ -778,28 +777,28 @@ dcat clean rNPU_netdetect_change --chip=0
 
 **使用示例**:
 ```bash
-# ① 查出目标芯片的 RoCE 网口名（见「④ 前置参数查询」①）：示例中芯片 2 为 eth2
-hccn_tool -i 2 -t          # 输出 eth2
+# ① 查出目标芯片的 RoCE 网口名（见「④ 前置参数查询」①）：示例中芯片 2 为 eth0
+hccn_tool -i 2 -status -g   # 输出 "Settings for eth0" → dev 为 eth0
 
 # ② 向该网口注入一条伪造 ARP（ip 选用 NPU 网段内一个未被占用的地址）
-dcat inject rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
-dcat query rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
-dcat clean rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
+dcat inject rNPU_arp_poison --chip=2 --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55
+dcat query rNPU_arp_poison --chip=2 --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55
+dcat clean rNPU_arp_poison --chip=2 --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55
 ```
 
-> **参数说明**：`dev` 必须用 `hccn_tool -i <chip> -t` 查出的真实网口名（示例为 eth2，勿用 eth0）；`ip` 用 NPU 同网段内未占用的地址。
+> **参数说明**：`dev` 必须用 `hccn_tool -i <chip> -status -g` 查出的真实网口名（示例为 eth0，勿用 eth0）；`ip` 用 NPU 同网段内未占用的地址。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| dev | 必填 | 字符串 | 网卡设备名（**NPU 内部名**，用 `hccn_tool -i <chip> -t` 查询，示例为 eth2，勿用 eth0） |
+| dev | 必填 | 字符串 | 网卡设备名（**NPU 内部名**，通常为 `eth0`，可用 `hccn_tool -i <chip> -status -g` 确认） |
 | ip | 必填 | IPv4 | 被 poisoning 的目标 IP |
 | mac | 必填 | MAC | 伪造的错误 MAC 地址 |
 
 **危险等级**: 高 — 流量被静默导向错误 MAC，可能导致数据泄漏或连接中断。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 仅按 ip+dev 删除。**`dev` 是 NPU 内部网口名**（eth2 等），不是 Linux 系统接口名（enp125s0f1 之类），配错会注入失败。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 仅按 ip+dev 删除。**`dev` 是 NPU 内部网口名**（通常为 eth0），不是 Linux 系统接口名（enp125s0f1 之类），配错会注入失败。
 
 ---
 
@@ -813,26 +812,26 @@ dcat clean rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:
 
 **使用示例**:
 ```bash
-# 前提：该 ARP 条目必须已存在！（dev 用真实网口名（示例为 eth2），示例中芯片 2 为 eth2）
+# 前提：该 ARP 条目必须已存在！（dev 通常为 `eth0`，示例中芯片 2 为 eth0）
 hccn_tool -i 2 -arp -g | grep 10.30.12.200   # 确认 ARP 条目存在
 
 # 若不存在，先用 arp_poison 创建（ip 必须是 NPU 网段内未占用地址）
-dcat inject rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=de:ad:be:ef:00:01
+dcat inject rNPU_arp_poison --chip=2 --dev=eth0 --ip=10.30.12.200 --mac=de:ad:be:ef:00:01
 
 # 删除 ARP 条目（inject 会自动保存原 MAC 到 sidecar）
-dcat inject rNPU_arp_del --chip=2 --dev=eth2 --ip=10.30.12.200
-dcat query rNPU_arp_del --chip=2 --dev=eth2 --ip=10.30.12.200
+dcat inject rNPU_arp_del --chip=2 --dev=eth0 --ip=10.30.12.200
+dcat query rNPU_arp_del --chip=2 --dev=eth0 --ip=10.30.12.200
 # clean 从 sidecar 恢复原 MAC
-dcat clean rNPU_arp_del --chip=2 --dev=eth2 --ip=10.30.12.200
+dcat clean rNPU_arp_del --chip=2 --dev=eth0 --ip=10.30.12.200
 ```
 
-> **参数说明**：`dev` 用 `hccn_tool -i <chip> -t` 查出的真实网口名；`ip` 用 NPU 同网段未占用地址。
+> **参数说明**：`dev` 用 `hccn_tool -i <chip> -status -g` 查出的真实网口名；`ip` 用 NPU 同网段未占用地址。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| dev | 必填 | 字符串 | NPU 内部网卡设备名（用 `hccn_tool -i <chip> -t` 查询，示例为 eth2，勿用 eth0） |
+| dev | 必填 | 字符串 | NPU 内部网卡设备名（通常为 `eth0`，可用 `hccn_tool -i <chip> -status -g` 确认） |
 | ip | 必填 | IPv4 | 要删除 ARP 表项的 IP |
 
 **危险等级**: 中 — 删除后流量短暂停滞，通常可通过 ARP 重新学习自愈。
@@ -977,7 +976,7 @@ dcat clean rNPU_iprule_del --chip=2 --dir=from --ip=10.30.12.211
 
 **危险等级**: 中 — 删除策略规则后受影响的流量可能回落到主路由表。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip rule 必须已存在，否则 `hccn_tool -ip_rule -d` 报 "configuration does not exist"。建议先用 `rNPU_iprule_add` 创建规则（确保 `dir`/`ip` 一致）再删除。clean 从 sidecar 读原 table 恢复；示例中 iprule_del 与 iprule_add 分别用 10.30.12.211/210，避免相互干扰。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip rule 必须已存在，否则 `hccn_tool -ip_rule -d` 报 "configuration does not exist"。建议先用 `rNPU_iprule_add` 创建规则（确保 `dir`/`ip` 一致）再删除。clean 从临时状态文件读取原 table 恢复；示例中 iprule_del 与 iprule_add 分别用 10.30.12.211/210，避免相互干扰。
 
 ---
 
@@ -995,13 +994,13 @@ dcat clean rNPU_iprule_del --chip=2 --dir=from --ip=10.30.12.211
 hccn_tool -i 2 -ip -g         # 示例输出 ipaddr:10.30.12.9 netmask:255.255.255.0
 hccn_tool -i 2 -gateway -g    # 示例输出 10.30.12.254
 
-# ② via 必须与 NPU IP 同网段；ip_mask 是 CIDR 位数；dev 是 NPU 内部名（示例为 eth2）
-dcat inject rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
+# ② via 必须与 NPU IP 同网段；ip_mask 是 CIDR 位数；dev 是 NPU 内部名（示例为 eth0）
+dcat inject rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth0 --table=100
 dcat query rNPU_iproute_add --chip=2
 dcat clean rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 ```
 
-> **参数说明**：`via` 用真实网关；`dev` 用 `hccn_tool -i <chip> -t` 查出的真实网口名；`ip` 选一个未占用的目标网段；`table` 用未被占用的表号。
+> **参数说明**：`via` 用真实网关；`dev` 用 `hccn_tool -i <chip> -status -g` 查出的真实网口名；`ip` 选一个未占用的目标网段；`table` 用未被占用的表号。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
@@ -1010,12 +1009,12 @@ dcat clean rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 | ip | 必填 | IPv4 | 目标网段地址（如 `10.30.50.0`，须未使用、不与 NPU 网段冲突） |
 | ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24），不是点分掩码 |
 | via | 必填 | IPv4 | 下一跳地址，**必须与 NPU 当前 IP 同网段** |
-| dev | 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -t` 查询，示例为 eth2，非 Linux 接口名） |
+| dev | 必填 | 字符串 | NPU 内部网卡名（通常为 `eth0`，可用 `hccn_tool -i <chip> -status -g` 确认，非 Linux 接口名） |
 | table | 必填 | 整数 0-255 | 路由表编号 |
 
 **危险等级**: 中 — 添加路由可能改变选路结果。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**ip_mask 是 CIDR 位数**（0-32），不是点分十进制掩码（如 `255.255.255.0`→`24`）。**via 网段匹配**：via 必须与 NPU IP 同网段。**dev 是 NPU 内部名**：示例为 `eth2`，用 `hccn_tool -i <chip> -t` 查询，不是 Linux 系统接口名（如 `enp125s0f1`）。**目标网段冲突**：`ip` 与已存在路由冲突会使 query 断言失败。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**ip_mask 是 CIDR 位数**（0-32），不是点分十进制掩码（如 `255.255.255.0`→`24`）。**via 网段匹配**：via 必须与 NPU IP 同网段。**dev 是 NPU 内部名**：通常为 `eth0`，可用 `hccn_tool -i <chip> -status -g` 确认，不是 Linux 系统接口名（如 `enp125s0f1`）。**目标网段冲突**：`ip` 与已存在路由冲突会使 query 断言失败。
 
 ---
 
@@ -1029,8 +1028,8 @@ dcat clean rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 
 **使用示例**:
 ```bash
-# 前提：该 ip_route 必须已存在！先用 iproute_add 创建（via 与 NPU IP 同网段，dev 用真实网口名（示例为 eth2））
-dcat inject rNPU_iproute_add --chip=2 --ip=10.30.51.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
+# 前提：该 ip_route 必须已存在！先用 iproute_add 创建（via 与 NPU IP 同网段，dev 通常为 `eth0`）
+dcat inject rNPU_iproute_add --chip=2 --ip=10.30.51.0 --ip_mask=24 --via=10.30.12.254 --dev=eth0 --table=100
 
 # 删除 ip_route
 dcat inject rNPU_iproute_del --chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100
@@ -1051,7 +1050,7 @@ dcat clean rNPU_iproute_del --chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100
 
 **危险等级**: 高 — 删除路由后对应网段立即不可达，clean 依赖 sidecar 中的原 via/dev。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip_route 必须已存在，否则 `hccn_tool -ip_route -d` 报 "configuration does not exist"。建议先用 `rNPU_iproute_add` 创建路由。**ip_mask 是 CIDR 位数**（0-32），不是点分掩码。clean 从 sidecar 读取原 via/dev/table 恢复；示例中 iproute_del 与 iproute_add 分别用 10.30.51.0/10.30.50.0 避免网段冲突。
+**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip_route 必须已存在，否则 `hccn_tool -ip_route -d` 报 "configuration does not exist"。建议先用 `rNPU_iproute_add` 创建路由。**ip_mask 是 CIDR 位数**（0-32），不是点分掩码。clean 从临时状态文件读取原 via/dev/table 恢复；示例中 iproute_del 与 iproute_add 分别用 10.30.51.0/10.30.50.0 避免网段冲突。
 
 ---
 

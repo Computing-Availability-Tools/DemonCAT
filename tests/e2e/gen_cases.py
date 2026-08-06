@@ -294,10 +294,10 @@ def gen():
     b_reject("rCPU_overload", "--cores=0 --load_pct=500", 1, 'load_pct must be', "load_pct: 500 above range")
     b_reject("rCPU_overload", "--cores=0 --load_pct=-1", 1, 'load_pct must be', "load_pct: -1 negative")
     b_reject("rCPU_overload", "--cores=0 --load_pct=abc", 1, 'load_pct must be', "load_pct: non-numeric")
-    # port (integer, no range validation in script)
-    b_gap("rNET_port_occupy", "--port=abc", "--port=abc", "port: non-numeric accepted")
-    b_gap("rNET_port_occupy", "--port=65536", "--port=65536", "port: 65536 above range")
-    b_gap("rNET_port_occupy", "--port=0", "--port=0", "port: 0 binds random")
+    # port (integer 1-65535)
+    b_reject("rNET_port_occupy", "--port=abc", 1, 'port must be numeric', "port: non-numeric rejected")
+    b_reject("rNET_port_occupy", "--port=65536", 1, 'port must be 1-65535', "port: 65536 above range")
+    b_reject("rNET_port_occupy", "--port=0", 1, 'port must be 1-65535', "port: 0 below range")
     # loss_pct (integer 0-100)
     b_reject("rNET_loss", "--iface=dcat-e2e0 --loss_pct=-1", 1, 'loss_pct must be', "loss_pct: -1 negative")
     b_reject("rNET_loss", "--iface=dcat-e2e0 --loss_pct=101", 1, 'loss_pct must be', "loss_pct: 101 above 100")
@@ -306,7 +306,7 @@ def gen():
     b_reject("rNET_delay", "--iface=dcat-e2e0 --delay_ms=-1", 1, '', "delay_ms: -1 negative")
     b_reject("rNET_delay", "--iface=dcat-e2e0 --delay_ms=abc", 1, '', "delay_ms: non-numeric")
     # chip (single digit 0-9)
-    b_reject("rNPU_bw_limit", "--chip=10 --bw_limit=10000", 1, 'chip must be', "chip: 10 two digits")
+    b_reject("rNPU_bw_limit", "--chip=12 --bw_limit=10000", 1, 'chip must be', "chip: 12 out of range 0-11")
     b_reject("rNPU_bw_limit", "--chip=a --bw_limit=10000", 1, 'chip must be', "chip: non-digit")
     b_reject("rNPU_bw_limit", "--bw_limit=10000", 3, 'missing required parameter', "chip: missing")
     # pid (positive integer)
@@ -572,6 +572,33 @@ def gen():
     # CLI-L: list
     add(f"CLI-L1", 0, "all", "all", "list", "none",
         f"{DCAT} list", 0, 'rCPU_overload', "", "", "", "list returns catalog")
+
+    # CLI-SERVE: HTTP serve 控制平面 (web 分支新增功能,此前零覆盖)
+    # 单 flow 多步:先帮助/解析,再启动后台 serve,依次探测只读+路径穿越,最后清理
+    SV_P = 18080
+    sv = f"CLI-SERVE"
+    def ser(step, phase, cmd, exp_code, msg_substr, vassert, behavior):
+        add(sv, step, "serve", "serve", phase, "none", cmd, exp_code, msg_substr,
+            "", vassert, "", behavior)
+    ser(0, "help", f"{DCAT} serve --help", 0, "serve", "", "serve subhelp")
+    ser(1, "badport", f"{DCAT} serve --port=abc", 2, "--port", "exitcode:2", "serve bad port parse")
+    # 启动后台 serve(只读)
+    ser(2, "start", f"{DCAT} serve --port {SV_P} --webroot . >/tmp/dcat_serve_e2e.log 2>&1 & sleep 1; curl -s http://127.0.0.1:{SV_P}/api/health",
+        0, '"status":"ok"', 'out_contains:"status":"ok"', "serve start + health")
+    # 只读:注入端点 POST → 403 (write disabled)
+    ser(3, "readonly", f"curl -s -X POST http://127.0.0.1:{SV_P}/api/inject -d '{{{{\"uid\":\"rCPU_overload\"}}}}'",
+        0, 'write disabled', 'out_contains:write disabled', "read-only POST inject rejected")
+    # 只读查询端点健康
+    ser(4, "catalog", f"curl -s http://127.0.0.1:{SV_P}/api/catalog",
+        0, 'rCPU_overload', 'out_contains:rCPU_overload', "serve catalog endpoint")
+    # 路径穿越防护: 字面 .. → curl 规范化后 realpath 兜底 → HTTP 404 (拒绝越界)
+    ser(5, "trav_lit", f"curl -s -o /dev/null -w '%{{http_code}}' http://127.0.0.1:{SV_P}/../../etc/passwd",
+        0, "", "out_contains:404", "serve traversal .. rejected (realpath 兜底)")
+    # URL 编码 %2e%2e → strstr 拦截 → HTTP 403
+    ser(6, "trav_enc", f"curl -s -o /dev/null -w '%{{http_code}}' 'http://127.0.0.1:{SV_P}/%2e%2e/%2e%2e/etc/passwd'",
+        0, "", "out_contains:403", "serve URL-encoded traversal rejected")
+    # 清理 serve 进程(用 pkill -x dcat 精确匹配进程名,避免 -f 匹配到执行 shell 自身)
+    ser(7, "cleanup", "pkill -x dcat 2>/dev/null; sleep 0.5; true", 0, "", "", "kill serve")
 
     # ================================================================
     # CONC: 并发竞争 (新增)

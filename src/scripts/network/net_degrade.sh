@@ -7,6 +7,8 @@ SIDECAR="/tmp/dcat-rNET_degrade-${iface}.sidecar"
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
+        # Validate iface: alphanumeric, underscore, hyphen only
+        case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         speed=${DCAT_PARAM_SPEED_MBPS:-10}
         case "$speed" in ''|*[!0-9]*) echo "speed_mbps must be a positive integer, got: '$speed'" >&2; exit 1 ;; esac
         [ "$speed" -ge 1 ] 2>/dev/null || { echo "speed_mbps must be >= 1, got: $speed" >&2; exit 1; }

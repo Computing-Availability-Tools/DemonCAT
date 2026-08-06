@@ -8,8 +8,9 @@
 typedef struct { char key[DCAT_KEY_LEN]; char value[DCAT_VAL_LEN]; } param_kv_t;
 typedef struct { param_kv_t items[DCAT_MAX_PARAMS]; int count; } params_t;
 
-/* result_t: 输出边界，json 由 cJSON 堆分配，调用方 result_free */
-typedef struct { int code; char *json; } result_t;
+/* result_t: 输出边界，json/payload 堆分配，调用方 result_free。
+ * raw=1 → payload 为已是最终文本(如 list 的表格)，output_print 原样输出，不做 JSON 加工。 */
+typedef struct { int code; char *json; int raw; } result_t;
 
 /* fault_def: 由 config.c 从 demoncat.conf 载入；registry 持有表 */
 typedef struct {

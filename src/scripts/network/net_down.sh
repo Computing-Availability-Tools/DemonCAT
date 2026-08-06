@@ -6,6 +6,8 @@ SIDECAR="/tmp/dcat-rNET_down-${iface}.sidecar"
 case "${DCAT_OP:-inject}" in
     inject)
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
+        # Validate iface: alphanumeric, underscore, hyphen only
+        case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_down-${iface}.sidecar"
         ip link set dev "$iface" down || { echo "ip link set down failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

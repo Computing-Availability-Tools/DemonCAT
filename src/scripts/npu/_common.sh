@@ -6,13 +6,12 @@ npu_check_env() {
 
 npu_validate_chip() {
     case "$1" in
-        [0-9]|10|11) return 0 ;;
-        '') return 1 ;;
-        *) echo "chip must be 0-11, got: '$1'" >&2; return 1 ;;
+        ''|*[!0-9]*) return 1 ;;
     esac
+    [ "$1" -ge 0 ] && [ "$1" -le 31 ]
 }
 
-# List all valid NPU device IDs (0-11, or DCAT_NPU_CHIPS if set)
+# List all valid NPU device IDs (from /dev/davinci* or DCAT_NPU_CHIPS if set)
 # DCAT_NPU_CHIPS="0,1,2,3" 可指定允许使用的芯片范围
 npu_list_chips() {
     if [ -n "$DCAT_NPU_CHIPS" ]; then
@@ -32,10 +31,11 @@ npu_list_chips() {
             esac
         done
     else
-        # 默认探测所有 0-11
-        for c in 0 1 2 3 4 5 6 7 8 9 10 11; do
-            hccn_tool -i $c -link -g 2>/dev/null | grep -q 'link' && echo "$c"
-        done
+        # 从 /dev/davinci* 设备文件动态获取 chip 列表（不硬编码数量）
+        for d in /dev/davinci[0-9]*; do
+            [ -e "$d" ] || continue
+            basename "$d" | grep -oE '[0-9]+$'
+        done | sort -n
     fi
 }
 

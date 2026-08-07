@@ -3,7 +3,7 @@
  *
  * 单端口双职:静态前端 + /api 端点(包装 dispatch_route 与 state)。
  * MVP:单线程串行 accept,手写 HTTP/1.1(GET/POST + Content-Length),
- * 明文 + 仅监听 127.0.0.1(安全由 SSH 隧道兜底)。 */
+ * 明文 + 默认监听 0.0.0.0(可远程访问;如需限制用 --bind 127.0.0.1)。 */
 #include "serve.h"
 #include "dispatch.h"
 #include "registry.h"
@@ -386,7 +386,7 @@ static void derive_default_webroot(char *out, size_t cap) {
 int serve_run(int port, const char *bind_addr, const char *webroot_in, int allow_write) {
     g_allow_write = allow_write ? 1 : 0;
     if (port <= 0) port = 8080;
-    if (!bind_addr || !bind_addr[0]) bind_addr = "127.0.0.1";
+    if (!bind_addr || !bind_addr[0]) bind_addr = "0.0.0.0";
     char webroot_buf[1024];
     const char *webroot = webroot_in;
     if (!webroot || !webroot[0]) {

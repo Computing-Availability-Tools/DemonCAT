@@ -271,6 +271,45 @@ static void append_active_record(const injection_record_t *r, void *ctx) {
 static result_t *dispatch_query_all(void) {
     cJSON *arr = cJSON_CreateArray();
     state_for_each_active(append_active_record, arr);
+    int n = cJSON_GetArraySize(arr);
+    if (n > 1) {
+        /* 多条记录：表格输出（人类可读） */
+        size_t cap = 256 + (size_t)n * 256;
+        char *out = malloc(cap);
+        if (!out) { cJSON_Delete(arr); return result_err("query", NULL, 1, "out of memory"); }
+        size_t off = 0;
+        off += snprintf(out+off, cap-off, "%-6s  %-24s  %-6s  %-20s  %s\n",
+                        "ID", "UID", "ACT", "STARTED", "PARAMS");
+        off += snprintf(out+off, cap-off, "%-6s  %-24s  %-6s  %-20s  %s\n",
+                        "------", "------------------------", "------", "--------------------", "------");
+        cJSON *o;
+        cJSON_ArrayForEach(o, arr) {
+            cJSON *jid = cJSON_GetObjectItem(o, "record_id");
+            cJSON *juid = cJSON_GetObjectItem(o, "uid");
+            cJSON *jactive = cJSON_GetObjectItem(o, "active");
+            cJSON *jstarted = cJSON_GetObjectItem(o, "started_at");
+            cJSON *jparams = cJSON_GetObjectItem(o, "params");
+            char pstr[256] = ""; int plen = 0;
+            if (jparams) {
+                cJSON *jp;
+                cJSON_ArrayForEach(jp, jparams) {
+                    if (jp->string && jp->valuestring)
+                        plen += snprintf(pstr+plen, sizeof(pstr)-plen, "%s=%s ", jp->string, jp->valuestring);
+                }
+            }
+            if (off >= cap - 256) { off += snprintf(out+off, cap-off, "... (truncated)\n"); break; }
+            off += snprintf(out+off, cap-off, "%-6d  %-24s  %-6s  %-20s  %s\n",
+                            jid ? (int)jid->valuedouble : 0,
+                            juid ? juid->valuestring : "",
+                            (jactive && jactive->type == cJSON_True) ? "yes" : "no",
+                            jstarted ? jstarted->valuestring : "",
+                            pstr);
+        }
+        cJSON_Delete(arr);
+        out[off] = '\0';
+        result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = out; r->raw = 1; return r;
+    }
+    /* 0-1 条记录：保持 JSON */
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
     cJSON_AddStringToObject(root, "op", "query");

@@ -11,6 +11,7 @@ case "${DCAT_OP:-inject}" in
         rate=${DCAT_PARAM_RATE_KBPS:?missing required param: rate_kbps}
         case "$rate" in ''|*[!0-9]*) echo "rate_kbps must be a positive integer, got: '$rate'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_bw_limit-${iface}.sidecar"
+        tc qdisc del dev "$iface" root 2>/dev/null || true
         tc qdisc add dev "$iface" root tbf rate "${rate}kbit" burst 32kbit latency 400ms || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"
         echo "applied ${rate}kbps limit on $iface"

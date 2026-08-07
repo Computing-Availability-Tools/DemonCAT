@@ -2,7 +2,7 @@
 # rNPU_iproute_add: add ip route. Clean = delete the added route.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
+if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 ip=${DCAT_PARAM_IP:-}
 mask=${DCAT_PARAM_IP_MASK:-}
 via=${DCAT_PARAM_VIA:-}

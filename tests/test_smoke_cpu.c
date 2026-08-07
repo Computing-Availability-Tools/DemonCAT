@@ -51,6 +51,25 @@ static int count_burn(void) {
     return count;
 }
 
+/* 轮询等待 burn 进程数 >= min，最多等 timeout_sec 秒。
+ * 代替固定 sleep(1)：系统高负载时 perl 启动可能慢于 1 秒。 */
+static int wait_burn_min(int min, int timeout_sec) {
+    for (int i = 0; i < timeout_sec * 10; i++) {
+        if (count_burn() >= min) return 1;
+        usleep(100000);
+    }
+    return 0;
+}
+
+/* 轮询等待 burn 进程数 == 0，最多等 timeout_sec 秒。 */
+static int wait_burn_zero(int timeout_sec) {
+    for (int i = 0; i < timeout_sec * 10; i++) {
+        if (count_burn() == 0) return 1;
+        usleep(100000);
+    }
+    return 0;
+}
+
 static void smoke_setup(void) {
     config_t cfg;
     config_load("config/demoncat.conf", &cfg);
@@ -76,7 +95,7 @@ int main(void) {
         fprintf(stderr, "FAIL: no two adjacent schedulable cores available\n");
         return 1;
     }
-    char cores2[16], cores_range[16], core1[8];
+    char cores2[16], cores_range[16], core1[16];
     snprintf(cores2, sizeof cores2, "%d,%d", base, base + 1);
     snprintf(cores_range, sizeof cores_range, "%d-%d", base, base + 1);
     snprintf(core1, sizeof core1, "%d", base);
@@ -91,17 +110,13 @@ int main(void) {
         CK(strstr(r->json, "record_id") != NULL);
         result_free(r);
 
-        sleep(1);
-        int n = count_burn();
-        CK(n >= 2);
+        CK(wait_burn_min(2, 5));
 
         r = dispatch_route("rCPU_overload", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
 
-        sleep(1);
-        n = count_burn();
-        CK(n == 0);
+        CK(wait_burn_zero(5));
     }
 
     /* ---- rCPU_overload re-inject: 默认拒绝 + --force 原子替换 ---- */
@@ -112,28 +127,23 @@ int main(void) {
         result_t *r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
         CK(r && r->code == 0); result_free(r);
 
-        sleep(1);
-        CK(count_burn() >= 2);
+        CK(wait_burn_min(2, 5));
 
         /* 同规格重注入: 默认拒绝 (code 5), 旧进程仍在 */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
         CK(r && r->code == 5); result_free(r);
-        sleep(1);
-        CK(count_burn() >= 2);
+        CK(wait_burn_min(2, 5));
 
         /* --force 原子替换: 旧清掉再注入, 不应翻倍 (<4) */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
         CK(r && r->code == 0); result_free(r);
-        sleep(1);
-        int n = count_burn();
-        CK(n >= 2);
-        CK(n < 4);
+        CK(wait_burn_min(2, 5));
+        CK(count_burn() < 4);
 
         r = dispatch_route_force("rCPU_overload", "clean", &p, 0);
         CK(r && r->code == 0); result_free(r);
 
-        sleep(1);
-        CK(count_burn() == 0);
+        CK(wait_burn_zero(5));
     }
 
     /* ---- rCPU_overload 重叠核集: 默认拒绝 + --force 替换 ---- */
@@ -146,8 +156,7 @@ int main(void) {
         result_t *r = dispatch_route_force("rCPU_overload", "inject", &p1, 0);
         CK(r && r->code == 0); result_free(r);
 
-        sleep(1);
-        CK(count_burn() >= 2);
+        CK(wait_burn_min(2, 5));
 
         /* 重叠核 base (含于 base-(base+1)): 默认拒绝 */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 0);
@@ -156,15 +165,12 @@ int main(void) {
         /* --force 替换: base-(base+1) 清掉, 注入 base (perl 数从 2 降为 1) */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 1);
         CK(r && r->code == 0); result_free(r);
-        sleep(1);
-        int n = count_burn();
-        CK(n >= 1);
-        CK(n < 3);
+        CK(wait_burn_min(1, 5));
+        CK(count_burn() < 3);
 
         r = dispatch_route_force("rCPU_overload", "clean", &p2, 0); CK(r && r->code == 0); result_free(r);
 
-        sleep(1);
-        CK(count_burn() == 0);
+        CK(wait_burn_zero(5));
     }
 
     smoke_teardown();

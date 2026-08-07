@@ -471,7 +471,8 @@ def gen():
     flow = f"STATE-{s_s}"
     add(flow, 0, "cpu", "rCPU_overload", "inject_a", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject cores=0")
     add(flow, 1, "cpu", "rCPU_overload", "inject_b", "none", f"{DCAT} inject rCPU_overload --cores=2", 0, '"status":"ok"', "", "", "", "inject cores=2 (different resource)")
-    add(flow, 2, "cpu", "rCPU_overload", "query_two", "none", f"{DCAT} query", 0, "", "", "state_contains:rCPU_overload", "", "two records")
+    add(flow, 2, "cpu", "rCPU_overload", "query_two", "none",
+        f"{DCAT} query", 0, "", "", "out_contains:rCPU_overload", "", "two records")
     add(flow, 3, "cpu", "rCPU_overload", "clean_a", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "", "", "", "clean cores=0")
     add(flow, 4, "cpu", "rCPU_overload", "clean_b", "none", f"{DCAT} clean rCPU_overload --cores=2", 0, "", "", "", "", "clean cores=2")
     s_s += 1
@@ -522,7 +523,7 @@ def gen():
         "for p in $(seq 19000 19032); do ./build/dcat inject rNET_port_occupy --port=$p; done",
         1, "", "", 'out_contains:state table full', "", "33rd inject fails: state full")
     add(flow, 1, "chaos", "state_full", "query_records", "none",
-        f"{DCAT} query", 0, "", "", "state_contains:rNET_port_occupy", "", "32 records")
+        f"{DCAT} query", 0, "", "", "out_contains:rNET_port_occupy", "", "32 records")
     add(flow, 2, "chaos", "state_full", "clean_all", "none",
         f"{DCAT} clean --all", 0, "", "", "", "", "clean --all clears all")
     add(flow, 3, "chaos", "state_full", "query_empty", "none",

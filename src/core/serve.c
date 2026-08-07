@@ -204,10 +204,30 @@ static resp_t api_catalog(void) {
     return resp_from_result(dispatch_route(NULL, "list", &empty));
 }
 
+static void append_active_record(const injection_record_t *r, void *ctx) {
+    cJSON *arr = (cJSON *)ctx;
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "uid", r->uid);
+    cJSON_AddNumberToObject(o, "record_id", (double)r->record_id);
+    cJSON_AddStringToObject(o, "started_at", r->started_at);
+    cJSON_AddBoolToObject(o, "active", r->active);
+    cJSON *p = cJSON_CreateObject();
+    for (int i = 0; i < r->params.count; i++)
+        cJSON_AddStringToObject(p, r->params.items[i].key, r->params.items[i].value);
+    cJSON_AddItemToObject(o, "params", p);
+    cJSON_AddItemToArray(arr, o);
+}
+
 static resp_t api_state(void) {
     state_load();  /* 从磁盘重新加载,反映命令行进程的 inject/clean 修改 */
-    params_t empty; params_init(&empty);
-    return resp_from_result(dispatch_route(NULL, "query", &empty));
+    cJSON *arr = cJSON_CreateArray();
+    state_for_each_active(append_active_record, arr);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddStringToObject(root, "op", "query");
+    cJSON_AddItemToObject(root, "data", arr);
+    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
+    return resp_json(200, s);
 }
 
 static void append_record_json(const injection_record_t *r, cJSON *arr) {

@@ -46,23 +46,29 @@ cmake -B build && cmake --build build -j8
 # 3. 运行测试 （cmake>=3.20可直接执行，其它版本需在build目录下执行）
 ctest --test-dir build --output-on-failure
 
-# 4. 列出故障目录
-./build/dcat list
+# 4. 全局可用（二选一）
+sudo ln -sf $(pwd)/build/dcat /usr/local/bin/dcat   # 之后直接用 dcat 命令
+# 或每次用 ./build/dcat 代替本文档中的 dcat
 
-# 5. 注入 CPU 过载（2 核）
-./build/dcat inject rCPU_overload --cores=0,1
+# 5. 列出故障目录
+dcat list
 
-# 6. 查询故障是否生效
-./build/dcat query rCPU_overload --cores=0,1
+# 6. 注入 CPU 过载（2 核）
+dcat inject rCPU_overload --cores=0,1
 
-# 7. 清除故障
-./build/dcat clean rCPU_overload --cores=0,1
+# 7. 查询故障是否生效
+dcat query rCPU_overload --cores=0,1
+
+# 8. 清除故障
+dcat clean rCPU_overload --cores=0,1
 
 # 查看帮助
-./build/dcat --help
-./build/dcat inject --help
-./build/dcat inject rCPU_overload --help
+dcat --help
+dcat inject --help
+dcat inject rCPU_overload --help
 ```
+
+> **提示**：本文档所有命令均以 `dcat` 形式书写。若未执行上方 symlink，请将 `dcat` 替换为 `./build/dcat`。
 
 ## 命令格式
 

@@ -3,7 +3,7 @@
  *
  * 单端口双职:静态前端 + /api 端点(包装 dispatch_route 与 state)。
  * MVP:单线程串行 accept,手写 HTTP/1.1(GET/POST + Content-Length),
- * 明文 + 仅监听 127.0.0.1(安全由 SSH 隧道兜底)。 */
+ * 明文 + 默认监听 0.0.0.0(可远程访问;如需限制用 --bind 127.0.0.1)。 */
 #include "serve.h"
 #include "dispatch.h"
 #include "registry.h"
@@ -204,9 +204,30 @@ static resp_t api_catalog(void) {
     return resp_from_result(dispatch_route(NULL, "list", &empty));
 }
 
+static void append_active_record(const injection_record_t *r, void *ctx) {
+    cJSON *arr = (cJSON *)ctx;
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "uid", r->uid);
+    cJSON_AddNumberToObject(o, "record_id", (double)r->record_id);
+    cJSON_AddStringToObject(o, "started_at", r->started_at);
+    cJSON_AddBoolToObject(o, "active", r->active);
+    cJSON *p = cJSON_CreateObject();
+    for (int i = 0; i < r->params.count; i++)
+        cJSON_AddStringToObject(p, r->params.items[i].key, r->params.items[i].value);
+    cJSON_AddItemToObject(o, "params", p);
+    cJSON_AddItemToArray(arr, o);
+}
+
 static resp_t api_state(void) {
-    params_t empty; params_init(&empty);
-    return resp_from_result(dispatch_route(NULL, "query", &empty));
+    state_load();  /* 从磁盘重新加载,反映命令行进程的 inject/clean 修改 */
+    cJSON *arr = cJSON_CreateArray();
+    state_for_each_active(append_active_record, arr);
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddStringToObject(root, "op", "query");
+    cJSON_AddItemToObject(root, "data", arr);
+    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
+    return resp_json(200, s);
 }
 
 static void append_record_json(const injection_record_t *r, cJSON *arr) {
@@ -235,6 +256,7 @@ static int cmp_record_desc(const void *a, const void *b) {
     return 0;
 }
 static resp_t api_history(void) {
+    state_load();  /* 从磁盘重新加载,反映命令行进程的修改 */
     struct hist_ctx c; c.n = 0;
     state_for_each_all(collect_record, &c);
     qsort(c.arr, (size_t)c.n, sizeof(injection_record_t), cmp_record_desc);
@@ -386,7 +408,7 @@ static void derive_default_webroot(char *out, size_t cap) {
 int serve_run(int port, const char *bind_addr, const char *webroot_in, int allow_write) {
     g_allow_write = allow_write ? 1 : 0;
     if (port <= 0) port = 8080;
-    if (!bind_addr || !bind_addr[0]) bind_addr = "127.0.0.1";
+    if (!bind_addr || !bind_addr[0]) bind_addr = "0.0.0.0";
     char webroot_buf[1024];
     const char *webroot = webroot_in;
     if (!webroot || !webroot[0]) {

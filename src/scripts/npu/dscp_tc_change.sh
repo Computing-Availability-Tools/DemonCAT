@@ -2,7 +2,7 @@
 # rNPU_dscp_tc_change: DSCP-to-TC mapping change. Clean = restore original tc.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
+if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 dscp=${DCAT_PARAM_DSCP:-}
 tc=${DCAT_PARAM_TC:-}
 HCCN="hccn_tool -i $chip"

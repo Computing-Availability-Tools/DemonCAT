@@ -2,7 +2,7 @@
 # rNPU_mtu_mismatch: RoCE MTU change. Clean = restore original MTU from sidecar.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
+if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 size=${DCAT_PARAM_SIZE:-}
 HCCN="hccn_tool -i $chip"
 

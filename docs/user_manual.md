@@ -4,6 +4,8 @@
 > 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 33 条故障。
 > 完整规格见 [SPEC.md](../SPEC.md)，架构见 [DESIGN.md](../DESIGN.md)。
 
+> **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行 `sudo ln -sf $(pwd)/build/dcat /usr/local/bin/dcat` 即可全局使用 `dcat`；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。
+
 ---
 
 ## 故障能力清单

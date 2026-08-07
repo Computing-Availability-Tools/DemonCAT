@@ -164,29 +164,47 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
 }
 
 /* clean --all：遍历全部注册故障(cnf)，对支持 clean 的逐个执行无参 clean；
- * stateless，不依赖 state.json（脚本自行 glob /tmp 工件）。聚合每 uid 结果。 */
+ * stateless，不依赖 state.json（脚本自行 glob /tmp 工件）。聚合每 uid 结果。
+ * 输出：全成功 → 一行摘要；有失败 → 表格 + 汇总（人类可读）。 */
 result_t *dispatch_clean_all(void) {
-    cJSON *arr = cJSON_CreateArray();
     params_t empty; params_init(&empty);
     int n = 0; const fault_def_t *list = registry_list(&n);
+    int ok = 0, err = 0;
+    struct { char uid[64]; int failed; } rows[128];
+    int rc = 0;
+
     for (int i = 0; i < n; i++) {
         if (!op_in_supported(list[i].supported_ops, "clean")) continue;
         result_t *r = executor_run_fault(&list[i], "clean", &empty, 0);
-        /* 脚本清完 /tmp 工件后 reconcile 该 uid 的 state 记录，避免 query 幽灵 */
-        if (r && r->code == 0) reconcile_uid_state(list[i].uid);
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddStringToObject(o, "uid", list[i].uid);
-        cJSON_AddStringToObject(o, "status", (r && r->code == 0) ? "ok" : "error");
-        cJSON_AddItemToArray(arr, o);
+        int failed = !(r && r->code == 0);
+        if (!failed) {
+            reconcile_uid_state(list[i].uid);
+            ok++;
+        } else {
+            err++;
+        }
+        if (rc < 128) { strncpy(rows[rc].uid, list[i].uid, 63); rows[rc].uid[63]='\0'; rows[rc].failed = failed; rc++; }
         if (r) result_free(r);
     }
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "status", "ok");
-    cJSON_AddStringToObject(root, "op", "clean");
-    cJSON_AddStringToObject(root, "mode", "all");
-    cJSON_AddItemToObject(root, "data", arr);
-    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; r->raw = 0; return r;
+
+    result_t *res = malloc(sizeof(result_t)); res->code = 0;
+    if (err == 0) {
+        char *buf = malloc(128);
+        snprintf(buf, 128, "cleaned %d faults (all ok)\n", ok);
+        res->json = buf; res->raw = 1; return res;
+    }
+    /* 有失败：表格 + 汇总 */
+    size_t cap = 256 + (size_t)rc * 80;
+    char *buf = malloc(cap);
+    size_t off = 0;
+    off += snprintf(buf+off, cap-off, "%-24s  %s\n", "UID", "RESULT");
+    off += snprintf(buf+off, cap-off, "%-24s  %s\n", "------------------------", "------");
+    for (int i = 0; i < rc; i++) {
+        if (off >= cap - 80) { off += snprintf(buf+off, cap-off, "... (truncated)\n"); break; }
+        off += snprintf(buf+off, cap-off, "%-24s  %s\n", rows[i].uid, rows[i].failed ? "error" : "cleaned");
+    }
+    off += snprintf(buf+off, cap-off, "\n%d cleaned, %d error\n", ok, err);
+    res->json = buf; res->raw = 1; return res;
 }
 
 /* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */

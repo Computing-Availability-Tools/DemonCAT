@@ -205,6 +205,7 @@ static resp_t api_catalog(void) {
 }
 
 static resp_t api_state(void) {
+    state_load();  /* 从磁盘重新加载,反映命令行进程的 inject/clean 修改 */
     params_t empty; params_init(&empty);
     return resp_from_result(dispatch_route(NULL, "query", &empty));
 }
@@ -235,6 +236,7 @@ static int cmp_record_desc(const void *a, const void *b) {
     return 0;
 }
 static resp_t api_history(void) {
+    state_load();  /* 从磁盘重新加载,反映命令行进程的修改 */
     struct hist_ctx c; c.n = 0;
     state_for_each_all(collect_record, &c);
     qsort(c.arr, (size_t)c.n, sizeof(injection_record_t), cmp_record_desc);

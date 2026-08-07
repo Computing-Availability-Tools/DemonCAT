@@ -204,6 +204,8 @@ dcat clean rDISK_write_overload --device=/data
 
 本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
 
+> **互斥说明**：基于 `tc qdisc` 的故障（rNET_delay / rNET_loss / rNET_reorder / rNET_bw_limit / rNET_degrade / rNET_jitter）在同一网卡上**互斥**——一个网卡只能有一个 root qdisc。如需在同一网卡注入新故障，必须先 `dcat clean` 恢复旧故障后再注入。若注入失败提示"已有 root qdisc"，执行 `dcat clean --all` 或 `tc qdisc del dev <iface> root` 清理残留后重试。
+
 所有故障均支持 `inject`（注入）、`clean`（清理）、`query`（查询）三个操作。注入时通过 sidecar 临时状态文件（`/tmp/dcat-rNET_*`，用于记录注入前的原始值，便于 clean 时恢复）或 PID 文件记录状态，便于后续清理与查询。
 
 ---

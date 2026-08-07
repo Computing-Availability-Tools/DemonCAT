@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="DemonCAT (dcat) — 远程故障注入控制台。" />
+  <title>DemonCAT · 控制台</title>
+  <link rel="stylesheet" href="style.css?v=20260805a" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand" href="#top">
+        <span class="brand-logo">◣</span>
+        <span class="brand-name">DemonCAT</span>
+        <span class="brand-tag">dcat</span>
+      </a>
+      <nav class="topnav">
+        <a href="#console">控制台</a>
+        <a href="#catalog">故障目录</a>
+      </nav>
+      <div class="topbar-right">
+        <span class="conn-pill conn-off" id="connPill"><span class="dot dot-off"></span><span id="connText">检测中</span></span>
+        <a class="topbar-gh" href="https://github.com/Computing-Availability-Tools" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- 紧凑 header -->
+    <section class="dash-header">
+      <div class="container dash-header-inner">
+        <div>
+          <h1 class="dash-title">DemonCAT <span class="muted">远程控制台</span></h1>
+          <p class="dash-sub">实时查看 + 远程注入/清理故障(默认只读,--allow-write 开写)。</p>
+        </div>
+        <div class="dash-stats">
+          <span><strong>33</strong> 故障</span>
+          <span><strong>5</strong> 模块</span>
+          <span><strong>v0.1.0</strong></span>
+          <button class="btn btn-ghost btn-sm" id="dashRefresh" type="button">↻ 刷新</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 特性介绍(置顶) -->
+    <section class="section section-alt">
+      <div class="container">
+        <div class="feature-strip" id="featureStrip"></div>
+      </div>
+    </section>
+
+    <!-- 控制台:摘要卡 + 两列(活跃 | 历史) -->
+    <section id="console" class="section">
+      <div class="container">
+        <div class="stat-cards" id="statCards"></div>
+        <div class="dash-stack">
+          <div class="dash-col">
+            <h3 class="dash-col-title">活跃注入 <span class="dash-count" id="activeCount">0</span>
+              <button class="btn btn-sm btn-warn clean-all-btn" id="cleanAllBtn" type="button" hidden>清理全部</button>
+            </h3>
+            <div id="activeList" class="active-list"></div>
+          </div>
+          <div class="dash-col">
+            <h3 class="dash-col-title">历史记录 <span class="dash-count" id="historyCount">0</span></h3>
+            <div class="catalog-table-wrap">
+              <table class="catalog-table" id="historyTable"></table>
+              <div class="catalog-empty" id="historyEmpty" hidden>暂无历史记录。</div>
+            </div>
+            <p class="muted" id="historyNote" style="font-size:11px;margin-top:8px"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 故障目录(调色板:选故障注入) -->
+    <section id="catalog" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <h2 class="section-title">故障目录</h2>
+          <p class="section-sub">选故障注入:点行或「构造命令」按钮展开命令构造器(可写模式可直接执行)。</p>
+        </div>
+        <div class="catalog-controls">
+          <div class="catalog-tabs" id="catalogTabs"></div>
+          <div class="catalog-search">
+            <input id="catalogSearch" type="search" placeholder="搜索 UID / 说明 / 参数(如 cores, iface, chip)..." />
+            <span class="catalog-count" id="catalogCount"></span>
+          </div>
+        </div>
+        <div class="catalog-table-wrap">
+          <table class="catalog-table" id="catalogTable"></table>
+          <div class="catalog-empty" id="catalogEmpty" hidden>没有匹配的故障。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <div class="footer-brand"><span class="brand-logo">◣</span> DemonCAT · <span class="muted">dcat</span></div>
+      <div class="footer-links">
+        <a href="../../README.md">README</a>
+        <a href="../../SPEC.md">SPEC</a>
+        <a href="../../DESIGN.md">DESIGN</a>
+        <a href="../../docs/user_manual.md">用户手册</a>
+      </div>
+      <div class="footer-meta"><span>v0.1.0</span> · <span>C11 + CMake</span> · <span>Linux aarch64/x86_64</span></div>
+    </div>
+  </footer>
+
+  <!-- 命令构造器 modal -->
+  <div class="modal" id="cmdModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-uid" id="cmdUid"></div>
+          <div class="modal-desc" id="cmdDesc"></div>
+        </div>
+        <button class="modal-close" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body" id="cmdBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js?v=20260805a"></script>
+</body>
+</html>

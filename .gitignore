@@ -1,0 +1,8 @@
+build/
+.idea/
+*.o
+*.a
+plugins/*.so
+Testing/Temporary/
+tests/e2e/results_*.csv
+tests/e2e/report.md

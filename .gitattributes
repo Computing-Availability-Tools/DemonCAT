@@ -1,0 +1,13 @@
+# DemonCAT 是 POSIX/Linux 项目，强制使用 LF 行尾。
+# 防止 bash 脚本因 CRLF（\r）报 “$'\r': command not found” / “invalid option” 等错误。
+* text=auto eol=lf
+
+# 明确文本类型
+*.sh    text eol=lf
+*.c     text eol=lf
+*.h     text eol=lf
+*.cmake text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.conf  text eol=lf
+*.txt   text eol=lf

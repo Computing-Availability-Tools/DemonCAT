@@ -13,6 +13,7 @@ case "${DCAT_OP:-inject}" in
         case "$delay" in ''|*[!0-9]*) echo "delay_ms must be a positive integer, got: '$delay'" >&2; exit 1 ;; esac
         case "$jitter" in ''|*[!0-9]*) echo "jitter_ms must be a positive integer, got: '$jitter'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_jitter-${iface}.sidecar"
+        tc qdisc del dev "$iface" root 2>/dev/null || true
         tc qdisc add dev "$iface" root netem delay "${delay}ms" "${jitter}ms" || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"
         echo "applied ${delay}ms +/- ${jitter}ms jitter on $iface"

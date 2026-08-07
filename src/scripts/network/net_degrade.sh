@@ -13,6 +13,7 @@ case "${DCAT_OP:-inject}" in
         case "$speed" in ''|*[!0-9]*) echo "speed_mbps must be a positive integer, got: '$speed'" >&2; exit 1 ;; esac
         [ "$speed" -ge 1 ] 2>/dev/null || { echo "speed_mbps must be >= 1, got: $speed" >&2; exit 1; }
         SIDECAR="/tmp/dcat-rNET_degrade-${iface}.sidecar"
+        tc qdisc del dev "$iface" root 2>/dev/null || true
         tc qdisc add dev "$iface" root tbf rate "${speed}mbit" burst "${speed}kbit" latency 400ms || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface $speed" > "$SIDECAR"
         echo "degraded $iface to ${speed}Mbps (tc tbf)"

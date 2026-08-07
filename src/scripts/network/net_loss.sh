@@ -19,6 +19,7 @@ case "${DCAT_OP:-inject}" in
         case "$pct" in ''|*[!0-9]*) echo "loss_pct must be a number 0-100, got: '$pct'" >&2; exit 1 ;; esac
         [ "$pct" -ge 0 ] 2>/dev/null && [ "$pct" -le 100 ] 2>/dev/null || { echo "loss_pct must be 0-100, got: $pct" >&2; exit 1; }
         SIDECAR="/tmp/dcat-rNET_loss-${iface}.sidecar"
+        tc qdisc del dev "$iface" root 2>/dev/null || true
         tc qdisc add dev "$iface" root netem loss random "${pct}%" || { echo "tc add failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"
         echo "applied ${pct}% loss on $iface"

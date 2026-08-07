@@ -2,7 +2,7 @@
 # rNPU_iprule_add: add ip rule. Clean = delete the added rule.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
-[ -n "$chip" ] && npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }
+if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 dir=${DCAT_PARAM_DIR:-}
 ip=${DCAT_PARAM_IP:-}
 table=${DCAT_PARAM_TABLE:-}

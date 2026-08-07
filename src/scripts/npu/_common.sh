@@ -8,7 +8,7 @@ npu_validate_chip() {
     case "$1" in
         ''|*[!0-9]*) return 1 ;;
     esac
-    [ "$1" -ge 0 ] && [ "$1" -le 31 ]
+    return 0
 }
 
 # List all valid NPU device IDs (from /dev/davinci* or DCAT_NPU_CHIPS if set)

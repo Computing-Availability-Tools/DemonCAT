@@ -116,7 +116,7 @@ done
 
 echo ""
 echo "下一步："
-echo "  cmake -B build && cmake --build build"
-echo "  ctest --test-dir build --output-on-failure"
-echo "  sudo ln -sf \$(pwd)/build/dcat /usr/local/bin/dcat   # 全局可用 dcat"
+echo "  mkdir -p build && cd build && cmake .. && make -j8"
+echo "  ctest --output-on-failure   # 在 build 目录下执行"
+echo "  sudo make install   # 在 build 目录下执行，创建 /usr/local/bin/dcat 全局入口"
 echo "  dcat --help   # 或 ./build/dcat --help"

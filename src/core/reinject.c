@@ -53,9 +53,11 @@ int cores_intersect(const unsigned char a[DCAT_CORES_BYTES], const unsigned char
 }
 
 /* 资源键各参数是否重叠：cores→集合交集，其余→精确等；缺参跳过(留给 precheck)。
- * clean_required 为空 → 保守判重叠(任意活动=冲突)。 */
+ * new_params 未声明任何资源参数(如无参插件) → 不判冲突(无资源可冲突)。
+ * clean_required 为空且带参注入 → 保守判重叠(任意活动=冲突)。 */
 static int resource_overlaps(const params_t *new_params, const params_t *rec_params,
                              const char *clean_required) {
+    if (!new_params || new_params->count == 0) return 0;
     char buf[128];
     strncpy(buf, clean_required ? clean_required : "", sizeof(buf) - 1);
     buf[sizeof(buf) - 1] = '\0';
@@ -79,18 +81,24 @@ static int resource_overlaps(const params_t *new_params, const params_t *rec_par
     return 1;
 }
 
-int reinject_find_overlap(const fault_def_t *f, const params_t *new_params,
-                          long long *out_ids, int max_ids) {
-    if (!f || !new_params) return 0;
+int reinject_find_overlap_ops(const char *uid, const char *clean_required,
+                              const params_t *new_params, long long *out_ids, int max_ids) {
+    if (!uid || !new_params) return 0;
     injection_record_t snap[DCAT_MAX_RECORDS];
-    int n = state_snapshot_by_uid(f->uid, snap, DCAT_MAX_RECORDS);
+    int n = state_snapshot_by_uid(uid, snap, DCAT_MAX_RECORDS);
     int cnt = 0;
     for (int i = 0; i < n; i++) {
         if (snap[i].active &&
-            resource_overlaps(new_params, &snap[i].params, f->clean_required)) {
+            resource_overlaps(new_params, &snap[i].params, clean_required)) {
             if (out_ids && cnt < max_ids) out_ids[cnt] = snap[i].record_id;
             cnt++;
         }
     }
     return cnt;
+}
+
+int reinject_find_overlap(const fault_def_t *f, const params_t *new_params,
+                          long long *out_ids, int max_ids) {
+    if (!f) return 0;
+    return reinject_find_overlap_ops(f->uid, f->clean_required, new_params, out_ids, max_ids);
 }

@@ -14,6 +14,7 @@ static long long g_next_id = 1;
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_file[256] = "~/.demoncat/state.json";
 static int g_state_lost = 0;   /* 1=state 文件缺失或 JSON 解析失败(损坏/截断) */
+static int g_dirty = 0;        /* 1=有记录变更(注入/清理),state_save 才落盘 */
 
 static void fmt_started_at(time_t t, char *buf, size_t n) {
     struct tm tmv;
@@ -26,6 +27,7 @@ void state_reset(void) {
     memset(g_records, 0, sizeof(g_records));
     g_next_id = 1;
     g_state_lost = 0;
+    g_dirty = 1;   /* 内存已清空，可能与磁盘不一致 → 下次 state_save 须落盘 */
     pthread_mutex_unlock(&g_lock);
 }
 void state_set_file(const char *path) {
@@ -59,6 +61,7 @@ long long state_add(const char *uid, const params_t *params) {
     fmt_started_at(time(NULL), g_records[slot].started_at, sizeof(g_records[slot].started_at));
     g_records[slot].active = 1;
     long long id = g_records[slot].record_id;
+    g_dirty = 1;
     pthread_mutex_unlock(&g_lock);
     return id;
 }
@@ -109,7 +112,7 @@ int state_list_active(void) {
 void state_mark_inactive(long long id) {
     pthread_mutex_lock(&g_lock);
     for (int i = 0; i < DCAT_MAX_RECORDS; i++)
-        if (g_records[i].record_id == id) { g_records[i].active = 0; break; }
+        if (g_records[i].record_id == id) { g_records[i].active = 0; g_dirty = 1; break; }
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -166,6 +169,10 @@ static void ensure_parent_dir(const char *path) {
 
 void state_save(void) {
     pthread_mutex_lock(&g_lock);
+    if (!g_dirty) {   /* 只读操作(查询/列表)不重写 state 文件 */
+        pthread_mutex_unlock(&g_lock);
+        return;
+    }
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
         if (g_records[i].record_id == 0) continue;   /* 写全部已用记录(活跃+已清理),保留历史 */
@@ -181,28 +188,39 @@ void state_save(void) {
     cJSON_AddNumberToObject(root, "next_id", (double)g_next_id);
     cJSON_AddItemToObject(root, "records", arr);
     char *s = cJSON_Print(root); cJSON_Delete(root);
+    g_dirty = 0;   /* 清脏标记在锁内：避免并发 state_add 的 dirty=1 被覆盖 */
     pthread_mutex_unlock(&g_lock);
 
-    if (!s) return;
-    char path[256];
-    expand_home_path(g_file, path, sizeof(path));
-    ensure_parent_dir(path);
-    FILE *fp = fopen(path, "w");
-    if (fp) {
-        if (fputs(s, fp) == EOF || fclose(fp) != 0) {
-            fclose(fp);
+    int saved = 0;
+    if (s) {
+        char path[256];
+        expand_home_path(g_file, path, sizeof(path));
+        ensure_parent_dir(path);
+        FILE *fp = fopen(path, "w");
+        if (fp) {
+            int rc = fputs(s, fp);
+            if (fclose(fp) == 0 && rc != EOF) saved = 1;
         }
+        free(s);
     }
-    free(s);
+    if (!saved) {
+        /* 写盘失败(cJSON_Print 返回 NULL / fopen 失败 / fputs 失败 / fclose 失败)：
+         * 恢复脏标记，下次 state_save 重试，不静默丢失。 */
+        pthread_mutex_lock(&g_lock);
+        g_dirty = 1;
+        pthread_mutex_unlock(&g_lock);
+    }
 }
 
 void state_load(void) {
     pthread_mutex_lock(&g_lock);
+    g_dirty = 0;   /* 从文件加载 → 内存与磁盘一致 → 无需 save（query/list 不重写） */
     FILE *fp = fopen(g_file, "r");
     if (!fp) { g_state_lost = 1; pthread_mutex_unlock(&g_lock); return; }
     fseek(fp, 0, SEEK_END); long sz = ftell(fp); fseek(fp, 0, SEEK_SET);
     if (sz < 0) { fclose(fp); pthread_mutex_unlock(&g_lock); return; }
     char *buf = malloc((size_t)sz + 1);
+    if (!buf) { fclose(fp); pthread_mutex_unlock(&g_lock); return; }
     size_t rd = fread(buf, 1, (size_t)sz, fp); buf[rd] = '\0'; fclose(fp);
     cJSON *root = cJSON_Parse(buf); free(buf);
     if (root) {

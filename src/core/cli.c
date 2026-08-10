@@ -55,7 +55,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
     params_init(&out->params);
     g_cli_error[0] = '\0';
     if (argc < 2) {
-        snprintf(g_cli_error, sizeof g_cli_error, "no subcommand; available: inject, clean, query, list");
+        snprintf(g_cli_error, sizeof g_cli_error, "no subcommand; available: inject, clean, query, list, serve");
         return -1;
     }
 
@@ -93,7 +93,26 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 if (strcmp(argv[i], "--config") == 0) out->config  = argv[i + 1];
                 else                                    out->plugins = argv[i + 1];
                 i++;
+            } else {
+                snprintf(g_cli_error, sizeof g_cli_error, "option '%s' requires a value (use '%s=<path>')", argv[i], argv[i]);
+                return -1;
             }
+            continue;
+        }
+        if (strncmp(argv[i], "--config=", 9) == 0) {
+            if (argv[i][9] == '\0') {
+                snprintf(g_cli_error, sizeof g_cli_error, "option '--config' requires a value (use '--config=<path>')");
+                return -1;
+            }
+            out->config = argv[i] + 9;
+            continue;
+        }
+        if (strncmp(argv[i], "--plugins=", 10) == 0) {
+            if (argv[i][10] == '\0') {
+                snprintf(g_cli_error, sizeof g_cli_error, "option '--plugins' requires a value (use '--plugins=<dir>')");
+                return -1;
+            }
+            out->plugins = argv[i] + 10;
             continue;
         }
         /* serve 专用选项:仅 serve 子命令解析(--port/--bind/--webroot/--allow-write)。
@@ -107,6 +126,9 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 if (i + 1 < argc) {
                     if (parse_port_arg(argv[i + 1], &out->port) != 0) return -1;
                     i++;
+                } else {
+                    snprintf(g_cli_error, sizeof g_cli_error, "option '--port' requires a value (use '--port=<n>')");
+                    return -1;
                 }
                 continue;
             }
@@ -115,15 +137,41 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 continue;
             }
             if (strcmp(argv[i], "--bind") == 0) {
-                if (i + 1 < argc) { out->bind = argv[i + 1]; i++; }
+                if (i + 1 < argc) {
+                    out->bind = argv[i + 1];
+                    i++;
+                } else {
+                    snprintf(g_cli_error, sizeof g_cli_error, "option '--bind' requires a value (use '--bind=<addr>')");
+                    return -1;
+                }
                 continue;
             }
-            if (strncmp(argv[i], "--bind=", 7) == 0) { out->bind = argv[i] + 7; continue; }
+            if (strncmp(argv[i], "--bind=", 7) == 0) {
+                if (argv[i][7] == '\0') {
+                    snprintf(g_cli_error, sizeof g_cli_error, "option '--bind' requires a value (use '--bind=<addr>')");
+                    return -1;
+                }
+                out->bind = argv[i] + 7;
+                continue;
+            }
             if (strcmp(argv[i], "--webroot") == 0) {
-                if (i + 1 < argc) { out->webroot = argv[i + 1]; i++; }
+                if (i + 1 < argc) {
+                    out->webroot = argv[i + 1];
+                    i++;
+                } else {
+                    snprintf(g_cli_error, sizeof g_cli_error, "option '--webroot' requires a value (use '--webroot=<dir>')");
+                    return -1;
+                }
                 continue;
             }
-            if (strncmp(argv[i], "--webroot=", 10) == 0) { out->webroot = argv[i] + 10; continue; }
+            if (strncmp(argv[i], "--webroot=", 10) == 0) {
+                if (argv[i][10] == '\0') {
+                    snprintf(g_cli_error, sizeof g_cli_error, "option '--webroot' requires a value (use '--webroot=<dir>')");
+                    return -1;
+                }
+                out->webroot = argv[i] + 10;
+                continue;
+            }
         }
         /* subcommand may appear after global options (e.g. dcat --config x.conf inject ...) */
         if (!out->op && is_subcommand(argv[i])) {
@@ -142,11 +190,11 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             if (!out->op) {
                 if (has_param_after(argc, argv, i + 1)) {
                     snprintf(g_cli_error, sizeof g_cli_error,
-                             "missing subcommand before '%s'; try 'dcat inject %s ...' (available: inject, clean, query, list)",
+                             "missing subcommand before '%s'; try 'dcat inject %s ...' (available: inject, clean, query, list, serve)",
                              argv[i], argv[i]);
                 } else {
                     snprintf(g_cli_error, sizeof g_cli_error,
-                             "unknown subcommand '%s'; available: inject, clean, query, list", argv[i]);
+                             "unknown subcommand '%s'; available: inject, clean, query, list, serve", argv[i]);
                 }
                 return -1;
             }
@@ -200,7 +248,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
     if (!out->op && !out->help) {
         if (g_cli_error[0] == '\0')
             snprintf(g_cli_error, sizeof g_cli_error,
-                     "missing subcommand; available: inject, clean, query, list");
+                     "missing subcommand; available: inject, clean, query, list, serve");
         return -1;
     }
     return 0;

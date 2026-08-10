@@ -74,8 +74,15 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             else
                 taskset -c "$n" yes >/dev/null 2>&1 &
             fi
-            echo $! > "$CORE_PF"
-            pids="$pids $!"
+            pid=$!
+            sleep 0.05
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "$pid" > "$CORE_PF"
+                pids="$pids $pid"
+            else
+                echo "WARNING: core $n inject failed (core not available? cpuset restricted?)" >&2
+                rm -f "$CORE_PF"
+            fi
         done
         echo "injected CPU overload on cores [$spec] load=${load_pct}% (pids:$pids)"
         ;;
@@ -112,14 +119,13 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             spec=$DCAT_PARAM_CORES
             echo "requested_cores: $spec"
         else
-            spec=""
-            for pf in /tmp/dcat-rCPU_overload-c*.pid; do
+            spec=$(for pf in /tmp/dcat-rCPU_overload-c*.pid; do
                 [ -f "$pf" ] || continue
                 pid=$(cat "$pf" 2>/dev/null)
                 [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || continue
                 n=${pf##*/dcat-rCPU_overload-c}; n=${n%.pid}
-                spec="${spec:+$spec,}$n"
-            done
+                echo "$n"
+            done | sort -n | tr '\n' ',' | sed 's/,$//')
             echo "injected_cores: ${spec:-(none)}"
         fi
         # burn 进程数 (按 spec 指定核统计存活)

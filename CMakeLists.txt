@@ -3,7 +3,8 @@ project(demoncat C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror)
-add_compile_definitions(_POSIX_C_SOURCE=200809L)
+# add_compile_definitions 需 CMake 3.12+，用 add_definitions 保持 3.10 兼容
+add_definitions(-D_POSIX_C_SOURCE=200809L)
 find_package(Threads REQUIRED)
 
 add_library(cjson STATIC third_party/cjson/cJSON.c)
@@ -19,6 +20,31 @@ set(DCAT_CORE
 add_executable(dcat src/main.c ${DCAT_CORE})
 target_include_directories(dcat PRIVATE src src/core src/injectors src/plugins third_party/cjson)
 target_link_libraries(dcat PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})
+
+# ---- 全局入口：符号链接指向项目树 build/dcat ----
+# config/scripts/plugins/web 均按可执行文件位置解析（/proc/self/exe 解引用到项目树），
+# git pull 更新脚本/配置后立即生效，无需重新 install。
+set(_dcat_entry_code "
+  set(_dest \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin\")
+  file(MAKE_DIRECTORY \"\${_dest}\")
+  execute_process(COMMAND \"${CMAKE_COMMAND}\" -E remove -f \"\${_dest}/dcat\" OUTPUT_QUIET ERROR_QUIET)
+  execute_process(COMMAND \"${CMAKE_COMMAND}\" -E create_symlink
+                  \"${CMAKE_SOURCE_DIR}/build/dcat\" \"\${_dest}/dcat\"
+                  RESULT_VARIABLE _sl_rc)
+  if(NOT _sl_rc EQUAL 0)
+    message(FATAL_ERROR \"failed to create global dcat entry: \${_dest}/dcat\")
+  endif()
+  message(STATUS \"global entry: \${_dest}/dcat -> ${CMAKE_SOURCE_DIR}/build/dcat\")
+")
+install(CODE "${_dcat_entry_code}")
+add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND} -E remove -f "${CMAKE_INSTALL_PREFIX}/bin/dcat"
+    COMMENT "Removing global dcat entry (${CMAKE_INSTALL_PREFIX}/bin/dcat)")
+# make clean 连带删除全局入口（入口存在时需 sudo）。
+# ADDITIONAL_CLEAN_FILES 需 CMake 3.15+；3.10-3.14 下静默不生效，请改用 `make uninstall`。
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
+    set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${CMAKE_INSTALL_PREFIX}/bin/dcat")
+endif()
 
 enable_testing()
 

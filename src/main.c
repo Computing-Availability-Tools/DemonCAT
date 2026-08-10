@@ -45,8 +45,8 @@ int main(int argc, char **argv) {
     }
     if (argc < 2) { help_print_global(); return 2; }
     if (rc != 0 || !pc.op) {
-        printf("{\"status\":\"error\",\"op\":\"parse\",\"error\":{\"code\":2,\"message\":\"%s\"}}\n",
-               cli_get_error());
+        fprintf(stderr, "{\"status\":\"error\",\"op\":\"parse\",\"error\":{\"code\":2,\"message\":\"%s\"}}\n",
+                cli_get_error());
         return 2;
     }
 

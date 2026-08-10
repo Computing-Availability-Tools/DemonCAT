@@ -9,8 +9,8 @@ cd "$(dirname "$0")/.."
 # ---- 前置检查 ----
 [ "$(id -u)" = 0 ] || { echo "ERROR: 需要 root 权限运行 (sudo bash tests/smoke_root.sh)"; exit 1; }
 
-# 编译
-[ -x build/dcat ] || { cmake -B build && cmake --build build; }
+# 编译（子 shell 防止 cd 污染当前目录）
+[ -x build/dcat ] || { mkdir -p build && (cd build && cmake .. && make); }
 DCAT=./build/dcat
 
 # 测试状态隔离：dcat 不读 DCAT_STATE_FILE（main.c 只认 config 的 state_file/默认 ~/.demoncat）。
@@ -211,7 +211,7 @@ if [ "$HAS_SYSTEMCTL" = 1 ] && timeout 5 systemctl is-system-running >/dev/null 
     done
     if [ -n "$TEST_SVC" ]; then
         if $DCAT inject rNET_service_stop --service=$TEST_SVC --config "$DCAT_CONF" >/dev/null 2>&1; then
-            state=$(timeout 3 systemctl is-active "$TEST_SVC" 2>/dev/null)
+            state=$(timeout 3 systemctl is-active "$TEST_SVC" 2>/dev/null || true)
             if [ "$state" = "inactive" ] || [ "$state" = "failed" ]; then
                 $DCAT clean rNET_service_stop --service=$TEST_SVC --config "$DCAT_CONF" >/dev/null 2>&1
                 pass "rNET_service_stop"

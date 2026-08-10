@@ -40,6 +40,7 @@ static result_t *dispatch_list(void) {
     int pc = 0;
     const dcat_plugin_t *const *plugs = plugin_list(&pc);
     for (int i = 0; i < pc && m < MAX_LIST_ROWS; i++) {
+        if (plugs[i]->name && strcmp(plugs[i]->name, "sample") == 0) continue;
         rows[m].uid = plugs[i]->uid;
         rows[m].module = plugs[i]->name ? plugs[i]->name : "";
         char pbuf[64]; strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf)-1); pbuf[sizeof(pbuf)-1]='\0';
@@ -163,8 +164,8 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     return result_ok("clean", f->uid, 0, "cleaned");
 }
 
-/* clean --all：遍历全部注册故障(cnf)，对支持 clean 的逐个执行无参 clean；
- * stateless，不依赖 state.json（脚本自行 glob /tmp 工件）。聚合每 uid 结果。
+/* clean --all：遍历全部注册故障(cnf + 动态插件)，对支持 clean 的逐个执行无参 clean；
+ * stateless，不依赖 state.json（脚本自行 glob /tmp 工件，插件自行幂等清理）。聚合每 uid 结果。
  * 输出：全成功 → 一行摘要；有失败 → 表格 + 汇总（人类可读）。 */
 result_t *dispatch_clean_all(void) {
     params_t empty; params_init(&empty);
@@ -187,7 +188,25 @@ result_t *dispatch_clean_all(void) {
         if (r) result_free(r);
     }
 
-    result_t *res = malloc(sizeof(result_t)); res->code = 0;
+    /* 动态插件同样纳入 clean --all（注入器不在此列，无注册表迭代接口） */
+    int pn = 0;
+    const dcat_plugin_t *const *plist = plugin_list(&pn);
+    for (int i = 0; i < pn; i++) {
+        const dcat_plugin_t *p = plist[i];
+        if (!op_in_supported(p->supported_ops, "clean") || !p->clean) continue;
+        result_t *r = p->clean(&empty);
+        int failed = !(r && r->code == 0);
+        if (!failed) {
+            reconcile_uid_state(p->uid);
+            ok++;
+        } else {
+            err++;
+        }
+        if (rc < 128) { strncpy(rows[rc].uid, p->uid, 63); rows[rc].uid[63]='\0'; rows[rc].failed = failed; rc++; }
+        if (r) result_free(r);
+    }
+
+    result_t *res = malloc(sizeof(result_t)); res->code = (err > 0) ? 1 : 0;
     if (err == 0) {
         char *buf = malloc(128);
         snprintf(buf, 128, "cleaned %d faults (all ok)\n", ok);
@@ -205,6 +224,64 @@ result_t *dispatch_clean_all(void) {
     }
     off += snprintf(buf+off, cap-off, "\n%d cleaned, %d error\n", ok, err);
     res->json = buf; res->raw = 1; return res;
+}
+
+/* 重注入冲突错误（退出码 5）：列出重叠记录 id 与参数，提示 --force。 */
+static result_t *reinject_conflict_err(const char *uid, const long long *ids, int on) {
+    char msg[512];
+    int off = 0;
+    int w = snprintf(msg, sizeof msg, "resource already injected");
+    if (w < 0) off = (int)sizeof msg; else off = w;
+    int shown = on < 3 ? on : 3;
+    for (int k = 0; k < shown && off < (int)sizeof msg; k++) {
+        const injection_record_t *rec = state_find_by_id(ids[k]);
+        char pstr[256]; pstr[0] = '\0';
+        if (rec) fmt_record_params(rec, pstr, sizeof pstr);
+        const char *sep = (k == 0) ? " (" : "; ";
+        w = snprintf(msg + off, sizeof msg - (size_t)off,
+                     "%srecord id %lld: %s", sep, ids[k], pstr);
+        if (w < 0) { off = (int)sizeof msg; break; }
+        off += w;
+    }
+    if (on > 3 && off < (int)sizeof msg) {
+        w = snprintf(msg + off, sizeof msg - (size_t)off, "; +%d more", on - 3);
+        if (w < 0) off = (int)sizeof msg; else off += w;
+    }
+    if (off < (int)sizeof msg)
+        snprintf(msg + off, sizeof msg - (size_t)off, "); use --force to replace");
+    return result_err("inject", uid, DCAT_REINJECT_CONFLICT, msg);
+}
+
+/* --force：先清理重叠记录再注入。clean 由调用方提供（cnf=脚本）。
+ * 注：cnf 的 clean_one_record 成功返回 NULL（内部已 mark inactive）。 */
+typedef result_t *(*force_clean_fn)(void *ctx, const injection_record_t *rec);
+static result_t *force_clean_overlap(const char *uid, void *ctx, const long long *ids, int on,
+                                     force_clean_fn clean_one) {
+    for (int k = 0; k < on; k++) {
+        const injection_record_t *rec = state_find_by_id(ids[k]);
+        if (!rec) continue;
+        result_t *rc = clean_one(ctx, rec);
+        if (rc && rc->code != 0) {
+            char m[320]; const char *detail = "";
+            cJSON *root = cJSON_Parse(rc->json);
+            if (root) {
+                cJSON *e = cJSON_GetObjectItem(root, "error");
+                cJSON *mj = e ? cJSON_GetObjectItem(e, "message") : NULL;
+                if (mj && cJSON_IsString(mj)) detail = mj->valuestring;
+            }
+            snprintf(m, sizeof m, "--force: clean of record %lld failed: %s", ids[k], detail);
+            cJSON_Delete(root);
+            result_free(rc);
+            return result_err("inject", uid, 1, m);
+        }
+        result_free(rc);
+        state_mark_inactive(ids[k]);
+    }
+    return NULL;
+}
+
+static result_t *cnf_clean_ctx(void *ctx, const injection_record_t *rec) {
+    return clean_one_record((const fault_def_t *)ctx, rec->record_id);
 }
 
 /* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */
@@ -350,47 +427,10 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (strcmp(op, "inject") == 0) {
             long long ids[DCAT_MAX_RECORDS];
             int on = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);
-            if (on > 0 && !force) {
-                char msg[512];
-                int off = 0;
-                int w = snprintf(msg, sizeof msg, "resource already injected");
-                if (w < 0) off = (int)sizeof msg; else off = w;
-                int shown = on < 3 ? on : 3;
-                for (int k = 0; k < shown && off < (int)sizeof msg; k++) {
-                    const injection_record_t *rec = state_find_by_id(ids[k]);
-                    char pstr[256]; pstr[0] = '\0';
-                    if (rec) fmt_record_params(rec, pstr, sizeof pstr);
-                    const char *sep = (k == 0) ? " (" : "; ";
-                    w = snprintf(msg + off, sizeof msg - (size_t)off,
-                                 "%srecord id %lld: %s", sep, ids[k], pstr);
-                    if (w < 0) { off = (int)sizeof msg; break; }
-                    off += w;
-                }
-                if (on > 3 && off < (int)sizeof msg) {
-                    w = snprintf(msg + off, sizeof msg - (size_t)off, "; +%d more", on - 3);
-                    if (w < 0) off = (int)sizeof msg; else off += w;
-                }
-                if (off < (int)sizeof msg)
-                    snprintf(msg + off, sizeof msg - (size_t)off, "); use --force to replace");
-                return result_err("inject", f->uid, DCAT_REINJECT_CONFLICT, msg);
-            }
+            if (on > 0 && !force) return reinject_conflict_err(f->uid, ids, on);
             if (on > 0 && force) {
-                for (int k = 0; k < on; k++) {
-                    result_t *rc = clean_one_record(f, ids[k]);
-                    if (rc) {
-                        char m[320]; const char *detail = "";
-                        cJSON *root = cJSON_Parse(rc->json);
-                        if (root) {
-                            cJSON *e = cJSON_GetObjectItem(root, "error");
-                            cJSON *mj = e ? cJSON_GetObjectItem(e, "message") : NULL;
-                            if (mj && cJSON_IsString(mj)) detail = mj->valuestring;
-                        }
-                        snprintf(m, sizeof m, "--force: clean of record %lld failed: %s", ids[k], detail);
-                        cJSON_Delete(root);
-                        result_free(rc);
-                        return result_err("inject", f->uid, 1, m);
-                    }
-                }
+                result_t *fc = force_clean_overlap(f->uid, (void *)f, ids, on, cnf_clean_ctx);
+                if (fc) return fc;
             }
             return cnf_inject(f, params);
         }

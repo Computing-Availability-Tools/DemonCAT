@@ -219,7 +219,7 @@ int test_dispatch_clean_all_skips_reconcile_on_failure(void) {
     ASSERT_INT_EQ(state_list_active(), 2);
     result_t *r = dispatch_clean_all();
     ASSERT_TRUE(r != NULL);
-    ASSERT_INT_EQ(r->code, 0);                           /* --all 整体仍 ok（其它 uid 成功） */
+    ASSERT_INT_EQ(r->code, 1);                           /* --all 有失败 → code=1（非 0） */
     /* rCPU_overload clean 失败 → 记录保持 active；rNET_delay 成功 → 已 inactive */
     params_t q; params_init(&q);
     long long ids[DCAT_MAX_RECORDS];

@@ -59,7 +59,7 @@ case "${DCAT_OP:-inject}" in
             [ -n "$iface" ] || continue
             out=$(tc qdisc show dev "$iface" 2>/dev/null)
             match=$(echo "$out" | grep -E "netem.*loss")
-            [ -n "$match" ] && { echo "$match"; found=1; }
+            [ -n "$match" ] && { echo "[$iface] $match"; found=1; }
         done
         [ "$found" = 1 ] && exit 0 || exit 1
         ;;

@@ -53,14 +53,18 @@ def sh(cmd, env=None, timeout=60):
         return 1, f"[exception {e}]"
 
 
-def run_step_cmd(cmd, env, timeout=120, priv_user=None):
+def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
     """dcat 命令用 argv 列表执行（不带 shell），使注入载荷原样进入 dcat cli_parse
     （否则 shell=True 会把 ';touch ...' 当命令分隔符，框架自身执行载荷=假阳性）。
     但 CONC 测试用 & wait 做并发，必须 shell=True。
     辅助 shell 命令(rm/echo/pkill/for/$VAR) 仍用 shell=True。
-    priv_user: 非 None 时用 runuser 降权到该用户执行（P 类验证非 root 拒绝）。"""
+    priv_user: 非 None 时用 runuser 降权到该用户执行（P 类验证非 root 拒绝）。
+    dcat_bin: --dcat 指定的实际二进制；与 cases.csv 默认 ./build/dcat 不一致时替换。"""
     cs = cmd.strip()
-    dcat_rel = "./build/dcat"
+    default_rel = "./build/dcat"
+    if dcat_bin != default_rel:
+        cs = cs.replace(default_rel, dcat_bin)
+    dcat_rel = dcat_bin
     # CONC 测试含 & wait、SEC-S1 clean 含 ; rm 需要 shell；
     # SEC-I 注入含 ;touch（无空格）必须用 argv 防止载荷执行
     needs_shell = ('&' in cs and 'wait' in cs) or ('; ' in cs)
@@ -232,6 +236,11 @@ def apply_assert(vassert, verify_out, cmd_rc, cmd_json):
         path = vassert.split(":", 1)[1]
         ex = os.path.exists(path)
         return (not ex, f"notexists {path}: {not ex}")
+    if not (verify_out or "").strip() and vassert != "empty" \
+            and not vassert.startswith(("state_", "exitcode:", "exists:", "notexists:", "out_contains:")):
+        # 空输出 = 无证据：负向断言(notcontains/ne/!= 等)不得真空 PASS。
+        # 例外：显式 empty 断言；state_*/exitcode:/exists:/notexists:/out_contains: 不依赖 verify_out。
+        return (False, f"empty verify output (assert {vassert})")
     # 数值/字符串算子作用于 verify_out
     val = (verify_out or "").strip().splitlines()[-1] if (verify_out or "").strip() else ""
     if vassert.startswith(">="):
@@ -392,7 +401,7 @@ def main():
                 results.append(res)
                 continue
             priv = "nobody" if (is_priv and s["phase"] == "inject") else None
-            rc, out = run_step_cmd(cmd, env=env, timeout=120, priv_user=priv)
+            rc, out = run_step_cmd(cmd, env=env, dcat_bin=args.dcat, timeout=120, priv_user=priv)
             dt = int((time.time() - t0) * 1000)
             res["actual_exit_code"] = rc
             res["actual_json"] = out.strip()[:300]
@@ -445,11 +454,11 @@ def main():
 
     # ---- report.md ----
     rep = os.path.join(args.out_dir, "report.md")
-    _write_report(rep, results, counters, cat_stats, findings, ts, ipt)
+    _write_report(rep, results, counters, cat_stats, findings, ts, ipt, args.dcat)
     print("[phase] report.md written", flush=True)
     # ---- append test_report.md §10 ----
     if not args.no_append:
-        _append_test_report(args.report, results, counters, cat_stats, findings, ts, ipt)
+        _append_test_report(args.report, results, counters, cat_stats, findings, ts, ipt, args.dcat)
         print("[phase] test_report.md appended", flush=True)
 
     total = sum(counters.values())
@@ -504,9 +513,9 @@ def _eval_step(s, rc, out, ctx, env):
     return ok, detail
 
 
-def _write_report(path, results, counters, cat_stats, findings, ts, ipt):
+def _write_report(path, results, counters, cat_stats, findings, ts, ipt, dcat_bin):
     lines = []
-    lines.append(f"# DemonCAT E2E 测试报告\n\n生成时间: {ts}  |  root: {ipt}  |  dcat: {DCAT}\n")
+    lines.append(f"# DemonCAT E2E 测试报告\n\n生成时间: {ts}  |  root: {ipt}  |  dcat: {dcat_bin}\n")
     lines.append(f"## 汇总\n\n| 指标 | 值 |\n|---|---|")
     lines.append(f"| 流程(flow)总数 | {sum(counters.values())} |")
     lines.append(f"| PASS(流程) | {counters['PASS']} |")
@@ -543,7 +552,7 @@ def _write_report(path, results, counters, cat_stats, findings, ts, ipt):
     open(path, "w", encoding="utf-8").write("\n".join(lines))
 
 
-def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt):
+def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt, dcat_bin):
     total = sum(counters.values())
     rate = counters["PASS"] * 100 // max(1, total)
     sec = []

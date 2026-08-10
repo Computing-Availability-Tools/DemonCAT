@@ -738,7 +738,7 @@ CAT/
 
 - `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），`_POSIX_C_SOURCE=200809L` 编译定义（确保 strict C11 可移植），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
 - 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
-- WSL 验证：`cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure`。`WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
+- WSL 验证：`mkdir -p build && cd build && cmake .. && make -j8 && ctest --output-on-failure`。`WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
 
 ---
 

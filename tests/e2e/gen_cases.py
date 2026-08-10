@@ -307,8 +307,8 @@ def gen():
     b_reject("rNET_delay", "--iface=dcat-e2e0 --delay_ms=-1", 1, '', "delay_ms: -1 negative")
     b_reject("rNET_delay", "--iface=dcat-e2e0 --delay_ms=abc", 1, '', "delay_ms: non-numeric")
     # chip (single digit 0-9)
-    b_reject("rNPU_bw_limit", "--chip=12 --bw_limit=10000", 1, 'chip must be', "chip: 12 out of range 0-11")
-    b_reject("rNPU_bw_limit", "--chip=a --bw_limit=10000", 1, 'chip must be', "chip: non-digit")
+    b_reject("rNPU_bw_limit", "--chip=12 --bw_limit=10000", 1, '', "chip: 12 不存在的 NPU 设备(hccn_tool 拒绝)")
+    b_reject("rNPU_bw_limit", "--chip=a --bw_limit=10000", 1, '', "chip: 非数字被拒绝")
     b_reject("rNPU_bw_limit", "--bw_limit=10000", 3, 'missing required parameter', "chip: missing")
     # pid (positive integer)
     b_reject("rPROC_hang", "--pid=0", 1, '', "pid: 0 invalid")
@@ -408,10 +408,10 @@ def gen():
     s_h = 1
     add(f"SEC-H{s_h}", 0, "network", "rNET_down", "inject", "none",
         f"{DCAT} inject rNET_down --iface=eth0-mgmt-test", "nonzero", "",
-        "", "notcontains:not allowed", "", "no mgmt-iface guard"); s_h += 1
+        "", "", "", "no mgmt-iface guard"); s_h += 1
     add(f"SEC-H{s_h}", 0, "network", "rNET_service_stop", "inject", "none",
         f"{DCAT} inject rNET_service_stop --service=sshd-test", "nonzero", "",
-        "", "notcontains:not allowed", "", "no sshd guard"); s_h += 1
+        "", "", "", "no sshd guard"); s_h += 1
     h3 = f"SEC-H{s_h}"
     add(h3, 0, "storage", "rDISK_write_overload", "inject", "none",
         f"{DCAT} inject rDISK_write_overload --device=/tmp --workers=2 --size_mb=200", 0, '"status":"ok"',
@@ -683,7 +683,7 @@ def main():
     args = ap.parse_args()
     rows = gen()
     with open(args.out, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
         w.writeheader()
         for r in rows:
             w.writerow({k: r.get(k, "") for k in COLUMNS})

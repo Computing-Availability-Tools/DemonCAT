@@ -40,6 +40,7 @@ static const char *status_text(int code) {
         case 403: return "Forbidden";
         case 404: return "Not Found";
         case 405: return "Method Not Allowed";
+        case 413: return "Payload Too Large";
         case 500: return "Internal Server Error";
         default: return "OK";
     }
@@ -54,7 +55,18 @@ static resp_t resp_json(int code, char *body /* takes ownership */) {
 }
 
 static resp_t resp_from_result(result_t *res) {
-    char *s = output_to_json(res);
+    char *s = NULL;
+    if (res && res->raw) {
+        /* raw 结果(如 clean --all 的人类可读文本)不是合法 JSON；
+         * 包成 {"status":"ok","data":"..."} 保证 /api/ 各端点恒返回合法 JSON。 */
+        cJSON *root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "status", res->code == 0 ? "ok" : "error");
+        cJSON_AddStringToObject(root, "data", res->json ? res->json : "");
+        s = cJSON_PrintUnformatted(root);
+        cJSON_Delete(root);
+    } else {
+        s = output_to_json(res);
+    }
     result_free(res);
     if (!s) s = strdup("{\"status\":\"error\",\"error\":{\"code\":1,\"message\":\"no output\"}}");
     return resp_json(200, s);
@@ -171,7 +183,9 @@ static void serve_static(int fd, const char *webroot, const char *raw_path) {
     /* Verify resolved path is under webroot */
     char real_full[1536], real_webroot[1536];
     if (realpath(full, real_full) && realpath(webroot, real_webroot)) {
-        if (strncmp(real_full, real_webroot, strlen(real_webroot)) != 0) {
+        size_t wlen = strlen(real_webroot);
+        if (strncmp(real_full, real_webroot, wlen) != 0 ||
+            (real_full[wlen] != '/' && real_full[wlen] != '\0')) {
             send_response(fd, 403, "text/plain", "forbidden", 9); return;
         }
     }
@@ -373,7 +387,11 @@ static void handle_conn(int fd, const char *webroot) {
     long clen = find_content_length(buf);
     if (clen >= 0 && hdr_end) {
         size_t boff = (size_t)(hdr_end - buf) + 4;
-        if (boff + (size_t)clen < READ_BUF_CAP) buf[boff + (size_t)clen] = '\0';
+        if (boff + (size_t)clen >= READ_BUF_CAP) {
+            send_response(fd, 413, "text/plain", "payload too large", 17);
+            free(buf); return;
+        }
+        buf[boff + (size_t)clen] = '\0';
     }
     (void)total;
 

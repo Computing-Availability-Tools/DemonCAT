@@ -36,7 +36,8 @@ case "${DCAT_OP:-inject}" in
         PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
 
         if [ -f "$PIDFILE" ]; then
-            for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done
+            old_pids=$(sed -n '1p' "$PIDFILE" 2>/dev/null)
+            for pid in $old_pids; do kill "$pid" 2>/dev/null; done
             rm -f "$PIDFILE"
         fi
 
@@ -60,7 +61,7 @@ case "${DCAT_OP:-inject}" in
             pids="$pids $!"
             i=$((i + 1))
         done
-        echo "$pids" > "$PIDFILE"
+        { echo "$pids"; echo "$dev"; } > "$PIDFILE"
         echo "injected disk write overload: $workers workers on $dev (pids:$pids)"
         ;;
 
@@ -78,22 +79,27 @@ case "${DCAT_OP:-inject}" in
         cleaned=0
         for dev_clean in $dev_cleans; do
             [ -n "$dev_clean" ] || continue
-            dev=$(echo "$dev_clean" | tr '_' '/')
             PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
             if [ -f "$PIDFILE" ]; then
-                for pid in $(cat "$PIDFILE"); do
+                line1=$(sed -n '1p' "$PIDFILE" 2>/dev/null)
+                line2=$(sed -n '2p' "$PIDFILE" 2>/dev/null)
+                pids="$line1"
+                [ -n "$line2" ] && dev="$line2"
+                for pid in $pids; do
                     kill -TERM "$pid" 2>/dev/null
                 done
                 sleep 0.5
-                for pid in $(cat "$PIDFILE"); do
+                for pid in $pids; do
                     kill -9 "$pid" 2>/dev/null
                 done
                 rm -f "$PIDFILE"
                 sleep 0.3
-                pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.stress" 2>/dev/null
-                pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.write" 2>/dev/null
-                [ -d "$dev" ] && rm -f "${dev}/dcat.stress."* 2>/dev/null
-                rm -f "${dev}/dcat.write."* 2>/dev/null
+                if [ -n "$dev" ]; then
+                    pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.stress" 2>/dev/null
+                    pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.write" 2>/dev/null
+                    [ -d "$dev" ] && rm -f "${dev}/dcat.stress."* 2>/dev/null
+                    rm -f "${dev}/dcat.write."* 2>/dev/null
+                fi
                 cleaned=1
             fi
         done

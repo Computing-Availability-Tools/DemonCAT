@@ -60,12 +60,10 @@ case "${DCAT_OP:-inject}" in
             # 只匹配纯 delay netem (delay 在行尾), 排除 jitter/reorder
             match=$(echo "$out" | grep -E "netem.*delay [0-9.]+[a-z]*[[:space:]]*$")
             if [ -n "$match" ]; then
-                # 归一化: 去掉 qdisc 头/refcnt/limit 等 tc 内部噪音, 只留 "delay <值>"
-                val=$(echo "$match" | sed -n 's/.*delay \([0-9.]*[a-z]*\).*/\1/p')
-                echo "iface=$iface delay=${val}"
+                echo "[$iface] $match"
                 found=1
             else
-                echo "iface=$iface (no delay injection)"
+                echo "[$iface] (no delay injection)"
             fi
         done
         [ "$found" = 1 ] && exit 0 || exit 1

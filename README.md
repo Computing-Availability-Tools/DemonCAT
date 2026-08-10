@@ -40,26 +40,22 @@
 # 1. 一键安装依赖（Debian/Ubuntu/RHEL/CentOS 自动识别）
 bash scripts/install_deps.sh
 
-# 2. 编译（8核并行加速）
-cmake -B build && cmake --build build -j8
+# 2. 编译并创建全局入口（8核并行加速；需要 sudo）
+mkdir -p build && cd build && cmake .. && make -j8 && sudo make install && cd ..
 
-# 3. 运行测试 （cmake>=3.20可直接执行，其它版本需在build目录下执行）
-ctest --test-dir build --output-on-failure
+# 3.（可选）运行测试
+cd build && ctest --output-on-failure
 
-# 4. 全局可用（二选一）
-sudo ln -sf $(pwd)/build/dcat /usr/local/bin/dcat   # 之后直接用 dcat 命令
-# 或每次用 ./build/dcat 代替本文档中的 dcat
-
-# 5. 列出故障目录
+# 4. 列出故障目录
 dcat list
 
-# 6. 注入 CPU 过载（2 核）
+# 5. 注入 CPU 过载（2 核）
 dcat inject rCPU_overload --cores=0,1
 
-# 7. 查询故障是否生效
+# 6. 查询故障是否生效
 dcat query rCPU_overload --cores=0,1
 
-# 8. 清除故障
+# 7. 清除故障
 dcat clean rCPU_overload --cores=0,1
 
 # 查看帮助
@@ -68,7 +64,7 @@ dcat inject --help
 dcat inject rCPU_overload --help
 ```
 
-> **提示**：本文档所有命令均以 `dcat` 形式书写。若未执行上方 symlink，请将 `dcat` 替换为 `./build/dcat`。
+> **提示**：本文档所有命令均以 `dcat` 形式书写。若未执行上方安装（或无 sudo 权限），请将 `dcat` 替换为 `./build/dcat`。
 
 ## 命令格式
 
@@ -91,7 +87,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 `dcat serve` 在二进制内内置一个 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器：远程查看状态、构造命令、（可选）直接注入/清理。无外部 HTTP 依赖，手写 HTTP/1.1。
 
-### 启动
+### 启动与访问
 
 ```bash
 # 只读模式（默认）：浏览器查看 + 复制命令到 SSH 终端执行
@@ -107,21 +103,14 @@ setsid ./build/dcat serve --port 8080 --allow-write &
 pkill -f 'dcat serve'
 ```
 
-### 远程访问（SSH 隧道）
-
-serve 默认绑 `127.0.0.1`（明文，不对外暴露）。本机通过 SSH 端口转发访问：
-
-```bash
-ssh -L 8080:localhost:8080 user@server
-# 然后本机浏览器打开 http://localhost:8080
-```
+启动后浏览器打开 `http://192.168.1.100:8080`（把 `192.168.1.100` 换成你的服务器 IP；默认绑 `0.0.0.0`，可远程直接访问）。
 
 ### 选项
 
 | 选项 | 默认 | 说明 |
 |---|---|---|
 | `--port <n>` | 8080 | 监听端口 |
-| `--bind <addr>` | 127.0.0.1 | 绑定地址（明文，安全由 SSH 隧道兜底；不要绑 0.0.0.0） |
+| `--bind <addr>` | 0.0.0.0 | 绑定地址；改 `127.0.0.1` 仅本机可访问（配合 SSH 隧道做安全加固） |
 | `--webroot <dir>` | `<exe>/../src/web` | 静态前端根目录 |
 | `--allow-write` | 关 | 开 POST /api/inject\|clean（默认只读：GET 200，POST 403） |
 
@@ -142,8 +131,32 @@ ssh -L 8080:localhost:8080 user@server
 
 - **默认只读**：不开 `--allow-write` 时，POST /api/inject\|clean 返回 403，只能查看 + 复制命令到终端执行。
 - **`--allow-write` opt-in**：显式开启才允许浏览器注入/清理（前端注入前 `confirm()` 二次确认）。
-- **明文 + 本机绑定**：默认 `127.0.0.1`，不对外暴露；远程访问走 SSH 隧道（加密 + 认证由 SSH 兜底）。
-- 不要用 `--bind 0.0.0.0` 对公网暴露明文服务。
+- **默认绑 0.0.0.0**：方便远程直接访问。
+
+> **安全加固（可选）**：HTTP 是明文传输，无认证。如需加密 + 认证保护，用 `--bind 127.0.0.1` + SSH 隧道：
+>
+> **第 1 步 — 服务器上拉起 serve**（绑 127.0.0.1，只接受本机回环连接）：
+> ```bash
+> ./build/dcat serve --port 8080 --bind 127.0.0.1
+> ```
+>
+> **第 2 步 — 你的电脑上开 SSH 隧道**（把本地 8080 端口通过 SSH 转发到服务器 8080）：
+> ```bash
+> ssh -L 8080:localhost:8080 user@192.168.1.100
+> #         └─ 本地端口     └─ 服务器端口（要和 --port 一致）
+> # 本地端口可随意换，比如 -L 6060:localhost:5050 → 浏览器开 http://localhost:6060
+> # SSH 端口非 22 用 -p 指定，比如 ssh -L 8080:localhost:8080 -p 2125 user@192.168.1.100
+> # 把 user 和 192.168.1.100 换成你的 SSH 用户名和服务器 IP
+> ```
+> 输入 SSH 密码后保持终端窗口开着（窗口关了隧道就断）。
+>
+> **第 3 步 — 浏览器访问**：
+> ```
+> http://localhost:8080
+> ```
+> 此时你电脑 → localhost:8080 的流量，经 SSH 加密隧道转发到服务器 localhost:8080，全程加密且经过 SSH 账号认证。
+>
+> **原理**：`--bind 127.0.0.1` 让 serve 只接受服务器本机连接，外部网络无法直接访问；SSH 隧道在两者间建了一条加密管道，把你的请求安全地送到 serve。
 
 ### 前端仪表盘
 

@@ -1,6 +1,5 @@
 #!/bin/bash
-# scripts/install_deps.sh — 一键安装 DemonCAT 编译 + 运行时依赖
-# 支持 Debian/Ubuntu (apt) 和 RHEL/CentOS (yum/dnf)
+# scripts/install_deps.sh �?一键安�?DemonCAT 编译 + 运行时依�?# 支持 Debian/Ubuntu (apt) �?RHEL/CentOS (yum/dnf)
 # 用法: bash scripts/install_deps.sh
 set -e
 
@@ -8,7 +7,7 @@ echo "=========================================="
 echo "DemonCAT 依赖安装脚本"
 echo "=========================================="
 
-# ---- 检测包管理器 ----
+# ---- 检测包管理�?----
 PKG=""
 PKG_INVOKE=""
 if command -v apt-get >/dev/null 2>&1; then
@@ -21,20 +20,17 @@ elif command -v dnf >/dev/null 2>&1; then
     PKG="dnf"
     PKG_INVOKE="sudo dnf"
 else
-    echo "ERROR: 未识别的包管理器（支持 apt / yum / dnf）"
+    echo "ERROR: 未识别的包管理器（支�?apt / yum / dnf�?
     exit 1
 fi
 echo "检测到包管理器: $PKG"
 echo ""
 
-# ---- 修复 yum/dnf 的 Python 环境问题 ----
-# 场景：conda/miniconda/pyenv 可能把 /usr/bin/python3 指向了非系统 Python，
-# 导致 yum/dnf（依赖系统 Python 的 dnf 模块）报 ModuleNotFoundError: No module named 'dnf'
-# 这里自动检测并修复。
-if [ "$PKG" = "yum" ] || [ "$PKG" = "dnf" ]; then
+# ---- 修复 yum/dnf �?Python 环境问题 ----
+# 场景：conda/miniconda/pyenv 可能�?/usr/bin/python3 指向了非系统 Python�?# 导致 yum/dnf（依赖系�?Python �?dnf 模块）报 ModuleNotFoundError: No module named 'dnf'
+# 这里自动检测并修复�?if [ "$PKG" = "yum" ] || [ "$PKG" = "dnf" ]; then
     if ! $PKG_INVOKE --version >/dev/null 2>&1; then
-        # 扫描所有系统 Python 版本，找能导入 dnf 模块的那个
-        SYS_PYTHON=""
+        # 扫描所有系�?Python 版本，找能导�?dnf 模块的那�?        SYS_PYTHON=""
         for py in /usr/bin/python3.*; do
             [ -x "$py" ] && "$py" -c "import dnf" >/dev/null 2>&1 && SYS_PYTHON="$py" && break
         done
@@ -43,16 +39,16 @@ if [ "$PKG" = "yum" ] || [ "$PKG" = "dnf" ]; then
             PKG_INVOKE="sudo $SYS_PYTHON $DNF_BIN"
         else
             echo "-------------------------------------------------------------"
-            echo "错误: 包管理器 ($PKG) 无法正常运行。"
+            echo "错误: 包管理器 ($PKG) 无法正常运行�?
             echo "                                                            "
             echo "可能原因: /usr/bin/python3 被非系统 Python 占用（如 conda），"
-            echo "且未找到可替代的系统 Python。"
+            echo "且未找到可替代的系统 Python�?
             echo "                                                            "
             echo "手动修复:                                                     "
-            echo "  # 查看可用的系统 Python 版本                                "
+            echo "  # 查看可用的系�?Python 版本                                "
             echo "  ls /usr/bin/python3.*                                       "
             echo "                                                            "
-            echo "  # 找出有 dnf 模块的那个                                     "
+            echo "  # 找出�?dnf 模块的那�?                                    "
             echo "  for py in /usr/bin/python3.*; do                            "
             echo "    \$py -c 'import dnf' && echo \$py 可用                     "
             echo "  done                                                        "
@@ -81,12 +77,11 @@ if [ "$PKG" = "apt" ]; then
     sudo apt-get update -qq
     sudo apt-get install -y $BUILD_PKGS_APT
     echo ""
-    echo "[2/2] 安装运行时依赖..."
+    echo "[2/2] 安装运行时依�?.."
     sudo apt-get install -y $RUNTIME_PKGS_APT
 else
     # yum / dnf
-    # 幂等：已安装的包跳过，只安装缺失的（避免网络不可达时重复安装反复报错）
-    MISSING=""
+    # 幂等：已安装的包跳过，只安装缺失的（避免网络不可达时重复安装反复报错�?    MISSING=""
     for p in $BUILD_PKGS_YUM $RUNTIME_PKGS_YUM; do
         if ! rpm -q "$p" >/dev/null 2>&1; then
             MISSING="$MISSING $p"
@@ -100,7 +95,7 @@ else
     fi
 fi
 
-# ---- 检查 NPU 工具 ----
+# ---- 检�?NPU 工具 ----
 echo ""
 echo "=========================================="
 echo "依赖安装完成。检查工具可用性："
@@ -108,15 +103,15 @@ echo "=========================================="
 TOOLS="perl taskset dd tc ip ethtool iptables systemctl python3 hccn_tool"
 for t in $TOOLS; do
     if command -v "$t" >/dev/null 2>&1; then
-        echo "  $t: ✅"
+        echo "  $t: �?
     else
-        echo "  $t: ❌ (NPU 故障需要 Atlas 硬件驱动，其他模块不受影响)"
+        echo "  $t: �?(NPU 故障需�?Atlas 硬件驱动，其他模块不受影�?"
     fi
 done
 
 echo ""
 echo "下一步："
 echo "  mkdir -p build && cd build && cmake .. && make -j8"
-echo "  ctest --output-on-failure   # 在 build 目录下执行"
-echo "  sudo make install   # 在 build 目录下执行，创建 /usr/local/bin/dcat 全局入口"
-echo "  dcat --help   # 或 ./build/dcat --help"
+echo "  ctest --output-on-failure   # �?build 目录下执�?
+echo "  sudo make install   # �?build 目录下执行，创建 /usr/local/bin/dcat 全局入口"
+echo "  dcat --help   # �?./build/dcat --help"

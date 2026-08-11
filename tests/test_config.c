@@ -16,7 +16,7 @@ int test_load_faults(void) {
     ASSERT_STR_CONTAINS(f->inject_required, "iface");
     ASSERT_STR_CONTAINS(f->inject_required, "delay_ms");
     ASSERT_STR_CONTAINS(f->clean_required, "iface");
-    ASSERT_STR_CONTAINS(f->query_optional, "iface");   /* query 不再强制必填，原 query_required 已并入 query_optional */
+    ASSERT_STR_CONTAINS(f->query_optional, "iface");   /* query 不再强制必填，原 query_required 已并�?query_optional */
     /* inject-only: clean/query fields empty */
     const fault_def_t *p = config_find(&cfg, "rPROC_exit");
     ASSERT_TRUE(p != NULL);
@@ -37,7 +37,7 @@ int test_resolve_script(void) {
     resolve_script("/opt/dcat", "~/x.sh", dst, sizeof(dst));
     ASSERT_STREQ(dst, "~/x.sh");                 /* home 相对不变 */
     resolve_script(".", "scripts/x.sh", dst, sizeof(dst));
-    ASSERT_STREQ(dst, "scripts/x.sh");           /* root='.' 走 CWD */
+    ASSERT_STREQ(dst, "scripts/x.sh");           /* root='.' �?CWD */
     return 0;
 }
 
@@ -46,7 +46,7 @@ int test_derive_project_root(void) {
     derive_project_root("/opt/dcat/config/demoncat.conf", root, sizeof(root));
     ASSERT_STREQ(root, "/opt/dcat");
     derive_project_root("config/demoncat.conf", root, sizeof(root));
-    ASSERT_STREQ(root, ".");                      /* 相对配置 → root='.' */
+    ASSERT_STREQ(root, ".");                      /* 相对配置 �?root='.' */
     return 0;
 }
 

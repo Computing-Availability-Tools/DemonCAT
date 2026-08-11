@@ -47,11 +47,11 @@ char *output_to_json(result_t *r) {
         cJSON_Delete(root);
         if (s) return s;
     }
-    /* fallback: 返回原始 json 副本(可能非合法 JSON,但保证非空) */
+    /* fallback: 返回原始 json 副本(可能非合�?JSON,但保证非�? */
     return strdup(r->json);
 }
 
-/* raw 结果：payload 已是最终文本，不附加 timestamp、不改写。 */
+/* raw 结果：payload 已是最终文本，不附�?timestamp、不改写�?*/
 result_t *result_raw(const char *text, int code) {
     result_t *r = malloc(sizeof(result_t));
     r->code = code; r->json = text ? strdup(text) : NULL; r->raw = 1;

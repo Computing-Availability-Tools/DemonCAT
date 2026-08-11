@@ -23,7 +23,7 @@ static int has_param_after(int argc, char **argv, int from) {
     return 0;
 }
 
-/* 严格解析端口:1-65535 整数,否则 -1 并写入 g_cli_error */
+/* 严格解析端口:1-65535 整数,否则 -1 并写�?g_cli_error */
 static int parse_port_arg(const char *s, int *out) {
     if (!s || !*s) {
         snprintf(g_cli_error, sizeof g_cli_error, "--port requires a numeric value 1-65535, got: '%s'", s ? s : "");
@@ -62,7 +62,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
     out->op = is_subcommand(argv[1]) ? argv[1] : NULL;
     int i = out->op ? 2 : 1;
 
-    /* uid：紧跟子命令、非 flag、非保留字 */
+    /* uid：紧跟子命令、非 flag、非保留�?*/
     if (out->op && i < argc && argv[i][0] != '-' && argv[i][0] != '\0' &&
         strcmp(argv[i], "values") != 0 && strcmp(argv[i], "where") != 0) {
         strncpy(out->uid, argv[i], sizeof(out->uid) - 1);
@@ -115,8 +115,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             out->plugins = argv[i] + 10;
             continue;
         }
-        /* serve 专用选项:仅 serve 子命令解析(--port/--bind/--webroot/--allow-write)。
-         * 避免 --port 全局吞掉 rNET_port_occupy/rNET_tcp_loss 的 port 参数(撞名致 exit 3)。 */
+        /* serve 专用选项:�?serve 子命令解�?--port/--bind/--webroot/--allow-write)�?         * 避免 --port 全局吞掉 rNET_port_occupy/rNET_tcp_loss �?port 参数(撞名�?exit 3)�?*/
         if (out->op && strcmp(out->op, "serve") == 0) {
             if (strcmp(argv[i], "--allow-write") == 0) {
                 out->allow_write = 1;
@@ -186,7 +185,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
             continue;
         }
         if (strncmp(argv[i], "--", 2) != 0) {
-            /* 无子命令时, 第一个裸词视作子命令拼写错误 (如 "injec") */
+            /* 无子命令�? 第一个裸词视作子命令拼写错误 (�?"injec") */
             if (!out->op) {
                 if (has_param_after(argc, argv, i + 1)) {
                     snprintf(g_cli_error, sizeof g_cli_error,
@@ -198,7 +197,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 }
                 return -1;
             }
-            /* 形如 key=value 但漏了 '--' 前缀 */
+            /* 形如 key=value 但漏�?'--' 前缀 */
             const char *eq2 = strchr(argv[i], '=');
             if (eq2 && argv[i][0] != '-') {
                 char k[64];

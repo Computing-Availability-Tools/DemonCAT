@@ -163,7 +163,7 @@ int test_parse_force_on_clean_parsed(void) {
     int rc = cli_parse(5, (char**)argv, &pc);
     ASSERT_INT_EQ(rc, 0);
     ASSERT_STREQ(pc.op, "clean");
-    ASSERT_INT_EQ(pc.force, 1);   /* 解析成功; dispatch 层忽略, 但 parse 不报错 */
+    ASSERT_INT_EQ(pc.force, 1);   /* 解析成功; dispatch 层忽�? �?parse 不报�?*/
     return 0;
 }
 

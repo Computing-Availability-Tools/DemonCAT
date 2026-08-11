@@ -1,4 +1,4 @@
-/* tests/test_reinject.c — TDD: 默认拒绝 + --force 原子替换 */
+/* tests/test_reinject.c �?TDD: 默认拒绝 + --force 原子替换 */
 #include "test.h"
 #include "reinject.h"
 #include "dispatch.h"
@@ -51,11 +51,11 @@ int test_cores_parse_invalid(void) {
     ASSERT_INT_EQ(cores_parse("0-2000", b), -1);        /* 越界 (≥DCAT_MAX_CORES) */
     ASSERT_INT_EQ(cores_parse("3-1", b), -1);           /* lo>hi */
     ASSERT_INT_EQ(cores_parse("0,1,", b), -1);          /* 尾随逗号 */
-    ASSERT_INT_EQ(cores_parse("12345", b), -1);         /* 5 位 token → atoi 溢出防护 */
+    ASSERT_INT_EQ(cores_parse("12345", b), -1);         /* 5 �?token �?atoi 溢出防护 */
     return 0;
 }
 
-/* 大范围核集(如 640 核主机)可解析, 且与低位核正确判重叠。 */
+/* 大范围核�?�?640 核主�?可解�? 且与低位核正确判重叠�?*/
 int test_cores_parse_large_range_overlap(void) {
     unsigned char b[DCAT_CORES_BYTES];
     ASSERT_INT_EQ(cores_parse("0-155", b), 0);
@@ -63,12 +63,12 @@ int test_cores_parse_large_range_overlap(void) {
 
     unsigned char single[DCAT_CORES_BYTES];
     ASSERT_INT_EQ(cores_parse("0", single), 0);
-    ASSERT_TRUE(cores_intersect(b, single));            /* {0..155} ∩ {0} = {0} */
+    ASSERT_TRUE(cores_intersect(b, single));            /* {0..155} �?{0} = {0} */
 
     unsigned char hi[DCAT_CORES_BYTES];
     ASSERT_INT_EQ(cores_parse("300-400", hi), 0);
     ASSERT_TRUE(bitset(hi, 300) && bitset(hi, 400));
-    ASSERT_TRUE(!cores_intersect(b, hi));               /* {0..155} ∩ {300..400} = ∅ */
+    ASSERT_TRUE(!cores_intersect(b, hi));               /* {0..155} �?{300..400} = �?*/
     return 0;
 }
 
@@ -80,14 +80,14 @@ int test_cores_intersect_overlap_disjoint(void) {
     ASSERT_TRUE(cores_intersect(a, c));                /* 交集={0} */
 
     memset(c, 0, sizeof c); cores_parse("2,3", c);
-    ASSERT_TRUE(!cores_intersect(a, c));                /* 交集=∅ */
+    ASSERT_TRUE(!cores_intersect(a, c));                /* 交集=�?*/
 
     memset(c, 0, sizeof c); cores_parse("0-8", c);
     ASSERT_TRUE(cores_intersect(a, c));                 /* {0,1}∩{0..8} */
     return 0;
 }
 
-/* ---- reinject reject: CPU 同规格 ---- */
+/* ---- reinject reject: CPU 同规�?---- */
 int test_reinject_reject_exact_same_cpu(void) {
     setup();
     params_t p; params_init(&p); params_set(&p, "cores", "0,1");
@@ -141,14 +141,14 @@ int test_reinject_force_replaces_cpu(void) {
     result_t *r = dispatch_route_force("rCPU_overload", "inject", &p2, 1);
     ASSERT_TRUE(r && r->code == 0); result_free(r);
 
-    ASSERT_INT_EQ(state_list_active(), 1);              /* 旧 0,1 被清, 仅 0-8 */
+    ASSERT_INT_EQ(state_list_active(), 1);              /* �?0,1 被清, �?0-8 */
     long long ids[DCAT_MAX_RECORDS];
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p1, ids, DCAT_MAX_RECORDS), 0);
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p2, ids, DCAT_MAX_RECORDS), 1);
     return 0;
 }
 
-/* ---- 网络标量: 同 iface reject, 不同 iface OK ---- */
+/* ---- 网络标量: �?iface reject, 不同 iface OK ---- */
 int test_reinject_network_scalar_reject(void) {
     setup();
     params_t p1; params_init(&p1);
@@ -158,7 +158,7 @@ int test_reinject_network_scalar_reject(void) {
     params_t p2; params_init(&p2);
     params_set(&p2, "iface", "eth0"); params_set(&p2, "delay_ms", "200");
     result_t *r2 = dispatch_route_force("rNET_delay", "inject", &p2, 0);
-    ASSERT_INT_EQ(r2->code, 5);                          /* 同 iface → 重叠 */
+    ASSERT_INT_EQ(r2->code, 5);                          /* �?iface �?重叠 */
     ASSERT_STR_CONTAINS(r2->json, "iface=eth0");         /* 前次注入参数 */
     result_free(r2);
 
@@ -188,7 +188,7 @@ int test_reinject_network_force_replace(void) {
     return 0;
 }
 
-/* ---- 多参资源键 AND (rNPU_arp_poison: chip,dev,ip) ---- */
+/* ---- 多参资源�?AND (rNPU_arp_poison: chip,dev,ip) ---- */
 int test_reinject_multiparam_and_logic(void) {
     setup();
     params_t a; params_init(&a);
@@ -196,12 +196,12 @@ int test_reinject_multiparam_and_logic(void) {
     params_set(&a, "ip", "1.1.1.1"); params_set(&a, "mac", "de:ad:01");
     ASSERT_TRUE(dispatch_route_force("rNPU_arp_poison", "inject", &a, 0)->code == 0);
 
-    params_t b; params_init(&b);                        /* 不同 ip → 不同资源 */
+    params_t b; params_init(&b);                        /* 不同 ip �?不同资源 */
     params_set(&b, "chip", "0"); params_set(&b, "dev", "eth0");
     params_set(&b, "ip", "2.2.2.2"); params_set(&b, "mac", "de:ad:02");
     ASSERT_TRUE(dispatch_route_force("rNPU_arp_poison", "inject", &b, 0)->code == 0);
 
-    params_t c; params_init(&c);                        /* 同 chip,dev,ip → 重叠 */
+    params_t c; params_init(&c);                        /* �?chip,dev,ip �?重叠 */
     params_set(&c, "chip", "0"); params_set(&c, "dev", "eth0");
     params_set(&c, "ip", "1.1.1.1"); params_set(&c, "mac", "de:ad:03");
     result_t *rc = dispatch_route_force("rNPU_arp_poison", "inject", &c, 0);
@@ -215,19 +215,19 @@ int test_reinject_multiparam_and_logic(void) {
     return 0;
 }
 
-/* ---- inject-only 免检 (rPROC_exit: 不写 state → 0 overlap) ---- */
+/* ---- inject-only 免检 (rPROC_exit: 不写 state �?0 overlap) ---- */
 int test_reinject_inject_only_exempt(void) {
     setup();
     params_t p; params_init(&p); params_set(&p, "pid", "12345");
     result_t *r1 = dispatch_route_force("rPROC_exit", "inject", &p, 0);
     ASSERT_TRUE(r1 && r1->code == 0); result_free(r1);
-    result_t *r2 = dispatch_route_force("rPROC_exit", "inject", &p, 0);  /* 不 reject */
+    result_t *r2 = dispatch_route_force("rPROC_exit", "inject", &p, 0);  /* �?reject */
     ASSERT_TRUE(r2 && r2->code == 0); result_free(r2);
     ASSERT_INT_EQ(state_list_active(), 0);               /* inject-only 不写 state */
     return 0;
 }
 
-/* ---- dispatch_route wrapper 后向兼容: 默认 force=0 → reject ---- */
+/* ---- dispatch_route wrapper 后向兼容: 默认 force=0 �?reject ---- */
 int test_dispatch_route_wrapper_default_reject(void) {
     setup();
     params_t p; params_init(&p); params_set(&p, "cores", "0,1");
@@ -252,7 +252,7 @@ static result_t *mock_fail_2nd_clean(const char *cmd, const char *const *env) {
     return result_ok("inject", "x", 0, "ok");
 }
 
-/* --force 清理多条重叠记录时中途 clean 失败: 已清的保持已清、中止注入、消息带 record id + 底层错误 */
+/* --force 清理多条重叠记录时中�?clean 失败: 已清的保持已清、中止注入、消息带 record id + 底层错误 */
 int test_reinject_force_partial_clean_failure(void) {
     config_load("config/demoncat.conf", &g_cfg);
     registry_init(&g_cfg);
@@ -275,8 +275,8 @@ int test_reinject_force_partial_clean_failure(void) {
 
     long long ids[DCAT_MAX_RECORDS];
     ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p1, ids, DCAT_MAX_RECORDS), 0); /* rec1 已清 */
-    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p2, ids, DCAT_MAX_RECORDS), 1); /* rec2 仍活动 */
-    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p3, ids, DCAT_MAX_RECORDS), 0); /* 未注入 */
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p2, ids, DCAT_MAX_RECORDS), 1); /* rec2 仍活�?*/
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p3, ids, DCAT_MAX_RECORDS), 0); /* 未注�?*/
     return 0;
 }
 

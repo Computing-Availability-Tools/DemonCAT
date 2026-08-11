@@ -1,9 +1,8 @@
 #define _GNU_SOURCE  /* realpath */
-/* serve.c — dcat HTTP 控制平面(长驻模式)
+/* serve.c �?dcat HTTP 控制平面(长驻模式)
  *
- * 单端口双职:静态前端 + /api 端点(包装 dispatch_route 与 state)。
- * MVP:单线程串行 accept,手写 HTTP/1.1(GET/POST + Content-Length),
- * 明文 + 默认监听 0.0.0.0(可远程访问;如需限制用 --bind 127.0.0.1)。 */
+ * 单端口双�?静态前�?+ /api 端点(包装 dispatch_route �?state)�? * MVP:单线程串�?accept,手写 HTTP/1.1(GET/POST + Content-Length),
+ * 明文 + 默认监听 0.0.0.0(可远程访�?如需限制�?--bind 127.0.0.1)�?*/
 #include "serve.h"
 #include "dispatch.h"
 #include "registry.h"
@@ -27,7 +26,7 @@
 #define READ_BUF_CAP  (256 * 1024)
 
 static volatile sig_atomic_t g_stop = 0;
-static int g_allow_write = 0;   /* --allow-write: 默认只读,不暴露 POST /api/inject|clean */
+static int g_allow_write = 0;   /* --allow-write: 默认只读,不暴�?POST /api/inject|clean */
 static void on_signal(int sig) { (void)sig; g_stop = 1; }
 
 /* ---------- 响应 ---------- */
@@ -57,8 +56,7 @@ static resp_t resp_json(int code, char *body /* takes ownership */) {
 static resp_t resp_from_result(result_t *res) {
     char *s = NULL;
     if (res && res->raw) {
-        /* raw 结果(如 clean --all 的人类可读文本)不是合法 JSON；
-         * 包成 {"status":"ok","data":"..."} 保证 /api/ 各端点恒返回合法 JSON。 */
+        /* raw 结果(�?clean --all 的人类可读文�?不是合法 JSON�?         * 包成 {"status":"ok","data":"..."} 保证 /api/ 各端点恒返回合法 JSON�?*/
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "status", res->code == 0 ? "ok" : "error");
         cJSON_AddStringToObject(root, "data", res->json ? res->json : "");
@@ -101,7 +99,7 @@ static long find_content_length(const char *buf) {
     return -1;
 }
 
-/* 读完整 HTTP 请求(headers + body)。成功 0,total 写入 *out_total。 */
+/* 读完�?HTTP 请求(headers + body)。成�?0,total 写入 *out_total�?*/
 static int read_request(int fd, char *buf, size_t cap, size_t *out_total) {
     size_t total = 0;
     char *hdr_end = NULL;
@@ -152,7 +150,7 @@ static void send_response(int fd, int code, const char *ct, const char *body, si
     }
 }
 
-/* ---------- 静态文件 ---------- */
+/* ---------- 静态文�?---------- */
 static const char *content_type_for(const char *path) {
     const char *dot = strrchr(path, '.');
     if (!dot) return "application/octet-stream";
@@ -233,7 +231,7 @@ static void append_active_record(const injection_record_t *r, void *ctx) {
 }
 
 static resp_t api_state(void) {
-    state_load();  /* 从磁盘重新加载,反映命令行进程的 inject/clean 修改 */
+    state_load();  /* 从磁盘重新加�?反映命令行进程的 inject/clean 修改 */
     cJSON *arr = cJSON_CreateArray();
     state_for_each_active(append_active_record, arr);
     cJSON *root = cJSON_CreateObject();
@@ -270,7 +268,7 @@ static int cmp_record_desc(const void *a, const void *b) {
     return 0;
 }
 static resp_t api_history(void) {
-    state_load();  /* 从磁盘重新加载,反映命令行进程的修改 */
+    state_load();  /* 从磁盘重新加�?反映命令行进程的修改 */
     struct hist_ctx c; c.n = 0;
     state_for_each_all(collect_record, &c);
     qsort(c.arr, (size_t)c.n, sizeof(injection_record_t), cmp_record_desc);
@@ -312,7 +310,7 @@ static resp_t api_inject(const char *body) {
     result_t *r = dispatch_route_force(uid_j->valuestring, "inject", &params, force);
     cJSON_Delete(root);
     resp_t resp = resp_from_result(r);
-    state_save();   /* 持久化,崩溃恢复 */
+    state_save();   /* 持久�?崩溃恢复 */
     return resp;
 }
 
@@ -326,7 +324,7 @@ static resp_t api_clean(const char *body) {
     cJSON *uid_j = cJSON_GetObjectItem(root, "uid");
     result_t *r;
     if (!uid_j || !cJSON_IsString(uid_j) || !uid_j->valuestring[0])
-        r = dispatch_clean_all();   /* 无 uid = clean --all */
+        r = dispatch_clean_all();   /* �?uid = clean --all */
     else
         r = dispatch_route(uid_j->valuestring, "clean", &params);
     cJSON_Delete(root);
@@ -349,22 +347,22 @@ static resp_t handle_api(const char *method, const char *path, const char *body)
         if (strcmp(path, "/api/catalog") == 0) return api_catalog();
         if (strcmp(path, "/api/state")   == 0) return api_state();
         if (strcmp(path, "/api/history") == 0) return api_history();
-        /* inject/clean 是 POST-only → 落到 405 */
+        /* inject/clean �?POST-only �?落到 405 */
     } else if (strcmp(method, "POST") == 0) {
         if (strcmp(path, "/api/inject") == 0) {
-            if (!g_allow_write) return resp_err(403, "write disabled — restart with --allow-write to enable inject/clean");
+            if (!g_allow_write) return resp_err(403, "write disabled �?restart with --allow-write to enable inject/clean");
             return api_inject(body);
         }
         if (strcmp(path, "/api/clean")  == 0) {
-            if (!g_allow_write) return resp_err(403, "write disabled — restart with --allow-write to enable inject/clean");
+            if (!g_allow_write) return resp_err(403, "write disabled �?restart with --allow-write to enable inject/clean");
             return api_clean(body);
         }
-        /* health/catalog/state/history 是 GET-only → 落到 405 */
+        /* health/catalog/state/history �?GET-only �?落到 405 */
     }
     return resp_err(405, "method not allowed");
 }
 
-/* ---------- 单连接 ---------- */
+/* ---------- 单连�?---------- */
 static void handle_conn(int fd, const char *webroot) {
     char *buf = malloc(READ_BUF_CAP);
     if (!buf) { send_response(fd, 500, "text/plain", "oom", 3); return; }
@@ -378,12 +376,12 @@ static void handle_conn(int fd, const char *webroot) {
     *line_end = '\0';
     char method[16] = {0}, path[1024] = {0}, version[16] = {0};
     int n = sscanf(buf, "%15s %1023s %15s", method, path, version);
-    *line_end = '\r';   /* 恢复,供后续 strstr 找 \r\n\r\n */
+    *line_end = '\r';   /* 恢复,供后�?strstr �?\r\n\r\n */
     if (n < 2) { send_response(fd, 400, "text/plain", "bad request line", 16); free(buf); return; }
 
     char *hdr_end = strstr(buf, "\r\n\r\n");
     const char *body = hdr_end ? hdr_end + 4 : "";
-    /* 按 Content-Length 截断 body(防 trailing 字节污染 cJSON_Parse) */
+    /* �?Content-Length 截断 body(�?trailing 字节污染 cJSON_Parse) */
     long clen = find_content_length(buf);
     if (clen >= 0 && hdr_end) {
         size_t boff = (size_t)(hdr_end - buf) + 4;
@@ -415,7 +413,7 @@ static void derive_default_webroot(char *out, size_t cap) {
     if (n > 0) {
         out[n] = '\0';
         char *slash = strrchr(out, '/');
-        if (slash) *slash = '\0';   /* strip "dcat" → exe_dir (build/) */
+        if (slash) *slash = '\0';   /* strip "dcat" �?exe_dir (build/) */
         size_t len = strlen(out);
         snprintf(out + len, cap - len, "/../src/web");
         return;
@@ -462,7 +460,7 @@ int serve_run(int port, const char *bind_addr, const char *webroot_in, int allow
         close(sfd); return 1;
     }
 
-    fprintf(stderr, "dcat serve: listening on %s:%d (webroot=%s, %s) — Ctrl+C to stop\n",
+    fprintf(stderr, "dcat serve: listening on %s:%d (webroot=%s, %s) �?Ctrl+C to stop\n",
             bind_addr, port, webroot, g_allow_write ? "read-write" : "read-only");
 
     for (;;) {

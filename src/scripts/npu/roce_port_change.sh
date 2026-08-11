@@ -20,7 +20,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -udp -g 2>/dev/null | grep -oE 'udp_port:[0-9]+' | grep -oE '[0-9]+')
         [ -n "$orig" ] && sidecar_save rNPU_roce_port_change "$chip" "$orig"
         $HCCN -udp -s port "$port" || { echo "udp set failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_roce_port_change 注入回读校验失败:动作未生效" >&2; exit 1; }
+        fault_present || { echo "rNPU_roce_port_change 注入回读校验失败:动作未生�? >&2; exit 1; }
         echo "applied roce udp port $port on chip $chip (was $orig)"
         ;;
     clean)

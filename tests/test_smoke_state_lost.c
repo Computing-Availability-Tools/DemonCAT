@@ -1,10 +1,6 @@
-/* tests/test_smoke_state_lost.c — Tier 3: state.json 丢失后 stateless clean 仍能清除活跃故障。
- *
- * 场景：注入真实故障（写 /tmp sidecar + state.json）→ 模拟运维误删 state.json →
- *       分别走三条 clean 路径，验证故障确已从系统移除（进程恢复 + sidecar 消失）。
- *
- * 用 rPROC_hang（非 root、写 /tmp/dcat-rPROC_hang-<pid>.sidecar、可观测 State T/S）。
- */
+/* tests/test_smoke_state_lost.c �?Tier 3: state.json 丢失�?stateless clean 仍能清除活跃故障�? *
+ * 场景：注入真实故障（�?/tmp sidecar + state.json）→ 模拟运维误删 state.json �? *       分别走三�?clean 路径，验证故障确已从系统移除（进程恢�?+ sidecar 消失）�? *
+ * �?rPROC_hang（非 root、写 /tmp/dcat-rPROC_hang-<pid>.sidecar、可观测 State T/S）�? */
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"
@@ -30,7 +26,7 @@ static void setup(void) {
     registry_init(&cfg);
     state_reset();
     state_set_file(SFILE);
-    state_load();                 /* 首次文件不存在 → state_is_lost()=1，内存空 */
+    state_load();                 /* 首次文件不存�?�?state_is_lost()=1，内存空 */
     executor_set_mock(NULL);
     system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null");
 }
@@ -42,8 +38,8 @@ static void teardown(void) {
     system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null");
 }
 
-/* fork 一个 sleep 子进程并注入 rPROC_hang（SIGSTOP + 写 sidecar + 写 state）；
- * 返回子进程 pid，失败 -1。 */
+/* fork 一�?sleep 子进程并注入 rPROC_hang（SIGSTOP + �?sidecar + �?state）；
+ * 返回子进�?pid，失�?-1�?*/
 static pid_t inject_hang(void) {
     pid_t pid = fork();
     if (pid < 0) return -1;
@@ -71,7 +67,7 @@ static int sidecar_exists(pid_t pid) {
     return access(path, F_OK) == 0;
 }
 
-/* 模拟运维误删 state.json：删文件 + 重置内存 + 重新 load（文件缺失 → lost） */
+/* 模拟运维误删 state.json：删文件 + 重置内存 + 重新 load（文件缺�?�?lost�?*/
 static void lose_state(void) {
     unlink(SFILE);
     state_reset();
@@ -84,7 +80,7 @@ static void reap(pid_t pid) {
     kill(pid, SIGCONT); kill(pid, SIGKILL); waitpid(pid, NULL, 0);
 }
 
-/* ---- Test 1: clean <uid> --params（state 丢失 → 回退用用户参数调脚本） ---- */
+/* ---- Test 1: clean <uid> --params（state 丢失 �?回退用用户参数调脚本�?---- */
 static int t_clean_with_params_after_state_lost(void) {
     setup();
     pid_t pid = inject_hang(); CK(pid > 0);
@@ -93,8 +89,8 @@ static int t_clean_with_params_after_state_lost(void) {
     CK(sidecar_exists(pid));           /* /tmp 工件存在 */
 
     lose_state();                      /* 误删 state.json */
-    CK(state_is_lost());               /* 标记为丢失 */
-    /* state 无记录 → 带参 clean 必须回退到脚本（用用户 pid） */
+    CK(state_is_lost());               /* 标记为丢�?*/
+    /* state 无记�?�?带参 clean 必须回退到脚本（用用�?pid�?*/
     char pidstr[16]; snprintf(pidstr, sizeof pidstr, "%d", pid);
     params_t p; memset(&p, 0, sizeof p);
     strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, pidstr); p.count = 1;
@@ -108,7 +104,7 @@ static int t_clean_with_params_after_state_lost(void) {
     return 0;
 }
 
-/* ---- Test 2: clean <uid>（无参，stateless glob /tmp 工件） ---- */
+/* ---- Test 2: clean <uid>（无参，stateless glob /tmp 工件�?---- */
 static int t_clean_no_params_after_state_lost(void) {
     setup();
     pid_t pid = inject_hang(); CK(pid > 0);
@@ -125,7 +121,7 @@ static int t_clean_no_params_after_state_lost(void) {
     return 0;
 }
 
-/* ---- Test 3: clean --all（fan-out 无参 clean，stateless） ---- */
+/* ---- Test 3: clean --all（fan-out 无参 clean，stateless�?---- */
 static int t_clean_all_after_state_lost(void) {
     setup();
     pid_t pid = inject_hang(); CK(pid > 0);
@@ -141,17 +137,17 @@ static int t_clean_all_after_state_lost(void) {
     return 0;
 }
 
-/* ---- Test 4: 部分 state（文件有效但记录被抹除）→ 带参 clean 不回退（安全，不动系统资源），
- *              但无参 stateless clean 仍可恢复。锁定“仅在完全丢失才回退”的边界。 ---- */
+/* ---- Test 4: 部分 state（文件有效但记录被抹除）�?带参 clean 不回退（安全，不动系统资源），
+ *              但无�?stateless clean 仍可恢复。锁定“仅在完全丢失才回退”的边界�?---- */
 static int t_clean_partial_state_safe_no_fallback(void) {
     setup();
     pid_t pid = inject_hang(); CK(pid > 0);
     sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
 
-    /* 模拟部分损坏：把 state.json 重写为有效但空记录（运维手编辑/截断记录） */
+    /* 模拟部分损坏：把 state.json 重写为有效但空记录（运维手编�?截断记录�?*/
     state_reset();                    /* 清内存记录，g_state_lost=0 */
-    state_save();                      /* 覆盖为合法 JSON（空记录） */
-    state_load();                      /* 文件合法 → state_is_lost()=0 */
+    state_save();                      /* 覆盖为合�?JSON（空记录�?*/
+    state_load();                      /* 文件合法 �?state_is_lost()=0 */
     CK(!state_is_lost());
 
     char pidstr[16]; snprintf(pidstr, sizeof pidstr, "%d", pid);
@@ -161,10 +157,10 @@ static int t_clean_partial_state_safe_no_fallback(void) {
     CK(r && r->code != 0);           /* "no active injection"，不触碰进程 */
     result_free(r);
     sleep(1);
-    CK(is_stopped(pid) == 1);         /* 仍处于 STOP（clean 未动它） */
+    CK(is_stopped(pid) == 1);         /* 仍处�?STOP（clean 未动它） */
     CK(sidecar_exists(pid));          /* sidecar 仍在 */
 
-    /* 恢复手段：无参 stateless clean（glob /tmp 工件） */
+    /* 恢复手段：无�?stateless clean（glob /tmp 工件�?*/
     params_t empty; memset(&empty, 0, sizeof empty);
     result_t *r2 = dispatch_route("rPROC_hang", "clean", &empty);
     CK(r2 && r2->code == 0);
@@ -176,14 +172,14 @@ static int t_clean_partial_state_safe_no_fallback(void) {
     return 0;
 }
 
-/* ---- Test 5: state 完好时无参 clean → 既清系统又 reconcile state（用户实测场景） ----
- * 注入 rPROC_hang（state 有记录）→ 无参 clean → 进程恢复 + sidecar 消失 +
- * state 记录被标 inactive（query 不再残留幽灵）。 */
+/* ---- Test 5: state 完好时无�?clean �?既清系统�?reconcile state（用户实测场景） ----
+ * 注入 rPROC_hang（state 有记录）�?无参 clean �?进程恢复 + sidecar 消失 +
+ * state 记录被标 inactive（query 不再残留幽灵）�?*/
 static int t_clean_no_params_reconciles_state(void) {
     setup();
     pid_t pid = inject_hang(); CK(pid > 0);
     sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
-    CK(state_list_active() == 1);       /* state 有该记录（区别于前 3 例误删后 state 为空） */
+    CK(state_list_active() == 1);       /* state 有该记录（区别于�?3 例误删后 state 为空�?*/
     params_t empty; memset(&empty, 0, sizeof empty);   /* count=0 */
     result_t *r = dispatch_route("rPROC_hang", "clean", &empty);
     CK(r && r->code == 0);
@@ -191,7 +187,7 @@ static int t_clean_no_params_reconciles_state(void) {
     sleep(1);
     CK(is_stopped(pid) == 0);            /* 系统层：SIGCONT 恢复 */
     CK(!sidecar_exists(pid));           /* 系统层：sidecar 已删 */
-    /* state 层：记录应已 reconcile 为 inactive（无幽灵） */
+    /* state 层：记录应已 reconcile �?inactive（无幽灵�?*/
     params_t q; memset(&q, 0, sizeof q);
     long long ids[DCAT_MAX_RECORDS];
     CK(state_find_by_params("rPROC_hang", &q, ids, DCAT_MAX_RECORDS) == 0);

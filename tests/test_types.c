@@ -24,7 +24,7 @@ int test_params_count(void) {
 }
 
 int test_key_to_env(void) {
-    /* DCAT_PARAM_<KEY>：非字母数字->'_'，大写 */
+    /* DCAT_PARAM_<KEY>：非字母数字->'_'，大�?*/
     ASSERT_STREQ(dcat_key_to_env("loss_pct"), "DCAT_PARAM_LOSS_PCT");
     ASSERT_STREQ(dcat_key_to_env("speed-mbps"), "DCAT_PARAM_SPEED_MBPS");
     ASSERT_STREQ(dcat_key_to_env("cores"), "DCAT_PARAM_CORES");
@@ -32,18 +32,18 @@ int test_key_to_env(void) {
 }
 
 int test_params_equal_subset(void) {
-    /* 用于 clean 按参数匹配：用户提供参数是记录参数的子集则匹配 */
+    /* 用于 clean 按参数匹配：用户提供参数是记录参数的子集则匹�?*/
     params_t rec; params_init(&rec);
     params_set(&rec, "iface", "eth0");
     params_set(&rec, "loss_pct", "5");
     params_t q; params_init(&q);
-    params_set(&q, "iface", "eth0");           /* 子集 → 匹配 */
+    params_set(&q, "iface", "eth0");           /* 子集 �?匹配 */
     ASSERT_TRUE(params_match_subset(&q, &rec));
     params_set(&q, "loss_pct", "5");
-    ASSERT_TRUE(params_match_subset(&q, &rec)); /* 完全一致 → 匹配 */
-    params_set(&q, "loss_pct", "3");            /* 值不同 → 不匹配 */
+    ASSERT_TRUE(params_match_subset(&q, &rec)); /* 完全一�?�?匹配 */
+    params_set(&q, "loss_pct", "3");            /* 值不�?�?不匹�?*/
     ASSERT_TRUE(!params_match_subset(&q, &rec));
-    params_t q2; params_init(&q2);              /* 空 query 匹配所有 */
+    params_t q2; params_init(&q2);              /* �?query 匹配所�?*/
     ASSERT_TRUE(params_match_subset(&q2, &rec));
     return 0;
 }

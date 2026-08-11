@@ -1,4 +1,4 @@
-/* tests/test_faults_network.c â€” Tier 1: mock table-driven tests for network (11) */
+/* tests/test_faults_network.c â€?Tier 1: mock table-driven tests for network (11) */
 #include "test_faults_common.h"
 
 int main(void) {

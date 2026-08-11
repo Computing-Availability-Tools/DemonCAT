@@ -1,4 +1,4 @@
-/* tests/test_smoke_cpu.c — Tier 3: real execution tests for CPU faults */
+/* tests/test_smoke_cpu.c �?Tier 3: real execution tests for CPU faults */
 #define _GNU_SOURCE
 #include "core/config.h"
 #include "core/registry.h"
@@ -17,9 +17,8 @@
 
 #define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
 
-/* 找到两个相邻、且当前进程 affinity 允许的核 (a, a+1)。
- * 共享容器里会用 taskset/cpuset 屏蔽某些核(例如此环境 0,2-639 不含核1),
- * 对这些核 taskset -c 会 EINVAL, 故不能硬编码 "0,1"。失败返回 -1。 */
+/* 找到两个相邻、且当前进程 affinity 允许的核 (a, a+1)�? * 共享容器里会�?taskset/cpuset 屏蔽某些�?例如此环�?0,2-639 不含�?),
+ * 对这些核 taskset -c �?EINVAL, 故不能硬编码 "0,1"。失败返�?-1�?*/
 static int find_adjacent_cores(int *a) {
     cpu_set_t set;
     if (sched_getaffinity(0, sizeof set, &set) != 0) return -1;
@@ -51,8 +50,7 @@ static int count_burn(void) {
     return count;
 }
 
-/* 轮询等待 burn 进程数 >= min，最多等 timeout_sec 秒。
- * 代替固定 sleep(1)：系统高负载时 perl 启动可能慢于 1 秒。 */
+/* 轮询等待 burn 进程�?>= min，最多等 timeout_sec 秒�? * 代替固定 sleep(1)：系统高负载�?perl 启动可能慢于 1 秒�?*/
 static int wait_burn_min(int min, int timeout_sec) {
     for (int i = 0; i < timeout_sec * 10; i++) {
         if (count_burn() >= min) return 1;
@@ -61,7 +59,7 @@ static int wait_burn_min(int min, int timeout_sec) {
     return 0;
 }
 
-/* 轮询等待 burn 进程数 == 0，最多等 timeout_sec 秒。 */
+/* 轮询等待 burn 进程�?== 0，最多等 timeout_sec 秒�?*/
 static int wait_burn_zero(int timeout_sec) {
     for (int i = 0; i < timeout_sec * 10; i++) {
         if (count_burn() == 0) return 1;
@@ -91,7 +89,7 @@ int main(void) {
 
     int base;
     if (find_adjacent_cores(&base) != 0) {
-        /* 连两个相邻可调度核都没有 → 环境无法支撑本测试, 明确报错 */
+        /* 连两个相邻可调度核都没有 �?环境无法支撑本测�? 明确报错 */
         fprintf(stderr, "FAIL: no two adjacent schedulable cores available\n");
         return 1;
     }
@@ -129,12 +127,12 @@ int main(void) {
 
         CK(wait_burn_min(2, 5));
 
-        /* 同规格重注入: 默认拒绝 (code 5), 旧进程仍在 */
+        /* 同规格重注入: 默认拒绝 (code 5), 旧进程仍�?*/
         r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
         CK(r && r->code == 5); result_free(r);
         CK(wait_burn_min(2, 5));
 
-        /* --force 原子替换: 旧清掉再注入, 不应翻倍 (<4) */
+        /* --force 原子替换: 旧清掉再注入, 不应翻�?(<4) */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
         CK(r && r->code == 0); result_free(r);
         CK(wait_burn_min(2, 5));
@@ -158,7 +156,7 @@ int main(void) {
 
         CK(wait_burn_min(2, 5));
 
-        /* 重叠核 base (含于 base-(base+1)): 默认拒绝 */
+        /* 重叠�?base (含于 base-(base+1)): 默认拒绝 */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 0);
         CK(r && r->code == 5); result_free(r);
 

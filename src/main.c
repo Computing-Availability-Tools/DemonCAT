@@ -1,13 +1,7 @@
 /*
- * dcat 主入口。
- *
- * 总体流程：
- *   1. 解析命令行参数 (cli_parse)；
- *   2. --help 始终优先，直接输出帮助后退出；
- *   3. 加载配置 (config_load) 并初始化注册表 / 运行状态 / 插件；
- *   4. 按子命令分发：serve 走 HTTP 服务器，其余走路由分发 (dispatch)；
- *   5. 输出结果、保存状态、卸载插件，按退出码返回。
- */
+ * dcat 主入口�? *
+ * 总体流程�? *   1. 解析命令行参�?(cli_parse)�? *   2. --help 始终优先，直接输出帮助后退出；
+ *   3. 加载配置 (config_load) 并初始化注册�?/ 运行状�?/ 插件�? *   4. 按子命令分发：serve �?HTTP 服务器，其余走路由分�?(dispatch)�? *   5. 输出结果、保存状态、卸载插件，按退出码返回�? */
 #include "config.h"
 #include "registry.h"
 #include "state.h"
@@ -39,7 +33,7 @@ int main(int argc, char **argv) {
     parsed_cmd_t pc;
     int rc = cli_parse(argc, argv, &pc);
 
-    /* --help 始终优先：即使其余参数 malformed 也直接输出帮助后退出 0 */
+    /* --help 始终优先：即使其余参�?malformed 也直接输出帮助后退�?0 */
     if (cli_has_help(argc, argv)) {
         const char *sub = cli_subcommand(argc, argv);
         if (sub) {
@@ -90,7 +84,7 @@ int main(int argc, char **argv) {
     }
     plugin_load_dir(plugindir);
 
-    /* 第五步：分发子命令。serve → HTTP 服务器；否则走路由分发 */
+    /* 第五步：分发子命令。serve �?HTTP 服务器；否则走路由分�?*/
     if (pc.op && strcmp(pc.op, "serve") == 0) {
         return serve_run(pc.port, pc.bind, pc.webroot, pc.allow_write);
     }
@@ -107,7 +101,7 @@ int main(int argc, char **argv) {
         r = dispatch_route_force(pc.uid, pc.op, &pc.params, pc.force);
     }
     output_print(r);
-    /* 第六步：输出结果、保存状态并卸载插件，按结果码返回 */
+    /* 第六步：输出结果、保存状态并卸载插件，按结果码返�?*/
     int code = r ? r->code : 1;
     result_free(r);
     state_save();

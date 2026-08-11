@@ -75,7 +75,7 @@ void resolve_script(const char *root, const char *val, char *dst, int cap) {
 }
 
 void derive_project_root(const char *cfgpath, char *root, int cap) {
-    /* <root>/config/demoncat.conf → <root>；相对路径 → '.' */
+    /* <root>/config/demoncat.conf �?<root>；相对路�?�?'.' */
     const char *marker = "/config/demoncat.conf";
     size_t mlen = strlen(marker);
     size_t plen = strlen(cfgpath);

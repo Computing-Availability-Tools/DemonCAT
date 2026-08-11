@@ -37,7 +37,7 @@ int test_clean_help_excludes_inject_only(void) {
     char *t = help_render_subcommand("clean", NULL);
     ASSERT_TRUE(t != NULL);
     ASSERT_STR_CONTAINS(t, "rNET_loss");            /* 支持 clean */
-    ASSERT_TRUE(strstr(t, "rPROC_exit") == NULL);   /* inject-only 不列入 */
+    ASSERT_TRUE(strstr(t, "rPROC_exit") == NULL);   /* inject-only 不列�?*/
     free(t);
     return 0;
 }

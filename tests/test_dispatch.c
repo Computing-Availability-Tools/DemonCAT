@@ -15,7 +15,7 @@ static result_t *mock_ok(const char *cmd, const char *const *env) {
     return result_ok("inject", "x", 0, "ok");
 }
 
-/* 捕获 executor 收到的 DCAT_OP / DCAT_PARAM_CORES，用于验证 clean 的分发 */
+/* 捕获 executor 收到�?DCAT_OP / DCAT_PARAM_CORES，用于验�?clean 的分�?*/
 static int g_cap_calls = 0;
 static const char *g_cap_op = NULL;
 static const char *g_cap_cores = NULL;
@@ -111,14 +111,14 @@ int test_dispatch_uid_not_found(void) {
 int test_dispatch_query_uid_no_params_ok(void) {
     setup();
     params_t p; params_init(&p);
-    /* query 带 uid 但无参：按 SPEC 不应被拒（脚本自行展示全部），不再返回 code 3 */
+    /* query �?uid 但无参：�?SPEC 不应被拒（脚本自行展示全部），不再返�?code 3 */
     result_t *r = dispatch_route("rNET_delay", "query", &p);
     ASSERT_INT_EQ(r->code, 0);
     result_free(r);
     return 0;
 }
 
-/* clean <uid> 无参 = clean-all-for-uid：直接调脚本 clean（不传 DCAT_PARAM_*），绕过 state */
+/* clean <uid> 无参 = clean-all-for-uid：直接调脚本 clean（不�?DCAT_PARAM_*），绕过 state */
 int test_dispatch_clean_no_params_invokes_script(void) {
     setup();
     executor_set_mock(mock_cap);
@@ -134,7 +134,7 @@ int test_dispatch_clean_no_params_invokes_script(void) {
     return 0;
 }
 
-/* clean --all：对每个支持 clean 的注册故障各调一次无参 clean，聚合返回 ok */
+/* clean --all：对每个支持 clean 的注册故障各调一次无�?clean，聚合返�?ok */
 int test_dispatch_clean_all_fans_out(void) {
     setup();
     executor_set_mock(mock_cap);
@@ -151,12 +151,12 @@ int test_dispatch_clean_all_fans_out(void) {
     return 0;
 }
 
-/* state 丢失(文件缺失)下 clean <uid> --params 应回退用用户参数调脚本 clean */
+/* state 丢失(文件缺失)�?clean <uid> --params 应回退用用户参数调脚本 clean */
 int test_dispatch_clean_state_lost_fallback(void) {
     setup();
     executor_set_mock(mock_cap);
     state_set_file("/tmp/dcat-test-state-missing2.json");
-    state_load();                       /* 文件缺失 → state_is_lost()=1，内存空 */
+    state_load();                       /* 文件缺失 �?state_is_lost()=1，内存空 */
     g_cap_calls = 0; g_cap_op = NULL; g_cap_cores = "SENTINEL";
     params_t p; params_init(&p); params_set(&p, "cores", "0");
     result_t *r = dispatch_route("rCPU_overload", "clean", &p);
@@ -169,8 +169,7 @@ int test_dispatch_clean_state_lost_fallback(void) {
     return 0;
 }
 
-/* clean <uid> 无参（stateless）：脚本清 /tmp 工件后，必须 reconcile state——
- * 把该 uid 全部活跃记录标 inactive，避免 query 残留幽灵记录。 */
+/* clean <uid> 无参（stateless）：脚本�?/tmp 工件后，必须 reconcile state—�? * 把该 uid 全部活跃记录�?inactive，避�?query 残留幽灵记录�?*/
 int test_dispatch_clean_no_params_marks_state_inactive(void) {
     setup();
     params_t p; params_init(&p); params_set(&p, "cores", "0");
@@ -184,7 +183,7 @@ int test_dispatch_clean_no_params_marks_state_inactive(void) {
     result_free(r); return 0;
 }
 
-/* clean --all：fan-out 无参 clean 后，全部活跃记录应被 reconcile 为 inactive。 */
+/* clean --all：fan-out 无参 clean 后，全部活跃记录应被 reconcile �?inactive�?*/
 int test_dispatch_clean_all_marks_state_inactive(void) {
     setup();
     params_t a; params_init(&a); params_set(&a, "cores", "0");
@@ -199,8 +198,8 @@ int test_dispatch_clean_all_marks_state_inactive(void) {
     result_free(r); return 0;
 }
 
-/* clean --all 边界：某 uid 脚本 clean 失败时不得 reconcile 该 uid 记录
- * （否则会把仍活跃的注入误标 inactive = 反向幽灵）。reconcile 仅在 code==0 时发生。 */
+/* clean --all 边界：某 uid 脚本 clean 失败时不�?reconcile �?uid 记录
+ * （否则会把仍活跃的注入误�?inactive = 反向幽灵）。reconcile 仅在 code==0 时发生�?*/
 static result_t *mock_fail_cpu_overload_clean(const char *cmd, const char *const *env) {
     const char *op = "inject";
     for (int i = 0; env && env[i]; i++)
@@ -213,18 +212,18 @@ int test_dispatch_clean_all_skips_reconcile_on_failure(void) {
     setup();
     executor_set_mock(mock_fail_cpu_overload_clean);
     params_t a; params_init(&a); params_set(&a, "cores", "0");
-    dispatch_route("rCPU_overload", "inject", &a);     /* rCPU_overload 有活跃记录 */
+    dispatch_route("rCPU_overload", "inject", &a);     /* rCPU_overload 有活跃记�?*/
     params_t b; params_init(&b); params_set(&b, "iface", "eth0"); params_set(&b, "delay_ms", "100");
-    dispatch_route("rNET_delay", "inject", &b);         /* rNET_delay 有活跃记录 */
+    dispatch_route("rNET_delay", "inject", &b);         /* rNET_delay 有活跃记�?*/
     ASSERT_INT_EQ(state_list_active(), 2);
     result_t *r = dispatch_clean_all();
     ASSERT_TRUE(r != NULL);
-    ASSERT_INT_EQ(r->code, 1);                           /* --all 有失败 → code=1（非 0） */
-    /* rCPU_overload clean 失败 → 记录保持 active；rNET_delay 成功 → 已 inactive */
+    ASSERT_INT_EQ(r->code, 1);                           /* --all 有失�?�?code=1（非 0�?*/
+    /* rCPU_overload clean 失败 �?记录保持 active；rNET_delay 成功 �?�?inactive */
     params_t q; params_init(&q);
     long long ids[DCAT_MAX_RECORDS];
-    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1); /* 仍活跃，未误标 */
-    ASSERT_INT_EQ(state_find_by_params("rNET_delay", &q, ids, DCAT_MAX_RECORDS), 0);   /* 已 reconcile */
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1); /* 仍活跃，未误�?*/
+    ASSERT_INT_EQ(state_find_by_params("rNET_delay", &q, ids, DCAT_MAX_RECORDS), 0);   /* �?reconcile */
     result_free(r); return 0;
 }
 

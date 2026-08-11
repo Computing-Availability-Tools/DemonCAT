@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-/* ---- 极简可增长字符串缓冲（OOM 时停止追加，避免截断） ---- */
+/* ---- 极简可增长字符串缓冲（OOM 时停止追加，避免截断�?---- */
 typedef struct { char *buf; size_t len, cap; int oom; } sb_t;
 
 static void sb_init(sb_t *s) {
@@ -59,18 +59,18 @@ static const char *op_usage(const char *op) {
 }
 
 static const char *op_desc(const char *op) {
-    if (strcmp(op, "inject") == 0) return "注入故障；可恢复故障写 state + 返回 record_id；inject-only 不写 state";
-    if (strcmp(op, "clean")  == 0) return "清除活跃注入：clean <uid> --params 按参数匹配 state 记录逐条清理；"
-                                       "clean <uid> 无参=清该 uid 全部 /tmp 工件(脚本自 glob)；"
-                                       "clean --all=对所有故障 fan-out 无参 clean；均 stateless，state.json 丢失/损坏仍可清";
-    if (strcmp(op, "query")  == 0) return "无 uid 列出全部活跃注入；有 uid 走脚本 query 直通 stdout + confirmed（参数可选，无参=查全部）";
+    if (strcmp(op, "inject") == 0) return "注入故障；可恢复故障�?state + 返回 record_id；inject-only 不写 state";
+    if (strcmp(op, "clean")  == 0) return "清除活跃注入：clean <uid> --params 按参数匹�?state 记录逐条清理�?
+                                       "clean <uid> 无参=清该 uid 全部 /tmp 工件(脚本�?glob)�?
+                                       "clean --all=对所有故�?fan-out 无参 clean；均 stateless，state.json 丢失/损坏仍可�?;
+    if (strcmp(op, "query")  == 0) return "�?uid 列出全部活跃注入；有 uid 走脚�?query 直�?stdout + confirmed（参数可选，无参=查全部）";
     if (strcmp(op, "list")   == 0) return "列出故障目录（cnf + 动态插件）";
-    if (strcmp(op, "serve")  == 0) return "启动 HTTP 控制平面(长驻):同端口 serve 静态前端 + /api/*;"
-                                       "经 SSH 隧道访问 localhost:PORT 远程注入/查看;Ctrl+C 优雅退出(state 保存)";
+    if (strcmp(op, "serve")  == 0) return "启动 HTTP 控制平面(长驻):同端�?serve 静态前�?+ /api/*;"
+                                       "�?SSH 隧道访问 localhost:PORT 远程注入/查看;Ctrl+C 优雅退�?state 保存)";
     return "";
 }
 
-/* 获取操作对应的 required 字段指针 */
+/* 获取操作对应�?required 字段指针 */
 static const char *get_op_required(const fault_def_t *f, const char *op) {
     if (strcmp(op, "inject") == 0) return f->inject_required;
     if (strcmp(op, "clean")  == 0) return f->clean_required;
@@ -84,7 +84,7 @@ static const char *get_op_optional(const fault_def_t *f, const char *op) {
     return "";
 }
 
-/* 按 op 的 required/optional 拼参数示例 */
+/* �?op �?required/optional 拼参数示�?*/
 static void render_example(sb_t *s, const char *op, const fault_def_t *f) {
     sb_addf(s, "  示例：dcat %s %s", op, f->uid);
     char buf[128];
@@ -111,8 +111,8 @@ static void render_fault_table(sb_t *s, const char *op) {
         if (!op_in_supported(list[i].supported_ops, op)) continue;
         const char *req = get_op_required(&list[i], op);
         const char *opt = get_op_optional(&list[i], op);
-        sb_addf(s, "  %-24s %s", list[i].uid, req[0] ? req : "（无必填）");
-        if (opt[0]) sb_addf(s, "  [可选: %s]", opt);
+        sb_addf(s, "  %-24s %s", list[i].uid, req[0] ? req : "（无必填�?);
+        if (opt[0]) sb_addf(s, "  [可�? %s]", opt);
         sb_addf(s, "\n");
         printed++;
     }
@@ -126,13 +126,13 @@ char *help_render_global(void) {
         "usage: dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--plugins <dir>] [--help]\n"
         "  subcommand: inject | clean | query | list | serve\n"
         "  inject <uid> --p1=v1 ...     注入故障\n"
-        "  clean  <uid> [--k=v ...]     清除活跃注入；无参=清该 uid 全部工件；--all=清全部故障(stateless)\n"
-        "  query  [uid] [--k=v ...]     无 uid 列出活跃注入；有 uid 验证故障是否生效（参数可选，无参=查全部）\n"
+        "  clean  <uid> [--k=v ...]     清除活跃注入；无�?清该 uid 全部工件�?-all=清全部故�?stateless)\n"
+        "  query  [uid] [--k=v ...]     �?uid 列出活跃注入；有 uid 验证故障是否生效（参数可选，无参=查全部）\n"
         "  list                         列出故障目录\n"
         "  serve [--port n] [--bind a] [--webroot d] [--allow-write]  HTTP 控制平面(长驻);默认只读,+--allow-write 开注入/清理\n"
-        "  --config <path>              指定 demoncat.conf 路径（默认 <root>/config/demoncat.conf）\n"
+        "  --config <path>              指定 demoncat.conf 路径（默�?<root>/config/demoncat.conf）\n"
         "  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）\n"
-        "  --all                        仅 clean：无参清理全部故障（state.json 丢失/损坏时仍可清）\n"
+        "  --all                        �?clean：无参清理全部故障（state.json 丢失/损坏时仍可清）\n"
         "  --help                       打印本帮助；置于子命令后可显示该子命令参数\n");
     return sb_done(&s);
 }
@@ -149,13 +149,13 @@ char *help_render_subcommand(const char *op, const char *uid) {
         return sb_done(&s);
     }
     if (strcmp(op, "serve") == 0) {
-        sb_addf(&s, "  --port <n>                 监听端口（默认 8080）\n");
-        sb_addf(&s, "  --bind <addr>              绑定地址（默认 0.0.0.0 全接口;明文,安全由 SSH 隧道兜底）\n");
-        sb_addf(&s, "  --webroot <dir>            静态前端根目录（默认 <exe>/../src/web）\n");
-        sb_addf(&s, "  --allow-write              开 POST /api/inject|clean(默认只读:仅查看+复制命令到终端执行)\n");
-        sb_addf(&s, "  典型(只读):`dcat serve --port 8080` → 浏览器查看 + 复制命令到 SSH 执行\n");
-        sb_addf(&s, "  典型(可写):`dcat serve --port 8080 --allow-write` → 浏览器直接注入/清理\n");
-        sb_addf(&s, "  本机:`ssh -L 8080:localhost:8080 user@server` → 访问 http://localhost:8080\n");
+        sb_addf(&s, "  --port <n>                 监听端口（默�?8080）\n");
+        sb_addf(&s, "  --bind <addr>              绑定地址（默�?0.0.0.0 全接�?明文,安全�?SSH 隧道兜底）\n");
+        sb_addf(&s, "  --webroot <dir>            静态前端根目录（默�?<exe>/../src/web）\n");
+        sb_addf(&s, "  --allow-write              开 POST /api/inject|clean(默认只读:仅查�?复制命令到终端执�?\n");
+        sb_addf(&s, "  典型(只读):`dcat serve --port 8080` �?浏览器查�?+ 复制命令�?SSH 执行\n");
+        sb_addf(&s, "  典型(可写):`dcat serve --port 8080 --allow-write` �?浏览器直接注�?清理\n");
+        sb_addf(&s, "  本机:`ssh -L 8080:localhost:8080 user@server` �?访问 http://localhost:8080\n");
         return sb_done(&s);
     }
 
@@ -165,13 +165,13 @@ char *help_render_subcommand(const char *op, const char *uid) {
         if (f) {
             const char *req = get_op_required(f, op);
             const char *opt = get_op_optional(f, op);
-            sb_addf(&s, "\n故障 %s：%s\n", f->uid, f->desc[0] ? f->desc : "（无描述）");
-            sb_addf(&s, "  支持操作：%s\n", f->supported_ops);
-            sb_addf(&s, "  %s 必填参数：%s\n", op, req[0] ? req : "（无）");
-            sb_addf(&s, "  %s 可选参数：%s\n", op, opt[0] ? opt : "（无）");
+            sb_addf(&s, "\n故障 %s�?s\n", f->uid, f->desc[0] ? f->desc : "（无描述�?);
+            sb_addf(&s, "  支持操作�?s\n", f->supported_ops);
+            sb_addf(&s, "  %s 必填参数�?s\n", op, req[0] ? req : "（无�?);
+            sb_addf(&s, "  %s 可选参数：%s\n", op, opt[0] ? opt : "（无�?);
             render_example(&s, op, f);
         } else {
-            sb_addf(&s, "\n（未知故障 uid：%s）\n", uid);
+            sb_addf(&s, "\n（未知故�?uid�?s）\n", uid);
         }
     }
 

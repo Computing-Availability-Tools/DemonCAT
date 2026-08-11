@@ -1,5 +1,4 @@
-/* 示例动态插件：可恢复故障 rSAMPLE_test（inject/clean/query）
- * 编译为 plugins/libsample.so，验证 dlopen 加载 + dispatch 三级回退 + state */
+/* 示例动态插件：可恢复故�?rSAMPLE_test（inject/clean/query�? * 编译�?plugins/libsample.so，验�?dlopen 加载 + dispatch 三级回退 + state */
 #include "plugins/plugin.h"
 #include "core/types.h"
 #include "core/output.h"

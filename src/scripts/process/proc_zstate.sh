@@ -1,7 +1,7 @@
 #!/bin/sh
 # rPROC_zstate: turn a real process into a zombie by killing it.
-# inject: kill -9 $pid â†’ process exits â†’ zombie if parent doesn't reap
-# clean:  kill the parent â†’ zombie reparented to init â†’ init reaps
+# inject: kill -9 $pid â†?process exits â†?zombie if parent doesn't reap
+# clean:  kill the parent â†?zombie reparented to init â†?init reaps
 # query:  check if $pid is in Z state
 # Note: after clean, target process is dead and cannot be restored.
 
@@ -19,7 +19,7 @@ case "${DCAT_OP:-inject}" in
         sleep 0.2
         state=$(awk '/^State:/{print $2}' /proc/$pid/status 2>/dev/null)
         if [ "$state" = "Z" ]; then
-            echo "process $pid killed â†’ zombie (parent $ppid not reaping)"
+            echo "process $pid killed â†?zombie (parent $ppid not reaping)"
         else
             echo "process $pid killed (parent $ppid reaped immediately, no zombie persisted)"
         fi

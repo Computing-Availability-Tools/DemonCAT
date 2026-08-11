@@ -2,7 +2,7 @@
 #include "output.h"
 #include <string.h>
 
-/* 成功（可恢复 inject）：含 record_id */
+/* 成功（可恢复 inject）：�?record_id */
 int test_ok_recoverable_has_record_id(void) {
     result_t *r = result_ok("inject", "rCPU_overload", 3, "ok");
     ASSERT_STR_CONTAINS(r->json, "\"status\":\"ok\"");
@@ -14,7 +14,7 @@ int test_ok_recoverable_has_record_id(void) {
     result_free(r); return 0;
 }
 
-/* 成功（inject-only）：无 record_id 字段 */
+/* 成功（inject-only）：�?record_id 字段 */
 int test_ok_inject_only_no_record_id(void) {
     result_t *r = result_ok("inject", "rPROC_exit", 0, "killed");
     ASSERT_STR_CONTAINS(r->json, "\"status\":\"ok\"");

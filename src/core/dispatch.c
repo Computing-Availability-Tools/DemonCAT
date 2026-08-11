@@ -17,7 +17,7 @@ static int is_inject_only(const fault_def_t *f) {
     return strcmp(f->supported_ops, "inject") == 0;
 }
 
-/* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非裸 JSON。 */
+/* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非�?JSON�?*/
 typedef struct { const char *uid; const char *module; const char *ops; const char *desc; } list_row_t;
 #define MAX_LIST_ROWS 128
 
@@ -36,7 +36,7 @@ static result_t *dispatch_list(void) {
         rows[m].desc = list[i].desc;
         m++;
     }
-    /* 动态插件纳入 list */
+    /* 动态插件纳�?list */
     int pc = 0;
     const dcat_plugin_t *const *plugs = plugin_list(&pc);
     for (int i = 0; i < pc && m < MAX_LIST_ROWS; i++) {
@@ -50,7 +50,7 @@ static result_t *dispatch_list(void) {
         m++;
     }
 
-    /* 计算各列最大宽度(含表头) */
+    /* 计算各列最大宽�?含表�? */
     int w_uid = 4, w_mod = 6, w_ops = 3, w_desc = 4;
     for (int i = 0; i < m; i++) {
         int lu=(int)strlen(rows[i].uid), lm=(int)strlen(rows[i].module),
@@ -60,7 +60,7 @@ static result_t *dispatch_list(void) {
         if (lo > w_ops) w_ops = lo;
         if (ld > w_desc) w_desc = ld;
     }
-    if (w_desc > 60) w_desc = 60;   /* 描述列过长则截断，保持可读 */
+    if (w_desc > 60) w_desc = 60;   /* 描述列过长则截断，保持可�?*/
 
     size_t cap = (size_t)(m + 2) * (size_t)(w_uid + w_mod + w_ops + w_desc + 4) + 64;
     char *out = malloc(cap);
@@ -89,7 +89,7 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
         if (id < 0) {
             result_free(r);
             return result_err("inject", f->uid, 1,
-                "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                "state table full, cannot track injection �?run 'dcat query' and clean existing faults");
         }
         cJSON *root = cJSON_Parse(r->json);
         if (root) {
@@ -104,8 +104,7 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
     return r;
 }
 
-/* 清单条活动记录(复用于 cnf_clean 与 --force 替换路径)。
- * 成功返回 NULL; 失败返回 executor 的 err(调用方 result_free)。 */
+/* 清单条活动记�?复用�?cnf_clean �?--force 替换路径)�? * 成功返回 NULL; 失败返回 executor �?err(调用�?result_free)�?*/
 static result_t *clean_one_record(const fault_def_t *f, long long record_id) {
     const injection_record_t *rec = state_find_by_id(record_id);
     if (!rec) return NULL;
@@ -116,7 +115,7 @@ static result_t *clean_one_record(const fault_def_t *f, long long record_id) {
     return NULL;
 }
 
-/* 格式化记录的全部参数为 "key=val,key=val"（用于 reinject 拒绝消息展示前次注入）。 */
+/* 格式化记录的全部参数�?"key=val,key=val"（用�?reinject 拒绝消息展示前次注入）�?*/
 static void fmt_record_params(const injection_record_t *rec, char *out, size_t cap) {
     if (!out || cap == 0) return;
     out[0] = '\0';
@@ -131,9 +130,8 @@ static void fmt_record_params(const injection_record_t *rec, char *out, size_t c
     }
 }
 
-/* stateless clean（无参 / clean --all）成功后 reconcile state：把该 uid 全部活跃记录
- * 标 inactive，使 query 与系统一致（不残留幽灵记录）。内存空（state 丢失/无记录）时
- * state_find_by_params 返回 0，自然 no-op。 */
+/* stateless clean（无�?/ clean --all）成功后 reconcile state：把�?uid 全部活跃记录
+ * �?inactive，使 query 与系统一致（不残留幽灵记录）。内存空（state 丢失/无记录）�? * state_find_by_params 返回 0，自�?no-op�?*/
 static void reconcile_uid_state(const char *uid) {
     params_t empty; params_init(&empty);
     long long ids[DCAT_MAX_RECORDS];
@@ -142,8 +140,7 @@ static void reconcile_uid_state(const char *uid) {
 }
 
 static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
-    /* clean <uid> 无参 = clean-all-for-uid：脚本自行 glob /tmp 工件，绕过 state 查找；
-     * 脚本成功后 reconcile：把该 uid 全部活跃记录标 inactive，避免 query 残留幽灵。 */
+    /* clean <uid> 无参 = clean-all-for-uid：脚本自�?glob /tmp 工件，绕�?state 查找�?     * 脚本成功�?reconcile：把�?uid 全部活跃记录�?inactive，避�?query 残留幽灵�?*/
     if (user_params->count == 0) {
         result_t *r = executor_run_fault(f, "clean", user_params, 0);
         if (r && r->code == 0) reconcile_uid_state(f->uid);
@@ -152,7 +149,7 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) {
-        /* state 丢失/损坏时回退：用用户参数直接调脚本 clean（脚本读 /tmp 工件清理） */
+        /* state 丢失/损坏时回退：用用户参数直接调脚�?clean（脚本读 /tmp 工件清理�?*/
         if (state_is_lost())
             return executor_run_fault(f, "clean", user_params, 0);
         return result_err("clean", f->uid, 1, "no active injection");
@@ -164,9 +161,7 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     return result_ok("clean", f->uid, 0, "cleaned");
 }
 
-/* clean --all：遍历全部注册故障(cnf + 动态插件)，对支持 clean 的逐个执行无参 clean；
- * stateless，不依赖 state.json（脚本自行 glob /tmp 工件，插件自行幂等清理）。聚合每 uid 结果。
- * 输出：全成功 → 一行摘要；有失败 → 表格 + 汇总（人类可读）。 */
+/* clean --all：遍历全部注册故�?cnf + 动态插�?，对支持 clean 的逐个执行无参 clean�? * stateless，不依赖 state.json（脚本自�?glob /tmp 工件，插件自行幂等清理）。聚合每 uid 结果�? * 输出：全成功 �?一行摘要；有失�?�?表格 + 汇总（人类可读）�?*/
 result_t *dispatch_clean_all(void) {
     params_t empty; params_init(&empty);
     int n = 0; const fault_def_t *list = registry_list(&n);
@@ -188,7 +183,7 @@ result_t *dispatch_clean_all(void) {
         if (r) result_free(r);
     }
 
-    /* 动态插件同样纳入 clean --all（注入器不在此列，无注册表迭代接口） */
+    /* 动态插件同样纳�?clean --all（注入器不在此列，无注册表迭代接口） */
     int pn = 0;
     const dcat_plugin_t *const *plist = plugin_list(&pn);
     for (int i = 0; i < pn; i++) {
@@ -212,7 +207,7 @@ result_t *dispatch_clean_all(void) {
         snprintf(buf, 128, "cleaned %d faults (all ok)\n", ok);
         res->json = buf; res->raw = 1; return res;
     }
-    /* 有失败：表格 + 汇总 */
+    /* 有失败：表格 + 汇�?*/
     size_t cap = 256 + (size_t)rc * 80;
     char *buf = malloc(cap);
     size_t off = 0;
@@ -226,7 +221,7 @@ result_t *dispatch_clean_all(void) {
     res->json = buf; res->raw = 1; return res;
 }
 
-/* 重注入冲突错误（退出码 5）：列出重叠记录 id 与参数，提示 --force。 */
+/* 重注入冲突错误（退出码 5）：列出重叠记录 id 与参数，提示 --force�?*/
 static result_t *reinject_conflict_err(const char *uid, const long long *ids, int on) {
     char msg[512];
     int off = 0;
@@ -252,8 +247,7 @@ static result_t *reinject_conflict_err(const char *uid, const long long *ids, in
     return result_err("inject", uid, DCAT_REINJECT_CONFLICT, msg);
 }
 
-/* --force：先清理重叠记录再注入。clean 由调用方提供（cnf=脚本）。
- * 注：cnf 的 clean_one_record 成功返回 NULL（内部已 mark inactive）。 */
+/* --force：先清理重叠记录再注入。clean 由调用方提供（cnf=脚本）�? * 注：cnf �?clean_one_record 成功返回 NULL（内部已 mark inactive）�?*/
 typedef result_t *(*force_clean_fn)(void *ctx, const injection_record_t *rec);
 static result_t *force_clean_overlap(const char *uid, void *ctx, const long long *ids, int on,
                                      force_clean_fn clean_one) {
@@ -284,7 +278,7 @@ static result_t *cnf_clean_ctx(void *ctx, const injection_record_t *rec) {
     return clean_one_record((const fault_def_t *)ctx, rec->record_id);
 }
 
-/* 第3层：动态插件 dispatch（通用预检 + plugin->precheck + 函数指针 + state） */
+/* �?层：动态插�?dispatch（通用预检 + plugin->precheck + 函数指针 + state�?*/
 static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const params_t *params) {
     if (!op_in_supported(p->supported_ops, op))
         return result_err(op, p->uid, 3, "op not in supported_ops");
@@ -296,7 +290,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     const char *op_req = NULL;
     if (strcmp(op, "inject") == 0)     op_req = p->inject_required;
     else if (strcmp(op, "clean") == 0) op_req = p->clean_required;
-    /* query 不强制必填参数（无参时脚本自行展示全部），与 cnf 路径 precheck 一致 */
+    /* query 不强制必填参数（无参时脚本自行展示全部），与 cnf 路径 precheck 一�?*/
     if (op_req && !required_params_present(op_req, params))
         return result_err(op, p->uid, 3, "missing required params");
     if (p->precheck) {
@@ -312,7 +306,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
             if (id < 0) {
                 result_free(r);
                 return result_err("inject", p->uid, 1,
-                    "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                    "state table full, cannot track injection �?run 'dcat query' and clean existing faults");
             }
             cJSON *root = cJSON_Parse(r->json);
             if (root) {
@@ -348,7 +342,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     return result_err(op, p->uid, 3, "op not in supported_ops");
 }
 
-/* query 无 uid：列出 dcat 自身全部活跃注入记录（SPEC §6） */
+/* query �?uid：列�?dcat 自身全部活跃注入记录（SPEC §6�?*/
 static void append_active_record(const injection_record_t *r, void *ctx) {
     cJSON *arr = (cJSON *)ctx;
     cJSON *o = cJSON_CreateObject();
@@ -368,7 +362,7 @@ static result_t *dispatch_query_all(void) {
     state_for_each_active(append_active_record, arr);
     int n = cJSON_GetArraySize(arr);
     if (n > 1) {
-        /* 多条记录：表格输出（人类可读） */
+        /* 多条记录：表格输出（人类可读�?*/
         size_t cap = 256 + (size_t)n * 256;
         char *out = malloc(cap);
         if (!out) { cJSON_Delete(arr); return result_err("query", NULL, 1, "out of memory"); }
@@ -460,7 +454,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
                 if (id < 0) {
                     result_free(r);
                     return result_err("inject", uid, 1,
-                        "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                        "state table full, cannot track injection �?run 'dcat query' and clean existing faults");
                 }
             }
             return r;

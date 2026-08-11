@@ -99,7 +99,7 @@ int test_state_save_creates_missing_parent_dir(void) {
     ASSERT_TRUE(state_add("rNET_delay", &p) > 0);
     state_save();
     state_reset();
-    state_load();                                   /* 父目录不存在时 fopen 失败 → load 找不到 */
+    state_load();                                   /* 父目录不存在�?fopen 失败 �?load 找不�?*/
     long long ids[DCAT_MAX_RECORDS];
     ASSERT_INT_EQ(state_find_by_params("rNET_delay", &p, ids, DCAT_MAX_RECORDS), 1);
     unlink("/tmp/dcat-fresh-state-test/sub/state.json");

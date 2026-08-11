@@ -1,4 +1,4 @@
-/* tests/test_smoke_process.c â€” Tier 3: real execution tests for process faults */
+/* tests/test_smoke_process.c â€?Tier 3: real execution tests for process faults */
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"
@@ -95,7 +95,7 @@ int main(void) {
         waitpid(pid, NULL, 0);  /* reap to avoid zombie interfering with zstate test */
     }
 
-    /* ---- rPROC_zstate (kill target â†’ zombie) ---- */
+    /* ---- rPROC_zstate (kill target â†?zombie) ---- */
     {
         /* Create watcher process (detached via setsid) that forks target and won't reap.
          * This isolates the parent so clean killing the parent doesn't kill the test. */

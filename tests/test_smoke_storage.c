@@ -1,4 +1,4 @@
-/* tests/test_smoke_storage.c — Tier 3: real execution tests for storage + port_occupy */
+/* tests/test_smoke_storage.c �?Tier 3: real execution tests for storage + port_occupy */
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"
@@ -52,7 +52,7 @@ static void smoke_teardown(void) {
     state_reset();
     state_set_file("");
     unlink("/tmp/dcat_smoke_storage.json");
-    /* unlink() 不支持 glob,需用 shell 通配清理 */
+    /* unlink() 不支�?glob,需�?shell 通配清理 */
     system("rm -f /tmp/dcat-rDISK_write_overload-*.pid");
     system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*");
     system("rm -f /tmp/dcat-rNET_port_occupy-*.pid");

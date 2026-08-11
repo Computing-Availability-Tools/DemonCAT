@@ -19,7 +19,7 @@ int test_build_cmd_and_env(void) {
     params_t p; params_init(&p);
     params_set(&p, "iface", "eth0");
     params_set(&p, "loss_pct", "5");
-    result_t *r = executor_run_fault(&f, "inject", &p, 0);  /* timeout=0 不超时 */
+    result_t *r = executor_run_fault(&f, "inject", &p, 0);  /* timeout=0 不超�?*/
     ASSERT_TRUE(g_last_cmd != NULL);
     ASSERT_STR_CONTAINS(g_last_cmd, "/x/net_loss.sh");
     ASSERT_TRUE(g_last_env != NULL);

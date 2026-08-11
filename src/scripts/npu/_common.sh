@@ -1,4 +1,4 @@
-# _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
+# _common.sh �?npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
 npu_check_env() {
     command -v hccn_tool >/dev/null 2>&1 || { echo "hccn_tool not found in PATH" >&2; exit 1; }
@@ -31,7 +31,7 @@ npu_list_chips() {
             esac
         done
     else
-        # 从 /dev/davinci* 设备文件动态获取 chip 列表（不硬编码数量）
+        # �?/dev/davinci* 设备文件动态获�?chip 列表（不硬编码数量）
         for d in /dev/davinci[0-9]*; do
             [ -e "$d" ] || continue
             basename "$d" | grep -oE '[0-9]+$'
@@ -39,7 +39,7 @@ npu_list_chips() {
     fi
 }
 
-# Execute callback for each chip: chip has value → once; chip empty → all devices
+# Execute callback for each chip: chip has value �?once; chip empty �?all devices
 # Exit code: 0 if any chip confirms fault, 1 if none (for dispatch confirmed flag)
 # Usage: npu_foreach_chip 'command with $HCCN'
 npu_foreach_chip() {

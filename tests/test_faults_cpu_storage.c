@@ -1,4 +1,4 @@
-/* tests/test_faults_cpu_storage.c â€” Tier 1: mock table-driven tests for CPU (2) + storage (1) */
+/* tests/test_faults_cpu_storage.c â€?Tier 1: mock table-driven tests for CPU (2) + storage (1) */
 #include "test_faults_common.h"
 
 int main(void) {

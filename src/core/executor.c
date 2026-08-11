@@ -72,7 +72,7 @@ result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_
     int nenv = 0;
     const char **env = build_env(f, op, p, &nenv);
     if (g_mock) {
-        return g_mock(f->script, env);  /* mock 场景 env 供测试检查，不释放 */
+        return g_mock(f->script, env);  /* mock 场景 env 供测试检查，不释�?*/
     }
     clear_stale_env_params(f);
     int pipefd[2];
@@ -81,8 +81,7 @@ result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_
     if (pid < 0) { free_env(env, nenv); close(pipefd[0]); close(pipefd[1]); return result_err(op, f->uid, 1, "fork failed"); }
     if (pid == 0) {
         apply_env(env, nenv);
-        /* stdin 从 /dev/null 读：脚本的参数经 env 传入，不应读 dcat 的 stdin；
-         * 非交互场景（cron/ctest/管道）下 stdin 为空管道，脚本误 read 会永久阻塞。 */
+        /* stdin �?/dev/null 读：脚本的参数经 env 传入，不应读 dcat �?stdin�?         * 非交互场景（cron/ctest/管道）下 stdin 为空管道，脚本误 read 会永久阻塞�?*/
         int devnull = open("/dev/null", O_RDONLY);
         if (devnull >= 0) { dup2(devnull, 0); close(devnull); }
         dup2(pipefd[1], 1); dup2(pipefd[1], 2); close(pipefd[0]); close(pipefd[1]);
@@ -126,7 +125,7 @@ int executor_run_raw_fault(const fault_def_t *f, const char *op, const params_t 
         result_t *r = g_mock(f->script, env);
         int code = r ? r->code : 1;
         result_free(r);
-        return code;  /* mock 场景 env 供测试检查，不释放 */
+        return code;  /* mock 场景 env 供测试检查，不释�?*/
     }
     clear_stale_env_params(f);
     apply_env(env, nenv);

@@ -59,9 +59,9 @@ static void smoke_teardown(void) {
     state_set_file("");
     unlink("/tmp/dcat_smoke_storage.json");
     /* unlink() 不支持 glob,需用 shell 通配清理 */
-    system("rm -f /tmp/dcat-rDISK_write_overload-*.pid");
-    system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*");
-    system("rm -f /tmp/dcat-rNET_port_occupy-*.pid");
+    if (system("rm -f /tmp/dcat-rDISK_write_overload-*.pid")) {}
+    if (system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*")) {}
+    if (system("rm -f /tmp/dcat-rNET_port_occupy-*.pid")) {}
 }
 
 int main(void) {
@@ -117,7 +117,7 @@ int main(void) {
         FILE *f = popen(cmd, "r");
         CK(f);
         int n = 0;
-        fscanf(f, "%d", &n);
+        if (fscanf(f, "%d", &n) != 1) n = 0;
         pclose(f);
         CK(n >= 1);
 
@@ -130,7 +130,7 @@ int main(void) {
         f = popen(cmd, "r");
         CK(f);
         n = 0;
-        fscanf(f, "%d", &n);
+        if (fscanf(f, "%d", &n) != 1) n = 0;
         pclose(f);
         CK(n == 0);
     }

@@ -38,14 +38,14 @@ static void setup(void) {
     state_set_file(SFILE);
     state_load(); /* 首次文件不存在 → state_is_lost()=1，内存空 */
     executor_set_mock(NULL);
-    system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null");
+    if (system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null")) {}
 }
 
 static void teardown(void) {
     state_reset();
     state_set_file("");
     unlink(SFILE);
-    system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null");
+    if (system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null")) {}
 }
 
 /* fork 一个 sleep 子进程并注入 rPROC_hang（SIGSTOP + 写 sidecar + 写 state）；

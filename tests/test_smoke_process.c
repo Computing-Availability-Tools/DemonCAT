@@ -143,7 +143,7 @@ int main(void) {
         char target_str[16] = {0};
         FILE *f = fopen("/tmp/dcat_zstate_test.pid", "r");
         CK(f);
-        fscanf(f, "%15s", target_str);
+        if (fscanf(f, "%15s", target_str) != 1) target_str[0] = '\0';
         fclose(f);
         unlink("/tmp/dcat_zstate_test.pid");
 
@@ -169,7 +169,7 @@ int main(void) {
         f = popen(cmd, "r");
         CK(f);
         int n = 0;
-        fscanf(f, "%d", &n);
+        if (fscanf(f, "%d", &n) != 1) n = 0;
         pclose(f);
         CK(n == 0);
         kill(watcher, 9);

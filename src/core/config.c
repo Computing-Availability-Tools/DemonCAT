@@ -31,8 +31,12 @@ int config_load(const char *path, config_t *cfg) {
             cur = NULL;
             if (strncmp(section, "fault.", 6) == 0 && cfg->fault_count < DCAT_MAX_FAULTS) {
                 cur = &cfg->faults[cfg->fault_count++];
-                strncpy(cur->uid, section + 6, sizeof(cur->uid) - 1);
-                cur->uid[sizeof(cur->uid) - 1] = '\0';
+                {
+                    size_t _len = strlen(section + 6);
+                    if (_len >= sizeof(cur->uid)) _len = sizeof(cur->uid) - 1;
+                    memcpy(cur->uid, section + 6, _len);
+                    cur->uid[_len] = '\0';
+                }
             }
             continue;
         }

@@ -39,8 +39,7 @@ static result_t *dispatch_list(void) {
         char buf[64];
         strncpy(buf, list[i].supported_ops, sizeof(buf) - 1);
         buf[sizeof(buf) - 1] = '\0';
-        strncpy(opsbuf[m], buf, sizeof(opsbuf[m]) - 1);
-        opsbuf[m][sizeof(opsbuf[m]) - 1] = '\0';
+        snprintf(opsbuf[m], sizeof(opsbuf[m]), "%s", buf);
         rows[m].ops = opsbuf[m];
         rows[m].desc = list[i].desc;
         m++;
@@ -55,8 +54,7 @@ static result_t *dispatch_list(void) {
         char pbuf[64];
         strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf) - 1);
         pbuf[sizeof(pbuf) - 1] = '\0';
-        strncpy(opsbuf[m], pbuf, sizeof(opsbuf[m]) - 1);
-        opsbuf[m][sizeof(opsbuf[m]) - 1] = '\0';
+        snprintf(opsbuf[m], sizeof(opsbuf[m]), "%s", pbuf);
         rows[m].ops = opsbuf[m];
         rows[m].desc = (plugs[i]->description && plugs[i]->description[0]) ? plugs[i]->description : "";
         m++;

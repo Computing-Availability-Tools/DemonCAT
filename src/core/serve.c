@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <limits.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -212,7 +213,7 @@ static void serve_static(int fd, const char *webroot, const char *raw_path) {
         return;
     }
     /* Verify resolved path is under webroot */
-    char real_full[1536], real_webroot[1536];
+    char real_full[PATH_MAX], real_webroot[PATH_MAX];
     if (realpath(full, real_full) && realpath(webroot, real_webroot)) {
         size_t wlen = strlen(real_webroot);
         if (strncmp(real_full, real_webroot, wlen) != 0 ||

@@ -255,7 +255,7 @@ if [ "$HAS_HCCN" = 1 ]; then
             fail "$uid" "inject 失败 (hccn_tool 可能需要特定芯片状态)"
         fi
     done
-    skip "其余 15 条 rNPU_*" "需要特定 NPU 配置参数，请参照 docs/manual_test_guide.md 手动测试"
+    skip "其余 15 条 rNPU_*" "需要特定 NPU 配置参数，请参照 docs/Manual_Test_Reference.md 手动测试"
 else
     skip "全部 19 条 rNPU_*" "hccn_tool 不可用 — 需要 Atlas NPU 物理机，WSL 无法模拟。原因：所有 NPU 故障通过 hccn_tool 操作 RoCE 网卡，无硬件无法执行 inject/clean/query 的任何一步"
 fi

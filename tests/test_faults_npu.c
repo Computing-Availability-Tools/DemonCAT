@@ -38,70 +38,73 @@ int main(void) {
         CK(r && r->code == 0); CMD_CONTAINS("netdetect_change.sh"); result_free(r);
         r = dispatch_route("rNPU_netdetect_change", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_arp_poison */
+    /* rNPU_arp (action=add) */
     {
-        params_t p = mkparams("chip", "0", "dev", "eth0", "ip", "192.168.1.50", "mac", "aa:bb:cc:dd:ee:ff",
-                              NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_arp_poison", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("arp_poison.sh");
+        params_t p = mkparams("chip", "0", "action", "add", "dev", "eth0", "ip", "192.168.1.50", "mac", "aa:bb:cc:dd:ee:ff",
+                              NULL,NULL);
+        result_t *r = dispatch_route("rNPU_arp", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("arp.sh");
         check_param_env("mac", "aa:bb:cc:dd:ee:ff"); result_free(r);
-        r = dispatch_route("rNPU_arp_poison", "clean", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rNPU_arp", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_arp_del */
+    /* rNPU_arp (action=del) */
     {
-        params_t p = mkparams("chip", "0", "dev", "eth0", "ip", "192.168.1.50", NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_arp_del", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("arp_del.sh"); result_free(r);
-        r = dispatch_route("rNPU_arp_del", "clean", &p); CK(r && r->code == 0); result_free(r);
+        params_t p = mkparams("chip", "0", "action", "del", "dev", "eth0", "ip", "192.168.1.50", NULL,NULL, NULL,NULL);
+        result_t *r = dispatch_route("rNPU_arp", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("arp.sh"); result_free(r);
+        r = dispatch_route("rNPU_arp", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_route_add */
+    /* rNPU_route (action=add) */
     {
-        params_t p = mkparams("chip", "0", "address", "10.0.0.0", "netmask", "255.0.0.0", "gateway", "192.168.1.1",
-                              NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_route_add", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("route_add.sh"); result_free(r);
-        r = dispatch_route("rNPU_route_add", "clean", &p); CK(r && r->code == 0); result_free(r);
+        params_t p = mkparams("chip", "0", "action", "add", "address", "10.0.0.0", "netmask", "255.0.0.0", "gateway", "192.168.1.1",
+                              NULL,NULL);
+        result_t *r = dispatch_route("rNPU_route", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("route.sh");
+        r = dispatch_route("rNPU_route", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_route_del */
+    /* rNPU_route (action=del) */
     {
-        params_t p = mkparams("chip", "0", "address", "10.0.0.0", "netmask", "255.0.0.0", NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_route_del", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("route_del.sh"); result_free(r);
-        r = dispatch_route("rNPU_route_del", "clean", &p); CK(r && r->code == 0); result_free(r);
+        params_t p = mkparams("chip", "0", "action", "del", "address", "10.0.0.0", "netmask", "255.0.0.0", NULL,NULL, NULL,NULL);
+        result_t *r = dispatch_route("rNPU_route", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("route.sh"); result_free(r);
+        r = dispatch_route("rNPU_route", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_iprule_add */
+    /* rNPU_iprule (action=add) */
     {
-        params_t p = mkparams("chip", "0", "dir", "in", "ip", "192.168.1.50", "table", "100",
-                              NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_iprule_add", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("iprule_add.sh");
+        params_t p = mkparams("chip", "0", "action", "add", "dir", "in", "ip", "192.168.1.50", "table", "100",
+                              NULL,NULL);
+        result_t *r = dispatch_route("rNPU_iprule", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("iprule.sh");
         check_param_env("dir", "in"); check_param_env("table", "100"); result_free(r);
-        r = dispatch_route("rNPU_iprule_add", "clean", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rNPU_iprule", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_iprule_del */
+    /* rNPU_iprule (action=del) */
     {
-        params_t p = mkparams("chip", "0", "dir", "in", "ip", "192.168.1.50", NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_iprule_del", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("iprule_del.sh"); result_free(r);
-        r = dispatch_route("rNPU_iprule_del", "clean", &p); CK(r && r->code == 0); result_free(r);
+        params_t p = mkparams("chip", "0", "action", "del", "dir", "in", "ip", "192.168.1.50", NULL,NULL, NULL,NULL);
+        result_t *r = dispatch_route("rNPU_iprule", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("iprule.sh"); result_free(r);
+        r = dispatch_route("rNPU_iprule", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_iproute_add (6 params) */
+    /* rNPU_iproute (action=add, 7 params — use params_set, mkparams max=6) */
     {
-        params_t p = mkparams("chip", "0", "ip", "10.0.0.1", "ip_mask", "255.0.0.0",
-                              "via", "192.168.1.1", "dev", "eth0", "table", "100");
-        result_t *r = dispatch_route("rNPU_iproute_add", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("iproute_add.sh");
+        params_t p; params_init(&p);
+        params_set(&p, "chip", "0"); params_set(&p, "action", "add");
+        params_set(&p, "ip", "10.0.0.1"); params_set(&p, "ip_mask", "255.0.0.0");
+        params_set(&p, "via", "192.168.1.1"); params_set(&p, "dev", "eth0");
+        params_set(&p, "table", "100");
+        result_t *r = dispatch_route("rNPU_iproute", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("iproute.sh");
         check_param_env("ip_mask", "255.0.0.0"); check_param_env("via", "192.168.1.1");
         check_param_env("dev", "eth0"); check_param_env("table", "100"); result_free(r);
-        r = dispatch_route("rNPU_iproute_add", "clean", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rNPU_iproute", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_iproute_del */
+    /* rNPU_iproute (action=del) */
     {
-        params_t p = mkparams("chip", "0", "ip", "10.0.0.1", "ip_mask", "255.0.0.0", "table", "100",
-                              NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_iproute_del", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("iproute_del.sh"); result_free(r);
-        r = dispatch_route("rNPU_iproute_del", "clean", &p); CK(r && r->code == 0); result_free(r);
+        params_t p = mkparams("chip", "0", "action", "del", "ip", "10.0.0.1", "ip_mask", "255.0.0.0", "table", "100",
+                              NULL,NULL);
+        result_t *r = dispatch_route("rNPU_iproute", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("iproute.sh"); result_free(r);
+        r = dispatch_route("rNPU_iproute", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
     /* rNPU_bw_limit */
     {

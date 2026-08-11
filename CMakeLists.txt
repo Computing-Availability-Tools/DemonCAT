@@ -75,11 +75,13 @@ dcat_test(test_help         tests/test_help.c)
 dcat_test(test_plugin_manager     tests/test_plugin_manager.c)
 dcat_test(test_plugin_integration tests/test_plugin_integration.c)
 
-# ---- Tier 1: Mock 表驱动故障测试 (33 条全覆盖) ----
+# ---- Tier 1: Mock 表驱动故障测试 (v0.1 33 条 + 批次2 30 条全覆盖) ----
 dcat_test(test_faults_cpu_storage  tests/test_faults_cpu_storage.c)
 dcat_test(test_faults_network      tests/test_faults_network.c)
 dcat_test(test_faults_process     tests/test_faults_process.c)
 dcat_test(test_faults_npu         tests/test_faults_npu.c)
+dcat_test(test_faults_batch2_newmods tests/test_faults_batch2_newmods.c)
+dcat_test(test_faults_batch2_ext     tests/test_faults_batch2_ext.c)
 
 # ---- Tier 2: 脚本语法检查 (sh -n) ----
 add_test(NAME test_syntax COMMAND sh tests/check_syntax.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

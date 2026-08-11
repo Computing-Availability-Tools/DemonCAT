@@ -2,7 +2,7 @@
 """tests/e2e/gen_cases.py — dcat e2e 测试用例自动生成器
 
 8 类分类（混沌工程 + 测试矩阵）：
-  FUNC  : 功能基线 — 33 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
+  FUNC  : 功能基线 — 59 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
   BOUND : 边界值 — 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法）
   SEC   : 安全 — 命令注入(inject+clean+query) + 权限边界 + 主机安全(路径穿越/symlink)
   STATE : 状态一致性 — clean×2/--force/reinject 拒绝/query 幂等/并发 inject
@@ -172,6 +172,112 @@ OBS = {
         provision="none", precondition="hccn_tool",
         v_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", v_assert="contains:4792",
         c_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", c_assert="contains:4791"),
+    # ---- batch2 新增故障 (26 条, 排除 sys_panic/sys_poweroff) ----
+    "rMEM_leak": dict(module="memory", inject_args="--size_mb=32", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rMEM_oom": dict(module="memory", inject_args="--rate_mb=256", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rMEM_fragment": dict(module="memory", inject_args="--blocks=20", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rMEM_swap_overload": dict(module="memory", inject_args="--size_mb=128", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rCPU_quota": dict(module="cpu", inject_args="--quota_pct=50", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rCPU_freq": dict(module="cpu", inject_args="--cores=0 --freq_mhz=1000", clean_args="",
+        provision="none", precondition="root+cpufreq",
+        v_cmd="cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null", v_assert="eq:1000000",
+        c_cmd="cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null", c_assert="ne:1000000"),
+    "rCPU_core_hang": dict(module="cpu", inject_args="--cores=0", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_part_full": dict(module="storage", inject_args="--path=/tmp --size=50M", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rDISK_part_full.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_part_full.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_inode_exhaust": dict(module="storage", inject_args="--path=/tmp --count=500", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rDISK_inode_exhaust.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_inode_exhaust.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_io_delay": dict(module="storage", inject_args="--device={loop_dev} --delay_ms=10", clean_args="",
+        provision="loop_device", precondition="root+dm_delay",
+        v_cmd="ls /tmp/dcat-rDISK_io_delay.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_io_delay.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_io_error": dict(module="storage", inject_args="--device={loop_dev}", clean_args="",
+        provision="loop_device", precondition="root+dm_error",
+        v_cmd="ls /tmp/dcat-rDISK_io_error.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_io_error.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_scsi_error": dict(module="storage", inject_args="--device={loop_dev}", clean_args="",
+        provision="loop_device", precondition="root+fail_make_request",
+        v_cmd="ls /tmp/dcat-rDISK_scsi_error.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_scsi_error.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_loss": dict(module="storage", inject_args="--device={loop_dev}", clean_args="",
+        provision="loop_device", precondition="root+scsi_disk",
+        v_cmd="ls /tmp/dcat-rDISK_loss.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_loss.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rNET_corrupt": dict(module="network", inject_args="--iface={iface} --corrupt_pct=10", clean_args="",
+        provision="dummy_iface", precondition="root+tc+dummy_iface",
+        v_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", v_assert=">=1",
+        c_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", c_assert="==0"),
+    "rNET_conn_exhaust": dict(module="network", inject_args="--target=127.0.0.1:{port} --count=20", clean_args="",
+        provision="free_port", precondition="none",
+        v_cmd="ls /tmp/dcat-rNET_conn_exhaust.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rNET_conn_exhaust.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rPROC_fork_bomb": dict(module="process", inject_args="--count=20", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rPROC_loop": dict(module="process", inject_args="--threads=1", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rPROC_fd_exhaust": dict(module="process", inject_args="--count=256", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rFS_file_lock": dict(module="filesystem", inject_args="--path=/tmp/dcat_fslock_test --mode=nowrite", clean_args="",
+        provision="none", precondition="none",
+        setup_cmd="echo test > /tmp/dcat_fslock_test",
+        v_cmd="stat -c %a /tmp/dcat_fslock_test 2>/dev/null", v_assert="eq:444",
+        c_cmd="stat -c %a /tmp/dcat_fslock_test 2>/dev/null", c_assert="ne:444"),
+    "rFS_iowait_high": dict(module="filesystem", inject_args="--path=/tmp --workers=1", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rFS_iowait_high.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rFS_iowait_high.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rDOCKER_kill": dict(module="docker", inject_args="--container={ctr}", clean_args="",
+        provision="docker_container", precondition="docker",
+        v_cmd="docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null", v_assert="eq:exited",
+        c_cmd="docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null", c_assert="ne:exited"),
+    "rDOCKER_mem_overload": dict(module="docker", inject_args="--container={ctr} --size=128M", clean_args="",
+        provision="docker_container", precondition="docker+python3",
+        v_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rNPU_freq_down": dict(module="npu", inject_args="--chip=2 --freq=1000", clean_args="--chip=2",
+        provision="none", precondition="hccn_tool",
+        v_cmd="ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l", c_assert="==0"),
+    "rNPU_aic_fault": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_fault", v_assert=">=1",
+        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_fault", c_assert="==0"),
+    "rNPU_aiv_fault": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_fault", v_assert=">=1",
+        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_fault", c_assert="==0"),
+    "rNPU_hbm_fault": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_fault", v_assert=">=1",
+        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_fault", c_assert="==0"),
 }
 
 
@@ -347,6 +453,56 @@ def gen():
     b_reject("rNPU_dscp_tc_change", "--chip=2 --dscp=64 --tc=1", 1, '', "dscp: 64 above range")
     b_reject("rNPU_dscp_tc_change", "--chip=2 --dscp=-1 --tc=1", 1, '', "dscp: negative")
 
+    # ---- batch2 新增参数类型边界值 ----
+    # quota_pct (1-99 range)
+    b_reject("rCPU_quota", "--quota_pct=0", 1, 'quota_pct must be', "quota_pct: 0 below range")
+    b_reject("rCPU_quota", "--quota_pct=100", 1, 'quota_pct must be', "quota_pct: 100 above range")
+    b_reject("rCPU_quota", "--quota_pct=-1", 1, 'quota_pct must be', "quota_pct: negative")
+    b_reject("rCPU_quota", "--quota_pct=abc", 1, 'quota_pct must be', "quota_pct: non-numeric")
+    b_reject("rCPU_quota", "", 3, 'missing required parameter', "quota_pct: missing")
+    # freq_mhz (positive integer)
+    b_reject("rCPU_freq", "--cores=0 --freq_mhz=0", 1, '', "freq_mhz: 0 invalid")
+    b_reject("rCPU_freq", "--cores=0 --freq_mhz=-1", 1, '', "freq_mhz: negative")
+    b_reject("rCPU_freq", "--cores=0 --freq_mhz=abc", 1, '', "freq_mhz: non-numeric")
+    # corrupt_pct (0-100 range)
+    b_reject("rNET_corrupt", "--iface=dcat-e2e0 --corrupt_pct=-1", 1, '', "corrupt_pct: negative")
+    b_reject("rNET_corrupt", "--iface=dcat-e2e0 --corrupt_pct=101", 1, '', "corrupt_pct: 101 above 100")
+    b_reject("rNET_corrupt", "--iface=dcat-e2e0 --corrupt_pct=abc", 1, '', "corrupt_pct: non-numeric")
+    # blocks (positive integer)
+    b_reject("rMEM_fragment", "--blocks=0", 1, '', "blocks: 0 invalid")
+    b_reject("rMEM_fragment", "--blocks=-1", 1, '', "blocks: negative")
+    b_reject("rMEM_fragment", "--blocks=abc", 1, '', "blocks: non-numeric")
+    # threads (positive integer)
+    b_reject("rPROC_loop", "--threads=0", 1, '', "threads: 0 invalid")
+    b_reject("rPROC_loop", "--threads=-1", 1, '', "threads: negative")
+    b_reject("rPROC_loop", "--threads=abc", 1, '', "threads: non-numeric")
+    # count (positive integer, rPROC_fork_bomb)
+    b_reject("rPROC_fork_bomb", "--count=0", 1, '', "count: 0 invalid")
+    b_reject("rPROC_fork_bomb", "--count=-1", 1, '', "count: negative")
+    b_reject("rPROC_fork_bomb", "--count=abc", 1, '', "count: non-numeric")
+    # rate_mb (positive integer)
+    b_reject("rMEM_oom", "--rate_mb=0", 1, '', "rate_mb: 0 invalid")
+    b_reject("rMEM_oom", "--rate_mb=-1", 1, '', "rate_mb: negative")
+    b_reject("rMEM_oom", "--rate_mb=abc", 1, '', "rate_mb: non-numeric")
+    # size_mb (positive integer, rMEM_leak)
+    b_reject("rMEM_leak", "--size_mb=0", 1, '', "size_mb: 0 invalid")
+    b_reject("rMEM_leak", "--size_mb=-1", 1, '', "size_mb: negative")
+    b_reject("rMEM_leak", "--size_mb=abc", 1, '', "size_mb: non-numeric")
+    # mode (enum noread/nowrite/norw/nodelete)
+    b_reject("rFS_file_lock", "--path=/tmp --mode=invalid", 1, 'mode must be one of', "mode: invalid enum")
+    b_reject("rFS_file_lock", "--path=/tmp", 3, 'missing required parameter', "mode: missing")
+    # target (host:port format)
+    b_reject("rNET_conn_exhaust", "--target=", 3, 'missing required parameter', "target: empty")
+    b_reject("rNET_conn_exhaust", "--target=noport", 1, '', "target: no port separator")
+    # container (string, must exist)
+    b_reject("rDOCKER_kill", "--container=", 3, 'missing required parameter', "container: empty")
+    b_reject("rDOCKER_kill", "--container=nonexistent_ctr_xyz", 1, '', "container: not found")
+    # path (directory, rDISK_part_full)
+    b_reject("rDISK_part_full", "--path=/nonexistent_dir_xyz", 1, '', "path: not a directory")
+    b_reject("rDISK_part_full", "--path=", 3, 'missing required parameter', "path: empty")
+    # device (block device, rDISK_io_error)
+    b_reject("rDISK_io_error", "--device=/tmp/not_a_block_dev", 1, '', "device: not a block device")
+
     # ================================================================
     # SEC: 安全 (命令注入 inject+clean+query + 权限边界 + 主机安全)
     # ================================================================
@@ -484,6 +640,25 @@ def gen():
     add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject1 NPU")
     add(flow, 2, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
     add(flow, 3, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip=2", 0, "", "", "", "", "cleanup NPU")
+    s_s += 1
+    # S8: batch2 新增故障 clean×2 (rMEM_leak, 无参 clean 幂等)
+    flow = f"STATE-{s_s}"
+    add(flow, 0, "memory", "rMEM_leak", "inject", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject")
+    add(flow, 1, "memory", "rMEM_leak", "clean1", "none", f"{DCAT} clean rMEM_leak", 0, "", "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", "==0", "", "first clean ok")
+    add(flow, 2, "memory", "rMEM_leak", "clean2", "none", f"{DCAT} clean rMEM_leak", 1, "", "", "", "", "second clean: no active")
+    s_s += 1
+    # S9: batch2 新增故障 reinject 拒绝 code5 (rMEM_leak)
+    flow = f"STATE-{s_s}"
+    add(flow, 0, "memory", "rMEM_leak", "inject1", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject1")
+    add(flow, 1, "memory", "rMEM_leak", "reject", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 5, "", "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", ">=1", "", "reinject rejected code5")
+    add(flow, 2, "memory", "rMEM_leak", "clean", "none", f"{DCAT} clean rMEM_leak", 0, "", "", "", "", "cleanup")
+    s_s += 1
+    # S10: batch2 新增故障 --force 替换 (rMEM_leak)
+    flow = f"STATE-{s_s}"
+    add(flow, 0, "memory", "rMEM_leak", "inject1", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject1")
+    add(flow, 1, "memory", "rMEM_leak", "force_replace", "none", f"{DCAT} inject rMEM_leak --size_mb=32 --force", 0, '"status":"ok"', "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", ">=1", "", "--force replace")
+    add(flow, 2, "memory", "rMEM_leak", "query_one", "none", f"{DCAT} query", 0, "", "", "state_contains:rMEM_leak", "", "one record")
+    add(flow, 3, "memory", "rMEM_leak", "clean", "none", f"{DCAT} clean rMEM_leak", 0, "", "", "", "", "cleanup")
     s_s += 1
 
     # ================================================================

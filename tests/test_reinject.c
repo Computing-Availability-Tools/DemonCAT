@@ -188,28 +188,28 @@ int test_reinject_network_force_replace(void) {
     return 0;
 }
 
-/* ---- 多参资源键 AND (rNPU_arp_poison: chip,dev,ip) ---- */
+/* ---- 多参资源键 AND (rNPU_arp: chip,dev,ip) ---- */
 int test_reinject_multiparam_and_logic(void) {
     setup();
     params_t a; params_init(&a);
-    params_set(&a, "chip", "0"); params_set(&a, "dev", "eth0");
+    params_set(&a, "chip", "0"); params_set(&a, "action", "add"); params_set(&a, "dev", "eth0");
     params_set(&a, "ip", "1.1.1.1"); params_set(&a, "mac", "de:ad:01");
-    ASSERT_TRUE(dispatch_route_force("rNPU_arp_poison", "inject", &a, 0)->code == 0);
+    ASSERT_TRUE(dispatch_route_force("rNPU_arp", "inject", &a, 0)->code == 0);
 
     params_t b; params_init(&b);                        /* 不同 ip → 不同资源 */
-    params_set(&b, "chip", "0"); params_set(&b, "dev", "eth0");
+    params_set(&b, "chip", "0"); params_set(&b, "action", "add"); params_set(&b, "dev", "eth0");
     params_set(&b, "ip", "2.2.2.2"); params_set(&b, "mac", "de:ad:02");
-    ASSERT_TRUE(dispatch_route_force("rNPU_arp_poison", "inject", &b, 0)->code == 0);
+    ASSERT_TRUE(dispatch_route_force("rNPU_arp", "inject", &b, 0)->code == 0);
 
     params_t c; params_init(&c);                        /* 同 chip,dev,ip → 重叠 */
-    params_set(&c, "chip", "0"); params_set(&c, "dev", "eth0");
+    params_set(&c, "chip", "0"); params_set(&c, "action", "add"); params_set(&c, "dev", "eth0");
     params_set(&c, "ip", "1.1.1.1"); params_set(&c, "mac", "de:ad:03");
-    result_t *rc = dispatch_route_force("rNPU_arp_poison", "inject", &c, 0);
+    result_t *rc = dispatch_route_force("rNPU_arp", "inject", &c, 0);
     ASSERT_INT_EQ(rc->code, 5);
     ASSERT_STR_CONTAINS(rc->json, "ip=1.1.1.1");
     result_free(rc);
 
-    result_t *rf = dispatch_route_force("rNPU_arp_poison", "inject", &c, 1);  /* force 替换 */
+    result_t *rf = dispatch_route_force("rNPU_arp", "inject", &c, 1);  /* force 替换 */
     ASSERT_TRUE(rf && rf->code == 0); result_free(rf);
     ASSERT_INT_EQ(state_list_active(), 2);              /* b(2.2.2.2) + c(1.1.1.1) */
     return 0;

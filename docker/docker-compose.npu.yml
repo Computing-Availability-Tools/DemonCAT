@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  demoncat:
+    volumes:
+      - /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
+      - /usr/local/Ascend/nnae:/usr/local/Ascend/nnae:ro
+    devices:
+      - /dev/davinci0
+      - /dev/davinci1
+    environment:
+      LD_LIBRARY_PATH: /usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64
+      PATH: /usr/local/Ascend/driver/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

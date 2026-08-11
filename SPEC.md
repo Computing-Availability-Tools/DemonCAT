@@ -150,14 +150,10 @@ dcat list
 | `rNPU_ip_change` | npu | inject,clean,query | chip,address,netmask | — |
 | `rNPU_gw_change` | npu | inject,clean,query | chip,gateway | — |
 | `rNPU_netdetect_change` | npu | inject,clean,query | chip,address | — |
-| `rNPU_arp_poison` | npu | inject,clean,query | chip,dev,ip,mac | — |
-| `rNPU_arp_del` | npu | inject,clean,query | chip,dev,ip | — |
-| `rNPU_route_add` | npu | inject,clean,query | chip,address,netmask,gateway | — |
-| `rNPU_route_del` | npu | inject,clean,query | chip,address,netmask | — |
-| `rNPU_iprule_add` | npu | inject,clean,query | chip,dir,ip,table | — |
-| `rNPU_iprule_del` | npu | inject,clean,query | chip,dir,ip | — |
-| `rNPU_iproute_add` | npu | inject,clean,query | chip,ip,ip_mask,via,dev,table | — |
-| `rNPU_iproute_del` | npu | inject,clean,query | chip,ip,ip_mask,table | — |
+| `rNPU_arp` | npu | inject,clean,query | chip,action,dev,ip | mac |
+| `rNPU_route` | npu | inject,clean,query | chip,action,address,netmask | gateway |
+| `rNPU_iprule` | npu | inject,clean,query | chip,action,dir,ip | table |
+| `rNPU_iproute` | npu | inject,clean,query | chip,action,ip,ip_mask,table | via,dev |
 | `rNPU_bw_limit` | npu | inject,clean,query | chip,bw_limit | — |
 | `rNPU_mtu_mismatch` | npu | inject,clean,query | chip,size | — |
 | `rNPU_dscp_tc_change` | npu | inject,clean,query | chip,dscp,tc | — |
@@ -262,7 +258,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 
 对同一资源的重复注入，dcat **默认拒绝**（退出码 5），需显式 `--force` 才原子替换。
 
-- **资源键** = 故障的 `clean_required` 各参数（资源标识，非值参数）。例：`rCPU_overload` 资源键=`cores`；`rNET_delay` 资源键=`iface`；`rNPU_arp_poison` 资源键=`chip,dev,ip`。
+- **资源键** = 故障的 `clean_required` 各参数（资源标识，非值参数）。例：`rCPU_overload` 资源键=`cores`；`rNET_delay` 资源键=`iface`；`rNPU_arp` 资源键=`chip,dev,ip`。
 - **重叠判定**：
   - `cores` 参数走**集合交集**（核集语义）：`0,1` 与 `0-8` 重叠（核 0、1 相交），`0,1` 与 `2,3` 不重叠。
   - 其余参数（device/iface/port/pid/chip/...）走**精确等值**；多参资源键（如 chip,dev,ip）各参精确 AND。

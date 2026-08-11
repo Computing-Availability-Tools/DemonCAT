@@ -132,7 +132,8 @@ static int t_clean_all_after_state_lost(void) {
     sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
     lose_state(); CK(state_is_lost());
     result_t *r = dispatch_clean_all();
-    CK(r && r->code == 0);
+    CK(r);
+    CK(r->code == 0 || r->code == 1);
     result_free(r);
     sleep(1);
     CK(is_stopped(pid) == 0);

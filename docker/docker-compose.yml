@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  demoncat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: demoncat:latest
+    privileged: true
+    network_mode: host
+    pid: host
+    entrypoint: ["dcat"]
+    command: ["serve", "--port", "8080"]
+    volumes:
+      - dcat-state:/var/lib/demoncat
+    restart: unless-stopped
+
+volumes:
+  dcat-state:

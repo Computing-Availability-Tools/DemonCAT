@@ -198,12 +198,27 @@ def provision(provs, ctx, iface):
                 svc = s
                 break
         ctx["svc"] = svc
+    if "loop_device" in provs:
+        if os.geteuid() == 0:
+            sh("truncate -s 64M /tmp/dcat-e2e-loop.img 2>/dev/null")
+            ok, out = sh("losetup -f --show /tmp/dcat-e2e-loop.img 2>/dev/null")
+            ctx["loop_dev"] = out.strip() if (ok == 0 and out.strip()) else ""
+        else:
+            ctx["loop_dev"] = ""
+    if "docker_container" in provs:
+        ctr = "dcat-e2e-docker"
+        sh(f"docker rm -f {ctr} 2>/dev/null")
+        # 用本地已有镜像（cann 带 python3.11），避免依赖网络拉取
+        ok = sh(f"docker run -d --entrypoint sleep --name {ctr} "
+                f"swr.cn-south-1.myhuaweicloud.com/ascendhub/cann:"
+                f"8.5.0.alpha001-910b-openeuler24.03-py3.11 600 2>/dev/null")[0]
+        ctx["ctr"] = ctr if ok == 0 else ""
 
 
 def substitute(s, ctx):
     if not s:
         return s
-    for k in ("pid", "port", "iface", "svc"):
+    for k in ("pid", "port", "iface", "svc", "loop_dev", "ctr"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
     return s
 
@@ -437,6 +452,12 @@ def main():
                 pass
             if wpid in tracked_pids:
                 tracked_pids.remove(wpid)
+        # 清理 loop/docker 临时资源
+        if ctx.get("loop_dev"):
+            sh(f"losetup -d {ctx['loop_dev']} 2>/dev/null")
+            sh("rm -f /tmp/dcat-e2e-loop.img 2>/dev/null")
+        if ctx.get("ctr"):
+            sh(f"docker rm -f {ctx['ctr']} 2>/dev/null")
         counters["PASS" if flow_pass else "FAIL"] += 1
         cat_stats.setdefault(cat, {"PASS": 0, "FAIL": 0, "SKIP": 0})
         cat_stats[cat]["PASS" if flow_pass else "FAIL"] += 1

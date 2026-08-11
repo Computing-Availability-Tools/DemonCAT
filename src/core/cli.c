@@ -71,6 +71,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
     }
 
     for (; i < argc; i++) {
+        if (!argv[i]) continue;
         if (strcmp(argv[i], "--help") == 0) {
             out->help = 1;
             continue;

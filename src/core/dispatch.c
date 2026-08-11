@@ -272,7 +272,7 @@ result_t *dispatch_clean_all(void) {
         }
         off += snprintf(buf + off, cap - off, "%-24s  %s\n", rows[i].uid, rows[i].failed ? "error" : "cleaned");
     }
-    off += snprintf(buf + off, cap - off, "\n%d cleaned, %d error\n", ok, err);
+    (void)snprintf(buf + off, cap - off, "\n%d cleaned, %d error\n", ok, err);
     res->json = buf;
     res->raw = 1;
     return res;

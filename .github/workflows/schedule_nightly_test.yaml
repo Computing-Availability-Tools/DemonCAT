@@ -32,7 +32,7 @@ jobs:
     needs: lint
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: linux-arm64-npu-static-8
+      runner: ubuntu-latest
       flows: ""
       run-as-root: true
 

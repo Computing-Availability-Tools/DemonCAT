@@ -1,6 +1,9 @@
 name: Nightly_Test_A2
 
 on:
+  push:
+    branches:
+      - '*'
   schedule:
     - cron: '0 18 * * *'
   workflow_dispatch:

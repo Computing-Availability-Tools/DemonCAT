@@ -1,6 +1,9 @@
 name: E2E_Full
 
 on:
+  push:
+    branches:
+      - '*'
   pull_request:
     types:
       - opened
@@ -19,7 +22,7 @@ permissions:
 jobs:
   lint:
     name: Lint (pre-commit + PR title)
-    if: ${{ github.event.action != 'labeled' || github.event.label.name == 'ready' }}
+    if: ${{ github.event_name != 'pull_request' || github.event.action != 'labeled' || github.event.label.name == 'ready' }}
     uses: ./.github/workflows/_pre_commit.yaml
 
   unit-test:
@@ -33,7 +36,7 @@ jobs:
   e2e-full:
     name: E2E full (all flows, root, NPU hardware)
     needs: lint
-    if: ${{ always() && needs.lint.result == 'success' && contains(github.event.pull_request.labels.*.name, 'ready') }}
+    if: ${{ always() && needs.lint.result == 'success' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'ready')) }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: linux-arm64-npu-static-8
@@ -51,13 +54,15 @@ jobs:
           LINT: ${{ needs.lint.result }}
           UNIT: ${{ needs.unit-test.result }}
           E2E: ${{ needs.e2e-full.result }}
-          READY: ${{ contains(github.event.pull_request.labels.*.name, 'ready') }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          READY: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ready') }}
         run: |
           set -eu
           echo "=== PR Full CI Gate Summary ==="
           echo "lint:       ${LINT}"
           echo "unit-test:  ${UNIT}"
           echo "e2e-full:  ${E2E}"
+          echo "is_pr:      ${IS_PR}"
           echo "ready?:     ${READY}"
           for r in "${LINT}" "${UNIT}"; do
             case "$r" in
@@ -65,7 +70,7 @@ jobs:
               *) echo "::error::Required job did not succeed: ${r}"; exit 1 ;;
             esac
           done
-          if [ "${READY}" = "true" ]; then
+          if [ "${IS_PR}" = "true" ] && [ "${READY}" = "true" ]; then
             case "${E2E}" in
               success) ;;
               *) echo "::error::e2e-full did not succeed (result: ${E2E})"; exit 1 ;;

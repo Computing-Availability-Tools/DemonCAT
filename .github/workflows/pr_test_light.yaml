@@ -1,6 +1,9 @@
 name: E2E_Light
 
 on:
+  push:
+    branches:
+      - '*'
   pull_request:
     types:
       - opened

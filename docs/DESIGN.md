@@ -42,18 +42,29 @@
   - [7.4 注册与查找](#74-注册与查找)
   - [7.5 dispatch 路由](#75-dispatch-路由)
   - [7.6 与 cnf+脚本路径的关系](#76-与-cnf脚本路径的关系)
-- [8. 目录结构](#8-目录结构)
-- [9. 构建](#9-构建)
-- [10. 测试设计](#10-测试设计)
-  - [10.1 mock_executor](#101-mock_executor)
-  - [10.2 表驱动](#102-表驱动)
-  - [10.3 故障覆盖矩阵](#103-故障覆盖矩阵)
-  - [10.4 真实环境冒烟](#104-真实环境冒烟)
-- [11. 命令行与使用场景](#11-命令行与使用场景)
-  - [11.1 命令结构](#111-命令结构)
-  - [11.2 全局参数](#112-全局参数)
-  - [11.3 使用场景](#113-使用场景)
-- [12. 与 SPEC 的对应](#12-与-spec-的对应)
+- [8. Reinject 默认拒绝与原子替换（--force）](#8-reinject-默认拒绝与原子替换--force)
+  - [8.1 目标与动机](#81-目标与动机)
+  - [8.2 适用范围（v1）](#82-适用范围v1)
+  - [8.3 资源键](#83-资源键)
+  - [8.4 overlap 检测算法](#84-overlap-检测算法)
+  - [8.5 cores 解析器](#85-cores-解析器)
+  - [8.6 CLI（--force）](#86-cli--force)
+  - [8.7 dispatch 路由改动](#87-dispatch-路由改动)
+  - [8.8 向后兼容（BREAKING）](#88-向后兼容breaking)
+  - [8.9 测试计划（TDD）](#89-测试计划tdd)
+  - [8.10 deferred 与约束](#810-deferred-与约束)
+- [9. 目录结构](#9-目录结构)
+- [10. 构建](#10-构建)
+- [11. 测试设计](#11-测试设计)
+  - [11.1 mock_executor](#111-mock_executor)
+  - [11.2 表驱动](#112-表驱动)
+  - [11.3 故障覆盖矩阵](#113-故障覆盖矩阵)
+  - [11.4 真实环境冒烟](#114-真实环境冒烟)
+- [12. 命令行与使用场景](#12-命令行与使用场景)
+  - [12.1 命令结构](#121-命令结构)
+  - [12.2 全局参数](#122-全局参数)
+  - [12.3 使用场景](#123-使用场景)
+- [13. 与 SPEC 的对应](#13-与-spec-的对应)
 
 ---
 
@@ -193,7 +204,7 @@ typedef struct {
 #define DCAT_MAX_RECORDS 32
 ```
 
-> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同参数允许并发）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
+> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
 
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 
@@ -207,12 +218,13 @@ typedef struct {
 ### 3.2 cli.c（命令解析器）
 解析 `subcommand uid [flags]`，产出：
 ```c
-typedef struct { const char *op; char uid[64]; params_t params; } parsed_cmd_t;
+typedef struct { const char *op; char uid[64]; params_t params; int force; } parsed_cmd_t;
 ```
 解析流程：
 1. `argv[1]` = subcommand（`inject` / `clean` / `query` / `list`）；`--help` 直接输出帮助并退出
 2. `argv[2]` = uid（若存在且不以 `--` 开头）；`query` 和 `list` 可省略 uid
 3. 剩余 argv = `--key=value` 标志，逐对解析进 `params_t`（`--config` / `--help` 为全局选项，不进 params）
+4. `--force` 为布尔 flag（裸出现 → `force=1`，同 `--help`）；`--force=x` 报错 `--force does not take a value`。仅 inject 路径生效；clean / query / list 出现则忽略（兼容历史脚本）。详见 §8.6。
 
 所有参数统一为 `--key=value` 标志，不再区分 inject 的 `(p1,p2) values (v1,v2)` 与 clean/query 的 `where k=v`。
 
@@ -245,7 +257,7 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 - `precheck(fault_def, op, params)`：执行 SPEC §4.2 预检 4 步；返回 `result_t`（成功 / 带错误码）。
 - 本模块只做静态校验（uid 存在、op 合法、参数齐全、脚本可执行），**不做交互确认**（本期不实现 safety_confirm）。
 - **参数校验边界**：precheck 按 op 取对应的 `*_required` 列表校验齐全且非空（**结构校验**：inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部）；参数值合法性（如 `cores` 范围、`iface` 是否存在）由脚本自行校验（**语义校验**）。`declared_params_only(inject_req, inject_opt, clean_req, clean_opt, query_req, query_opt, params)` 接收 6 个 per-op required/optional 列表，校验用户参数是否全部在声明范围内，未声明的参数直接拒绝（报错退出码 3）。query 跳过必填校验；inject/clean 若 `*_required` 列表为空，则空参数允许通过。
-- **不限制并发注入**：允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
+- **不做并发拦截**：precheck 只做静态结构校验（uid / op / 参数齐全 / 脚本可执行）；同 uid 同资源重复注入的拦截由 dispatch 层 reinject 检测处理（§8.4），不在 precheck。
 - 注入器故障的预检由 `injector_t->precheck` 函数指针实现（§7.3），不走本模块。
 
 ### 3.6 state.c
@@ -254,6 +266,7 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 - `state_find_by_params(uid, params)`：按 uid + 用户提供的参数匹配活跃记录（用户提供的参数须与 inject 时参数一致才匹配）。供 `clean` 使用。
 - `state_find(uid)` / `state_find_by_id(id)` / `state_list()`。
 - `state_mark_inactive(id)`：clean 后置 `active=0`。
+- `state_snapshot_by_uid(uid, out[], cap)`：在锁内拷贝该 uid 的活跃记录快照（避免 reinject 检测与 --force 逐条 clean 在 clean 循环中回调 state 造成重入死锁），供 §8 使用。
 - 持久化：变更后写 `~/.demoncat/state.json`（cJSON 序列化），启动时加载（恢复 `record_id` 计数与未清理记录，含 params）。
 - **不实现**自动清理线程 / `state_lazy_clean` / `expires_at` / `bg_pid`（本期不实现超时自动恢复；clean 一律由用户手动调用；统一同步执行无 dcat 托管 pid）。
 - **不区分故障来源**：cnf 故障与注入器故障共用同一 state 表。
@@ -281,6 +294,7 @@ INI 解析 `demoncat.conf`：
 - **注入器故障**（`injector_find` 命中 `injector_t`）：直接调 `inj->inject/clean/query` 函数指针，不 fork、不设环境变量。
 
 - `dispatch_clean_record(rec)`：传记录存储的 inject 参数给脚本 `DCAT_OP=clean` 或调 `inj->clean(params)`。由 `dispatch_clean` 调用，按用户参数匹配活跃记录，逐条执行 clean。**无 background→executor_kill 分支**（本期统一同步执行，clean 始终由脚本/注入器自行清理其子进程与系统资源）。
+- **Reinject 默认拒绝**（§8）：inject 路径在调脚本前先做 `reinject_find_overlap` 资源重叠检测；同资源重叠且无 `--force` → 退出码 5 拒绝；`--force` → 逐条 clean 旧记录后重新 inject。`dispatch_route_force(uid, op, params, force)` 承载 force 参数，`dispatch_route(...)` 退化为 `force=0` 的 wrapper 保后向兼容。
 
 ---
 
@@ -422,6 +436,8 @@ parse → registry_find(uid)
   │     │                          → output_ok(message, record_id)
   │     └─ 未命中 → output_err(4, "not found")
 ```
+
+> **Reinject 检测**（§8）：CNF 可恢复分支在 `executor_run(DCAT_OP=inject)` 之前先做 `reinject_find_overlap` 资源重叠检测——同资源 overlap 且无 `--force` → 退出码 5 拒绝；`--force` → 逐条 clean 旧记录（`executor_run` DCAT_OP=clean + `state_mark_inactive`）后再 inject。仅 CNF 路径接入；注入器路径 deferred（§8.10）；inject-only 无 state 天然免检。
 
 ### 5.2 clean
 
@@ -641,12 +657,122 @@ dispatch_route(uid, op, params):
 
 ---
 
-## 8. 目录结构
+## 8. Reinject 默认拒绝与原子替换（--force）
+
+> 对同一资源的重复注入从"隐式并集/覆盖"改为"默认拒绝 + `--force` 原子替换"。TDD 完成，由 `tests/test_reinject.c` 覆盖（见 Test_Report.md / §11）。
+
+### 8.1 目标与动机
+
+对同一资源的重复注入，由旧的"隐式并集/覆盖"改为**默认拒绝**；只有显式带上 `--force` 时才原子替换旧记录。
+
+动机场景：`rCPU_overload cores=0,1` 已注入，再 `cores=0-8`（核集相交）应**拒绝**，而非旧加法并集共存；需显式 `--force` 才原子替换为 `0-8`。
+
+### 8.2 适用范围（v1）
+
+- **CNF 路径**（config 驱动的 33 条故障，`registry_find` 命中）：适用。
+- **inject-only 故障**（`supported_ops="inject"`，不写 state）：天然 0 overlap → 自然免检，无需特殊处理。
+- **插件路径**（`plugin_dispatch`）、**legacy injector 路径**（`injector_find`）：deferred，本期不接入（§8.10）。
+
+### 8.3 资源键
+
+- **资源键 = `f->clean_required` 各参数值**（已验 33 条 cnf 故障的 `clean_required` 均为纯资源标识：cores / device / iface / port / service / pid / chip*），零新增 config 字段。
+- **`cores` 硬编码为集合语义参数**（唯一集合参数）：走集合交集；其余参数（device / iface / port / service / pid / chip / dev / ip / …）走精确串等；多参键（如 NPU `chip,dev,ip`）取各参精确 AND。
+- 备选方案"新增 conf `resource_key` 字段"按 YAGNI 舍弃（`clean_required` 已等价）。
+
+### 8.4 overlap 检测算法
+
+对每个同 uid 的活动记录 R（经 `state_snapshot_by_uid` 在锁内拷贝快照，避免回调重入死锁，§3.6）：
+
+```
+resource_overlaps(new, R, clean_required):
+  for tok in clean_required.split(','):
+    nv = params_find(new, tok); rv = params_find(R, tok)
+    if !nv or !rv: continue              # 缺参 → 该 param 不贡献 overlap（留给 precheck 报 missing）
+    if tok == "cores":
+      nb, rb = cores_parse(nv), cores_parse(rv)   # 任一解析失败 → continue（不阻塞，留给脚本报错）
+      if !cores_intersect(nb, rb): return false   # 核集不相交 → 非同资源
+    else:
+      if strcmp(nv, rv) != 0: return false        # 标量不等 → 非同资源
+  return true                                     # 全部资源参 overlap → 同资源
+```
+
+- 任一 R overlap → **REJECT**（收集所有 overlap record id）。
+- `--force` → 逐个 clean 旧 overlap 记录（复用 clean 路径：`executor_run` DCAT_OP=clean + `state_mark_inactive`，§5.2），全成功后再 inject。
+- clean 失败 → 中止注入（返回 err），已清记录丢失；inject 失败则旧记录已清（操作者可重注）。
+- **非真原子**（两步脚本：先 clean 后 inject），存在窗口（§8.10）。
+
+### 8.5 cores 解析器
+
+- spec：`"0,1" | "0-3" | "0,1,4-6" | "0"` → 位图 `unsigned char bits[16]`（128 bit，核 0–127）。
+- `cores_parse(spec, bits)`：split `,`，token 含 `-` → lo-hi 区间置位，否则单核置位；越界/非法 → 返回 -1。
+- `cores_intersect(a, b)`：位 AND，任一位置 1 → 1。
+
+### 8.6 CLI（--force）
+
+- `parsed_cmd_t` 新增 `int force;`（§3.2）。
+- `cli.c`：`--force` 当布尔 flag（同 `--help`，裸出现 → `force=1`）；`--force=x` → 报错 "`--force` does not take a value"。
+- `--force` 仅 inject 路径生效；clean / query / list 出现 → 忽略（无害，兼容历史脚本）。
+
+### 8.7 dispatch 路由改动
+
+`dispatch_route_force(uid, op, params, force)` 承载 force 参数（§3.9）；`dispatch_route(...)` 退化为 `force=0` 的 wrapper，保后向兼容，现有调用零改动。CNF inject 分支：
+
+```
+if (strcmp(op, "inject") == 0) {
+    int ids[DCAT_MAX_RECORDS];
+    int n = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);   // §8.4
+    if (n > 0 && !force)
+        return result_err("inject", f->uid, 5,
+                           "resource already injected; use --force to replace");
+    if (n > 0 && force)
+        for each id: dispatch clean (executor_run DCAT_OP=clean) + state_mark_inactive;
+                   失败返回 err（已清记录丢失）
+    return executor_run(script, DCAT_OP=inject) → state_add(uid, params) → output_ok(record_id);
+}
+```
+
+- **退出码 5 = reinject conflict**。
+- inject-only 分支无 state → `reinject_find_overlap` 恒 0 → 不拒绝（§8.2）。
+
+### 8.8 向后兼容（BREAKING）
+
+- **CPU `cores` 加法并集（PR#15）→ 默认拒绝**：有意 breaking（用户的动机场景）。
+  - `0,1` 已注入 → 再 `0,1`（同）：旧 idempotent-ok，现 **REJECT**。
+  - `0,1` 已注入 → `0-8`（重叠）：旧并集共存，现 **REJECT**。
+- 网络 / 进程 / 存储：本就同资源不可并存（tc qdisc / ipset / 单 pid），只是把隐式打架显式化为 reject，基本非 breaking。
+- 迁移：重注入改加 `--force`；不同资源（不重叠核 / 不同 iface）仍并发 OK。
+
+### 8.9 测试计划（TDD，`tests/test_reinject.c`，先全红）
+
+1. `cores_parse`：`"0,1"`→{0,1}；`"0-3"`→{0,1,2,3}；`"0,1,4-6"`→{0,1,4,5,6}；`"0"`→{0}；非法→-1。
+2. `cores_intersect`：{0,1}∩{0,2}={0}；{0,1}∩{2,3}=∅；{0,1}∩{0-8}={0,1}。
+3. overlap 精确：mock inject `rCPU_overload cores=0,1` → 活动；再 `0,1`（force=0）→ code 5 REJECT；`2,3` → OK。
+4. overlap 集合：`0,1` 活动；再 `0-8`（force=0）→ REJECT；`4,5` → OK。
+5. `--force` 替换：`0,1` 活动；`--force 0-8` → 旧 `0,1` 被清，`0-8` 活动（state 唯一，cores=0-8）。
+6. 网络标量：`rNET_delay iface=eth0 delay_ms=100` 活动；再 `iface=eth0 delay_ms=200`（force=0）→ REJECT；`iface=eth1` → OK；`--force iface=eth0 delay_ms=200` → 替换（state 唯一 iface=eth0）。
+7. 多参键（NPU，mock state 不跑脚本）：`rNPU_ip_change chip=0 dev=eth0 ip=1.1.1.1` 活动；再 `ip=2.2.2.2` → OK（不同资源）；再 `ip=1.1.1.1` → REJECT；`--force ip=1.1.1.1` → 替换。
+8. inject-only 免检：`rPROC_exit inject` → 无 state；再 inject → OK（0 overlap，不 reject）。
+9. CLI：`inject rCPU_overload --cores=0,1 --force` → `pc.force==1`；无 `--force` → 0；`--force=x` → error；clean 带 `--force` → 忽略不报错。
+
+连带行为变更：
+
+- `test_smoke_cpu.c` test1（同规格重注入 idempotent-ok）→ 改断言 REJECT（无 --force）/ OK replace（--force）。
+- `test_smoke_cpu.c` test2（`0-1`→`0` 重叠 idempotent-ok）→ 改断言 REJECT（无 --force）。
+
+### 8.10 deferred 与约束
+
+- 插件 / legacy injector 路径未接入 reinject（CNF 路径已覆盖 33 故障）。
+- `clean_required` 为空且写 state 的故障（本期无此 fault）：保守判 overlap（任意活动 = 冲突）。
+- 真原子性：两步脚本（先 clean 后 inject）存在窗口，未做事务回滚。
+
+---
+
+## 9. 目录结构
 
 ```
 CAT/
 ├── CMakeLists.txt              # C11, 静态链接, 含 third_party/cjson
-├── SPEC.md  DESIGN.md  README.md
+├── SPEC.md  docs/DESIGN.md  README.md
 ├── Release_Notes.md
 │   ├── docs/
 │   │   ├── test_report.md
@@ -734,7 +860,7 @@ CAT/
 
 ---
 
-## 9. 构建
+## 10. 构建
 
 - `CMakeLists.txt`：`set(CMAKE_C_STANDARD 11)`（gnu11 扩展开启，便于 `usleep`/`select`/`fork`），`_POSIX_C_SOURCE=200809L` 编译定义（确保 strict C11 可移植），静态链接，`find_package(Threads)`，把 `third_party/cjson/cJSON.c` 与 `src/injectors/injectors.c` 编进二进制，`-Wall -Wextra -Werror`。
 - 目标 `dcat`；测试通过 `enable_testing()` + `add_test`，`ctest` 驱动。测试 `WORKING_DIRECTORY=${CMAKE_SOURCE_DIR}` 以便 `config/demoncat.conf` 与 `src/scripts/*.sh` 解析。
@@ -742,21 +868,22 @@ CAT/
 
 ---
 
-## 10. 测试设计
+## 11. 测试设计
 
 > 开发遵循 TDD：先写测试用例（定义期望命令串 + 环境变量 + 退出码 + JSON 输出），再实现功能代码使测试通过。测试用例是行为的权威定义（见 SPEC §9.1）。
+> Reinject 默认拒绝与 --force 的测试设计见 §8.9（`tests/test_reinject.c`）。
 
-### 10.1 mock_executor
+### 11.1 mock_executor
 
 `executor_set_mock(fn)`，`fn` 捕获 `(cmd)` 不真正 fork。测试通过 `getenv()` 读取环境变量断言 cnf 故障下发命令串与环境变量集合（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_*`）。
 
 > 注入器故障不经过 executor，mock_executor 不适用；注入器测试直接断言 `inj->op(params)` 返回的 `result_t`。
 
-### 10.2 表驱动
+### 11.2 表驱动
 
 以 `struct { input; fault_def; expect_cmd; expect_env; expect_record; expect_json; expect_exit; }` 数组驱动 inject / clean / query（cnf 故障）。
 
-### 10.3 故障覆盖矩阵
+### 11.3 故障覆盖矩阵
 
 | 故障 | inject | clean | query | mock 断言 | 真实冒烟 |
 |---|:---:|:---:|:---:|---|---|
@@ -775,7 +902,7 @@ CAT/
 | 全部 16 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
 | 注入器（builtin_injectors[]） | — | — | — | 本期为空，无覆盖；启用后用 `inj->op` 返回值断言 | — |
 
-### 10.4 真实环境冒烟
+### 11.4 真实环境冒烟
 
 - 可恢复故障：inject → query(active) → clean → query(empty) → 无残留进程。
 - inject-only：inject → query(无记录) → clean 拒绝（退出码 3）。
@@ -783,9 +910,9 @@ CAT/
 
 ---
 
-## 11. 命令行与使用场景
+## 12. 命令行与使用场景
 
-### 11.1 命令结构
+### 12.1 命令结构
 
 ```
 dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
@@ -793,14 +920,14 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 子命令模式：`inject` / `clean` / `query` / `list` 为第一个参数，uid 为第二个位置参数（`query` 和 `list` 可省略），其余为 `--key=value` 标志。
 
-### 11.2 全局参数
+### 12.2 全局参数
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--config <path>` | 固定路径见 SPEC §7 | 配置文件路径覆盖 |
 | `--help` | — | 显示帮助 |
 
-### 11.3 使用场景
+### 12.3 使用场景
 
 #### 场景一：可恢复故障注入（手动 clean）
 
@@ -818,12 +945,16 @@ dcat query
 dcat clean rNET_loss --iface=eth0
 ```
 
-#### 场景二：并发注入同 uid 不同参数
+#### 场景二：同 uid 不同资源并发 / 同资源重注入
 
 ```bash
-# 同 uid 不同参数允许并发
+# 同 uid 不同资源（iface 不同 → 无 overlap）允许并发（§8）
 dcat inject rNET_loss --iface=eth0 --loss_pct=5
 dcat inject rNET_loss --iface=eth1 --loss_pct=3
+
+# 同资源重注入（iface 相同 → overlap）默认拒绝，需 --force 原子替换（§8）
+dcat inject rNET_loss --iface=eth0 --loss_pct=8            # 退出码 5 拒绝
+dcat inject rNET_loss --iface=eth0 --loss_pct=8 --force    # 清旧 eth0 记录后重注
 
 # 按参数 clean（只清 eth0）
 dcat clean rNET_loss --iface=eth0
@@ -852,7 +983,7 @@ dcat list                            # 故障目录
 
 ---
 
-## 12. 与 SPEC 的对应
+## 13. 与 SPEC 的对应
 
 - **决策1（注册机制）**：registry 从 cnf 载入 `fault_def`（含 6 个 per-op required/optional 字段）；编译 `injector_t` 作为进程内高级扩展点（§3.3 + §7）。
 - **决策2（命令语法）**：子命令式 `dcat <subcommand> [uid] --key=value ...`，不再使用 SQL-like 单引号命令串；所有参数统一为 `--key=value` 标志（§3.2 + SPEC §2）。
@@ -866,4 +997,5 @@ dcat list                            # 故障目录
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。
 - **决策11（统一同步阻塞执行）**：本期不区分 background/sync 模式，不实现 `executor_spawn`、`executor_kill`、`injection_record_t.bg_pid`。所有故障 inject/clean/query 均同步阻塞执行：cnf 故障用 `executor_run` / `executor_run_raw`，注入器故障直接调函数指针。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取清理。
 - **决策12（注入器接口设计完成，实现留位）**：`injector_t` 接口（uid + 4 函数指针）、`builtin_injectors[]` 注册表、`injector_find` 查找、dispatch 回退路由均已设计（§7）。本期 `builtin_injectors[]` 为空数组，所有故障走 cnf+脚本路径；待出现脚本无法实现的需求（精确定时/二进制协议/进程内状态）时启用。
-- **决策13（参数匹配与并发注入）**：允许同 uid 重复注入（含相同参数），dcat 不做并发拦截，脚本自行处理幂等性。`injection_record_t` 存储 inject 时的 `params`，clean 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本，逐条执行；某条失败时停止，剩余不清理。**clean 和 query（带 uid）各自有独立的 `clean_required` / `query_required`：precheck 按 op 校验对应 required 列表齐全，缺参数被拒绝（退出码 3）；该 op 无 required 参数时允许空参数。** 不再有"至少一个参数"硬编码检查——是否需要参数完全由各 op 的 `*_required` 列表决定（precheck 自然处理）。query（不带 uid）查全部活跃记录不受此限制。所有命令（inject / clean / query）均拒绝未在对应 op 的 `*_required` / `*_optional` 中声明的参数（退出码 3），不做透传。
+- **决策13（参数匹配与 clean）**：`injection_record_t` 存储 inject 时的 `params`，clean 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本，逐条执行；某条失败时停止，剩余不清理。**clean 和 query（带 uid）各自有独立的 `clean_required` / `query_required`：precheck 按 op 校验对应 required 列表齐全，缺参数被拒绝（退出码 3）；该 op 无 required 参数时允许空参数。** 不再有"至少一个参数"硬编码检查——是否需要参数完全由各 op 的 `*_required` 列表决定（precheck 自然处理）。query（不带 uid）查全部活跃记录不受此限制。所有命令（inject / clean / query）均拒绝未在对应 op 的 `*_required` / `*_optional` 中声明的参数（退出码 3），不做透传。
+- **决策14（Reinject 默认拒绝 + --force 原子替换）**：对同一资源的重复注入默认拒绝（退出码 5），需 `--force` 才原子替换（逐条 clean 旧记录后重新 inject）。资源键 = `clean_required` 各参数值（`cores` 走集合交集，其余走精确串等，多参键取各参精确 AND）；inject-only 故障无 state 天然免检。CNF 路径覆盖 33 故障；插件 / legacy injector 路径 deferred。CPU `cores` 加法并集语义改为默认拒绝（有意 breaking）。详见 §8。

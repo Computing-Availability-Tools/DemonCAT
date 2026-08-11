@@ -127,6 +127,6 @@ sudo python3 tests/e2e/run_e2e.py
 
 ## 参考
 
-- 测试设计：[DESIGN.md §10](../../DESIGN.md)
+- 测试设计：[docs/DESIGN.md §10](../../docs/DESIGN.md)
 - 技术规格：[SPEC.md §9](../../SPEC.md)
 - 项目主页：[README.md](../../README.md)

@@ -1,22 +1,27 @@
 #!/bin/bash
-# tests/smoke_root.sh �?自动化测试需�?root 的故�?# 用法: sudo bash tests/smoke_root.sh
-# 自动检测可用工具，能测的都测，不能测的跳过并说明原�?set -e
+# tests/smoke_root.sh — 自动化测试需要 root 的故障
+# 用法: sudo bash tests/smoke_root.sh
+# 自动检测可用工具，能测的都测，不能测的跳过并说明原因
+set -e
 
 cd "$(dirname "$0")/.."
 
-# ---- 前置检�?----
-[ "$(id -u)" = 0 ] || { echo "ERROR: 需�?root 权限运行 (sudo bash tests/smoke_root.sh)"; exit 1; }
+# ---- 前置检查 ----
+[ "$(id -u)" = 0 ] || { echo "ERROR: 需要 root 权限运行 (sudo bash tests/smoke_root.sh)"; exit 1; }
 
-# 编译（子 shell 防止 cd 污染当前目录�?[ -x build/dcat ] || { mkdir -p build && (cd build && cmake .. && make); }
+# 编译（子 shell 防止 cd 污染当前目录）
+[ -x build/dcat ] || { mkdir -p build && (cd build && cmake .. && make); }
 DCAT=./build/dcat
 
-# 测试状态隔离：dcat 不读 DCAT_STATE_FILE（main.c 只认 config �?state_file/默认 ~/.demoncat）�?# 生成临时 config，把 state_file 覆盖�?/tmp，避免污�?/root/.demoncat/state.json�?TMP_CONF="/tmp/dcat_smoke_root.conf"
+# 测试状态隔离：dcat 不读 DCAT_STATE_FILE（main.c 只认 config 的 state_file/默认 ~/.demoncat）。
+# 生成临时 config，把 state_file 覆盖到 /tmp，避免污染 /root/.demoncat/state.json。
+TMP_CONF="/tmp/dcat_smoke_root.conf"
 STATE_FILE="/tmp/dcat_smoke_root.json"
 sed "s|^state_file = .*|state_file = $STATE_FILE|" config/demoncat.conf > "$TMP_CONF"
 rm -f "$STATE_FILE"
 DCAT_CONF="$TMP_CONF"
 
-# 创建测试用的虚拟网卡 (不影响真实网�?
+# 创建测试用的虚拟网卡 (不影响真实网络)
 TEST_IFACE="dcat-test0"
 ip link add "$TEST_IFACE" type dummy 2>/dev/null || true
 ip link set "$TEST_IFACE" up 2>/dev/null || true
@@ -25,8 +30,8 @@ PASS=0; FAIL=0; SKIP=0
 
 report() { echo "  $1: $2"; }
 pass() { echo "  PASS: $1"; PASS=$((PASS+1)); }
-fail() { echo "  FAIL: $1 �?$2"; FAIL=$((FAIL+1)); }
-skip() { echo "  SKIP: $1 �?$2"; SKIP=$((SKIP+1)); }
+fail() { echo "  FAIL: $1 — $2"; FAIL=$((FAIL+1)); }
+skip() { echo "  SKIP: $1 — $2"; SKIP=$((SKIP+1)); }
 
 cleanup_fault() {
     $DCAT clean "$@" --config "$DCAT_CONF" >/dev/null 2>&1 || true
@@ -38,20 +43,20 @@ echo "=========================================="
 echo "DemonCAT Root Smoke Test"
 echo "=========================================="
 
-# ---- 工具检�?----
+# ---- 工具检测 ----
 echo ""
-echo "--- 工具检�?---"
-HAS_TC=0;    command -v tc >/dev/null 2>&1 && HAS_TC=1 && echo "  tc: �? || echo "  tc: �?(apt install iproute2)"
-HAS_DD=0;    command -v dd >/dev/null 2>&1 && HAS_DD=1 && echo "  dd: �? || echo "  dd: �?
-HAS_IP=0;    command -v ip >/dev/null 2>&1 && HAS_IP=1 && echo "  ip: �? || echo "  ip: �?
-HAS_ETHTOOL=0; command -v ethtool >/dev/null 2>&1 && HAS_ETHTOOL=1 && echo "  ethtool: �? || echo "  ethtool: �?(apt install ethtool)"
-HAS_IPTABLES=0; command -v iptables >/dev/null 2>&1 && HAS_IPTABLES=1 && echo "  iptables: �? || echo "  iptables: �?(apt install iptables)"
-HAS_SYSTEMCTL=0; command -v systemctl >/dev/null 2>&1 && HAS_SYSTEMCTL=1 && echo "  systemctl: �? || echo "  systemctl: �?
-HAS_HCCN=0;  command -v hccn_tool >/dev/null 2>&1 && HAS_HCCN=1 && echo "  hccn_tool: �? || echo "  hccn_tool: �?(需�?Atlas NPU 硬件)"
+echo "--- 工具检测 ---"
+HAS_TC=0;    command -v tc >/dev/null 2>&1 && HAS_TC=1 && echo "  tc: ✅" || echo "  tc: ❌ (apt install iproute2)"
+HAS_DD=0;    command -v dd >/dev/null 2>&1 && HAS_DD=1 && echo "  dd: ✅" || echo "  dd: ❌"
+HAS_IP=0;    command -v ip >/dev/null 2>&1 && HAS_IP=1 && echo "  ip: ✅" || echo "  ip: ❌"
+HAS_ETHTOOL=0; command -v ethtool >/dev/null 2>&1 && HAS_ETHTOOL=1 && echo "  ethtool: ✅" || echo "  ethtool: ❌ (apt install ethtool)"
+HAS_IPTABLES=0; command -v iptables >/dev/null 2>&1 && HAS_IPTABLES=1 && echo "  iptables: ✅" || echo "  iptables: ❌ (apt install iptables)"
+HAS_SYSTEMCTL=0; command -v systemctl >/dev/null 2>&1 && HAS_SYSTEMCTL=1 && echo "  systemctl: ✅" || echo "  systemctl: ❌"
+HAS_HCCN=0;  command -v hccn_tool >/dev/null 2>&1 && HAS_HCCN=1 && echo "  hccn_tool: ✅" || echo "  hccn_tool: ❌ (需要 Atlas NPU 硬件)"
 
 # ---- 测试网卡 ----
 HAS_TEST_IFACE=0
-ip link show "$TEST_IFACE" >/dev/null 2>&1 && HAS_TEST_IFACE=1 && echo "  测试网卡 $TEST_IFACE: �? || echo "  测试网卡: �?(创建失败)"
+ip link show "$TEST_IFACE" >/dev/null 2>&1 && HAS_TEST_IFACE=1 && echo "  测试网卡 $TEST_IFACE: ✅" || echo "  测试网卡: ❌ (创建失败)"
 
 # ====================================================================
 echo ""
@@ -63,27 +68,27 @@ if [ -w /sys/devices/system/cpu/cpu1/online ]; then
         if [ "$state" = "0" ]; then
             $DCAT clean rCPU_core_offline --cores=1 --config "$DCAT_CONF" >/dev/null 2>&1
             state2=$(cat /sys/devices/system/cpu/cpu1/online 2>/dev/null)
-            [ "$state2" = "1" ] && pass "rCPU_core_offline" || fail "rCPU_core_offline" "clean �?cpu1 未恢�?(state=$state2)"
+            [ "$state2" = "1" ] && pass "rCPU_core_offline" || fail "rCPU_core_offline" "clean 后 cpu1 未恢复 (state=$state2)"
         else
             cleanup_fault rCPU_core_offline --cores=1
-            fail "rCPU_core_offline" "inject �?cpu1 未离�?(state=$state)"
+            fail "rCPU_core_offline" "inject 后 cpu1 未离线 (state=$state)"
         fi
     else
         fail "rCPU_core_offline" "inject 失败"
     fi
 else
-    skip "rCPU_core_offline" "sysfs 不可�?(WSL 内核限制)"
+    skip "rCPU_core_offline" "sysfs 不可写 (WSL 内核限制)"
 fi
 
 # ====================================================================
 echo ""
-echo "--- 网络故障 (需�?tc + 测试网卡 $TEST_IFACE) ---"
+echo "--- 网络故障 (需要 tc + 测试网卡 $TEST_IFACE) ---"
 # ====================================================================
 
 test_tc_fault() {
     uid="$1"; shift
     if [ "$HAS_TC" = 0 ] || [ "$HAS_TEST_IFACE" = 0 ]; then
-        skip "$uid" "需�?tc + 测试网卡"
+        skip "$uid" "需要 tc + 测试网卡"
         return
     fi
     # inject
@@ -97,11 +102,11 @@ test_tc_fault() {
                 pass "$uid"
             else
                 cleanup_fault "$uid" "$@"
-                fail "$uid" "clean �?qdisc 仍存�?
+                fail "$uid" "clean 后 qdisc 仍存在"
             fi
         else
             cleanup_fault "$uid" "$@"
-            fail "$uid" "inject �?qdisc 未添�?
+            fail "$uid" "inject 后 qdisc 未添加"
         fi
     else
         fail "$uid" "inject 失败"
@@ -133,7 +138,7 @@ if [ "$HAS_IP" = 1 ] && [ "$HAS_TEST_IFACE" = 1 ]; then
         fail "rNET_down" "inject 失败"
     fi
 else
-    skip "rNET_down" "需�?ip + 测试网卡"
+    skip "rNET_down" "需要 ip + 测试网卡"
 fi
 
 # ====================================================================
@@ -145,11 +150,11 @@ if [ "$HAS_ETHTOOL" = 1 ] && [ "$HAS_TEST_IFACE" = 1 ]; then
         $DCAT clean rNET_degrade --iface=$TEST_IFACE --speed_mbps=10 --config "$DCAT_CONF" >/dev/null 2>&1
         pass "rNET_degrade"
     else
-        # ethtool 可能不支�?dummy 网卡，这是预期的
-        skip "rNET_degrade" "ethtool 不支�?$TEST_IFACE (dummy 网卡无速率控制)"
+        # ethtool 可能不支持 dummy 网卡，这是预期的
+        skip "rNET_degrade" "ethtool 不支持 $TEST_IFACE (dummy 网卡无速率控制)"
     fi
 else
-    skip "rNET_degrade" "需�?ethtool + 测试网卡"
+    skip "rNET_degrade" "需要 ethtool + 测试网卡"
 fi
 
 # ====================================================================
@@ -166,7 +171,7 @@ if [ "$HAS_IP" = 1 ] && [ "$HAS_TEST_IFACE" = 1 ]; then
         fail "rNET_link_flap" "inject 失败"
     fi
 else
-    skip "rNET_link_flap" "需�?ip + 测试网卡"
+    skip "rNET_link_flap" "需要 ip + 测试网卡"
 fi
 
 # ====================================================================
@@ -191,7 +196,7 @@ if [ "$HAS_IPTABLES" = 1 ]; then
         fail "rNET_tcp_loss" "inject 失败"
     fi
 else
-    skip "rNET_tcp_loss" "iptables 未安�?(apt install iptables)"
+    skip "rNET_tcp_loss" "iptables 未安装 (apt install iptables)"
 fi
 
 # ====================================================================
@@ -199,7 +204,7 @@ echo ""
 echo "--- rNET_service_stop (systemctl) ---"
 # ====================================================================
 if [ "$HAS_SYSTEMCTL" = 1 ] && timeout 5 systemctl is-system-running >/dev/null 2>&1; then
-    # 检查是否有可测试的服务 (不停止关键服�?
+    # 检查是否有可测试的服务 (不停止关键服务)
     TEST_SVC=""
     for svc in chronyd ntpd sshd cron; do
         systemctl is-active "$svc" >/dev/null 2>&1 && TEST_SVC="$svc" && break
@@ -218,18 +223,18 @@ if [ "$HAS_SYSTEMCTL" = 1 ] && timeout 5 systemctl is-system-running >/dev/null 
             fail "rNET_service_stop" "inject 失败"
         fi
     else
-        skip "rNET_service_stop" "没有可测试的非关键服�?(chronyd/ntpd/sshd/cron 均未运行)"
+        skip "rNET_service_stop" "没有可测试的非关键服务 (chronyd/ntpd/sshd/cron 均未运行)"
     fi
 else
-    skip "rNET_service_stop" "systemctl 不可用或 systemd 未正常运�?(WSL 常见)"
+    skip "rNET_service_stop" "systemctl 不可用或 systemd 未正常运行 (WSL 常见)"
 fi
 
 # ====================================================================
 echo ""
-echo "--- NPU 故障 (19 �? ---"
+echo "--- NPU 故障 (19 条) ---"
 # ====================================================================
 if [ "$HAS_HCCN" = 1 ]; then
-    echo "  (hccn_tool 可用，开始测�?..)"
+    echo "  (hccn_tool 可用，开始测试...)"
     # NPU 测试需要真实硬件，这里只做 inject→query→clean 流程验证
     NPU_TESTS=(
         "rNPU_link_down chip=0"
@@ -240,19 +245,19 @@ if [ "$HAS_HCCN" = 1 ]; then
     for line in "${NPU_TESTS[@]}"; do
         uid=$(echo "$line" | awk '{print $1}')
         params=$(echo "$line" | cut -d' ' -f2-)
-        # 构�?--key=value 参数
+        # 构造 --key=value 参数
         args=""
         for kv in $params; do args="$args --${kv}"; done
         if $DCAT inject "$uid" --config "$DCAT_CONF" $args >/dev/null 2>&1; then
             $DCAT clean "$uid" --config "$DCAT_CONF" $args >/dev/null 2>&1
             pass "$uid"
         else
-            fail "$uid" "inject 失败 (hccn_tool 可能需要特定芯片状�?"
+            fail "$uid" "inject 失败 (hccn_tool 可能需要特定芯片状态)"
         fi
     done
-    skip "其余 15 �?rNPU_*" "需要特�?NPU 配置参数，请参照 docs/Manual_Test_Reference.md 手动测试"
+    skip "其余 15 条 rNPU_*" "需要特定 NPU 配置参数，请参照 docs/Manual_Test_Reference.md 手动测试"
 else
-    skip "全部 19 �?rNPU_*" "hccn_tool 不可�?�?需�?Atlas NPU 物理机，WSL 无法模拟。原因：所�?NPU 故障通过 hccn_tool 操作 RoCE 网卡，无硬件无法执行 inject/clean/query 的任何一�?
+    skip "全部 19 条 rNPU_*" "hccn_tool 不可用 — 需要 Atlas NPU 物理机，WSL 无法模拟。原因：所有 NPU 故障通过 hccn_tool 操作 RoCE 网卡，无硬件无法执行 inject/clean/query 的任何一步"
 fi
 
 # ====================================================================
@@ -262,10 +267,11 @@ ip link del "$TEST_IFACE" 2>/dev/null || true
 rm -f "$STATE_FILE" "$TMP_CONF" /tmp/dcat-* 2>/dev/null || true
 
 # ====================================================================
-# 汇�?# ====================================================================
+# 汇总
+# ====================================================================
 echo ""
 echo "=========================================="
-echo "测试结果汇�?
+echo "测试结果汇总"
 echo "=========================================="
 echo "  PASS: $PASS"
 echo "  FAIL: $FAIL"
@@ -273,7 +279,7 @@ echo "  SKIP: $SKIP"
 echo "  TOTAL: $((PASS+FAIL+SKIP))"
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-    echo "�?全部通过 (跳过的故障因缺少依赖，安装依赖后重跑即可)"
+    echo "✅ 全部通过 (跳过的故障因缺少依赖，安装依赖后重跑即可)"
 else
-    echo "�?�?$FAIL 个失�?
+    echo "❌ 有 $FAIL 个失败"
 fi

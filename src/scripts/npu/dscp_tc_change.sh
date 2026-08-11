@@ -23,7 +23,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -dscp_to_tc -g dscp "$dscp" 2>/dev/null | awk -v d="$dscp" '$1==d {print $2}')
         [ -n "$orig" ] && sidecar_save rNPU_dscp_tc_change "$chip" "$orig"
         $HCCN -dscp_to_tc -s dscp "$dscp" tc "$tc" || { echo "dscp_to_tc set failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_dscp_tc_change 注入回读校验失败:动作未生�? >&2; exit 1; }
+        fault_present || { echo "rNPU_dscp_tc_change 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied dscp $dscp -> tc $tc on chip $chip (was $orig)"
         ;;
     clean)

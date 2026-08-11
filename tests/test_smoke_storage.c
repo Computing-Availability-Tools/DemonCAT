@@ -1,4 +1,4 @@
-/* tests/test_smoke_storage.c �?Tier 3: real execution tests for storage + port_occupy */
+/* tests/test_smoke_storage.c — Tier 3: real execution tests for storage + port_occupy */
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"
@@ -13,7 +13,13 @@
 #include <sys/types.h>
 #include <glob.h>
 
-#define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
+#define CK(cond)                                  \
+    do {                                          \
+        if (!(cond)) {                            \
+            fprintf(stderr, "FAIL: %s\n", #cond); \
+            return 1;                             \
+        }                                         \
+    } while (0)
 
 /* Count alive rDISK_write_overload worker subshells by scanning dcat pidfiles
  * (/tmp/dcat-rDISK_write_overload-<dev>.pid, space-separated PIDs per file) + kill -0 probe.
@@ -52,7 +58,7 @@ static void smoke_teardown(void) {
     state_reset();
     state_set_file("");
     unlink("/tmp/dcat_smoke_storage.json");
-    /* unlink() 不支�?glob,需�?shell 通配清理 */
+    /* unlink() 不支持 glob,需用 shell 通配清理 */
     system("rm -f /tmp/dcat-rDISK_write_overload-*.pid");
     system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*");
     system("rm -f /tmp/dcat-rNET_port_occupy-*.pid");
@@ -63,10 +69,17 @@ int main(void) {
 
     /* ---- rDISK_write_overload (dd writers) ---- */
     {
-        params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "device"); strcpy(p.items[0].value, "/tmp"); p.count = 1;
-        strcpy(p.items[1].key, "workers"); strcpy(p.items[1].value, "2"); p.count = 2;
-        strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "500"); p.count = 3;
+        params_t p;
+        memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "device");
+        strcpy(p.items[0].value, "/tmp");
+        p.count = 1;
+        strcpy(p.items[1].key, "workers");
+        strcpy(p.items[1].value, "2");
+        p.count = 2;
+        strcpy(p.items[2].key, "size_mb");
+        strcpy(p.items[2].value, "500");
+        p.count = 3;
 
         result_t *r = dispatch_route("rDISK_write_overload", "inject", &p);
         CK(r && r->code == 0);
@@ -87,8 +100,11 @@ int main(void) {
 
     /* ---- rNET_port_occupy (python3 socket holder) ---- */
     {
-        params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "port"); strcpy(p.items[0].value, "19999"); p.count = 1;
+        params_t p;
+        memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "port");
+        strcpy(p.items[0].value, "19999");
+        p.count = 1;
 
         result_t *r = dispatch_route("rNET_port_occupy", "inject", &p);
         CK(r && r->code == 0);
@@ -96,10 +112,13 @@ int main(void) {
 
         sleep(1);
         /* check port is occupied */
-        char cmd[128]; snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
+        char cmd[128];
+        snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
         FILE *f = popen(cmd, "r");
         CK(f);
-        int n = 0; fscanf(f, "%d", &n); pclose(f);
+        int n = 0;
+        fscanf(f, "%d", &n);
+        pclose(f);
         CK(n >= 1);
 
         r = dispatch_route("rNET_port_occupy", "clean", &p);
@@ -110,7 +129,9 @@ int main(void) {
         snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
         f = popen(cmd, "r");
         CK(f);
-        n = 0; fscanf(f, "%d", &n); pclose(f);
+        n = 0;
+        fscanf(f, "%d", &n);
+        pclose(f);
         CK(n == 0);
     }
 

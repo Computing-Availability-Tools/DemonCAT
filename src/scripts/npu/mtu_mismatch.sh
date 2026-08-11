@@ -20,7 +20,7 @@ case "${DCAT_OP:-inject}" in
         orig=$($HCCN -mtu -g 2>/dev/null | grep -oE 'mtu:[[:space:]]*[0-9]+' | grep -oE '[0-9]+')
         [ -n "$orig" ] && sidecar_save rNPU_mtu_mismatch "$chip" "$orig"
         $HCCN -mtu -s size "$size" || { echo "mtu set failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_mtu_mismatch 注入回读校验失败:动作未生�? >&2; exit 1; }
+        fault_present || { echo "rNPU_mtu_mismatch 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "applied mtu $size on chip $chip (was $orig)"
         ;;
     clean)

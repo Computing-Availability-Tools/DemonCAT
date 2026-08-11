@@ -114,7 +114,7 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
         ;;
 
     query)
-        # �?cores 参数 �?按指定核; 无参�?�?�?per-core pidfile 探测实际注入的核 (权威, 避免 ps/grep 误匹�?
+        # 有 cores 参数 → 按指定核; 无参数 → 从 per-core pidfile 探测实际注入的核 (权威, 避免 ps/grep 误匹配)
         if [ -n "$DCAT_PARAM_CORES" ]; then
             spec=$DCAT_PARAM_CORES
             echo "requested_cores: $spec"
@@ -128,7 +128,7 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             done | sort -n | tr '\n' ',' | sed 's/,$//')
             echo "injected_cores: ${spec:-(none)}"
         fi
-        # burn 进程�?(�?spec 指定核统计存�?
+        # burn 进程数 (按 spec 指定核统计存活)
         total=0
         for n in $(parse_cores "$spec"); do
             CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"
@@ -139,7 +139,7 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
         echo "burn_processes: $total"
         if [ "$total" -gt 0 ]; then
             echo "--- per-core CPU (instantaneous, /proc/stat) ---"
-            # 采样 /proc/stat 两次�?delta �?每核 %us (无外部依�? �?top/mpstat 同算�? 瞬时值非生命周期均�?
+            # 采样 /proc/stat 两次算 delta → 每核 %us (无外部依赖; 与 top/mpstat 同算法, 瞬时值非生命周期均值)
             s1=$(awk '/^cpu[0-9]/{sub(/^cpu/,"",$1); print $1,$2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null)
             sleep 0.2
             s2=$(awk '/^cpu[0-9]/{sub(/^cpu/,"",$1); print $1,$2,$3,$4,$5,$6,$7,$8,$9}' /proc/stat 2>/dev/null)
@@ -165,7 +165,7 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
                 ps -p "$pid" -o pid=,psr=,cmd= 2>/dev/null
             done
         else
-            echo "(no active rCPU_overload injection �?run 'dcat inject rCPU_overload --cores=...')"
+            echo "(no active rCPU_overload injection — run 'dcat inject rCPU_overload --cores=...')"
         fi
         [ "$total" -gt 0 ]
         ;;

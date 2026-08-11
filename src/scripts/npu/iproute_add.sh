@@ -25,7 +25,7 @@ case "${DCAT_OP:-inject}" in
         : ${table:?missing required param: table}
         npu_check_env
         $HCCN -ip_route -a ip "$ip" ip_mask "$mask" via "$via" dev "$dev" table "$table" || { echo "ip_route add failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_iproute_add 注入回读校验失败:动作未生�? >&2; exit 1; }
+        fault_present || { echo "rNPU_iproute_add 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "added ip_route $ip/$mask via $via dev $dev table $table on chip $chip"
         ;;
     clean)

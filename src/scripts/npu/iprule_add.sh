@@ -21,7 +21,7 @@ case "${DCAT_OP:-inject}" in
         : ${table:?missing required param: table}
         npu_check_env
         $HCCN -ip_rule -a dir "$dir" ip "$ip" table "$table" || { echo "ip_rule add failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_iprule_add 注入回读校验失败:动作未生�? >&2; exit 1; }
+        fault_present || { echo "rNPU_iprule_add 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "added ip_rule $dir $ip -> table $table on chip $chip"
         ;;
     clean)

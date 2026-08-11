@@ -6,7 +6,10 @@
 #include <stdlib.h>
 
 static config_t g_cfg;
-static void setup(void) { config_load("config/demoncat.conf", &g_cfg); registry_init(&g_cfg); }
+static void setup(void) {
+    config_load("config/demoncat.conf", &g_cfg);
+    registry_init(&g_cfg);
+}
 
 int test_global_help(void) {
     char *t = help_render_global();
@@ -36,8 +39,8 @@ int test_clean_help_excludes_inject_only(void) {
     setup();
     char *t = help_render_subcommand("clean", NULL);
     ASSERT_TRUE(t != NULL);
-    ASSERT_STR_CONTAINS(t, "rNET_loss");            /* 支持 clean */
-    ASSERT_TRUE(strstr(t, "rPROC_exit") == NULL);   /* inject-only 不列�?*/
+    ASSERT_STR_CONTAINS(t, "rNET_loss");          /* 支持 clean */
+    ASSERT_TRUE(strstr(t, "rPROC_exit") == NULL); /* inject-only 不列入 */
     free(t);
     return 0;
 }
@@ -46,7 +49,7 @@ int test_uid_detail_and_example(void) {
     setup();
     char *t = help_render_subcommand("inject", "rNET_loss");
     ASSERT_TRUE(t != NULL);
-    ASSERT_STR_CONTAINS(t, "Network packet loss");   /* desc */
+    ASSERT_STR_CONTAINS(t, "Network packet loss"); /* desc */
     ASSERT_STR_CONTAINS(t, "dcat inject rNET_loss --iface=<iface> --loss_pct=<loss_pct>");
     free(t);
     return 0;
@@ -67,7 +70,7 @@ int test_query_help(void) {
     ASSERT_TRUE(t != NULL);
     ASSERT_STR_CONTAINS(t, "dcat query");
     ASSERT_STR_CONTAINS(t, "rNET_delay");
-    ASSERT_STR_CONTAINS(t, "iface");   /* query 参数 iface（现归入 query_optional，不再必填） */
+    ASSERT_STR_CONTAINS(t, "iface"); /* query 参数 iface（现归入 query_optional，不再必填） */
     free(t);
     return 0;
 }

@@ -25,7 +25,9 @@ jobs:
 
       - name: Install build deps (only if missing)
         run: |
-          command -v cmake >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1 || bash scripts/install_deps.sh
+          if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+            bash scripts/install_deps.sh
+          fi
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release

@@ -21,7 +21,7 @@ case "${DCAT_OP:-inject}" in
         : ${gw:?missing required param: gateway}
         npu_check_env
         $HCCN -route -a address "$addr" netmask "$mask" gateway "$gw" || { echo "route add failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_route_add 注入回读校验失败:动作未生�? >&2; exit 1; }
+        fault_present || { echo "rNPU_route_add 注入回读校验失败:动作未生效" >&2; exit 1; }
         echo "added route $addr/$mask via $gw on chip $chip"
         ;;
     clean)

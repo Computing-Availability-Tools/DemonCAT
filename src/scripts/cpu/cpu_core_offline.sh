@@ -1,8 +1,8 @@
 #!/bin/sh
 # rCPU_core_offline: offline CPU cores via sysfs.
 # inject: per-core echo 0 > online + touch cN marker (per-core, no overwrite on multi-inject)
-# clean:  use record's DCAT_PARAM_CORES â†?per-core echo 1 > online + rm cN marker
-# query:  glob cN markers (or use --cores) â†?check actual online state
+# clean:  use record's DCAT_PARAM_CORES â†’ per-core echo 1 > online + rm cN marker
+# query:  glob cN markers (or use --cores) â†’ check actual online state
 # cpu0 is usually not offlinable; script skips and warns.
 
 parse_cores() {

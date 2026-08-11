@@ -1,5 +1,5 @@
 #!/bin/sh
-# tests/check_syntax.sh â€?Tier 2: syntax check all scripts
+# tests/check_syntax.sh â€” Tier 2: syntax check all scripts
 for f in src/scripts/*/*.sh src/scripts/npu/_common.sh scripts/install_deps.sh; do
     [ -f "$f" ] || continue
     sh -n "$f" || { echo "SYNTAX ERROR in $f"; exit 1; }

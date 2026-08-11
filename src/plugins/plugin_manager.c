@@ -69,7 +69,10 @@ int plugin_load_dir(const char *dir) {
         {
             int dup = 0;
             for (int i = 0; i < g_count; i++)
-                if (strcmp(g_plugins[i]->uid, p->uid) == 0) { dup = 1; break; }
+                if (strcmp(g_plugins[i]->uid, p->uid) == 0) {
+                    dup = 1;
+                    break;
+                }
             if (dup) {
                 fprintf(stderr, "plugin: %s duplicate uid '%s' already loaded\n", path, p->uid);
                 dlclose(h);

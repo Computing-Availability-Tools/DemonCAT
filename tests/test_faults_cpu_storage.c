@@ -1,4 +1,4 @@
-/* tests/test_faults_cpu_storage.c â€?Tier 1: mock table-driven tests for CPU (2) + storage (1) */
+/* tests/test_faults_cpu_storage.c â€” Tier 1: mock table-driven tests for CPU (2) + storage (1) */
 #include "test_faults_common.h"
 
 int main(void) {
@@ -6,7 +6,7 @@ int main(void) {
 
     /* ---- rCPU_overload ---- */
     {
-        params_t p = mkparams("cores", "0,1", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
+        params_t p = mkparams("cores", "0,1", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         g_mock_called = 0;
         result_t *r = dispatch_route("rCPU_overload", "inject", &p);
         CK(r && r->code == 0);
@@ -28,7 +28,7 @@ int main(void) {
 
     /* ---- rCPU_core_offline ---- */
     {
-        params_t p = mkparams("cores", "0-3", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
+        params_t p = mkparams("cores", "0-3", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         g_mock_called = 0;
         result_t *r = dispatch_route("rCPU_core_offline", "inject", &p);
         CK(r && r->code == 0);
@@ -47,7 +47,7 @@ int main(void) {
     /* ---- rDISK_write_overload ---- */
     {
         params_t p = mkparams("device", "/tmp", "workers", "2", "size_mb", "50",
-                              NULL,NULL, NULL,NULL, NULL,NULL);
+                              NULL, NULL, NULL, NULL, NULL, NULL);
         g_mock_called = 0;
         result_t *r = dispatch_route("rDISK_write_overload", "inject", &p);
         CK(r && r->code == 0);

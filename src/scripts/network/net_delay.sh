@@ -18,7 +18,7 @@ case "${DCAT_OP:-inject}" in
         validate_iface "$iface" || exit 1
         case "$delay" in ''|*[!0-9]*) echo "delay_ms must be a positive integer, got: '$delay'" >&2; exit 1 ;; esac
         SIDECAR="/tmp/dcat-rNET_delay-${iface}.sidecar"
-        tc qdisc add dev "$iface" root netem delay "${delay}ms" || { echo "$iface 已有 root qdisc ($(tc qdisc show dev "$iface" 2>/dev/null | grep root | head -1))" >&2; echo "请先清理: dcat clean --all �?tc qdisc del dev $iface root" >&2; exit 1; }
+        tc qdisc add dev "$iface" root netem delay "${delay}ms" || { echo "$iface 已有 root qdisc ($(tc qdisc show dev "$iface" 2>/dev/null | grep root | head -1))" >&2; echo "请先清理: dcat clean --all 或 tc qdisc del dev $iface root" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"
         echo "applied ${delay}ms delay on $iface"
         ;;
@@ -57,7 +57,7 @@ case "${DCAT_OP:-inject}" in
         for iface in $ifaces; do
             [ -n "$iface" ] || continue
             out=$(tc qdisc show dev "$iface" 2>/dev/null)
-            # 只匹配纯 delay netem (delay 在行�?, 排除 jitter/reorder
+            # 只匹配纯 delay netem (delay 在行尾), 排除 jitter/reorder
             match=$(echo "$out" | grep -E "netem.*delay [0-9.]+[a-z]*[[:space:]]*$")
             if [ -n "$match" ]; then
                 echo "[$iface] $match"

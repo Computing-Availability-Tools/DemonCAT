@@ -5,8 +5,8 @@
 typedef struct injector_t {
     const char *uid;
     result_t *(*inject)(const params_t *params);
-    result_t *(*clean)(const params_t *params);   /* inject-only 注入器为 NULL */
-    result_t *(*query)(const params_t *params);    /* inject-only 注入器为 NULL */
+    result_t *(*clean)(const params_t *params); /* inject-only 注入器为 NULL */
+    result_t *(*query)(const params_t *params); /* inject-only 注入器为 NULL */
     result_t *(*precheck)(const char *op, const params_t *params);
 } injector_t;
 

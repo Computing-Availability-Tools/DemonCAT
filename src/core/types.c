@@ -40,7 +40,7 @@ const char *dcat_key_to_env(const char *key) {
 }
 
 int params_match_subset(const params_t *query, const params_t *record) {
-    /* query 每个 key �?record 中存在且值一致则匹配；空 query 匹配所�?*/
+    /* query 每个 key 在 record 中存在且值一致则匹配；空 query 匹配所有 */
     for (int i = 0; i < query->count; i++) {
         const char *v = params_find(record, query->items[i].key);
         if (!v || strcmp(v, query->items[i].value) != 0) return 0;

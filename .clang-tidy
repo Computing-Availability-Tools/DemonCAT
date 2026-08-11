@@ -1,0 +1,10 @@
+---
+Checks: >
+  -*,
+  clang-analyzer-*,
+  -clang-analyzer-optin.cplusplus.*,
+  -clang-analyzer-cplusplus.NewDelete,
+  -clang-analyzer-cplusplus.NewDeleteLeaks,
+  -clang-analyzer-apiModeling.*
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'src/'

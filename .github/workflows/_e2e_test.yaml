@@ -1,0 +1,65 @@
+name: _e2e_test
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
+      flows:
+        description: "Comma-separated flow_id prefixes; empty string = all flows"
+        type: string
+        default: CLI
+      run-as-root:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (${{ inputs.flows || 'ALL' }})
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build deps (only if missing)
+        run: |
+          command -v cmake >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1 || bash scripts/install_deps.sh
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Ensure python3 + curl
+        run: |
+          command -v python3 >/dev/null 2>&1 || sudo apt-get install -y -qq python3 || bash scripts/install_deps.sh
+          command -v curl >/dev/null 2>&1 || sudo apt-get install -y -qq curl || bash scripts/install_deps.sh
+
+      - name: Run E2E
+        env:
+          FLOWS: ${{ inputs.flows }}
+          AS_ROOT: ${{ inputs.run-as-root }}
+        run: |
+          if [ "$AS_ROOT" = "true" ]; then
+            sudo python3 tests/e2e/run_e2e.py --flows "$FLOWS" --no-append
+          else
+            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --no-append
+          fi
+
+      - name: Upload E2E results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ inputs.flows || 'all' }}
+          path: |
+            tests/e2e/results_*.csv
+            tests/e2e/report.md
+          if-no-files-found: ignore
+          retention-days: 7

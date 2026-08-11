@@ -1,0 +1,62 @@
+name: E2E_Light
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Lint (pre-commit + PR title)
+    uses: ./.github/workflows/_pre_commit.yaml
+
+  unit-test:
+    name: Unit tests (ctest)
+    needs: lint
+    uses: ./.github/workflows/_unit_test.yaml
+    with:
+      runner: ubuntu-latest
+
+  e2e-light:
+    name: E2E lightweight (CLI, no root)
+    needs: lint
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: ubuntu-latest
+      flows: CLI
+      run-as-root: false
+
+  ci-gate:
+    name: CI Gate (required status check)
+    needs: [lint, unit-test, e2e-light]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        env:
+          LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit-test.result }}
+          E2E: ${{ needs.e2e-light.result }}
+        run: |
+          set -eu
+          echo "=== PR Light CI Gate Summary ==="
+          echo "lint:       ${LINT}"
+          echo "unit-test:  ${UNIT}"
+          echo "e2e-light:  ${E2E}"
+          for r in "${LINT}" "${UNIT}" "${E2E}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::One or more required jobs did not succeed (see above)"; exit 1 ;;
+            esac
+          done
+          echo "=== CI Gate: PASSED ==="

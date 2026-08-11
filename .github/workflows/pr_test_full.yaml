@@ -1,0 +1,74 @@
+name: E2E_Full
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Lint (pre-commit + PR title)
+    if: ${{ github.event.action != 'labeled' || github.event.label.name == 'ready' }}
+    uses: ./.github/workflows/_pre_commit.yaml
+
+  unit-test:
+    name: Unit tests (ctest)
+    needs: lint
+    if: ${{ always() && needs.lint.result == 'success' }}
+    uses: ./.github/workflows/_unit_test.yaml
+    with:
+      runner: ubuntu-latest
+
+  e2e-full:
+    name: E2E full (all flows, root, NPU hardware)
+    needs: lint
+    if: ${{ always() && needs.lint.result == 'success' && contains(github.event.pull_request.labels.*.name, 'ready') }}
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: linux-arm64-npu-static-8
+      flows: ""
+      run-as-root: true
+
+  ci-gate:
+    name: CI Gate (required status check)
+    needs: [lint, unit-test, e2e-full]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        env:
+          LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit-test.result }}
+          E2E: ${{ needs.e2e-full.result }}
+          READY: ${{ contains(github.event.pull_request.labels.*.name, 'ready') }}
+        run: |
+          set -eu
+          echo "=== PR Full CI Gate Summary ==="
+          echo "lint:       ${LINT}"
+          echo "unit-test:  ${UNIT}"
+          echo "e2e-full:  ${E2E}"
+          echo "ready?:     ${READY}"
+          for r in "${LINT}" "${UNIT}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::Required job did not succeed: ${r}"; exit 1 ;;
+            esac
+          done
+          if [ "${READY}" = "true" ]; then
+            case "${E2E}" in
+              success) ;;
+              *) echo "::error::e2e-full did not succeed (result: ${E2E})"; exit 1 ;;
+            esac
+          fi
+          echo "=== CI Gate: PASSED ==="

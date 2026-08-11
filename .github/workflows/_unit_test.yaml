@@ -1,0 +1,43 @@
+name: _unit_test
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  unit-test:
+    name: Unit tests (ctest)
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build deps (only if missing)
+        run: |
+          command -v cmake >/dev/null 2>&1 && command -v gcc >/dev/null 2>&1 || bash scripts/install_deps.sh
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Run ctest
+        run: ctest --test-dir build --output-on-failure --timeout 60
+
+      - name: Upload ctest logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-logs
+          path: build/Testing/Temporary/
+          if-no-files-found: ignore
+          retention-days: 7

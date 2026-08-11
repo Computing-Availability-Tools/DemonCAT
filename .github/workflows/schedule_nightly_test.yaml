@@ -1,0 +1,59 @@
+name: Nightly_Test_A2
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (pre-commit)
+    uses: ./.github/workflows/_pre_commit.yaml
+
+  unit-test:
+    name: Unit tests (ctest)
+    needs: lint
+    uses: ./.github/workflows/_unit_test.yaml
+    with:
+      runner: ubuntu-latest
+
+  e2e-full:
+    name: E2E full (all flows, root, NPU hardware)
+    needs: lint
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: linux-arm64-npu-static-8
+      flows: ""
+      run-as-root: true
+
+  ci-gate:
+    name: Nightly Gate
+    needs: [lint, unit-test, e2e-full]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required jobs
+        env:
+          LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit-test.result }}
+          E2E: ${{ needs.e2e-full.result }}
+        run: |
+          set -eu
+          echo "=== Nightly Gate Summary ==="
+          echo "lint:       ${LINT}"
+          echo "unit-test:  ${UNIT}"
+          echo "e2e-full:  ${E2E}"
+          for r in "${LINT}" "${UNIT}" "${E2E}"; do
+            case "$r" in
+              success) ;;
+              *) echo "::error::Job did not succeed: ${r}"; exit 1 ;;
+            esac
+          done
+          echo "=== Nightly Gate: PASSED ==="

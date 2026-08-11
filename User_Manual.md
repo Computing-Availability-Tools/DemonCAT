@@ -2,7 +2,7 @@
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
 > 覆盖 CPU / 存储 / 网络 / 进程 / NPU 五大模块，共 33 条故障。
-> 完整规格见 [SPEC.md](../SPEC.md)，架构见 [DESIGN.md](../docs/DESIGN.md)。
+> 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)。
 
 > **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行一次 `sudo make install` 即可在 `/usr/local/bin` 创建全局入口（符号链接指向 `build/dcat`，后续更新只需 `git pull`，无需重新安装）；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。
 
@@ -63,6 +63,7 @@
   - [5.14 rNPU_mtu_mismatch](#514-rnpu_mtu_mismatch) — RoCE MTU 变更
   - [5.15 rNPU_dscp_tc_change](#515-rnpu_dscp_tc_change) — DSCP→TC 映射变更
   - [5.16 rNPU_roce_port_change](#516-rnpu_roce_port_change) — RoCE UDP 端口变更
+- [第六章 Web 控制台（dcat serve）](#第六章-web-控制台dcat-serve)
 
 ---
 
@@ -131,6 +132,7 @@ dcat clean  rCPU_overload --cores=0,1
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | cores | inject/clean 必填；query 可选 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 或 `"0-3,7"` 格式；query 缺省时查全部在线核 |
+| load_pct | 可选 | 整数 | 每核负载百分比（1–100），默认 100；通过 `taskset -c` 绑核后控制 perl 进程的 CPU 占用率 |
 
 **危险等级**: 中 — 指定核用户态 100% 满载，影响该核上其他任务调度。
 
@@ -1170,3 +1172,47 @@ dcat clean rNPU_roce_port_change --chip=0
 **危险等级**: 高 — 端口非 4791 时对端按标准 RoCEv2 发包将无法匹配，该芯片所有 RoCEv2 流量中断。
 
 **补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 缺省回退值为 4791（RoCEv2 标准端口）。
+
+---
+
+## 第六章 Web 控制台（dcat serve）
+
+### 6.1 概述
+
+`dcat serve` 在二进制内内置 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器。默认**只读**（`--allow-write` 开启注入/清理），无外部 HTTP 依赖。
+
+### 6.2 命令
+
+```bash
+# 只读模式（默认），绑定 127.0.0.1
+dcat serve --port 8080
+
+# 可写模式，绑定所有网卡
+dcat serve --port 8080 --bind 0.0.0.0 --allow-write
+```
+
+### 6.3 参数
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `--port N` | 8080 | HTTP 监听端口 |
+| `--bind ADDR` | 0.0.0.0 | 绑定地址（默认 `0.0.0.0`，SSH 隧道访问可用 `127.0.0.1`） |
+| `--webroot DIR` | 内置 | 自定义静态前端目录（覆盖内置 `src/web/`） |
+| `--allow-write` | 关闭 | 开启注入/清理写操作（默认只读） |
+
+### 6.4 API 端点
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/state` | GET | 当前活跃注入记录（从磁盘 reload state.json，同步命令行修改） |
+| `/api/history` | GET | 历史注入记录（含已清理） |
+| `/api/catalog` | GET | 故障目录（含模块/参数声明） |
+| `/api/inject` | POST | 注入故障（需 `--allow-write`） |
+| `/api/clean` | POST | 清理故障（需 `--allow-write`） |
+
+### 6.5 安全
+
+- `realpath()` 路径穿越防护
+- `%2e` URL 编码检测
+- `--port` CLI 校验（防止绑定非法端口）
+- 默认只读，写操作需显式 `--allow-write`

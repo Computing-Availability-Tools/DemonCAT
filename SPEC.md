@@ -50,7 +50,7 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
-- `subcommand` ∈ `{ inject, clean, query, list }`
+- `subcommand` ∈ `{ inject, clean, query, list, serve }`
 - `uid`：故障唯一标识（如 `rCPU_overload`），在配置中声明；`query` 和 `list` 可省略 uid
 - 所有参数以 `--key=value` 标志传入，可选参数不填即省略对应标志
 - 全局选项 `--config` / `--help` 与参数标志混合使用
@@ -64,6 +64,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless，不依赖 state.json）；聚合每 uid 结果。state.json 丢失/损坏时仍可清 | — |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查询 dcat 自身全部活跃注入记录；有 uid：调脚本 `query` 分支验证故障是否真的在系统上生效，用户参数与 inject 参数独立 | `inject,clean,query` |
 | `list` | 列出配置中声明的全部故障目录 | 所有 |
+| `serve [--port N] [--bind ADDR] [--webroot DIR] [--allow-write]` | 启动 HTTP 控制平面（长驻）：内置静态前端 + `/api/*` 端点；默认只读，`--allow-write` 开注入/清理 | — |
 
 > `inject`-only 故障（如 `rPROC_exit`）不支持 `clean` / `query`；注入即终结，无活跃记录。
 > 本期不实现超时自动恢复；所有可恢复故障注入后需用户手动 `clean`。
@@ -128,7 +129,7 @@ dcat list
 
 | UID | module | supported_ops | inject_required | inject_optional |
 |---|---|---|---|---|
-| `rCPU_overload` * | cpu | inject,clean,query | cores | — |
+| `rCPU_overload` * | cpu | inject,clean,query | cores | load_pct |
 | `rNET_delay` * | network | inject,clean,query | iface,delay_ms | — |
 | `rNET_loss` | network | inject,clean,query | iface,loss_pct | — |
 | `rNET_reorder` | network | inject,clean,query | iface,reorder_pct | — |
@@ -344,6 +345,7 @@ yes_processes: 2
 | 2 | 解析错误（命令格式不合法） |
 | 3 | 预检拒绝 |
 | 4 | 未找到（uid 不在目录中） |
+| 5 | 重注入拒绝（同资源已注入，需 `--force`） |
 
 ---
 
@@ -396,7 +398,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 
 | 批次 | 范围 | 状态 |
 |---|---|---|
-| **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 19）+ 测试 | ✅ 已完成 |
+| **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 16）+ 测试 | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
@@ -441,8 +443,34 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 
 ---
 
-## 11. 高级扩展点（本期不实现，仅留位）
+## 11. 高级扩展点
 
 少数需要进程内自定义逻辑（精确定时、二进制协议）的故障可走**编译注入器**路径：实现 `injector_t`（`uid` + 4 个函数指针 `inject/clean/query/precheck`）并注册到 `builtin_injectors[]`。registry 查找时 cnf 故障优先，未命中再查编译注入器。
 
 > 本期 YAGNI，仅文档与头文件 `src/injectors/injector.h` 留位。所有故障均走 cnf + 脚本路径。
+
+### 11.1 动态插件层（第三层 dispatch）
+
+除 cnf + 脚本（第一层）与编译注入器（第二层）外，dispatch 还支持**第三层动态插件**（`dlopen` 加载的 `.so`），运行时可插拔，无需重编译 dcat。三层按优先级回退：
+
+1. **cnf 数据驱动**（`registry_find` 命中 `fault_def_t`）→ executor 调脚本
+2. **编译注入器**（`injector_find` 命中 `injector_t`）→ 直接函数调用
+3. **动态插件**（`plugin_find` 命中 `dcat_plugin_t`）→ `plugin_dispatch` 调函数指针
+
+插件接口 `dcat_plugin_t`（`src/plugins/plugin.h`）含 ABI 版本门控 + per-op 参数声明 + `init`/`fini` 生命周期钩子 + `precheck`/`inject`/`clean`/`query` 函数指针。插件目录默认 `<root>/plugins`，`--plugins <dir>` 可覆盖。完整设计见 [docs/Dynamic_Plugin_Implement.md](docs/Dynamic_Plugin_Implement.md)。
+
+> 示例插件 `src/plugins/sample/sample_plugin.c`（`rSAMPLE_test`），本期仅用于集成测试。
+
+---
+
+## 12. Web 控制平面（dcat serve）
+
+`dcat serve` 在二进制内内置 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器。默认**只读**（`--allow-write` 开启注入/清理），无外部 HTTP 依赖。
+
+- **子命令**：`dcat serve [--port N] [--bind ADDR] [--webroot DIR] [--allow-write]`
+- **默认**：端口 8080，绑定 `0.0.0.0`（SSH 隧道访问可用 `--bind 127.0.0.1`）
+- **API 端点**：`/api/state`（活跃记录）、`/api/history`（历史）、`/api/catalog`（目录）、`/api/inject`（需 `--allow-write`）、`/api/clean`（需 `--allow-write`）
+- **安全**：`realpath()` 路径穿越防护 + `%2e` URL 编码检测 + `--port` CLI 校验
+- **state 同步**：`/api/state` 与 `/api/history` 从磁盘 reload `state.json`，同步命令行修改
+
+> 详见 [User_Manual.md 第六章](User_Manual.md)。

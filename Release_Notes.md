@@ -139,8 +139,8 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 
 ### 测试
 
-- **ctest**：26/26 全通过
-  - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / cli / faults / help / plugin_manager + plugin_integration）
+- **ctest**：24/24 全通过
+  - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
   - Tier 1 mock 表驱动故障测试（33 条全覆盖）
   - Tier 2 脚本语法检查（sh -n 全部 33 脚本 + _common.sh）
   - Tier 3 真实执行测试（非 root 故障）

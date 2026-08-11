@@ -68,7 +68,7 @@
 | 编译选项 | `-Wall -Wextra -Werror` | ✅ 零警告 |
 | 二进制 | `build/dcat` | ✅ |
 | 动态插件 | `plugins/libsample.so` | ✅ |
-| 脚本语法 | `sh -n` 全部 35 脚本 | ✅ |
+| 脚本语法 | `sh -n` 全部 34 脚本 | ✅ |
 
 ---
 
@@ -157,7 +157,7 @@
 | rNET_link_flap | iface=docker0,count=2 | ✅ | pidfile 存活 | ✅ confirmed:true | ✅ | UP | **PASS** |
 | rNET_bw_limit | iface=docker0,rate_kbps=1024 | ✅ | tc: tbf rate 1024Kbit | ✅ confirmed:true | ✅ | noqueue | **PASS** |
 | rNET_jitter | iface=docker0,delay_ms=50,jitter_ms=10 | ✅ | tc: netem delay 50.0ms 10.0ms | ✅ confirmed:true | ✅ | noqueue | **PASS** |
-| rNET_tcp_loss | iface=docker0,port=39998 | ✅ | iptables: dpt:39998 | ✅ confirmed:true | ✅ | 规则清除 | **PASS** |
+| rNET_tcp_loss | port=39998 | ✅ | iptables: dpt:39998 | ✅ confirmed:true | ✅ | 规则清除 | **PASS** |
 
 ### 5.4 进程模块（3 条）
 
@@ -290,11 +290,11 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 
 ---
 
-## 9. 增量：clean --all + stateless clean（2026-07-30）
+## 11. 增量：clean --all + stateless clean（2026-07-30）
 
 > 在 v0.1 基础上新增 **stateless clean** 能力：`clean <uid>` 无参 / `clean --all` 不依赖 `state.json`，脚本自行 glob `/tmp` 工件清理；`state.json` 丢失/损坏时仍可清。
 
-### 9.1 新增能力
+### 11.1 新增能力
 
 | 入口 | 行为 |
 |---|---|
@@ -302,7 +302,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 | `dcat clean --all` | 对全部支持 clean 的注册故障 fan-out 无参 clean（stateless），聚合每 uid 结果为 `{uid,status}` 数组。 |
 | `dcat clean <uid> --params`（带参） | 原行为：按参数匹配 state 记录逐条清理；**新增**：`state.json` 丢失/损坏（`state_is_lost()`）时回退用用户参数直接调脚本 clean。 |
 
-### 9.2 核心改动
+### 11.2 核心改动
 
 - `cli.c/h`：新增 `--all` 全局标志（仅 clean 生效）。
 - `dispatch.c/h`：`cnf_clean` 零参数走 stateless 脚本 clean，**脚本成功后 `reconcile_uid_state()` 把该 uid 全部活跃记录标 inactive（避免 query 残留幽灵）**；带参数且 state 丢失时回退脚本 clean；新增 `dispatch_clean_all()` 聚合 fan-out（同样 reconcile）。
@@ -310,7 +310,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 - `precheck.c`：`clean` 零参数时跳过 `clean_required` 校验（clean-all-for-uid 模式）。
 - `help.c` / `main.c`：`--help` 与全局用法补 `clean --all` / 无参 clean 说明；`--all` 与非 clean 组合报错（退出码 2）。
 
-### 9.3 脚本层 no-arg clean 全覆盖
+### 11.3 脚本层 no-arg clean 全覆盖
 
 全部 33 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
 
@@ -321,7 +321,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 
 > 所有 NPU 脚本顶部 `chip=${DCAT_PARAM_CHIP:?...}` 改为 `:-`（非致命），`npu_validate_chip` 仅在有值时校验；inject-required 参数的 `:?` 强制移入 `inject)` 分支，保证 query/clean 无参不崩、inject 仍拒绝缺参。
 
-### 9.4 测试结果
+### 11.4 测试结果
 
 | 测试 | 覆盖 | 结果 |
 |---|---|:---:|
@@ -336,7 +336,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 
 > CTest 当前共 **24** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
 
-### 9.5 已知限制
+### 11.5 已知限制
 
 - NPU 12 条「no-op」类故障（无 /tmp 工件、clean 需 chip+key 标识参数）在 `clean --all` 下仅报 "no active injection" 退出 0，**不实际清理**其活跃注入——这是 stateless 的固有局限（无法从 /tmp 工件还原标识参数）。此类故障的 stateless 清理需带参（`clean <uid> --chip=N [--key=...]`），或依赖完好的 state.json。
 - **部分损坏不回退**：`clean <uid> --params` 仅在 `state.json` **完全丢失/解析失败**（`state_is_lost()`）时回退脚本；若文件合法但记录被抹（运维手编辑/截断），带参 clean 报 "no active injection" 且**不触碰系统资源**（避免误清非 dcat 注入，如对未注入网卡 `tc qdisc del`）。此场景用无参 `clean <uid>` 或 `clean --all`（stateless glob）恢复。
@@ -352,14 +352,14 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 
 
 
-## 10. E2E 测试（CSV 驱动，354 步骤 / 165 流程）
+## 12. E2E 测试（CSV 驱动，354 步骤 / 165 流程）
 
-> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，352 步骤 / 165 流程），结果见 `tests/e2e/results_*.csv`。
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，354 步骤 / 165 流程），结果见 `tests/e2e/results_*.csv`。
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 - NPU: Atlas 910B4 device 2 (RoCE link DOWN)
 
-### 10.1 结果汇总
+### 12.1 结果汇总
 
 | 指标 | 值 |
 |------|------|
@@ -368,7 +368,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 | **TOTAL** | **165** |
 | **通过率** | **98%** |
 
-### 10.2 分类统计
+### 12.2 分类统计
 
 | 分类 | 说明 | PASS | FAIL |
 |---|---|---|---|
@@ -381,7 +381,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 | CONC | 并发竞争（同时 inject+clean / 双进程写 state） | 3 | 0 |
 | INTER | 故障交互（多故障叠加 / clean 一个不影响其他） | 3 | 0 |
 
-### 10.3 失败用例（3 个，全部 910B4 硬件/环境限制）
+### 12.3 失败用例（3 个，全部 910B4 硬件/环境限制）
 
 | ID | 故障 | 原因 |
 |---|---|---|

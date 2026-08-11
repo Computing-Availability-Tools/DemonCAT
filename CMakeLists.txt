@@ -75,7 +75,7 @@ dcat_test(test_help         tests/test_help.c)
 dcat_test(test_plugin_manager     tests/test_plugin_manager.c)
 dcat_test(test_plugin_integration tests/test_plugin_integration.c)
 
-# ---- Tier 1: Mock 表驱动故障测试 (38 条全覆盖) ----
+# ---- Tier 1: Mock 表驱动故障测试 (33 条全覆盖) ----
 dcat_test(test_faults_cpu_storage  tests/test_faults_cpu_storage.c)
 dcat_test(test_faults_network      tests/test_faults_network.c)
 dcat_test(test_faults_process     tests/test_faults_process.c)

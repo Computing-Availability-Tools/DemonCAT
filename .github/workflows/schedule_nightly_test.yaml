@@ -7,7 +7,7 @@ on:
     branches:
       - '*'
   schedule:
-    - cron: '0 18 * * *'
+    - cron: '0 00 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -23,6 +23,12 @@ jobs:
     name: Lint (pre-commit)
     uses: ./.github/workflows/_pre_commit.yaml
 
+  clang-tidy:
+    name: clang-tidy (advisory)
+    needs: lint
+    if: ${{ github.event_name != 'push' }}
+    uses: ./.github/workflows/_clang_tidy.yaml
+
   unit-test:
     name: Unit tests (ctest)
     needs: lint
@@ -36,16 +42,10 @@ jobs:
     if: ${{ github.event_name != 'push' }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: '["self-hosted", "linux-arm64-npu-static-8"]'
+      runner: '["self-hosted"]'
       flows: ""
       exclude: ""
       run-as-root: true
-
-  clang-tidy:
-    name: clang-tidy (advisory)
-    needs: lint
-    if: ${{ github.event_name != 'push' }}
-    uses: ./.github/workflows/_clang_tidy.yaml
 
   ci-gate:
     name: Nightly Gate

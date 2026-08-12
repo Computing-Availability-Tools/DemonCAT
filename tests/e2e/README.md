@@ -82,9 +82,10 @@ python3 tests/e2e/run_e2e.py --no-append
 
 ## 产物
 
-- `results_<时间戳>.csv`：每步 `actual_exit_code/actual_json/verify_actual/result/error_code/duration/timestamp`。
-- `report.md`：汇总 + 8 类分类统计 + 失败用例 + 跳过原因。
-- `test_report.md` §10：追加 e2e 汇总段（`--no-append` 可关）。
+- `results_<时间戳>.csv`：每步 `actual_exit_code/actual_json/verify_actual/result/error_code/duration/timestamp`，含 `expected_behavior` 列（测试目的）。
+- `report.md`：汇总 + **测试用例明细（含测试目的）** + 8 类分类统计(含分类说明) + 失败用例 + 跳过原因。
+- `test_report.md` §10：追加 e2e 汇总段，含逐用例测试目的表（`--no-append` 可关）。
+- CI artifact（`e2e-x86` / `e2e-arm64`）仅含本次运行相关产物：`report.md` + `results_*.csv` + `e2e_run.log` + `failures_*.log`，不含全量用例库 `cases.csv`。
 
 ## 断言 DSL（verify_assert 列）
 

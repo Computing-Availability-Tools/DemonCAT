@@ -33,6 +33,18 @@ TEST_IFACE = "dcat-e2e0"
 E2E_HOME = "/tmp/dcat_e2e_home"
 PWN = "/tmp/dcat_pwned"
 
+# 测试分类说明（分类→测试目的概述），供 report.md / test_report.md 复用
+CAT_DESC = {
+    "FUNC": "功能基线 — 故障 inject→verify→clean→query 全链路 + query<uid> 状态确认 + 插件生命周期",
+    "BOUND": "边界值 — 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法）",
+    "SEC": "安全 — 命令注入(inject+clean+query) + 权限边界(非root拒绝) + 主机安全(路径穿越/symlink)",
+    "STATE": "状态一致性 — clean×2幂等 / --force替换 / 重注入拒绝 / query幂等 / 多资源隔离",
+    "RES": "韧性/自愈 — state丢失/损坏/孤儿/幽灵恢复 / clean--all幂等 / state表满",
+    "CLI": "CLI接口 — 解析错误 + 帮助 + 退出码 + --config + HTTP serve控制平面",
+    "CONC": "并发竞争 — 同时inject+clean / 双进程写state / clean--all+inject",
+    "INTER": "故障交互 — 多故障叠加 / clean一个不影响其他 / clean--all后逐verify",
+}
+
 RESULT_COLS = [
     "id", "flow_id", "step", "phase", "fault_uid", "module",
     "command", "expected_exit_code", "expected_json", "verify_cmd", "verify_assert",
@@ -641,6 +653,19 @@ def _emit_gha_summary(rep, results, counters, cat_stats, fails, rpath, fail_log_
         print(f"WARN: write GITHUB_STEP_SUMMARY failed: {e}", file=sys.stderr)
 
 
+def _flow_purpose(steps):
+    """聚合一个 flow 各步骤的 expected_behavior → 测试目的描述。
+    跳过 setup/provision 步骤，按执行顺序串联，去重。"""
+    purposes = []
+    for s in steps:
+        if s.get("notes") == "provision/setup" or s.get("phase") == "setup":
+            continue
+        b = (s.get("expected_behavior") or "").strip()
+        if b and b not in purposes:
+            purposes.append(b)
+    return " → ".join(purposes) if purposes else "(无描述)"
+
+
 def _write_report(path, results, counters, cat_stats, findings, ts, ipt, dcat_bin):
     lines = []
     lines.append(f"# DemonCAT E2E 测试报告\n\n生成时间: {ts}  |  root: {ipt}  |  dcat: {dcat_bin}\n")
@@ -651,18 +676,47 @@ def _write_report(path, results, counters, cat_stats, findings, ts, ipt, dcat_bi
     lines.append(f"| SKIP(流程) | {counters['SKIP']} |")
     lines.append(f"| 执行步骤(step)数 | {len(results)} |")
     lines.append(f"| 通过率(按流程) | {counters['PASS']*100//max(1,sum(counters.values()))}% |")
-    lines.append("\n> 说明：`cases.csv` 以\"步骤(step)\"计数（每 flow 含 inject/clean/query 多步），"
-                 "报告汇总按\"流程(flow)\"计数（每 flow 一个 PASS/FAIL）。两者不等属正常。\n")
-    lines.append("## 分类统计\n\n| 分类 | PASS | FAIL | SKIP |\n|---|---|---|---|")
+    lines.append("\n> 说明：汇总按\"流程(flow)\"计数（每 flow 一个 PASS/FAIL），"
+                 "步骤明细见下方用例表。两者不等属正常。\n")
+
+    # ---- 测试用例明细（含测试目的）----
+    lines.append("## 测试用例明细（含测试目的）\n")
+    lines.append("> 下表列出本次实际执行的每个测试流程(flow)，"
+                 "测试目的由该 flow 各步骤的 expected_behavior 串联得出，"
+                 "展示该用例从头到尾验证了什么。\n")
+    lines.append("| # | flow_id | 分类 | 模块 | 测试目的 | 步骤数 | 结果 | 耗时(ms) |"
+                 "\n|---|---|---|---|---|---|---|---|")
+    flow_rows = {}
+    for r in results:
+        flow_rows.setdefault(r["flow_id"], []).append(r)
+    idx = 0
+    for fid in sorted(flow_rows.keys()):
+        idx += 1
+        steps = flow_rows[fid]
+        cat = fid.split("-")[0]
+        module = steps[0].get("module", "") if steps else ""
+        purpose = _flow_purpose(steps).replace("|", "\\|")
+        nsteps = len(steps)
+        flow_result = "FAIL" if any(s.get("result") == "FAIL" for s in steps) else "PASS"
+        total_ms = sum(int(s.get("duration_ms") or 0) for s in steps)
+        lines.append(f"| {idx} | {fid} | {cat} | {module} | {purpose} | "
+                     f"{nsteps} | {flow_result} | {total_ms} |")
+    lines.append("")
+
+    # ---- 分类统计（含分类说明）----
+    lines.append("## 分类统计\n\n| 分类 | 说明 | PASS | FAIL | SKIP |\n|---|---|---|---|---|")
     for cat in sorted(cat_stats):
         c = cat_stats[cat]
-        lines.append(f"| {cat} | {c['PASS']} | {c['FAIL']} | {c['SKIP']} |")
+        lines.append(f"| {cat} | {CAT_DESC.get(cat, '')} | {c['PASS']} | {c['FAIL']} | {c['SKIP']} |")
     lines.append("\n## 失败/发现\n")
     fails = [r for r in results if r["result"] == "FAIL"]
     if fails:
-        lines.append("| id | flow | phase | command | detail | expected_behavior |\n|---|---|---|---|---|---|")
+        lines.append("| id | flow | phase | command | detail | expected_behavior |"
+                     "\n|---|---|---|---|---|---|")
         for r in fails:
-            lines.append(f"| {r['id']} | {r['flow_id']} | {r['phase']} | {r['command'][:40]} | {r['verify_actual'][:60]} | {r.get('notes','')} |")
+            eb = (r.get("expected_behavior") or "").replace("|", "\\|")[:60]
+            lines.append(f"| {r['id']} | {r['flow_id']} | {r['phase']} | "
+                         f"{r['command'][:40]} | {r['verify_actual'][:60]} | {eb} |")
     else:
         lines.append("无失败。\n")
     if findings:
@@ -686,34 +740,45 @@ def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt, d
     sec = []
     sec.append(f"\n\n## 10. E2E 测试（CSV 驱动，{ts}）\n")
     sec.append("> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。"
-               "用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`。\n\n")
+               "用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成），结果见 `tests/e2e/results_*.csv`，"
+               "逐用例测试目的见 `tests/e2e/report.md` 及下方 10.2 表。\n\n")
     sec.append(f"- 执行环境: root={ipt}, HOME 隔离={E2E_HOME}, 测试网卡={TEST_IFACE}\n")
     sec.append(f"- 结果: **PASS {counters['PASS']} / FAIL {counters['FAIL']} / SKIP {counters['SKIP']} / TOTAL {total}**，通过率 {rate}%\n\n")
     sec.append("### 10.1 分类统计\n\n| 分类 | 说明 | PASS | FAIL | SKIP |\n|---|---|---|---|---|")
-    desc = {"FUNC": "功能基线(37故障全链路+query<uid>+插件)",
-            "BOUND": "边界值(每参数类型系统覆盖)",
-            "SEC": "安全(命令注入+权限边界+主机安全+symlink)",
-            "STATE": "状态一致性/幂等(clean×2/--force/reinject/并发inject)",
-            "RES": "韧性/自愈(state丢失/损坏/孤儿/幽灵/clean--all/state表满)",
-            "CLI": "CLI接口(解析错误+帮助+退出码+--config)",
-            "CONC": "并发竞争(同时inject+clean/双进程写state)",
-            "INTER": "故障交互(多故障叠加/clean一个不影响其他)"}
     for cat in sorted(cat_stats):
         c = cat_stats[cat]
-        sec.append(f"| {cat} | {desc.get(cat,'')} | {c['PASS']} | {c['FAIL']} | {c['SKIP']} |")
+        sec.append(f"| {cat} | {CAT_DESC.get(cat, '')} | {c['PASS']} | {c['FAIL']} | {c['SKIP']} |")
+    # ---- 10.2 测试用例明细（含测试目的）----
+    sec.append("\n### 10.2 测试用例明细（含测试目的）\n\n")
+    sec.append("| # | flow_id | 分类 | 测试目的 | 步骤数 | 结果 | 耗时(ms) |"
+               "\n|---|---|---|---|---|---|---|")
+    flow_rows = {}
+    for r in results:
+        flow_rows.setdefault(r["flow_id"], []).append(r)
+    idx = 0
+    for fid in sorted(flow_rows.keys()):
+        idx += 1
+        steps = flow_rows[fid]
+        cat = fid.split("-")[0]
+        purpose = _flow_purpose(steps).replace("|", "\\|")
+        nsteps = len(steps)
+        flow_result = "FAIL" if any(s.get("result") == "FAIL" for s in steps) else "PASS"
+        total_ms = sum(int(s.get("duration_ms") or 0) for s in steps)
+        sec.append(f"| {idx} | {fid} | {cat} | {purpose} | "
+                   f"{nsteps} | {flow_result} | {total_ms} |")
     fails = [r for r in results if r["result"] == "FAIL"]
-    sec.append("\n### 10.2 覆盖说明\n")
+    sec.append("\n### 10.3 覆盖说明\n")
     sec.append("- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。\n")
     sec.append("- SEC-P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝。\n")
     sec.append("- FUNC 中 rCPU_core_offline 默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。\n")
     sec.append("- SEC-H 写入边界：用 device=/tmp 安全路径（不污染 /etc）。\n")
     sec.append("- CONC/INTER 为混沌工程新增维度：并发竞争与故障交互。\n")
     if findings:
-        sec.append("\n### 10.3 安全/韧性发现\n")
+        sec.append("\n### 10.4 安全/韧性发现\n")
         for x in findings:
             sec.append(f"- {x}")
     if fails:
-        sec.append("\n### 10.4 失败用例\n\n| id | flow | phase | detail |\n|---|---|---|---|")
+        sec.append("\n### 10.5 失败用例\n\n| id | flow | phase | detail |\n|---|---|---|---|")
         for r in fails[:30]:
             sec.append(f"| {r['id']} | {r['flow_id']} | {r['phase']} | {r['verify_actual'][:80]} |")
     try:

@@ -59,20 +59,23 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq gcovr
+          # gcovr 7.0 (Ubuntu 24.04) API 变更：
+          #   --branch-coverage 已移除（分支覆盖率默认开启，XML/HTML/summary 均含 branch-rate）
+          #   --sort-percentage 已弃用 → --sort uncovered-percent
+          #   --txt-branches 已弃用 → --txt-metric branch
           # 生成 XML 报告用于 Codecov
           gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
                 --xml-pretty --output coverage.xml
-          # 生成 HTML 报告（单文件自包含，所有文件详情可展开查看 + 分支覆盖率）
+          # 生成 HTML 报告（单文件自包含，所有文件详情可展开查看）
           mkdir -p coverage-html
           gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
-                --html-nested --output coverage-html/index.html \
-                --branch-coverage
+                --html-nested --output coverage-html/index.html --sort uncovered-percent
           # 汇总写入 job summary（仅显示 Total 行）
           {
             echo "## Coverage Summary"
             echo '```'
             gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
-                  --txt-summary --branch-coverage
+                  --txt-summary
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

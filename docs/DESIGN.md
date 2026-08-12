@@ -722,7 +722,7 @@ dispatch_route(uid, op, params):
 
 ### 8.3 资源键
 
-- **资源键 = `f->clean_required` 各参数值**（已验 60 条 cnf 故障的 `clean_required` 均为纯资源标识：cores / device / iface / port / service / pid / chip*），零新增 config 字段。
+- **资源键 = `f->clean_required` 各参数值**（已验 58 条 cnf 故障的 `clean_required` 均为纯资源标识：cores / device / iface / port / service / pid / chip*），零新增 config 字段。
 - **`cores` 硬编码为集合语义参数**（唯一集合参数）：走集合交集；其余参数（device / iface / port / service / pid / chip / dev / ip / …）走精确串等；多参键（如 NPU `chip,dev,ip`）取各参精确 AND。
 - 备选方案"新增 conf `resource_key` 字段"按 YAGNI 舍弃（`clean_required` 已等价）。
 

@@ -27,7 +27,7 @@ DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / D
 - 3-tier dispatch：cnf 故障 → 编译注入器 → 动态插件（`dlopen .so`）
 - 示例动态插件 `plugins/libsample.so`
 
-#### 故障目录（60 条）
+#### 故障目录（58 条）
 
 CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 
@@ -37,7 +37,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 - **进程 3 条**：进程退出（inject-only）/ 进程挂起 / 僵尸进程
 - **NPU 16 条**：RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
 
-合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 60 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条。
+合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 58 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条。
 
 #### Web 控制台（dcat serve）
 

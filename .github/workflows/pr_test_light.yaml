@@ -25,18 +25,26 @@ jobs:
     uses: ./.github/workflows/_pre_commit.yaml
 
   unit-test:
-    name: Unit tests (ctest)
+    name: Unit tests (${{ matrix.runner }})
     needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     uses: ./.github/workflows/_unit_test.yaml
     with:
-      runner: ubuntu-latest
+      runner: ${{ matrix.runner }}
 
   e2e-light:
-    name: E2E smoke (core func + state/conc/res, no root)
+    name: E2E smoke (${{ matrix.runner }})
     needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: '["ubuntu-latest"]'
+      runner: '["${{ matrix.runner }}"]'
       # 冒烟核心用例（非 root 可跑，覆盖 PR 易引入严重回归的核心不变量）：
       # [功能 happy-path] 各非硬件模块 inject→clean→query 全链路
       #   FUNC-rCPU_overload       CPU (perl 自旋)

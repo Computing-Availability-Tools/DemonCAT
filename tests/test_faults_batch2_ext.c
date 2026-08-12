@@ -1,5 +1,5 @@
 /* tests/test_faults_batch2_ext.c — Tier 1: batch2 extensions to existing modules
- * cpu(3) + storage(6) + network(2) + process(3) + npu(4) = 18 */
+ * cpu(3) + storage(5) + network(2) + process(3) + npu(4) = 16 */
 #include "test_faults_common.h"
 
 int main(void) {
@@ -63,22 +63,6 @@ int main(void) {
         CK(r && r->code == 0); CMD_CONTAINS("disk_io_error.sh");
         check_param_env("device", "/dev/loop0"); result_free(r);
         r = dispatch_route("rDISK_io_error", "clean", &p); CK(r && r->code == 0); result_free(r);
-    }
-    /* rDISK_scsi_error (device) */
-    {
-        params_t p = mkparams("device", "/dev/sdb", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rDISK_scsi_error", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("disk_scsi_error.sh");
-        check_param_env("device", "/dev/sdb"); result_free(r);
-        r = dispatch_route("rDISK_scsi_error", "clean", &p); CK(r && r->code == 0); result_free(r);
-    }
-    /* rDISK_loss (device) */
-    {
-        params_t p = mkparams("device", "/dev/sdb", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rDISK_loss", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("disk_loss.sh");
-        check_param_env("device", "/dev/sdb"); result_free(r);
-        r = dispatch_route("rDISK_loss", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
 
     /* ---- network extensions ---- */

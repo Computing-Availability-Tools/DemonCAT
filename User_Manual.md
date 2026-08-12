@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八大模块，共 60 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八大模块，共 58 条故障。
 > 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)。
 
 > **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行一次 `sudo make install` 即可在 `/usr/local/bin` 创建全局入口（符号链接指向 `build/dcat`，后续更新只需 `git pull`，无需重新安装）；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。

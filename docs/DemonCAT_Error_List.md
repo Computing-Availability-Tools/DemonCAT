@@ -1,6 +1,6 @@
 # DemonCAT 故障目录
 
-当前共 60 条故障，覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八个模块。
+当前共 58 条故障，覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八个模块。
 
 ## CPU 模块（5 条）
 
@@ -12,7 +12,7 @@
 | `rCPU_freq` | cores | freq_mhz | CPU frequency limit (cpufreq scaling) |
 | `rCPU_quota` | quota_pct | — | CPU cgroup quota limit |
 
-## 存储模块（7 条）
+## 存储模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
@@ -21,8 +21,6 @@
 | `rDISK_inode_exhaust` | path | count | Inode exhaustion (small file creation) |
 | `rDISK_io_delay` | device | delay_ms | Disk IO delay (device-mapper delay) |
 | `rDISK_io_error` | device | — | Disk IO error (device-mapper error) |
-| `rDISK_scsi_error` | device | — | SCSI error injection (CONFIG_FAIL_MAKE_REQUEST, 需内核支持) |
-| `rDISK_loss` | device | — | Disk loss (SCSI delete, 需真实 SCSI 盘) |
 
 ## 网络模块（13 条）
 

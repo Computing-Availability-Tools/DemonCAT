@@ -16,7 +16,7 @@
 
 ### 版本定位
 
-DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统模块，提供统一的命令面、预检护栏、状态跟踪；60 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
+DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统模块，提供统一的命令面、预检护栏、状态跟踪；58 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
 
 ### 变更摘要
 
@@ -132,7 +132,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 #### 文档
 
 - README（含依赖说明 + 一键安装脚本 `scripts/install_deps.sh`）
-- 用户手册 `User_Manual.md`（60 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
+- 用户手册 `User_Manual.md`（58 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
 - 手动测试指南 `docs/Manual_Test_Reference.md`
 - SPEC（技术规格）+ DESIGN（架构设计）
 - Release Notes + docs/Test_Report.md
@@ -141,7 +141,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 
 - **ctest**：24/24 全通过
   - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
-  - Tier 1 mock 表驱动故障测试（60 条全覆盖）
+  - Tier 1 mock 表驱动故障测试（58 条全覆盖）
   - Tier 2 脚本语法检查（sh -n 全部 33 脚本 + _common.sh）
   - Tier 3 真实执行测试（非 root 故障）
   - root 冒烟测试（smoke_root.sh）

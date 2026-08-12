@@ -67,7 +67,8 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           # 生成可浏览的逐行 HTML 报告（下载 coverage-html artifact 后用浏览器打开 index.html）
-          genhtml coverage.info --output-directory coverage-html --branch-coverage --legend --ignore-errors unused
+          # --rc genhtml_charset=UTF-8: 源码含 UTF-8 中文注释，genhtml 默认 iso_8859_1 会导致乱码
+          genhtml coverage.info --output-directory coverage-html --branch-coverage --legend --ignore-errors unused --rc genhtml_charset=UTF-8
 
       - name: Upload to Codecov
         if: ${{ !cancelled() && inputs.coverage }}
@@ -77,15 +78,6 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload coverage.info artifact
-        if: ${{ !cancelled() && inputs.coverage }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-info
-          path: coverage.info
-          if-no-files-found: ignore
-          retention-days: 7
 
       - name: Upload coverage HTML report
         if: ${{ !cancelled() && inputs.coverage }}

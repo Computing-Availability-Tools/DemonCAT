@@ -59,7 +59,15 @@ jobs:
           # 排除第三方库、测试驱动自身、系统头，只保留 src/ 业务代码覆盖率
           # --ignore-errors unused: lcov 2.0 把未命中的排除模式(如 /usr/* 系统头未入覆盖)当 ERROR exit 25，需显式忽略
           lcov --remove coverage.info 'third_party/*' '/usr/*' 'tests/*' --output-file coverage.info --ignore-errors unused
-          lcov --summary coverage.info
+          # 汇总写入 job summary（Actions run 页直接可见，免翻日志）
+          {
+            echo "## Coverage Summary"
+            echo '```'
+            lcov --summary coverage.info
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 生成可浏览的逐行 HTML 报告（下载 coverage-html artifact 后用浏览器打开 index.html）
+          genhtml coverage.info --output-directory coverage-html --branch-coverage --legend --ignore-errors unused
 
       - name: Upload to Codecov
         if: ${{ !cancelled() && inputs.coverage }}
@@ -78,6 +86,15 @@ jobs:
           path: coverage.info
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Upload coverage HTML report
+        if: ${{ !cancelled() && inputs.coverage }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-html
+          path: coverage-html/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload ctest logs on failure
         if: failure()

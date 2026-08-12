@@ -10,17 +10,15 @@ SIDECAR="/tmp/dcat-rNPU_chip_reset-$chip.bak"
 
 case "${DCAT_OP:-inject}" in
     inject)
-        npu-smi set -t reset -i "$chip" -c 0 -y 2>/dev/null \
-            || npu-smi set -t reset -i "$chip" -c 0 2>/dev/null \
+        printf 'y\n' | npu-smi set -t reset -i "$chip" -c 0 2>/dev/null \
             || { echo "chip reset failed (need root / npu-smi)" >&2; exit 1; }
         printf 'reset\n' > "$SIDECAR"
         echo "reset NPU chip $chip via npu-smi"
         ;;
     clean)
-        # chip auto-recovers after reset; just clear sidecar
         rm -f "$SIDECAR" 2>/dev/null
-        # optionally force config recovery
-        hccn_tool -i "$chip" -cfg recovery 2>/dev/null || true
+        sleep 3
+        timeout 5 hccn_tool -i "$chip" -cfg recovery 2>/dev/null || true
         echo "chip $chip config recovered"
         ;;
     query)

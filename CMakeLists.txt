@@ -108,3 +108,17 @@ set_target_properties(sample_plugin PROPERTIES
 if(TARGET sample_plugin AND TARGET test_plugin_integration)
     add_dependencies(test_plugin_integration sample_plugin)
 endif()
+
+# ---- NPU ACL 压力工具 (可选, 检测到 CANN 则编译) ----
+set(ASCEND_TOOLKIT "/usr/local/Ascend/ascend-toolkit/latest")
+if(EXISTS "${ASCEND_TOOLKIT}/aarch64-linux/include/acl/acl.h")
+    add_executable(_npu_stress src/scripts/npu/_npu_stress.c)
+    target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include")
+    target_link_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/lib64")
+    target_link_libraries(_npu_stress PRIVATE ascendcl)
+    set_target_properties(_npu_stress PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
+    message(STATUS "NPU stress tool: enabled (ACL found)")
+else()
+    message(STATUS "NPU stress tool: disabled (ACL not found)")
+endif()

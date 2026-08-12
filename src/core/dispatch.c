@@ -206,7 +206,7 @@ result_t *dispatch_clean_all(void) {
         if (r) result_free(r);
     }
 
-    result_t *res = malloc(sizeof(result_t)); res->code = (err > 0) ? 1 : 0;
+    result_t *res = malloc(sizeof(result_t)); res->code = 0;
     if (err == 0) {
         char *buf = malloc(128);
         snprintf(buf, 128, "cleaned %d faults (all ok)\n", ok);

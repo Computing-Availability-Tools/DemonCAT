@@ -1,36 +1,54 @@
 #!/bin/sh
-# rNPU_aic_fault: stress AI-core to 100% via torch_npu matmul loop.
-# inject: run python stress script (background, duration-limited)
-# clean:  kill the stress process
-# query:  npu-smi info -t usages (check AICore%)
+# rNPU_aic_fault: AICore stress via ACL d2d memcpy (no torch_npu required).
+# inject: run _npu_stress aicore in background, write sidecar
+# clean:  kill stress process
+# query:  npu-smi info -t usages (check Aicore Usage Rate)
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
-duration=${DCAT_PARAM_DURATION:-60}
-npu_validate_chip "$chip"
+chip=${DCAT_PARAM_CHIP:-}
+if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 SIDECAR="/tmp/dcat-rNPU_aic_fault-$chip.pid"
+STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
+DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
+
+npu_acl_dev_id() {
+    if [ -f "$DEV_MAP_FILE" ]; then
+        awk -v card="$1" '$1==card{print $2; exit}' "$DEV_MAP_FILE"
+    fi
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
+        : ${chip:?missing required param: chip}
         npu_check_env
-        script_dir=$(cd "$(dirname "$0")" && pwd)
-        python3 "$script_dir/_npu_stress.py" --chip "$chip" --task aicore --duration "$duration" &
-        pid=$!
-        printf '%s\n' "$pid" > "$SIDECAR"
-        sleep 2
-        kill -0 "$pid" 2>/dev/null || { echo "aic stress failed to start (needs torch_npu + pydcmi)" >&2; rm -f "$SIDECAR"; exit 1; }
-        echo "injected aicore stress on chip $chip (pid=$pid, duration=${duration}s)"
+        if [ ! -x "$STRESS_BIN" ]; then
+            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2
+            exit 1
+        fi
+        dev_id=$(npu_acl_dev_id "$chip")
+        [ -z "$dev_id" ] && dev_id=0
+        duration=${DCAT_PARAM_DURATION:-30}
+        "$STRESS_BIN" aicore "$dev_id" "$duration" 512 >/dev/null 2>&1 &
+        echo $! > "$SIDECAR"
+        echo "AICore stress started on chip $chip (acl dev $dev_id, pid $!, ${duration}s)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
-            pid=$(cat "$SIDECAR")
-            kill "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null
+            kill -9 $(cat "$SIDECAR") 2>/dev/null
             rm -f "$SIDECAR"
-            echo "cleaned aicore stress on chip $chip (killed pid=$pid)"
-        else echo "no active aicore stress"; fi
+            echo "AICore stress stopped on chip $chip"
+        else
+            echo "no active AICore stress on chip $chip"
+        fi
         ;;
     query)
-        npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | grep -i 'Aicore'
-        if [ -f "$SIDECAR" ]; then exit 0; else exit 1; fi
+        if [ -f "$SIDECAR" ]; then
+            echo "FAULT CONFIRMED: AICore stress active (pid $(cat $SIDECAR))"
+            npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | grep -E 'Aicore|Aivector'
+            exit 0
+        else
+            echo "FAULT NOT ACTIVE: no AICore stress"
+            exit 1
+        fi
         ;;
-    *) echo "unknown op: $DCAT_OP" >&2; exit 1;;
+    *) echo "unknown op: $DCAT_OP" >&2; exit 1 ;;
 esac

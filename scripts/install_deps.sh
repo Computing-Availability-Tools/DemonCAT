@@ -1,11 +1,24 @@
 #!/bin/bash
 # scripts/install_deps.sh — 一键安装 DemonCAT 编译 + 运行时依赖
 # 支持 Debian/Ubuntu (apt) 和 RHEL/CentOS (yum/dnf)
-# 用法: bash scripts/install_deps.sh
+# 用法:
+#   bash scripts/install_deps.sh              # 安装全部 (编译+运行时)
+#   bash scripts/install_deps.sh --build      # 仅编译依赖 (cmake/gcc/...)
+#   bash scripts/install_deps.sh --runtime    # 仅运行时依赖 (ip/ethtool/iptables/...)
+# CI 中: 编译依赖按需装 (cmake/gcc 缺失时)，运行时依赖无条件装 (ethtool 在
+# ubuntu-latest 预装镜像缺失，会导致 E2E real_phy provision 失败)。
 set -e
 
+MODE="all"
+case "${1:-}" in
+  ""|--all) MODE="all" ;;
+  --build)  MODE="build" ;;
+  --runtime) MODE="runtime" ;;
+  *) echo "usage: $0 [--all|--build|--runtime]"; exit 1 ;;
+esac
+
 echo "=========================================="
-echo "DemonCAT 依赖安装脚本"
+echo "DemonCAT 依赖安装脚本 (mode: $MODE)"
 echo "=========================================="
 
 # ---- 检测包管理器 ----
@@ -77,26 +90,39 @@ RUNTIME_PKGS_YUM="iproute ethtool iptables perl python3 util-linux coreutils"
 
 # ---- 安装 ----
 if [ "$PKG" = "apt" ]; then
-    echo "[1/2] 安装编译依赖..."
     sudo apt-get update -qq
-    sudo apt-get install -y $BUILD_PKGS_APT
-    echo ""
-    echo "[2/2] 安装运行时依赖..."
-    sudo apt-get install -y $RUNTIME_PKGS_APT
+    if [ "$MODE" = "all" ] || [ "$MODE" = "build" ]; then
+        echo "[build] 安装编译依赖..."
+        sudo apt-get install -y $BUILD_PKGS_APT
+    fi
+    if [ "$MODE" = "all" ] || [ "$MODE" = "runtime" ]; then
+        echo "[runtime] 安装运行时依赖..."
+        sudo apt-get install -y $RUNTIME_PKGS_APT
+    fi
 else
     # yum / dnf
     # 幂等：已安装的包跳过，只安装缺失的（避免网络不可达时重复安装反复报错）
-    MISSING=""
-    for p in $BUILD_PKGS_YUM $RUNTIME_PKGS_YUM; do
-        if ! rpm -q "$p" >/dev/null 2>&1; then
-            MISSING="$MISSING $p"
+    install_missing() {
+        local missing=""
+        for p in "$@"; do
+            if ! rpm -q "$p" >/dev/null 2>&1; then
+                missing="$missing $p"
+            fi
+        done
+        if [ -z "$missing" ]; then
+            echo "  依赖已全部满足，跳过"
+        else
+            echo "  安装缺失依赖:$missing ..."
+            $PKG_INVOKE install -y $missing
         fi
-    done
-    if [ -z "$MISSING" ]; then
-        echo "[1/2] 依赖已全部满足，跳过 yum 安装"
-    else
-        echo "[1/2] 安装缺失依赖:$MISSING ..."
-        $PKG_INVOKE install -y $MISSING
+    }
+    if [ "$MODE" = "all" ] || [ "$MODE" = "build" ]; then
+        echo "[build] 检查编译依赖..."
+        install_missing $BUILD_PKGS_YUM
+    fi
+    if [ "$MODE" = "all" ] || [ "$MODE" = "runtime" ]; then
+        echo "[runtime] 检查运行时依赖..."
+        install_missing $RUNTIME_PKGS_YUM
     fi
 fi
 

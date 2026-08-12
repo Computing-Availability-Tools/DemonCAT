@@ -14,6 +14,7 @@ jobs:
   unit-test:
     name: Unit tests (ctest)
     runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +24,7 @@ jobs:
       - name: Install build deps (only if missing)
         run: |
           if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
-            bash scripts/install_deps.sh
+            bash scripts/install_deps.sh --build
           fi
 
       - name: Configure

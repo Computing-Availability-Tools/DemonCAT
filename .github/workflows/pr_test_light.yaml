@@ -3,7 +3,8 @@ name: E2E_Light
 on:
   push:
     branches:
-      - '*'
+      - main
+      - develop
   pull_request:
     types:
       - opened
@@ -35,7 +36,7 @@ jobs:
     needs: lint
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: ubuntu-latest
+      runner: '["ubuntu-latest"]'
       flows: CLI
       run-as-root: false
 
@@ -44,6 +45,7 @@ jobs:
     needs: [lint, unit-test, e2e-light]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check required jobs
         env:

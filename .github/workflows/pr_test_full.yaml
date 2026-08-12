@@ -1,9 +1,11 @@
 name: E2E_Full
 
+# PR 全量 E2E：ubuntu-latest 跑非 NPU 子集（排除 rNPU/rCPU_core_offline 等硬件依赖）。
+# 主干(main) push 也跑（合并后验证）；PR 需打 `ready` 标签才跑（成本控制）。
 on:
   push:
     branches:
-      - '*'
+      - main
   pull_request:
     types:
       - opened
@@ -34,36 +36,47 @@ jobs:
       runner: ubuntu-latest
 
   e2e-full:
-    name: E2E full (all flows, root, NPU hardware)
+    name: E2E full (non-NPU subset, root)
     needs: lint
     if: ${{ always() && needs.lint.result == 'success' && (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'ready')) }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: ubuntu-latest
+      runner: '["ubuntu-latest"]'
       flows: ""
+      exclude: "rNPU,rCPU_core_offline"
       run-as-root: true
+
+  clang-tidy:
+    name: clang-tidy (advisory)
+    needs: lint
+    if: ${{ always() && needs.lint.result == 'success' }}
+    uses: ./.github/workflows/_clang_tidy.yaml
 
   ci-gate:
     name: CI Gate (required status check)
-    needs: [lint, unit-test, e2e-full]
+    needs: [lint, unit-test, e2e-full, clang-tidy]
     if: ${{ always() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check required jobs
         env:
           LINT: ${{ needs.lint.result }}
           UNIT: ${{ needs.unit-test.result }}
           E2E: ${{ needs.e2e-full.result }}
+          CLANG: ${{ needs.clang-tidy.result }}
           IS_PR: ${{ github.event_name == 'pull_request' }}
           READY: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ready') }}
         run: |
           set -eu
           echo "=== PR Full CI Gate Summary ==="
-          echo "lint:       ${LINT}"
+          echo "lint:        ${LINT}"
           echo "unit-test:  ${UNIT}"
-          echo "e2e-full:  ${E2E}"
+          echo "e2e-full:   ${E2E}"
+          echo "clang-tidy: ${CLANG} (advisory)"
           echo "is_pr:      ${IS_PR}"
           echo "ready?:     ${READY}"
+          # lint/unit 必须成功或跳过；e2e-full 仅在 PR+ready 时强制要求
           for r in "${LINT}" "${UNIT}"; do
             case "$r" in
               success|skipped) ;;
@@ -76,4 +89,5 @@ jobs:
               *) echo "::error::e2e-full did not succeed (result: ${E2E})"; exit 1 ;;
             esac
           fi
+          # clang-tidy 为建议性（continue-on-error），仅报告不阻断
           echo "=== CI Gate: PASSED ==="

@@ -1,0 +1,37 @@
+name: _clang_tidy
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clang-tidy:
+    name: clang-tidy (static analysis, advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build deps + clang-tidy
+        run: |
+          if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+            bash scripts/install_deps.sh --build
+          fi
+          command -v clang-tidy >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq clang-tidy; }
+
+      - name: Configure (export compile_commands.json)
+        run: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy (clang-analyzer only)
+        run: |
+          set -eu
+          mapfile -t files < <(find src -name '*.c' -not -path '*/third_party/*')
+          echo "Analyzing ${#files[@]} translation units"
+          clang-tidy -p build --extra-arg=-Wno-error "${files[@]}"

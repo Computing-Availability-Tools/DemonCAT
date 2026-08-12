@@ -308,6 +308,8 @@ def main():
     ap.add_argument("--report", default=os.path.join(ROOT, "test_report.md"))
     ap.add_argument("--no-append", action="store_true")
     ap.add_argument("--flows", default="", help="逗号分隔 flow_id 前缀过滤")
+    ap.add_argument("--exclude", default="",
+                    help="逗号分隔 flow_id 前缀排除（双轨：ubuntu 子集排除 NPU/硬件依赖 flow）")
     args = ap.parse_args()
 
     if not os.path.exists(args.dcat):
@@ -322,6 +324,7 @@ def main():
         flows[fid].sort(key=lambda x: int(x["step"]))
 
     filt = [p for p in args.flows.split(",") if p] if args.flows else None
+    excl = [p for p in args.exclude.split(",") if p] if args.exclude else None
 
     os.makedirs(E2E_HOME, exist_ok=True)
     env = dict(os.environ)
@@ -369,6 +372,8 @@ def main():
     flow_ids = sorted(flows.keys())
     for fid in flow_ids:
         if filt and not any(fid.startswith(p) or p == fid for p in filt):
+            continue
+        if excl and any(fid.startswith(p) for p in excl):
             continue
         steps = flows[fid]
         cat = fid.split("-")[0]

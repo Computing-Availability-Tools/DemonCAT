@@ -2,8 +2,6 @@ name: Release (code + binary)
 
 on:
   push:
-    branches:
-      - '*'
     tags:
       - 'v*'
   schedule:
@@ -21,6 +19,7 @@ jobs:
   build-release:
     name: Build & release dcat
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,7 +29,7 @@ jobs:
       - name: Install build deps (only if missing)
         run: |
           if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
-            bash scripts/install_deps.sh
+            bash scripts/install_deps.sh --build
           fi
 
       - name: Configure

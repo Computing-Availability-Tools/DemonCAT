@@ -4,12 +4,17 @@ on:
   workflow_call:
     inputs:
       runner:
+        description: "JSON array of runs-on labels, e.g. [\"ubuntu-latest\"] or [\"self-hosted\",\"linux-arm64-npu-static-8\"]"
         type: string
-        default: ubuntu-latest
+        default: '["ubuntu-latest"]'
       flows:
         description: "Comma-separated flow_id prefixes; empty string = all flows"
         type: string
         default: CLI
+      exclude:
+        description: "Comma-separated flow_id prefixes to exclude (e.g. NPU/hardware flows on ubuntu)"
+        type: string
+        default: ""
       run-as-root:
         type: boolean
         default: false
@@ -19,8 +24,9 @@ permissions:
 
 jobs:
   e2e:
-    name: E2E (${{ inputs.flows || 'ALL' }})
-    runs-on: ${{ inputs.runner }}
+    name: E2E (${{ inputs.flows || 'ALL' }}${{ inputs.exclude != '' && ' excl' || '' }})
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,8 +36,13 @@ jobs:
       - name: Install build deps (only if missing)
         run: |
           if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
-            bash scripts/install_deps.sh
+            bash scripts/install_deps.sh --build
           fi
+
+      - name: Install runtime deps
+        continue-on-error: true
+        run: |
+          bash scripts/install_deps.sh --runtime
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -41,18 +52,19 @@ jobs:
 
       - name: Ensure python3 + curl
         run: |
-          command -v python3 >/dev/null 2>&1 || sudo apt-get install -y -qq python3 || bash scripts/install_deps.sh
-          command -v curl >/dev/null 2>&1 || sudo apt-get install -y -qq curl || bash scripts/install_deps.sh
+          command -v python3 >/dev/null 2>&1 || sudo apt-get install -y -qq python3 || bash scripts/install_deps.sh --runtime
+          command -v curl >/dev/null 2>&1 || sudo apt-get install -y -qq curl || bash scripts/install_deps.sh --runtime
 
       - name: Run E2E
         env:
           FLOWS: ${{ inputs.flows }}
+          EXCLUDE: ${{ inputs.exclude }}
           AS_ROOT: ${{ inputs.run-as-root }}
         run: |
           if [ "$AS_ROOT" = "true" ]; then
-            sudo python3 tests/e2e/run_e2e.py --flows "$FLOWS" --no-append
+            sudo python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append
           else
-            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --no-append
+            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append
           fi
 
       - name: Upload E2E results on failure

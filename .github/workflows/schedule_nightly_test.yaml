@@ -41,16 +41,13 @@ jobs:
       runner: ${{ matrix.runner }}
 
   e2e-full:
-    name: E2E full (${{ matrix.runner }})
+    name: E2E full (NPU runner)
     needs: lint
     if: ${{ github.event_name != 'push' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-latest, ubuntu-24.04-arm]
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: '["${{ matrix.runner }}"]'
+      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
+      runner: '["self-hosted", "linux-arm64-npu-910b-2"]'
       flows: ""
       exclude: ""
       run-as-root: true

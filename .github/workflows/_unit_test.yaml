@@ -62,16 +62,17 @@ jobs:
           # 生成 XML 报告用于 Codecov
           gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
                 --xml-pretty --output coverage.xml
-          # 生成 HTML 报告（带分支覆盖率，导航正常）
+          # 生成 HTML 报告（单文件自包含，所有文件详情可展开查看 + 分支覆盖率）
+          mkdir -p coverage-html
           gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
-                --html-details --output coverage-html/index.html \
-                --branch-coverage --sort-percentage
-          # 汇总写入 job summary（Actions run 页直接可见，免翻日志）
+                --html-nested --output coverage-html/index.html \
+                --branch-coverage
+          # 汇总写入 job summary（仅显示 Total 行）
           {
             echo "## Coverage Summary"
             echo '```'
             gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
-                  --txt --branch-coverage
+                  --txt-summary --branch-coverage
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

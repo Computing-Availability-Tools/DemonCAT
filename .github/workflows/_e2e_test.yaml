@@ -61,11 +61,25 @@ jobs:
           EXCLUDE: ${{ inputs.exclude }}
           AS_ROOT: ${{ inputs.run-as-root }}
         run: |
+          set -o pipefail
           if [ "$AS_ROOT" = "true" ]; then
-            sudo python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append
+            sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append 2>&1 | tee tests/e2e/e2e_run.log
           else
-            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append
+            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append 2>&1 | tee tests/e2e/e2e_run.log
           fi
+
+      - name: Print failure summary (on failure)
+        if: failure()
+        run: |
+          echo "===== E2E 失败诊断摘要 ====="
+          for f in tests/e2e/failures_*.log; do
+            [ -e "$f" ] || continue
+            echo "--- $f (失败用例完整 stdout/stderr/verify 输出) ---"
+            cat "$f" 2>/dev/null || true
+          done
+          echo "--- report.md (汇总+失败用例表) ---"
+          cat tests/e2e/report.md 2>/dev/null || true
+          echo "===== 完整产物已作为 artifact 上传 ====="
 
       - name: Upload E2E results on failure
         if: failure()
@@ -73,6 +87,8 @@ jobs:
         with:
           name: e2e-results-${{ inputs.flows || 'all' }}
           path: |
+            tests/e2e/e2e_run.log
+            tests/e2e/failures_*.log
             tests/e2e/results_*.csv
             tests/e2e/report.md
           if-no-files-found: ignore

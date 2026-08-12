@@ -53,13 +53,26 @@ def sh(cmd, env=None, timeout=60):
         return 1, f"[exception {e}]"
 
 
+def sh_sep(cmd, env=None, timeout=60, cwd=None):
+    """run shell cmd, return (rc, stdout, stderr) separately for failure diagnostics."""
+    try:
+        p = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+                           env=env, timeout=timeout, cwd=cwd)
+        return p.returncode, (p.stdout or ""), (p.stderr or "")
+    except subprocess.TimeoutExpired:
+        return 124, "", "[timeout]"
+    except Exception as e:
+        return 1, "", f"[exception {e}]"
+
+
 def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
     """dcat 命令用 argv 列表执行（不带 shell），使注入载荷原样进入 dcat cli_parse
     （否则 shell=True 会把 ';touch ...' 当命令分隔符，框架自身执行载荷=假阳性）。
     但 CONC 测试用 & wait 做并发，必须 shell=True。
     辅助 shell 命令(rm/echo/pkill/for/$VAR) 仍用 shell=True。
     priv_user: 非 None 时用 runuser 降权到该用户执行（P 类验证非 root 拒绝）。
-    dcat_bin: --dcat 指定的实际二进制；与 cases.csv 默认 ./build/dcat 不一致时替换。"""
+    dcat_bin: --dcat 指定的实际二进制；与 cases.csv 默认 ./build/dcat 不一致时替换。
+    返回 (rc, stdout, stderr) 三元组，便于失败时分别记录诊断信息。"""
     cs = cmd.strip()
     default_rel = "./build/dcat"
     if dcat_bin != default_rel:
@@ -74,16 +87,16 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
             if priv_user:
                 # runuser -u <user> -- <argv>；root 专用，免密
                 if sh(f"command -v runuser >/dev/null 2>&1")[0] != 0:
-                    return 1, "[runuser 未安装，无法降权验证非 root 拒绝]"
+                    return 1, "", "[runuser 未安装，无法降权验证非 root 拒绝]"
                 argv = ["runuser", "-u", priv_user, "--"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
-            return p.returncode, (p.stdout or "") + (p.stderr or "")
+            return p.returncode, (p.stdout or ""), (p.stderr or "")
         except subprocess.TimeoutExpired:
-            return 124, "[timeout]"
+            return 124, "", "[timeout]"
         except Exception as e:
-            return 1, f"[exception {e}]"
-    return sh(cs, env=env, timeout=timeout)
+            return 1, "", f"[exception {e}]"
+    return sh_sep(cs, env=env, timeout=timeout)
 
 
 def cmd_exists(c):
@@ -344,6 +357,8 @@ def main():
     cat_stats = {}
     findings = []
     tracked_pids = []
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fail_log_path = os.path.join(args.out_dir, f"failures_{ts}.log")
 
     def cleanup_all():
         try:
@@ -406,20 +421,22 @@ def main():
                 results.append(res)
                 continue
             priv = "nobody" if (is_priv and s["phase"] == "inject") else None
-            rc, out = run_step_cmd(cmd, env=env, dcat_bin=args.dcat, timeout=120, priv_user=priv)
+            rc, so, se = run_step_cmd(cmd, env=env, dcat_bin=args.dcat, timeout=120, priv_user=priv)
+            out = (so or "") + (se or "")
             dt = int((time.time() - t0) * 1000)
             res["actual_exit_code"] = rc
             res["actual_json"] = out.strip()[:300]
             res["duration_ms"] = dt
             res["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            ok, detail = _eval_step(s, rc, out, ctx, env)
+            ok, detail, vout, vrc = _eval_step(s, rc, out, ctx, env)
             res["verify_actual"] = detail
             res["result"] = "PASS" if ok else "FAIL"
             res["error_code"] = rc
             results.append(res)
             if not ok:
                 flow_pass = False
-                if cat == "SEC" and not ok:
+                _log_failure(s, rc, so, se, vout, vrc, detail, ctx, fail_log_path)
+                if cat == "SEC":
                     findings.append(f"{s['id']} ({fid}): {s['expected_behavior']} → {detail}")
                 break  # flow 内一步失败则中止该 flow 后续
         # 后置清扫
@@ -448,7 +465,6 @@ def main():
         print(f"  {'PASS' if flow_pass else 'FAIL'} {fid}")
 
     # ---- 输出 results csv ----
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     rpath = os.path.join(args.out_dir, f"results_{ts}.csv")
     with open(rpath, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=RESULT_COLS)
@@ -467,14 +483,24 @@ def main():
         print("[phase] test_report.md appended", flush=True)
 
     total = sum(counters.values())
+    fails = [r for r in results if r["result"] == "FAIL"]
     print("\n========== E2E 汇总 ==========")
     print(f"  PASS {counters['PASS']}  FAIL {counters['FAIL']}  SKIP {counters['SKIP']}  TOTAL {total}")
-    print(f"  results: {rpath}")
-    print(f"  report:  {rep}")
+    print(f"  results:  {rpath}")
+    print(f"  report:   {rep}")
+    print(f"  failures: {fail_log_path}")
+    if fails:
+        print(f"\n----- 失败用例摘要 ({len(fails)}) -----")
+        for r in fails:
+            print(f"  [FAIL] {r['id']} | {r['flow_id']} | step {r['step']} | {r['phase']} | "
+                  f"exit={r['actual_exit_code']} | {r['verify_actual']}")
+        print(f"\n完整失败详情(stdout/stderr/verify 输出)见上方控制台输出及 artifact: "
+              f"{os.path.basename(fail_log_path)}")
     if findings:
-        print(f"  ⚠ findings: {len(findings)}")
+        print(f"\n  findings: {len(findings)}")
         for x in findings:
             print(f"    - {x}")
+    _emit_gha_summary(rep, results, counters, cat_stats, fails, rpath, fail_log_path)
     return 1 if counters["FAIL"] else 0
 
 
@@ -489,24 +515,26 @@ def _res(s, result="", notes=""):
 
 
 def _eval_step(s, rc, out, ctx, env):
-    """评估单步：exit_code + expected_json + verify_assert."""
+    """评估单步：exit_code + expected_json + verify_assert。
+    返回 (ok, detail, verify_out, verify_rc) 供调用方记录诊断信息。"""
     exp = s["expected_exit_code"]
     if exp and exp != "*":
         if exp == "nonzero":
             if rc == 0:
-                return False, f"expected nonzero, got {rc}"
+                return False, f"expected nonzero, got {rc}", "", 0
         else:
             try:
                 if rc != int(exp):
-                    return False, f"exit {rc} != {exp}"
+                    return False, f"exit {rc} != {exp}", "", 0
             except ValueError:
                 pass
     ej = s["expected_json"]
     if ej and ej not in out:
-        return False, f"json missing '{ej}'"
+        return False, f"json missing '{ej}'", "", 0
     vasrt = s["verify_assert"]
     vcmd = substitute(s["verify_cmd"], ctx)
     vout = ""
+    vrc = 0
     # 观测前留 settle 时间（注入/清除后系统状态需片刻稳定，如 python listen / dd / kill 生效）
     if vcmd and not vasrt.startswith(("state_", "exitcode:", "out_contains:")):
         time.sleep(0.6)
@@ -515,7 +543,83 @@ def _eval_step(s, rc, out, ctx, env):
     elif vcmd and vasrt.startswith(("exists:", "notexists:")):
         vrc, vout = sh(vcmd, env=env, timeout=30)  # e.g. injection flag probe
     ok, detail = apply_assert(vasrt, vout, rc, out)
-    return ok, detail
+    return ok, detail, vout, vrc
+
+
+def _log_failure(s, rc, so, se, vout, vrc, detail, ctx, fail_log_path):
+    """打印并记录失败用例详细信息：控制台 + GHA ::error:: 注解 + failures_<ts>.log。
+    捕获 command/stdout/stderr/verify_cmd/verify_output/期望vs实际，方便用户定位解决。"""
+    ts = datetime.now().strftime("%H:%M:%S")
+    cmd = substitute(s["command"], ctx)
+    vcmd = substitute(s.get("verify_cmd", ""), ctx)
+    # GitHub Actions 注解（单行摘要，显示在 UI Annotations 面板，无需下载 artifact 即可定位）
+    summary = (f"flow={s['flow_id']} id={s['id']} step={s['step']} "
+               f"phase={s['phase']} uid={s.get('fault_uid', '')}: {detail}")
+    print("::error::" + summary.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'),
+          flush=True)
+    block = []
+    block.append("=" * 72)
+    block.append(f"[FAIL] {ts} | flow={s['flow_id']} | id={s['id']} | "
+                 f"step={s['step']} | phase={s['phase']}")
+    block.append(f"  fault_uid:         {s.get('fault_uid', '')}")
+    block.append(f"  expected_behavior: {s.get('expected_behavior', '') or s.get('notes', '')}")
+    block.append(f"  command:           {cmd}")
+    block.append(f"  expected_exit:     {s.get('expected_exit_code', '')}")
+    block.append(f"  expected_json:     {s.get('expected_json', '')}")
+    block.append(f"  verify_cmd:        {vcmd}")
+    block.append(f"  verify_assert:     {s.get('verify_assert', '')}")
+    block.append("  ---- ACTUAL ----")
+    block.append(f"  actual_exit_code:  {rc}")
+    block.append(f"  stdout:")
+    for line in (so or "").splitlines() or ["(empty)"]:
+        block.append(f"    {line}")
+    block.append(f"  stderr:")
+    for line in (se or "").splitlines() or ["(empty)"]:
+        block.append(f"    {line}")
+    block.append(f"  verify_exit_code:  {vrc}")
+    block.append(f"  verify_output:")
+    for line in (vout or "").splitlines() or ["(empty)"]:
+        block.append(f"    {line}")
+    block.append(f"  detail:             {detail}")
+    block.append("=" * 72)
+    text = "\n".join(block)
+    print(text, flush=True)
+    try:
+        with open(fail_log_path, "a", encoding="utf-8") as f:
+            f.write(text + "\n\n")
+    except Exception as e:
+        print(f"WARN: write failures log failed: {e}", file=sys.stderr)
+
+
+def _emit_gha_summary(rep, results, counters, cat_stats, fails, rpath, fail_log_path):
+    """向 GitHub Actions Job Summary ($GITHUB_STEP_SUMMARY) 写入摘要表。
+    本地运行(无该环境变量)时自动 no-op。"""
+    gss = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not gss:
+        return
+    total = sum(counters.values())
+    rate = counters["PASS"] * 100 // max(1, total)
+    lines = []
+    lines.append("## DemonCAT E2E 测试摘要\n")
+    lines.append(f"- **PASS**: {counters['PASS']} | **FAIL**: {counters['FAIL']} | "
+                 f"**SKIP**: {counters['SKIP']} | **TOTAL**: {total} | 通过率: {rate}%\n")
+    if fails:
+        lines.append(f"\n### 失败用例 ({len(fails)})\n")
+        lines.append("| id | flow | step | phase | exit | detail |")
+        lines.append("|---|---|---|---|---|---|")
+        for r in fails:
+            d = (r.get("verify_actual") or "").replace("|", "\\|")[:80]
+            lines.append(f"| {r['id']} | {r['flow_id']} | {r['step']} | {r['phase']} | "
+                         f"{r['actual_exit_code']} | {d} |")
+        lines.append(f"\n> 完整失败详情(stdout/stderr/verify 输出)见 artifact: "
+                     f"`{os.path.basename(fail_log_path)}` 及 `{os.path.basename(rep)}`\n")
+    else:
+        lines.append("\n所有用例通过。\n")
+    try:
+        with open(gss, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception as e:
+        print(f"WARN: write GITHUB_STEP_SUMMARY failed: {e}", file=sys.stderr)
 
 
 def _write_report(path, results, counters, cat_stats, findings, ts, ipt, dcat_bin):
@@ -601,4 +705,12 @@ def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt, d
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        msg = f"run_e2e.py crashed: {e}".replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+        print(f"::error::{msg}", flush=True)
+        print(tb, file=sys.stderr, flush=True)
+        sys.exit(1)

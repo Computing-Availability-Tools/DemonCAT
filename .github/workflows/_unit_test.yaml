@@ -34,13 +34,17 @@ jobs:
         run: cmake --build build -j"$(nproc)"
 
       - name: Run ctest
-        run: ctest --test-dir build --output-on-failure --timeout 60
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure --timeout 60 2>&1 | tee build/ctest_run.log
 
       - name: Upload ctest logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ctest-logs
-          path: build/Testing/Temporary/
+          path: |
+            build/ctest_run.log
+            build/Testing/Temporary/
           if-no-files-found: ignore
           retention-days: 7

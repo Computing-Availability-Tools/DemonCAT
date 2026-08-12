@@ -592,29 +592,46 @@ def _log_failure(s, rc, so, se, vout, vrc, detail, ctx, fail_log_path):
 
 
 def _emit_gha_summary(rep, results, counters, cat_stats, fails, rpath, fail_log_path):
-    """向 GitHub Actions Job Summary ($GITHUB_STEP_SUMMARY) 写入摘要表。
+    """向 GitHub Actions Job Summary ($GITHUB_STEP_SUMMARY) 写入摘要。
+    标题含 arch(x86_64/aarch64) 区分 x86/arm 矩阵腿；列出具体通过/失败 flow_id。
     本地运行(无该环境变量)时自动 no-op。"""
     gss = os.environ.get("GITHUB_STEP_SUMMARY")
     if not gss:
         return
+    import platform
+    arch = platform.machine()  # x86_64 / aarch64
     total = sum(counters.values())
     rate = counters["PASS"] * 100 // max(1, total)
+    # 按 flow 聚合：该 flow 任一步 FAIL → FAIL，否则 PASS
+    flow_state = {}
+    for r in results:
+        fid = r["flow_id"]
+        if r["result"] == "FAIL":
+            flow_state[fid] = "FAIL"
+        elif fid not in flow_state:
+            flow_state[fid] = "PASS"
+    pass_flows = sorted(f for f, s in flow_state.items() if s == "PASS")
+    fail_flows = sorted(f for f, s in flow_state.items() if s == "FAIL")
     lines = []
-    lines.append("## DemonCAT E2E 测试摘要\n")
-    lines.append(f"- **PASS**: {counters['PASS']} | **FAIL**: {counters['FAIL']} | "
-                 f"**SKIP**: {counters['SKIP']} | **TOTAL**: {total} | 通过率: {rate}%\n")
-    if fails:
-        lines.append(f"\n### 失败用例 ({len(fails)})\n")
-        lines.append("| id | flow | step | phase | exit | detail |")
+    lines.append(f"## E2E 摘要 [{arch}]\n")
+    lines.append(f"**PASS {counters['PASS']} / FAIL {counters['FAIL']} / "
+                 f"SKIP {counters['SKIP']} / TOTAL {total}** — 通过率 **{rate}%**\n")
+    if pass_flows:
+        lines.append(f"\n<details><summary><b>通过用例 ({len(pass_flows)})</b></summary>\n\n")
+        lines.append(", ".join(f"`{f}`" for f in pass_flows))
+        lines.append("\n\n</details>\n")
+    if fail_flows:
+        lines.append(f"\n<details><summary><b>失败用例 ({len(fail_flows)})</b></summary>\n\n")
+        lines.append(", ".join(f"`{f}`" for f in fail_flows))
+        lines.append("\n\n</details>\n")
+        lines.append("\n| id | flow | step | phase | exit | detail |")
         lines.append("|---|---|---|---|---|---|")
         for r in fails:
             d = (r.get("verify_actual") or "").replace("|", "\\|")[:80]
             lines.append(f"| {r['id']} | {r['flow_id']} | {r['step']} | {r['phase']} | "
                          f"{r['actual_exit_code']} | {d} |")
-        lines.append(f"\n> 完整失败详情(stdout/stderr/verify 输出)见 artifact: "
-                     f"`{os.path.basename(fail_log_path)}` 及 `{os.path.basename(rep)}`\n")
-    else:
-        lines.append("\n所有用例通过。\n")
+        lines.append(f"\n> 完整失败详情见 artifact: `{os.path.basename(fail_log_path)}` "
+                     f"及 `{os.path.basename(rep)}`\n")
     try:
         with open(gss, "a", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")

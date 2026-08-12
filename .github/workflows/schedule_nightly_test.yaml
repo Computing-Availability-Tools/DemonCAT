@@ -3,9 +3,6 @@ name: Nightly_Test_A2
 # 夜间全量测试：自托管 NPU runner 跑全量 E2E（含 NPU/硬件用例）。
 # 不在每次 push 触发（重型，且依赖专用硬件），仅 schedule + 手动。
 on:
-  push:
-    branches:
-      - develop
   schedule:
     - cron: '0 18 * * *'
   workflow_dispatch:

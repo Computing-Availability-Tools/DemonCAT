@@ -47,7 +47,7 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
-      runner: '["self-hosted", "linux-arm64-npu-910b-2"]'
+      runner: '["self-hosted", "npu-server","ARM64"]'
       flows: ""
       exclude: ""
       run-as-root: true

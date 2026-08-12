@@ -1,3 +1,4 @@
 self-hosted-runner:
   labels:
-    - linux-arm64-npu-910b-2
+    - npu-server
+    - ARM64

@@ -4,7 +4,7 @@ name: Nightly_Test_A2
 # 不在每次 push 触发（重型，且依赖专用硬件），仅 schedule + 手动。
 on:
   schedule:
-    - cron: '0 18 * * *'
+    - cron: '0 00 * * *'
   workflow_dispatch:
 
 concurrency:

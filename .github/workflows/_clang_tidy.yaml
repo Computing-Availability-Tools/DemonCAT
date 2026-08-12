@@ -1,4 +1,4 @@
-name: _clang_tidy
+name: Clang-Tidy
 
 on:
   workflow_call:

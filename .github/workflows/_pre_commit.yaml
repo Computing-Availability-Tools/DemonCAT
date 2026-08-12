@@ -1,4 +1,4 @@
-name: _pre_commit
+name: Pre-Commit
 
 on:
   workflow_call:

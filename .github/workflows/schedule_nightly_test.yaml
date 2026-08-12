@@ -1,10 +1,13 @@
 name: Nightly_Test_A2
 
 # 夜间全量测试：自托管 NPU runner 跑全量 E2E（含 NPU/硬件用例）。
-# 不在每次 push 触发（重型，且依赖专用硬件），仅 schedule + 手动。
+# push 触发仅走 lint + unit-test（轻量），NPU E2E 仅在 schedule/dispatch 时运行。
 on:
+  push:
+    branches:
+      - '*'
   schedule:
-    - cron: '0 00 * * *'
+    - cron: '0 18 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -30,6 +33,7 @@ jobs:
   e2e-full:
     name: E2E full (all flows, root, NPU runner)
     needs: lint
+    if: ${{ github.event_name != 'push' }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["self-hosted", "linux-arm64-npu-static-8"]'
@@ -40,6 +44,7 @@ jobs:
   clang-tidy:
     name: clang-tidy (advisory)
     needs: lint
+    if: ${{ github.event_name != 'push' }}
     uses: ./.github/workflows/_clang_tidy.yaml
 
   ci-gate:
@@ -55,6 +60,7 @@ jobs:
           UNIT: ${{ needs.unit-test.result }}
           E2E: ${{ needs.e2e-full.result }}
           CLANG: ${{ needs.clang-tidy.result }}
+          IS_PUSH: ${{ github.event_name == 'push' }}
         run: |
           set -eu
           echo "=== Nightly Gate Summary ==="
@@ -62,11 +68,19 @@ jobs:
           echo "unit-test:  ${UNIT}"
           echo "e2e-full:   ${E2E}"
           echo "clang-tidy: ${CLANG} (advisory)"
-          # nightly 质量门：严格 success（含 NPU 全量 E2E）；clang-tidy 为建议性，仅报告
-          for r in "${LINT}" "${UNIT}" "${E2E}"; do
+          echo "is_push:    ${IS_PUSH}"
+          for r in "${LINT}" "${UNIT}"; do
             case "$r" in
               success) ;;
               *) echo "::error::Job did not succeed: ${r}"; exit 1 ;;
             esac
           done
+          if [ "${IS_PUSH}" != "true" ]; then
+            for r in "${E2E}"; do
+              case "$r" in
+                success) ;;
+                *) echo "::error::Job did not succeed: ${r}"; exit 1 ;;
+              esac
+            done
+          fi
           echo "=== Nightly Gate: PASSED ==="

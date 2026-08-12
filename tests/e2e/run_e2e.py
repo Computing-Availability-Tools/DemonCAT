@@ -144,13 +144,17 @@ done
 # NPU stale state cleanup (only when NPU artifacts exist, to avoid 4s+ per sweep)
 if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
   for c in 2 5; do
-    hccn_tool -i $c -ip_rule -d dir from ip 10.30.12.210 2>/dev/null
-    hccn_tool -i $c -ip_rule -d dir from ip 10.30.12.211 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.210 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.211 2>/dev/null
     hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
     hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
     hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
     hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
     hccn_tool -i $c -link -s up 2>/dev/null
+    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
+    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
+    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
+    hccn_tool -i $c -udp -s port 4791 2>/dev/null
   done
 fi
 true
@@ -325,6 +329,22 @@ def json_state_data(jstr):
         return []
 
 
+def check_precondition(precond):
+    """物理前置检查。返回非空字符串 = 跳过原因（SKIP）；返回空串 = 通过。
+    仅 RoCE 链路物理 DOWN 等无法靠代码满足的前置才 SKIP；
+    hccn_tool 缺失等软件前置不跳过（用例自然 FAIL，保持生产全量跑哲学）。"""
+    if not precond or precond == "none":
+        return ""
+    if precond == "roce_link_up":
+        # rNPU_link_down 专用：inject 需链路可拉低、clean 需 -cfg recovery 恢复 UP；
+        # 物理无网线/对端 → -s up 返回成功但状态仍 DOWN → clean 无法恢复 → SKIP（非代码问题）
+        sh("hccn_tool -i 2 -link -s up 2>/dev/null")
+        rc, out = sh("hccn_tool -i 2 -link -g 2>/dev/null")
+        if rc != 0 or "up" not in (out or "").lower():
+            return "RoCE 链路物理 DOWN（无网线/对端），RoCE 配置类用例无法生效"
+    return ""
+
+
 # ---------------- 主流程 ----------------
 def main():
     ap = argparse.ArgumentParser()
@@ -386,9 +406,13 @@ def main():
                     sh(f"hccn_tool -i {c} -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null")
                     sh(f"hccn_tool -i {c} -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null")
                     sh(f"hccn_tool -i {c} -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null")
-                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.30.12.210 2>/dev/null")
-                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.30.12.211 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.20.10.210 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -ip_rule -d dir from ip 10.20.10.211 2>/dev/null")
                     sh(f"hccn_tool -i {c} -mtu -s size 1500 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -shaping -s bw_limit 200000 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -dscp_to_tc -s dscp 46 tc 0 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -netdetect -s address 0.0.0.0 2>/dev/null")
+                    sh(f"hccn_tool -i {c} -udp -s port 4791 2>/dev/null")
                 print("[phase] atexit NPU cleanup done", flush=True)
             print("[phase] atexit cleanup done", flush=True)
         except Exception as e:
@@ -405,7 +429,8 @@ def main():
             continue
         steps = flows[fid]
         cat = fid.split("-")[0]
-        # 不再 skip：生产要求全量跑。资源未就绪(无 hccn_tool/非 root/sysfs 等)→用例自然 FAIL。
+        # 原则上不 skip：生产要求全量跑，资源未就绪→用例自然 FAIL；
+        # 例外：物理前置缺失（如 RoCE 无网线）→ SKIP（见 check_precondition）。
         ctx = {}
 
         # 前置清扫
@@ -420,6 +445,19 @@ def main():
             tracked_pids.append(ctx["_watcher_pid"])
         # SEC-P 类（非 root 拒绝）：inject 步降权到 nobody 验证拒绝；verify/query 仍 root
         is_priv = fid.startswith("SEC-P")
+
+        # 物理前置检查（缺失 → SKIP，非代码问题）。放在 sweep 之后：
+        # sweep 已尝试恢复环境，仍不满足说明是物理前置（如 RoCE 无网线）。
+        precond = (steps[0].get("precondition") or "none") if steps else "none"
+        skip_reason = check_precondition(precond)
+        if skip_reason:
+            for s in steps:
+                results.append(_res(s, "SKIP", skip_reason))
+            counters["SKIP"] += 1
+            cat_stats.setdefault(cat, {"PASS": 0, "FAIL": 0, "SKIP": 0})
+            cat_stats[cat]["SKIP"] += 1
+            print(f"  SKIP {fid}: {skip_reason}")
+            continue
 
         flow_pass = True
         for s in steps:
@@ -768,7 +806,8 @@ def _append_test_report(path, results, counters, cat_stats, findings, ts, ipt, d
                    f"{nsteps} | {flow_result} | {total_ms} |")
     fails = [r for r in results if r["result"] == "FAIL"]
     sec.append("\n### 10.3 覆盖说明\n")
-    sec.append("- 生产全量跑，不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。\n")
+    sec.append("- 生产全量跑，原则上不 skip：root/NPU/硬件依赖用例在缺资源环境会 FAIL（生产应全绿）。\n")
+    sec.append("- 例外：rNPU_link_down 在 RoCE 链路物理 DOWN（无网线/对端）时 SKIP（需链路可拉低/恢复，物理前置，非代码问题）。\n")
     sec.append("- SEC-P 类(非 root 拒绝)：inject 步用 `runuser -u nobody` 降权验证拒绝。\n")
     sec.append("- FUNC 中 rCPU_core_offline 默认实跑（瞬态下线真实核 cpu1，clean+清扫恢复）。\n")
     sec.append("- SEC-H 写入边界：用 device=/tmp 安全路径（不污染 /etc）。\n")

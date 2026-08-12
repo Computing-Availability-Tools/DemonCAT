@@ -70,7 +70,7 @@ jobs:
           tar -czf "dcat-${VER}-${ARCH}.tar.gz" -C stage dcat
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: dcat-binary-${{ steps.ver.outputs.version }}-${{ steps.ver.outputs.arch }}
           path: dcat-*.tar.gz
@@ -101,7 +101,7 @@ jobs:
           git archive --format=tar.gz --prefix="dcat-${VER}/" HEAD -o "dcat-${VER}-source.tar.gz"
 
       - name: Download all binary artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           pattern: dcat-binary-*
           merge-multiple: true

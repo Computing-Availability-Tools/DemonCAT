@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload coverage.info artifact
         if: ${{ !cancelled() && inputs.coverage }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-info
           path: coverage.info
@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload ctest logs on failure
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ctest-logs
           path: |

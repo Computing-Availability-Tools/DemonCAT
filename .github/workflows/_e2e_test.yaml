@@ -96,12 +96,14 @@ jobs:
           cat tests/e2e/report.md 2>/dev/null || true
           echo "===== 完整产物已作为 artifact 上传 ====="
 
-      - name: Upload E2E results on failure
-        if: failure()
+      - name: Upload E2E results & cases
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: e2e-results-${{ inputs.flows || 'all' }}
+          # arch 标签避免 matrix(x86/arm 两腿)同名冲突；含 cases.csv(全量用例+功能描述) 与 results_(含描述列)
+          name: e2e-${{ (contains(inputs.runner, 'arm') || contains(inputs.runner, 'ARM')) && 'arm64' || 'x86' }}
           path: |
+            tests/e2e/cases.csv
             tests/e2e/e2e_run.log
             tests/e2e/failures_*.log
             tests/e2e/results_*.csv

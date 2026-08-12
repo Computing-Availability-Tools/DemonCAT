@@ -34,8 +34,9 @@ E2E_HOME = "/tmp/dcat_e2e_home"
 PWN = "/tmp/dcat_pwned"
 
 RESULT_COLS = [
-    "id", "flow_id", "step", "phase", "fault_uid",
+    "id", "flow_id", "step", "phase", "fault_uid", "module",
     "command", "expected_exit_code", "expected_json", "verify_cmd", "verify_assert",
+    "expected_behavior",
     "actual_exit_code", "actual_json", "verify_actual", "result", "error_code",
     "duration_ms", "timestamp", "notes",
 ]
@@ -506,10 +507,11 @@ def main():
 
 def _res(s, result="", notes=""):
     return dict(id=s["id"], flow_id=s["flow_id"], step=s["step"], phase=s["phase"],
-                fault_uid=s["fault_uid"],
+                fault_uid=s["fault_uid"], module=s.get("module", ""),
                 command=s["command"], expected_exit_code=s["expected_exit_code"],
                 expected_json=s["expected_json"], verify_cmd=s["verify_cmd"],
                 verify_assert=s["verify_assert"],
+                expected_behavior=s.get("expected_behavior", ""),
                 actual_exit_code="", actual_json="", verify_actual="",
                 result=result, error_code="", duration_ms="", timestamp="", notes=notes)
 

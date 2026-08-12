@@ -48,7 +48,11 @@ jobs:
       - name: Run ctest
         run: |
           set -o pipefail
-          ctest --test-dir build --output-on-failure --timeout 60 2>&1 | tee build/ctest_run.log
+          ctest --test-dir build --output-on-failure --timeout 60 --output-junit ctest-junit.xml 2>&1 | tee build/ctest_run.log
+
+      - name: Unit test summary
+        if: always()
+        run: python3 scripts/ctest_summary.py
 
       - name: Collect coverage (lcov)
         if: ${{ !cancelled() && inputs.coverage }}
@@ -92,9 +96,10 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: ctest-logs
+          name: ctest-logs-${{ contains(inputs.runner, 'arm') && 'arm64' || 'x86' }}
           path: |
             build/ctest_run.log
+            build/ctest-junit.xml
             build/Testing/Temporary/
           if-no-files-found: ignore
           retention-days: 7

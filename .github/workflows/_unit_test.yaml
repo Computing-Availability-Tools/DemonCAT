@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload to Codecov
         if: ${{ !cancelled() && inputs.coverage }}
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: ./coverage.info
           fail_ci_if_error: false
@@ -71,7 +71,7 @@ jobs:
 
       - name: Upload coverage.info artifact
         if: ${{ !cancelled() && inputs.coverage }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-info
           path: coverage.info
@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload ctest logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ctest-logs
           path: |

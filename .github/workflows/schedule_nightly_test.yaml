@@ -42,7 +42,7 @@ jobs:
     if: ${{ github.event_name != 'push' }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      runner: '["self-hosted"]'
+      runner: '["ubuntu-latest"]'
       flows: ""
       exclude: ""
       run-as-root: true

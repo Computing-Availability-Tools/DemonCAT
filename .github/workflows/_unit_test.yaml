@@ -37,7 +37,7 @@ jobs:
         run: |
           if [ "$COVERAGE" = "true" ]; then
             # Debug + 覆盖率插桩（-O0 避免 inline，行/分支覆盖率更准）
-            cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCAT_COVERAGE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+            cmake -B build -DCMAKE_BUILD_TYPE=Debug -DDCAT_COVERAGE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           else
             cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           fi

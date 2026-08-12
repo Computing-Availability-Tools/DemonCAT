@@ -3,7 +3,7 @@ project(demoncat C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror)
-# 覆盖率插桩（CI -DCAT_COVERAGE=ON 时开启；Debug + gcov，行/分支覆盖率）
+# 覆盖率插桩（CI -DDCAT_COVERAGE=ON 时开启；Debug + gcov，行/分支覆盖率）
 option(DCAT_COVERAGE "Enable C coverage instrumentation (gcov)" OFF)
 if(DCAT_COVERAGE)
     add_compile_options(-fprofile-arcs -ftest-coverage)

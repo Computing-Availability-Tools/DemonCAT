@@ -52,7 +52,7 @@ jobs:
 
       - name: Unit test summary
         if: always()
-        run: python3 scripts/ctest_summary.py
+        run: python3 tests/ctest_summary.py
 
       - name: Collect coverage (lcov)
         if: ${{ !cancelled() && inputs.coverage }}

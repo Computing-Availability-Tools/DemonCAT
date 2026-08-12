@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload to Codecov
         if: ${{ !cancelled() && inputs.coverage }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.info
           fail_ci_if_error: false

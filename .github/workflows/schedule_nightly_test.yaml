@@ -47,9 +47,18 @@ jobs:
       exclude: ""
       run-as-root: true
 
+  coverage:
+    name: Coverage (gcov → Codecov)
+    needs: lint
+    if: ${{ github.event_name != 'push' }}
+    uses: ./.github/workflows/_unit_test.yaml
+    with:
+      runner: ubuntu-latest
+      coverage: true
+
   ci-gate:
     name: Nightly Gate
-    needs: [lint, unit-test, e2e-full, clang-tidy]
+    needs: [lint, unit-test, e2e-full, clang-tidy, coverage]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -60,6 +69,7 @@ jobs:
           UNIT: ${{ needs.unit-test.result }}
           E2E: ${{ needs.e2e-full.result }}
           CLANG: ${{ needs.clang-tidy.result }}
+          COV: ${{ needs.coverage.result }}
           IS_PUSH: ${{ github.event_name == 'push' }}
         run: |
           set -eu
@@ -68,6 +78,7 @@ jobs:
           echo "unit-test:  ${UNIT}"
           echo "e2e-full:   ${E2E}"
           echo "clang-tidy: ${CLANG} (advisory)"
+          echo "coverage:   ${COV} (advisory)"
           echo "is_push:    ${IS_PUSH}"
           for r in "${LINT}" "${UNIT}"; do
             case "$r" in
@@ -81,4 +92,5 @@ jobs:
               *) echo "::error::e2e-full did not succeed: ${E2E}"; exit 1 ;;
             esac
           fi
+          # clang-tidy / coverage 为建议性，仅报告不阻断
           echo "=== Nightly Gate: PASSED ==="

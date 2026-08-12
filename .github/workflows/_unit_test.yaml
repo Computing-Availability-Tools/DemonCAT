@@ -6,6 +6,10 @@ on:
       runner:
         type: string
         default: ubuntu-latest
+      coverage:
+        description: "Enable C coverage instrumentation (Debug+gcov) + lcov collect + Codecov upload"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,7 +32,15 @@ jobs:
           fi
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+        env:
+          COVERAGE: ${{ inputs.coverage }}
+        run: |
+          if [ "$COVERAGE" = "true" ]; then
+            # Debug + 覆盖率插桩（-O0 避免 inline，行/分支覆盖率更准）
+            cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCAT_COVERAGE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          else
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          fi
 
       - name: Build
         run: cmake --build build -j"$(nproc)"
@@ -37,6 +49,34 @@ jobs:
         run: |
           set -o pipefail
           ctest --test-dir build --output-on-failure --timeout 60 2>&1 | tee build/ctest_run.log
+
+      - name: Collect coverage (lcov)
+        if: ${{ !cancelled() && inputs.coverage }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lcov
+          lcov --capture --directory build --output-file coverage.info --rc lcov_branch_coverage=1
+          # 排除第三方库、测试驱动自身、系统头，只保留 src/ 业务代码覆盖率
+          lcov --remove coverage.info 'third_party/*' '/usr/*' 'tests/*' --output-file coverage.info
+          lcov --summary coverage.info
+
+      - name: Upload to Codecov
+        if: ${{ !cancelled() && inputs.coverage }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage.info artifact
+        if: ${{ !cancelled() && inputs.coverage }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-info
+          path: coverage.info
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload ctest logs on failure
         if: failure()

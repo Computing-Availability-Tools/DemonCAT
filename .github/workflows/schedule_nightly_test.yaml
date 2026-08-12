@@ -76,11 +76,9 @@ jobs:
             esac
           done
           if [ "${IS_PUSH}" != "true" ]; then
-            for r in "${E2E}"; do
-              case "$r" in
-                success) ;;
-                *) echo "::error::Job did not succeed: ${r}"; exit 1 ;;
-              esac
-            done
+            case "${E2E}" in
+              success) ;;
+              *) echo "::error::e2e-full did not succeed: ${E2E}"; exit 1 ;;
+            esac
           fi
           echo "=== Nightly Gate: PASSED ==="

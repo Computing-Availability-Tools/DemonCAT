@@ -16,7 +16,7 @@
 
 ### 版本定位
 
-DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块，提供统一的命令面、预检护栏、状态跟踪；33 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
+DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统模块，提供统一的命令面、预检护栏、状态跟踪；60 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
 
 ### 变更摘要
 
@@ -27,7 +27,7 @@ DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU 模
 - 3-tier dispatch：cnf 故障 → 编译注入器 → 动态插件（`dlopen .so`）
 - 示例动态插件 `plugins/libsample.so`
 
-#### 故障目录（33 条）
+#### 故障目录（60 条）
 
 CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 
@@ -37,7 +37,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 - **进程 3 条**：进程退出（inject-only）/ 进程挂起 / 僵尸进程
 - **NPU 16 条**：RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
 
-合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条。
+合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 60 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条。
 
 #### Web 控制台（dcat serve）
 
@@ -132,7 +132,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 #### 文档
 
 - README（含依赖说明 + 一键安装脚本 `scripts/install_deps.sh`）
-- 用户手册 `User_Manual.md`（33 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
+- 用户手册 `User_Manual.md`（60 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
 - 手动测试指南 `docs/Manual_Test_Reference.md`
 - SPEC（技术规格）+ DESIGN（架构设计）
 - Release Notes + docs/Test_Report.md
@@ -141,7 +141,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 
 - **ctest**：24/24 全通过
   - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
-  - Tier 1 mock 表驱动故障测试（33 条全覆盖）
+  - Tier 1 mock 表驱动故障测试（60 条全覆盖）
   - Tier 2 脚本语法检查（sh -n 全部 33 脚本 + _common.sh）
   - Tier 3 真实执行测试（非 root 故障）
   - root 冒烟测试（smoke_root.sh）

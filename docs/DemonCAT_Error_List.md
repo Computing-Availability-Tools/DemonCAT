@@ -1,21 +1,30 @@
 # DemonCAT 故障目录
 
-当前共 33 条故障，覆盖 CPU / 存储 / 网络 / 进程 / NPU 五个模块。
+当前共 60 条故障，覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八个模块。
 
-## CPU 模块（2 条）
+## CPU 模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
 | `rCPU_overload` | cores | load_pct | CPU overload (multi-core burn, pure user-space) |
 | `rCPU_core_offline` | cores | — | CPU core offline via sysfs |
+| `rCPU_core_hang` | cores | — | CPU core hang (isolating core, migration stop) |
+| `rCPU_freq` | cores | freq_mhz | CPU frequency limit (cpufreq scaling) |
+| `rCPU_quota` | quota_pct | — | CPU cgroup quota limit |
 
-## 存储模块（1 条）
+## 存储模块（7 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
 | `rDISK_write_overload` | device | workers,size_mb | Disk write IO overload (dd writers) |
+| `rDISK_part_full` | path | size | Partition fill (dd file creation) |
+| `rDISK_inode_exhaust` | path | count | Inode exhaustion (small file creation) |
+| `rDISK_io_delay` | device | delay_ms | Disk IO delay (device-mapper delay) |
+| `rDISK_io_error` | device | — | Disk IO error (device-mapper error) |
+| `rDISK_scsi_error` | device | — | SCSI error injection (CONFIG_FAIL_MAKE_REQUEST, 需内核支持) |
+| `rDISK_loss` | device | — | Disk loss (SCSI delete, 需真实 SCSI 盘) |
 
-## 网络模块（11 条）
+## 网络模块（13 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
@@ -30,32 +39,70 @@
 | `rNET_bw_limit` | iface,rate_kbps | — | Bandwidth limit (tc tbf) |
 | `rNET_jitter` | iface,delay_ms,jitter_ms | — | Delay + jitter (tc netem) |
 | `rNET_tcp_loss` | port | direction | TCP packet loss (iptables DROP) |
+| `rNET_conn_exhaust` | target | count | Connection exhaustion (socket flood) |
+| `rNET_corrupt` | iface,corrupt_pct | — | Packet corruption (tc netem) |
 
-## 进程模块（3 条）
+## 进程模块（6 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
 | `rPROC_exit` | pid | — | Process exit (kill -9, irreversible) |
 | `rPROC_hang` | pid | — | Process hang (SIGSTOP) |
-| `rPROC_zstate` | pid | — | Zombie process (kill target → zombie, clean kills parent to reap) |
+| `rPROC_zstate` | pid | — | Zombie process (kill target → zombie) |
+| `rPROC_fork_bomb` | count | — | Fork bomb (controlled process explosion) |
+| `rPROC_loop` | threads | — | CPU loop (multi-thread busy loop) |
+| `rPROC_fd_exhaust` | count | — | File descriptor exhaustion |
 
-## NPU 模块（16 条）
+## 内存模块（4 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
-| `rNPU_link_down` | chip | — | RoCE link down (hccn_tool -cfg recovery) |
+| `rMEM_leak` | size_mb | — | Memory leak (progressive allocation) |
+| `rMEM_oom` | rate_mb | — | OOM pressure (rapid allocation) |
+| `rMEM_fragment` | blocks | — | Memory fragmentation (scatter allocation) |
+| `rMEM_swap_overload` | size_mb | — | Swap overload (force swapping) |
+
+## 文件系统模块（2 条）
+
+| UID | 必填参数 | 可选参数 | 说明 |
+|---|---|---|---|
+| `rFS_file_lock` | path,mode | — | File lock (flock: noread/nowrite/norw/nodelete) |
+| `rFS_iowait_high` | path | workers | High iowait (parallel dd readers) |
+
+## Docker 模块（2 条）
+
+| UID | 必填参数 | 可选参数 | 说明 |
+|---|---|---|---|
+| `rDOCKER_kill` | container | — | Docker container kill |
+| `rDOCKER_mem_overload` | container | size | Docker container memory overload (stress) |
+
+## NPU 模块（19 条）
+
+| UID | 必填参数 | 可选参数 | 说明 |
+|---|---|---|---|
+| `rNPU_link_down` | chip | — | RoCE link down (hccn_tool) |
 | `rNPU_ip_change` | chip,address,netmask | — | RoCE IP change |
 | `rNPU_gw_change` | chip,gateway | — | RoCE gateway change |
 | `rNPU_netdetect_change` | chip,address | — | Netdetect IP change |
-| `rNPU_arp_poison` | chip,dev,ip,mac | — | ARP poisoning (add wrong mac) |
-| `rNPU_arp_del` | chip,dev,ip | — | ARP entry deletion |
-| `rNPU_route_add` | chip,address,netmask,gateway | — | Add RoCE route |
-| `rNPU_route_del` | chip,address,netmask | — | Delete RoCE route |
-| `rNPU_iprule_add` | chip,dir,ip,table | — | Add ip rule |
-| `rNPU_iprule_del` | chip,dir,ip | — | Delete ip rule |
-| `rNPU_iproute_add` | chip,ip,ip_mask,via,dev,table | — | Add ip route |
-| `rNPU_iproute_del` | chip,ip,ip_mask,table | — | Delete ip route |
+| `rNPU_arp` | chip,action,dev,ip | mac | ARP manipulation (action=add poison / action=del delete) |
+| `rNPU_route` | chip,action,address,netmask | gateway | RoCE route manipulation (action=add / action=del) |
+| `rNPU_iprule` | chip,action,dir,ip | table | ip rule manipulation (action=add / action=del) |
+| `rNPU_iproute` | chip,action,ip,ip_mask | via,dev,table | ip route manipulation (action=add / action=del) |
 | `rNPU_bw_limit` | chip,bw_limit | — | RoCE bandwidth shaping limit |
 | `rNPU_mtu_mismatch` | chip,size | — | RoCE MTU mismatch |
 | `rNPU_dscp_tc_change` | chip,dscp,tc | — | DSCP-to-TC mapping change |
 | `rNPU_roce_port_change` | chip,port | — | RoCE UDP port change |
+| `rNPU_freq_down` | chip | — | AICore frequency query (910B4 不支持设置频率, 仅查询) |
+| `rNPU_aic_fault` | chip | duration | AICore stress (ACL d2d memcpy, 无需 torch_npu) |
+| `rNPU_aiv_fault` | chip | duration | AIVector stress (ACL d2d memcpy, 无需 torch_npu) |
+| `rNPU_hbm_fault` | chip | size_mb,duration | HBM stress (ACL malloc+memset, 无需 torch_npu) |
+| `rNPU_chip_reset` | chip | — | NPU chip reset (npu-smi set -t reset) |
+| `rNPU_driver_unbind` | chip | — | 驱动解绑 (PCIe unbind, 需重启恢复) |
+| `rNPU_pcie_remove` | chip | — | PCIe 掉卡 (PCIe remove, 需冷启动恢复) |
+
+## 系统模块（2 条）
+
+| UID | 必填参数 | 可选参数 | 说明 |
+|---|---|---|---|
+| `rSYS_panic` | — | — | 系统崩溃 (kernel panic, 导致系统宕机) |
+| `rSYS_poweroff` | — | — | 系统关机 (直接断电关机) |

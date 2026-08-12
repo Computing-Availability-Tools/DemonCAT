@@ -3,8 +3,8 @@
 # inject: echo <pcie_addr> > /sys/bus/pci/drivers/devdrv_device_driver/unbind
 # clean:  echo <pcie_addr> > /sys/bus/pci/drivers/devdrv_device_driver/bind + FLR reset
 # query:  check if device is bound to driver
-# NOTE:   On 910B4, driver unbind/rebind restores the driver binding but NOT the
-#         NPU firmware. Full recovery requires a host reboot.
+# NOTE:   On 910B4, driver rebind restores the driver binding but the NPU firmware
+#         may not fully recover. A warm reboot (reboot) restores the NPU.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi

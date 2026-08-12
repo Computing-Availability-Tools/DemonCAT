@@ -308,12 +308,18 @@ def gen():
         })
 
     # ================================================================
-    # FUNC: 功能基线 (33 faults × inject→verify→clean→query + query<uid> + plugin)
+    # FUNC: 功能基线 (inject→verify→clean→query + query<uid> + plugin)
+    # Dangerous faults are skipped (require cold boot to recover)
+    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rSYS_panic", "rSYS_poweroff"}
     # ================================================================
     for uid in sorted(OBS):
         o = OBS[uid]
         real_uid = o.get("real_uid", uid)
         flow = f"FUNC-{uid}"
+        if uid in SKIP_FLOWS:
+            add(flow, 0, o["module"], real_uid, "skip", "none",
+                "echo SKIP: dangerous fault (requires cold boot to recover)", 0, "",
+                "", "", "", "skipped: dangerous fault"); continue
         s = 0
         if o.get("provision", "none") != "none" or o.get("setup_cmd"):
             add(flow, s, o["module"], real_uid, "setup", o["precondition"], o.get("setup_cmd", ""), 0, "",

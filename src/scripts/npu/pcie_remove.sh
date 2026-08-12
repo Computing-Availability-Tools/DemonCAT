@@ -3,8 +3,8 @@
 # inject: echo 1 > /sys/bus/pci/devices/<pcie_addr>/remove
 # clean:  echo 1 > /sys/bus/pci/rescan + FLR reset
 # query:  check if NPU device still exists
-# NOTE:   On 910B4, PCIe rescan restores the device entry but NOT the NPU
-#         firmware. Full recovery requires a host reboot.
+# NOTE:   On 910B4, PCIe rescan restores the device entry but the NPU firmware
+#         does not reinitialize. A cold boot (power off + power on) is required.
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi

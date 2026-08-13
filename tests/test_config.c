@@ -68,8 +68,8 @@ int test_load_resolves_script_abs(void) {
 int test_config_load_not_found(void) {
     config_t cfg;
     int rc = config_load("/nonexistent/dcat_test.conf", &cfg);
-    ASSERT_INT_EQ(rc, -1);                  /* fopen 失败 → -1 */
-    ASSERT_INT_EQ(cfg.fault_count, 0);      /* memset 已清零 */
+    ASSERT_INT_EQ(rc, -1);             /* fopen 失败 → -1 */
+    ASSERT_INT_EQ(cfg.fault_count, 0); /* memset 已清零 */
     return 0;
 }
 
@@ -98,14 +98,14 @@ int test_config_load_edge_cases(void) {
     fprintf(fp, "inject_required=id\n");
     fprintf(fp, "unknown_field=skip\n");
     fprintf(fp, "[badsection_no_close\n"); /* 缺 ] → 整行跳过,不重置 cur */
-    fprintf(fp, "no_equals_here\n");        /* 无 = → 跳过 */
+    fprintf(fp, "no_equals_here\n");       /* 无 = → 跳过 */
     fclose(fp);
 
     config_t cfg;
     int rc = config_load(path, &cfg);
     ASSERT_INT_EQ(rc, 0);
     ASSERT_STREQ(cfg.log_level, "debug");
-    ASSERT_INT_EQ(cfg.fault_count, 1);           /* 仅 rTEST;坏 section 不计入 */
+    ASSERT_INT_EQ(cfg.fault_count, 1); /* 仅 rTEST;坏 section 不计入 */
     const fault_def_t *f = config_find(&cfg, "rTEST");
     ASSERT_TRUE(f != NULL);
     ASSERT_STREQ(f->module, "test");

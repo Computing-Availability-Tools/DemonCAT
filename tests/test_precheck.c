@@ -102,9 +102,9 @@ int test_op_in_supported(void) {
     ASSERT_INT_EQ(op_in_supported("inject,clean,query", "clean"), 1);
     ASSERT_INT_EQ(op_in_supported("inject,clean,query", "query"), 1);
     ASSERT_INT_EQ(op_in_supported("inject,clean,query", "inject"), 1);
-    ASSERT_INT_EQ(op_in_supported("inject", "clean"), 0);       /* 不在 */
-    ASSERT_INT_EQ(op_in_supported("", "inject"), 0);             /* 空 */
-    ASSERT_INT_EQ(op_in_supported(NULL, "inject"), 0);           /* NULL 防御 */
+    ASSERT_INT_EQ(op_in_supported("inject", "clean"), 0); /* 不在 */
+    ASSERT_INT_EQ(op_in_supported("", "inject"), 0);      /* 空 */
+    ASSERT_INT_EQ(op_in_supported(NULL, "inject"), 0);    /* NULL 防御 */
     return 0;
 }
 
@@ -115,9 +115,9 @@ int test_required_params_present(void) {
     params_set(&p, "iface", "eth0");
     params_set(&p, "loss_pct", "5");
 
-    ASSERT_INT_EQ(required_params_present("", &p), 1);           /* 空必填 → 通过 */
-    ASSERT_INT_EQ(required_params_present(NULL, &p), 1);         /* NULL 防御 */
-    ASSERT_INT_EQ(required_params_present("iface,loss_pct", &p), 1); /* 全在 */
+    ASSERT_INT_EQ(required_params_present("", &p), 1);                     /* 空必填 → 通过 */
+    ASSERT_INT_EQ(required_params_present(NULL, &p), 1);                   /* NULL 防御 */
+    ASSERT_INT_EQ(required_params_present("iface,loss_pct", &p), 1);       /* 全在 */
     ASSERT_INT_EQ(required_params_present("iface,loss_pct,extra", &p), 0); /* 缺 extra */
 
     params_t pe;

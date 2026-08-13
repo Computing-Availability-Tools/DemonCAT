@@ -20,7 +20,7 @@ int test_status_text(void) {
     ASSERT_STREQ(status_text(413), "Payload Too Large");
     ASSERT_STREQ(status_text(500), "Internal Server Error");
     ASSERT_STREQ(status_text(999), "OK"); /* default 分支 */
-    ASSERT_STREQ(status_text(0), "OK");    /* default 分支 */
+    ASSERT_STREQ(status_text(0), "OK");   /* default 分支 */
     return 0;
 }
 
@@ -34,9 +34,9 @@ int test_content_type(void) {
     ASSERT_STREQ(content_type_for("a.png"), "image/png");
     ASSERT_STREQ(content_type_for("a.svg"), "image/svg+xml");
     ASSERT_STREQ(content_type_for("a.ico"), "image/x-icon");
-    ASSERT_STREQ(content_type_for("noext"), "application/octet-stream");     /* 无 dot */
+    ASSERT_STREQ(content_type_for("noext"), "application/octet-stream");        /* 无 dot */
     ASSERT_STREQ(content_type_for("a.unknownext"), "application/octet-stream"); /* 未知 ext */
-    ASSERT_STREQ(content_type_for(".hidden"), "application/octet-stream");   /* dot 开头,未知 */
+    ASSERT_STREQ(content_type_for(".hidden"), "application/octet-stream");      /* dot 开头,未知 */
     return 0;
 }
 
@@ -107,12 +107,15 @@ int test_cmp_record_desc(void) {
     injection_record_t a, b;
     memset(&a, 0, sizeof a);
     memset(&b, 0, sizeof b);
-    a.record_id = 5; b.record_id = 10;
-    ASSERT_INT_EQ(cmp_record_desc(&a, &b), 1);  /* a<b → 1(降序在前) */
-    a.record_id = 10; b.record_id = 5;
+    a.record_id = 5;
+    b.record_id = 10;
+    ASSERT_INT_EQ(cmp_record_desc(&a, &b), 1); /* a<b → 1(降序在前) */
+    a.record_id = 10;
+    b.record_id = 5;
     ASSERT_INT_EQ(cmp_record_desc(&a, &b), -1); /* a>b → -1 */
-    a.record_id = 7; b.record_id = 7;
-    ASSERT_INT_EQ(cmp_record_desc(&a, &b), 0);  /* 相等 → 0 */
+    a.record_id = 7;
+    b.record_id = 7;
+    ASSERT_INT_EQ(cmp_record_desc(&a, &b), 0); /* 相等 → 0 */
     return 0;
 }
 

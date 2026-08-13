@@ -25,7 +25,7 @@ static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id>
 
 static int in_compute_phase(int load_pct, struct timespec *cycle_start) {
     if (load_pct >= 100) return 1;
-    int cycle_ms = 100;
+    int cycle_ms = 10;
     int on_ms = cycle_ms * load_pct / 100;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);

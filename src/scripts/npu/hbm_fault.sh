@@ -67,7 +67,20 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     query)
-        if [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
+        if [ -z "$chip" ]; then
+            found=0
+            for f in /tmp/dcat-rNPU_hbm_fault-*.pid; do
+                [ -f "$f" ] || continue
+                c=$(echo "$f" | sed 's/.*-//;s/\.pid//')
+                pid=$(cat "$f" 2>/dev/null)
+                kill -0 "$pid" 2>/dev/null || { rm -f "$f"; continue; }
+                echo "FAULT CONFIRMED: HBM stress active on chip $c (pid $pid)"
+                hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $c /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)
+                echo "  HBM Usage: ${hbm_raw:-?}"
+                found=1
+            done
+            [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE: no HBM stress"; exit 1; }
+        elif [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
             hbm_pct=$(npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
             hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $chip /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)

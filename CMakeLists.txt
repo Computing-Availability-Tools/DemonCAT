@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(demoncat C)
+project(demoncat C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror)
@@ -112,11 +112,12 @@ endif()
 # ---- NPU ACL 压力工具 (可选, 检测到 CANN 则编译) ----
 set(ASCEND_TOOLKIT "/usr/local/Ascend/ascend-toolkit/latest")
 if(EXISTS "${ASCEND_TOOLKIT}/aarch64-linux/include/acl/acl.h")
-    add_executable(_npu_stress src/scripts/npu/_npu_stress.c)
+    add_executable(_npu_stress src/scripts/npu/_npu_stress.cpp)
     target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include")
     target_link_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/lib64")
-    target_link_libraries(_npu_stress PRIVATE ascendcl acl_cblas)
+    target_link_libraries(_npu_stress PRIVATE ascendcl acl_cblas opapi nnopbase)
     set_target_properties(_npu_stress PROPERTIES
+        LINKER_LANGUAGE CXX
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
     message(STATUS "NPU stress tool: enabled (ACL found)")
 else()

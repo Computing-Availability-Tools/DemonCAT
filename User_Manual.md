@@ -1735,6 +1735,7 @@ dcat clean rNPU_freq_down --chip=2
 **使用示例**:
 ```bash
 dcat inject rNPU_aic_fault --chip=2
+dcat inject rNPU_aic_fault --chip=2 --load_pct=50   # 50% 负载
 dcat query rNPU_aic_fault --chip=2
 dcat clean rNPU_aic_fault --chip=2
 ```
@@ -1743,6 +1744,7 @@ dcat clean rNPU_aic_fault --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
+| load_pct | 可选 | 1-100 | 负载率百分比，默认 100（满载）；低于 100 时按占空比轮换计算/休眠 |
 
 **危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。持续运行直到 clean。
 
@@ -1762,6 +1764,7 @@ dcat clean rNPU_aic_fault --chip=2
 **使用示例**:
 ```bash
 dcat inject rNPU_aiv_fault --chip=2
+dcat inject rNPU_aiv_fault --chip=2 --load_pct=50   # 50% 负载
 dcat query rNPU_aiv_fault --chip=2
 dcat clean rNPU_aiv_fault --chip=2
 ```
@@ -1770,6 +1773,7 @@ dcat clean rNPU_aiv_fault --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
+| load_pct | 可选 | 1-100 | 负载率百分比，默认 100（满载）；低于 100 时按占空比轮换计算/休眠 |
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 

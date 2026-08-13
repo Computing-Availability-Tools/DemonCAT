@@ -1,5 +1,8 @@
 # _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
+# Ensure CANN OPP path is set for aclnn operators
+export ASCEND_OPP_PATH="${ASCEND_OPP_PATH:-/usr/local/Ascend/ascend-toolkit/latest/opp}"
+
 npu_check_env() {
     command -v hccn_tool >/dev/null 2>&1 || { echo "hccn_tool not found in PATH" >&2; exit 1; }
 }

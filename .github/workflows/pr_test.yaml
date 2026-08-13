@@ -20,6 +20,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - edited  # 改 PR 标题/描述后重跑(否则改标题不会触发新 run,旧快照的标题校验会一直卡)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

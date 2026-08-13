@@ -1253,7 +1253,7 @@ dcat clean rDOCKER_mem_overload --container=myapp
 
 ## 第八章 NPU 模块（19 条）
 
-NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool`、`npu-smi`、ACL（Ascend CL）及 PCIe sysfs 对 RoCE 网口、芯片硬件注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）、`npu_validate_chip`（校验芯片号）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
+NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool`、`npu-smi`、CANN及 PCIe sysfs 对 RoCE 网口、芯片硬件注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）、`npu_validate_chip`（校验芯片号）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 
 > ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「8.0 前置参数查询」查出目标机器实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth2 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
 
@@ -1302,14 +1302,14 @@ hccn_tool -i 2 -mtu -g                         # 当前 MTU
 - `action=del` 类用例的**前提**是目标项已存在：先注入对应 `action=add` 类用例再注入删除。
 - 这些是**机器相关**参数：在另一台机器上请换成未占用的网段。
 
-**⑥ ACL 设备映射（硬件故障用）**
+**⑥ device 映射（硬件故障用）**
 
-`rNPU_aic_fault`/`aiv_fault`/`hbm_fault` 使用 ACL C 程序 `_npu_stress` 施加压力，需要 chip→ACL dev ID 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <acl_dev_id>`，由环境初始化脚本生成。示例：
+`rNPU_aic_fault`/`aiv_fault`/`hbm_fault` 使用 C 程序 `_npu_stress` 施加压力，需要 chip→device 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <acl_dev_id>`，由环境初始化脚本生成。示例：
 ```
 2 0
 5 1
 ```
-表示 card 2 = ACL dev 0，card 5 = ACL dev 1。
+表示 card 2 = device 0，card 5 = device 1。
 
 ---
 
@@ -1725,10 +1725,10 @@ dcat clean rNPU_freq_down --chip=2
 
 **UID**: `rNPU_aic_fault`
 
-**描述**: 通过 ACL（Ascend CL）C 程序对指定芯片 AICore 施加 d2d memcpy 压力，模拟 AICore 计算故障/过载。
+**描述**: 通过 C 程序对指定芯片 AICore 施加 d2d memcpy 压力，模拟 AICore 计算故障/过载。
 
 **实现原理**: 
-- **inject**: 查找 chip→ACL dev ID 映射（`/tmp/dcat-npu-dev-map`），运行 `build/_npu_stress aicore <dev_id>` 后台进程，执行 d2d memcpy 持续施压。PID 写入 sidecar。
+- **inject**: 查找 chip→device 映射（`/tmp/dcat-npu-dev-map`），运行 `build/_npu_stress aicore <dev_id>` 后台进程，执行 d2d memcpy 持续施压。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。
 
@@ -1746,7 +1746,6 @@ dcat clean rNPU_aic_fault --chip=2
 
 **危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。持续运行直到 clean。
 
-**补充说明**: 依赖 CANN + ACL（libascendcl.so），需编译 `_npu_stress`（`cmake .. && make _npu_stress`）。不依赖 torch_npu。需要 chip→ACL dev 映射文件。
 
 ---
 
@@ -1754,7 +1753,7 @@ dcat clean rNPU_aic_fault --chip=2
 
 **UID**: `rNPU_aiv_fault`
 
-**描述**: 通过 ACL C 程序对指定芯片 AIVector 单元施加 d2d memcpy 压力，模拟 AIVector 计算故障/过载。
+**描述**: 通过 C 程序对指定芯片 AIVector 单元施加 d2d memcpy 压力，模拟 AIVector 计算故障/过载。
 
 **实现原理**: 与 `rNPU_aic_fault` 类似，运行 `build/_npu_stress aivector <dev_id>` 后台进程。
 - **clean**: kill stress 进程。
@@ -1774,7 +1773,6 @@ dcat clean rNPU_aiv_fault --chip=2
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 
-**补充说明**: 依赖 CANN + ACL，需编译 `_npu_stress`。不依赖 torch_npu。
 
 ---
 
@@ -1782,7 +1780,7 @@ dcat clean rNPU_aiv_fault --chip=2
 
 **UID**: `rNPU_hbm_fault`
 
-**描述**: 通过 ACL C 程序对指定芯片 HBM（高带宽内存）施加 malloc+memset 压力，模拟 HBM 内存故障/过载。
+**描述**: 通过 C 程序对指定芯片 HBM（高带宽内存）施加 malloc+memset 压力，模拟 HBM 内存故障/过载。
 
 **实现原理**: 
 - **inject**: 运行 `build/_npu_stress hbm <dev_id> [size_gb]` 后台进程，使用 `aclrtMalloc` + `aclrtMemset` 分配并填充 HBM 内存。PID 写入 sidecar。
@@ -1800,11 +1798,10 @@ dcat clean rNPU_hbm_fault --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| size | 可选 | 大小字符串 | 分配的 HBM 大小，支持 `2G`/`500M`/`500`（裸数=MB），默认 `2G` |
+| size | 必填 | 大小字符串 | 分配的 HBM 大小，支持 `2G`/`500M`/`500`（裸数=MB） |
 
 **危险等级**: 中 — HBM 持续高占用，影响同芯片上其他任务的显存分配，可能导致 OOM。持续运行直到 clean。
 
-**补充说明**: 依赖 CANN + ACL，需编译 `_npu_stress`。不依赖 torch_npu。`size_gb` 过大可能导致 HBM OOM。
 
 ---
 

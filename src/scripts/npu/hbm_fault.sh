@@ -67,7 +67,9 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     query)
-        if [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
+        _pid=$(cat "$SIDECAR" 2>/dev/null)
+        echo "DEBUG: SIDECAR=$SIDECAR file=$([ -f "$SIDECAR" ] && echo Y || echo N) pid=${_pid:-?} alive=$(kill -0 "$_pid" 2>/dev/null && echo Y || echo N)" >&2
+        if [ -f "$SIDECAR" ] && kill -0 "$_pid" 2>/dev/null; then
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
             hbm_pct=$(npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
             hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $chip /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)

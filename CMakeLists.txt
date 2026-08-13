@@ -115,7 +115,7 @@ if(EXISTS "${ASCEND_TOOLKIT}/aarch64-linux/include/acl/acl.h")
     add_executable(_npu_stress src/scripts/npu/_npu_stress.c)
     target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include")
     target_link_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/lib64")
-    target_link_libraries(_npu_stress PRIVATE ascendcl)
+    target_link_libraries(_npu_stress PRIVATE ascendcl acl_cblas)
     set_target_properties(_npu_stress PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
     message(STATUS "NPU stress tool: enabled (ACL found)")

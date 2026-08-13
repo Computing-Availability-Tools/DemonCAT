@@ -10,10 +10,12 @@
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 gen=${DCAT_PARAM_GEN:-1}
+# valid range: 1-3 (Gen4=original, Gen5=unsupported on 910B4)
+case "$gen" in 1|2|3) ;; *) echo "gen must be 1-3 (1=Gen1 2.5GT/s, 2=Gen2 5GT/s, 3=Gen3 8GT/s)" >&2; exit 1 ;; esac
 SIDECAR="/tmp/dcat-rNPU_pcie_down-$chip.bak"
 
 # PCIe speed by generation
-gen_speed() { case "$1" in 1) echo "2.5";; 2) echo "5";; 3) echo "8";; 4) echo "16";; 5) echo "32";; *) echo "2.5";; esac; }
+gen_speed() { case "$1" in 1) echo "2.5";; 2) echo "5";; 3) echo "8";; *) echo "2.5";; esac; }
 
 # Find NPU PCIe BDF from npu-smi
 get_npu_bdf() {

@@ -527,6 +527,7 @@ def gen():
     # chip + gen (NPU pcie_down)
     b_reject("rNPU_pcie_down", "--chip=abc --gen=1", 1, '', "chip: non-numeric")
     b_reject("rNPU_pcie_down", "--chip=2 --gen=abc", 1, '', "gen: non-numeric")
+    b_reject("rNPU_pcie_down", "--chip=2 --gen=5", 1, '', "gen: out of range (1-3)")
     b_reject("rNPU_pcie_down", "", 3, 'missing required parameter', "chip: missing")
     # chip (NPU chip_reset)
     b_reject("rNPU_chip_reset", "--chip=abc", 1, '', "chip: non-numeric")

@@ -1690,17 +1690,27 @@ dcat clean rNPU_roce_port_change --chip=0
 
 **UID**: `rNPU_pcie_down`
 
-**描述**: 通过 `setpci` 修改 PCIe Link Control 2 寄存器的 Target Link Speed，将 NPU PCIe 链路从 Gen4 (16GT/s) 降至 Gen1 (2.5GT/s)，带宽降低约 6.4 倍。NPU 在降速后仍可正常访问。
+**描述**: 通过 `setpci` 修改 PCIe Link Control 2 寄存器的 Target Link Speed，将 NPU PCIe 链路降速，大幅削减 PCIe 带宽。NPU 在降速后仍可正常访问。
 
 **实现原理**: 
+- PCIe 链路两端——**Root Port**（CPU 侧 PCIe 控制器，上游）和 **Endpoint**（NPU 设备，下游）——各有独立的 Link Control 2 寄存器。两端 Target Link Speed 都需修改，然后从 Root Port 端触发 Link Retrain 使链路重新协商到新速度。
 - **inject**: 从 `npu-smi info -t board` 获取芯片 PCIe BDF，通过 sysfs 找到上游 Root Port。读取两端 LnkCtl2 原始值并保存到 sidecar。将 Target Link Speed 设为目标 Gen 值，在 Root Port 端触发 Link Retrain。
 - **clean**: 从 sidecar 恢复原 LnkCtl2 值，重新 Retrain 恢复原速。
 - **query**: 检查 sidecar 是否存在，`lspci` 显示当前链路速度。
 
+**PCIe 代数与带宽对照**（原速 Gen4 16GT/s x16）:
+
+| gen | PCIe 代数 | 单通道速度 | x16 总带宽 | 相对原速 |
+|-----|----------|-----------|----------|---------|
+| 1 | Gen1 | 2.5 GT/s | ~4 GB/s | 12.5%（降 6.4x） |
+| 2 | Gen2 | 5 GT/s | ~8 GB/s | 25%（降 3.2x） |
+| 3 | Gen3 | 8 GT/s | ~15.8 GB/s | 50%（降 2x） |
+
 **使用示例**:
 ```bash
-dcat inject rNPU_pcie_down --chip=2           # 默认降至 Gen1 (2.5GT/s)
-dcat inject rNPU_pcie_down --chip=2 --gen=2   # 降至 Gen2 (5GT/s)
+dcat inject rNPU_pcie_down --chip=2           # 默认 Gen1，带宽降至 12.5%
+dcat inject rNPU_pcie_down --chip=2 --gen=2   # Gen2，带宽降至 25%
+dcat inject rNPU_pcie_down --chip=2 --gen=3   # Gen3，带宽降至 50%
 dcat query rNPU_pcie_down --chip=2
 dcat clean rNPU_pcie_down --chip=2
 ```
@@ -1709,11 +1719,11 @@ dcat clean rNPU_pcie_down --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| gen | 可选 | 1-5 | 目标 PCIe 代数（默认 1=Gen1 2.5GT/s） |
+| gen | 可选 | 1-3 | 目标 PCIe 代数（1=Gen1 2.5GT/s，2=Gen2 5GT/s，3=Gen3 8GT/s，默认 1） |
 
 **危险等级**: 中 — PCIe 带宽大幅降低，影响 NPU 数据传输性能。NPU 仍可访问但带宽受限。可逆（clean 恢复原速）。
 
-**补充说明**: 依赖 `setpci`（pciutils 包）。Root Port 和 Endpoint 两端都需设置 Target Link Speed，从 Root Port 端触发 Retrain。实测 910B4 支持 Gen1-Gen4 降速。
+**补充说明**: 依赖 `setpci`（pciutils 包）。Root Port 和 Endpoint 两端都需设置 Target Link Speed，从 Root Port 端触发 Retrain。
 
 ---
 

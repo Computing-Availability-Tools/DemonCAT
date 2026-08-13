@@ -278,14 +278,12 @@ OBS = {
         provision="none", precondition="npu-smi",
         v_cmd="ls /tmp/dcat-rNPU_chip_reset-2.bak 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="npu-smi info 2>/dev/null | grep -c 'OK'", c_assert=">=1"),
-    "rNPU_driver_unbind": dict(module="npu", inject_args="--chip=5", clean_args="--chip=5",
+    "rNPU_driver_unbind": dict(module="npu", inject_args="--chip=5",
         provision="none", precondition="root+npu-smi",
-        v_cmd="ls /tmp/dcat-rNPU_driver_unbind-5.bak 2>/dev/null | wc -l", v_assert=">=1",
-        c_cmd="ls /sys/bus/pci/drivers/devdrv_device_driver/0000:81:00.0 2>/dev/null | wc -l", c_assert=">=1"),
-    "rNPU_pcie_remove": dict(module="npu", inject_args="--chip=5", clean_args="--chip=5",
+        v_cmd="ls /tmp/dcat-rNPU_driver_unbind-5.bak 2>/dev/null | wc -l", v_assert=">=1"),
+    "rNPU_pcie_remove": dict(module="npu", inject_args="--chip=5",
         provision="none", precondition="root+npu-smi",
-        v_cmd="ls /tmp/dcat-rNPU_pcie_remove-5.bak 2>/dev/null | wc -l", v_assert=">=1",
-        c_cmd="ls /sys/bus/pci/devices/0000:81:00.0 2>/dev/null | wc -l", c_assert=">=1"),
+        v_cmd="ls /tmp/dcat-rNPU_pcie_remove-5.bak 2>/dev/null | wc -l", v_assert=">=1"),
 }
 
 

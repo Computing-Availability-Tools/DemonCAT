@@ -1855,8 +1855,9 @@ dcat clean rNPU_chip_reset --chip=2
 ```bash
 dcat inject rNPU_driver_unbind --chip=2
 dcat query rNPU_driver_unbind --chip=2
-dcat clean rNPU_driver_unbind --chip=2
 ```
+
+> **恢复方式**：本故障不支持 clean（910B4 上驱动重绑定后固件不完全恢复）。需**温重启（reboot）**才能完全恢复 NPU。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
@@ -1865,7 +1866,7 @@ dcat clean rNPU_driver_unbind --chip=2
 
 **危险等级**: 高 — 驱动解绑后该芯片不可用，所有 NPU 操作失败。
 
-**补充说明**: 需要 root。PCIe 地址通过 `npu-smi info` 输出中的 `0000:xx:xx.x` 格式获取，或通过 `lspci -D` + `/dev/davinci*` 映射回退。**910B4 恢复行为**：驱动重新绑定后驱动绑定恢复，但 NPU 固件可能未完全恢复，**需要温重启（reboot）**才能完全恢复 NPU。
+**补充说明**: 需要 root。PCIe 地址通过 `npu-smi info` 输出中的 `0000:xx:xx.x` 格式获取，或通过 `lspci -D` + `/dev/davinci*` 映射回退。脚本内含防御性 clean 分支（rebind + FLR）但非官方支持操作。
 
 ---
 
@@ -1884,8 +1885,9 @@ dcat clean rNPU_driver_unbind --chip=2
 ```bash
 dcat inject rNPU_pcie_remove --chip=2
 dcat query rNPU_pcie_remove --chip=2
-dcat clean rNPU_pcie_remove --chip=2
 ```
+
+> **恢复方式**：本故障不支持 clean（910B4 上 PCIe rescan 后设备条目恢复但固件不重新初始化）。需**冷启动（关机再开机）**才能完全恢复 NPU。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
@@ -1894,7 +1896,7 @@ dcat clean rNPU_pcie_remove --chip=2
 
 **危险等级**: 高 — PCIe 设备移除后该芯片完全消失，所有 NPU 操作失败。
 
-**补充说明**: 需要 root。**910B4 恢复行为**：PCIe rescan 恢复设备条目但 NPU 固件不会重新初始化，**需要冷启动（关机再开机）**才能完全恢复 NPU。温重启（reboot）可能不够。与 `rNPU_driver_unbind` 的区别：driver_unbind 仅断开驱动绑定（软件层），pcie_remove 从 PCIe 总线移除设备（更接近物理拔卡）。
+**补充说明**: 需要 root。**910B4 恢复行为**：PCIe rescan 恢复设备条目但 NPU 固件不会重新初始化，**需要冷启动（关机再开机）**才能完全恢复 NPU。温重启（reboot）可能不够。与 `rNPU_driver_unbind` 的区别：driver_unbind 仅断开驱动绑定（软件层），pcie_remove 从 PCIe 总线移除设备（更接近物理拔卡）。脚本内含防御性 clean 分支（rescan + FLR）但非官方支持操作。
 
 ---
 

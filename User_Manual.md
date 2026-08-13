@@ -1,8 +1,8 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八大模块，共 58 条故障。
-> 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)。
+> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统九大模块，共 58 条故障。
+> 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)，故障速查见 [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md)。
 
 > **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行一次 `sudo make install` 即可在 `/usr/local/bin` 创建全局入口（符号链接指向 `build/dcat`，后续更新只需 `git pull`，无需重新安装）；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。
 
@@ -12,12 +12,16 @@
 
 | 模块 | 条数 | 故障范围 |
 |---|:---:|---|
-| CPU | 2 | 核满载（纯用户态）、核离线 |
-| 存储 | 1 | 磁盘写压（dd 多实例） |
-| 网络 | 11 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 |
-| 进程 | 3 | 进程退出 / 挂起 / 僵尸 |
-| NPU | 16 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 |
-| **合计** | **33** | |
+| CPU | 5 | 核满载 / 核离线 / CPU 限额 / 降频 / RT 核饿死 |
+| 存储 | 5 | 磁盘写压 / 分区填满 / inode 耗尽 / IO 延迟 / IO 错误 |
+| 网络 | 13 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 / 包损坏 / 连接耗尽 |
+| 进程 | 6 | 进程退出 / 挂起 / 僵尸 / fork 炸弹 / 死循环 / FD 耗尽 |
+| 内存 | 4 | 内存泄漏 / OOM / 内存碎片 / Swap 过载 |
+| 文件系统 | 2 | 文件锁 / iowait 飙高 |
+| Docker | 2 | 容器 kill / 容器内存过载 |
+| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / 降频 / AICore 故障 / AIVector 故障 / HBM 故障 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
+| 系统 | 2 | 内核 panic / 下电重启 |
+| **合计** | **58** | |
 
 ---
 
@@ -25,12 +29,20 @@
 
 - [故障能力清单](#故障能力清单)
 - [通用约定：重注入与 --force](#通用约定重注入与---force)
-- [第一章 CPU 模块](#第一章-cpu-模块2-条)
+- [通用约定：clean --all 与 stateless clean](#通用约定clean---all-与-stateless-clean)
+- [第一章 CPU 模块](#第一章-cpu-模块5-条)
   - [1.1 rCPU_overload](#11-rcpu_overload) — 核满载
   - [1.2 rCPU_core_offline](#12-rcpu_core_offline) — 核离线
-- [第二章 存储模块](#第二章-存储模块1-条)
+  - [1.3 rCPU_quota](#13-rcpu_quota) — CPU 限额（cgroup）
+  - [1.4 rCPU_freq](#14-rcpu_freq) — CPU 降频
+  - [1.5 rCPU_core_hang](#15-rcpu_core_hang) — RT 核饿死
+- [第二章 存储模块](#第二章-存储模块5-条)
   - [2.1 rDISK_write_overload](#21-rdisk_write_overload) — 磁盘写压
-- [第三章 网络模块](#第三章-网络模块11-条)
+  - [2.2 rDISK_part_full](#22-rdisk_part_full) — 分区填满
+  - [2.3 rDISK_inode_exhaust](#23-rdisk_inode_exhaust) — inode 耗尽
+  - [2.4 rDISK_io_delay](#24-rdisk_io_delay) — IO 延迟
+  - [2.5 rDISK_io_error](#25-rdisk_io_error) — IO 错误
+- [第三章 网络模块](#第三章-网络模块13-条)
   - [3.1 rNET_delay](#31-rnet_delay) — 网络延迟
   - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包
   - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序
@@ -42,28 +54,51 @@
   - [3.9 rNET_bw_limit](#39-rnet_bw_limit) — 带宽限制
   - [3.10 rNET_jitter](#310-rnet_jitter) — 延迟抖动
   - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包
-- [第四章 进程模块](#第四章-进程模块3-条)
+  - [3.12 rNET_corrupt](#312-rnet_corrupt) — 包损坏
+  - [3.13 rNET_conn_exhaust](#313-rnet_conn_exhaust) — 连接耗尽
+- [第四章 进程模块](#第四章-进程模块6-条)
   - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出
   - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起
   - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程
-- [第五章 NPU 模块](#第五章-npu-模块16-条)
-  - [5.1 rNPU_link_down](#51-rnpu_link_down) — RoCE 链路 down
-  - [5.2 rNPU_ip_change](#52-rnpu_ip_change) — RoCE IP 变更
-  - [5.3 rNPU_gw_change](#53-rnpu_gw_change) — RoCE 网关变更
-  - [5.4 rNPU_netdetect_change](#54-rnpu_netdetect_change) — Netdetect IP 变更
-  - [5.5 rNPU_arp_poison](#55-rnpu_arp_poison) — ARP 毒化
-  - [5.6 rNPU_arp_del](#56-rnpu_arp_del) — ARP 条目删除
-  - [5.7 rNPU_route_add](#57-rnpu_route_add) — 添加 RoCE 路由
-  - [5.8 rNPU_route_del](#58-rnpu_route_del) — 删除 RoCE 路由
-  - [5.9 rNPU_iprule_add](#59-rnpu_iprule_add) — 添加 ip rule
-  - [5.10 rNPU_iprule_del](#510-rnpu_iprule_del) — 删除 ip rule
-  - [5.11 rNPU_iproute_add](#511-rnpu_iproute_add) — 添加 ip route
-  - [5.12 rNPU_iproute_del](#512-rnpu_iproute_del) — 删除 ip route
-  - [5.13 rNPU_bw_limit](#513-rnpu_bw_limit) — RoCE 带宽限速
-  - [5.14 rNPU_mtu_mismatch](#514-rnpu_mtu_mismatch) — RoCE MTU 变更
-  - [5.15 rNPU_dscp_tc_change](#515-rnpu_dscp_tc_change) — DSCP→TC 映射变更
-  - [5.16 rNPU_roce_port_change](#516-rnpu_roce_port_change) — RoCE UDP 端口变更
-- [第六章 Web 控制台（dcat serve）](#第六章-web-控制台dcat-serve)
+  - [4.4 rPROC_fork_bomb](#44-rproc_fork_bomb) — fork 炸弹
+  - [4.5 rPROC_loop](#45-rproc_loop) — 死循环
+  - [4.6 rPROC_fd_exhaust](#46-rproc_fd_exhaust) — FD 耗尽
+- [第五章 内存模块](#第五章-内存模块4-条)
+  - [5.1 rMEM_leak](#51-rmem_leak) — 内存泄漏
+  - [5.2 rMEM_oom](#52-rmem_oom) — OOM
+  - [5.3 rMEM_fragment](#53-rmem_fragment) — 内存碎片
+  - [5.4 rMEM_swap_overload](#54-rmem_swap_overload) — Swap 过载
+- [第六章 文件系统模块](#第六章-文件系统模块2-条)
+  - [6.1 rFS_file_lock](#61-rfs_file_lock) — 文件锁
+  - [6.2 rFS_iowait_high](#62-rfs_iowait_high) — iowait 飙高
+- [第七章 Docker 模块](#第七章-docker-模块2-条)
+  - [7.1 rDOCKER_kill](#71-rdocker_kill) — 容器 kill
+  - [7.2 rDOCKER_mem_overload](#72-rdocker_mem_overload) — 容器内存过载
+- [第八章 NPU 模块](#第八章-npu-模块19-条)
+  - [8.0 前置准备](#80-前置准备实机参数查询与调整)
+  - [8.1 rNPU_link_down](#81-rnpu_link_down) — RoCE 链路 down
+  - [8.2 rNPU_ip_change](#82-rnpu_ip_change) — RoCE IP 变更
+  - [8.3 rNPU_gw_change](#83-rnpu_gw_change) — RoCE 网关变更
+  - [8.4 rNPU_netdetect_change](#84-rnpu_netdetect_change) — Netdetect IP 变更
+  - [8.5 rNPU_arp](#85-rnpu_arp) — ARP 操控
+  - [8.6 rNPU_route](#86-rnpu_route) — RoCE 路由操控
+  - [8.7 rNPU_iprule](#87-rnpu_iprule) — ip rule 操控
+  - [8.8 rNPU_iproute](#88-rnpu_iproute) — ip route 操控
+  - [8.9 rNPU_bw_limit](#89-rnpu_bw_limit) — RoCE 带宽限速
+  - [8.10 rNPU_mtu_mismatch](#810-rnpu_mtu_mismatch) — RoCE MTU 变更
+  - [8.11 rNPU_dscp_tc_change](#811-rnpu_dscp_tc_change) — DSCP→TC 映射变更
+  - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
+  - [8.13 rNPU_freq_down](#813-rnpu_freq_down) — NPU 降频
+  - [8.14 rNPU_aic_fault](#814-rnpu_aic_fault) — AICore 故障
+  - [8.15 rNPU_aiv_fault](#815-rnpu_aiv_fault) — AIVector 故障
+  - [8.16 rNPU_hbm_fault](#816-rnpu_hbm_fault) — HBM 故障
+  - [8.17 rNPU_chip_reset](#817-rnpu_chip_reset) — 芯片复位
+  - [8.18 rNPU_driver_unbind](#818-rnpu_driver_unbind) — 驱动解绑
+  - [8.19 rNPU_pcie_remove](#819-rnpu_pcie_remove) — PCIe 拔卡
+- [第九章 系统模块](#第九章-系统模块2-条)
+  - [9.1 rSYS_panic](#91-rsys_panic) — 内核 panic
+  - [9.2 rSYS_poweroff](#92-rsys_poweroff) — 下电重启
+- [第十章 Web 控制台（dcat serve）](#第十章-web-控制台dcat-serve)
 
 ---
 
@@ -74,7 +109,7 @@ dcat 对**同一资源的重复注入默认拒绝**（退出码 5），需显式
 - **资源键**：各故障的 `clean_required` 参数（见每章参数表）。`cores` 走核集交集，其余走精确等值。
 - 同资源（同 iface / 重叠核 / 同 pid）重注入 → **拒绝**；加 `--force` → 先清旧再注新（原子替换）。
 - 不同资源（不同 iface / 不重叠核段）→ 并发注入 OK，互不影响。
-- inject-only 故障（如 `rPROC_exit`）不写 state，可重复 inject。
+- inject-only 故障（如 `rPROC_exit`、`rSYS_panic`）不写 state，可重复 inject。
 - `--force` 仅 inject 生效；clean/query/list 上忽略。`--force=x`（带值）报错。
 
 ```bash
@@ -107,7 +142,7 @@ dcat clean --all                      # 清全部故障（stateless，state.json
 
 ---
 
-## 第一章 CPU 模块（2 条）
+## 第一章 CPU 模块（5 条）
 
 ### 1.1 rCPU_overload — 核满载（perl 纯用户态）
 
@@ -169,7 +204,101 @@ dcat clean rCPU_core_offline --cores=2,3
 
 ---
 
-## 第二章 存储模块（1 条）
+### 1.3 rCPU_quota — CPU 限额（cgroup）
+
+**UID**: `rCPU_quota`
+
+**描述**: 通过 cgroup CPU quota 将指定 cgroup 的 CPU 使用率限制在 `quota_pct`%（1–99%），模拟 CPU 资源受限。
+
+**实现原理**: 
+- **inject**: 检测 cgroup 版本（v2 读 `cpu.max`，v1 读 `cpu.cfs_quota_us`）。对目标 cgroup（默认 `/sys/fs/cgroup/dcat_quota`，可通过 `cg_path` 指定已有 cgroup），设置 `quota_us = quota_pct * 100000 / 100`（period 固定 100000μs）。原值存入 sidecar。
+- **clean**: 从 sidecar 读取原值恢复；若 cgroup 为本工具创建则删除。
+- **query**: 读取当前 cgroup 的 CPU quota，打印 quota_pct。
+
+**使用示例**:
+```bash
+# 限制默认 cgroup 到 30% CPU
+dcat inject rCPU_quota --quota_pct=30
+dcat query  rCPU_quota
+dcat clean  rCPU_quota
+
+# 限制指定 cgroup 到 50% CPU
+dcat inject rCPU_quota --quota_pct=50 --cg_path=/sys/fs/cgroup/myapp
+dcat clean  rCPU_quota
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| quota_pct | inject 必填 | 整数 1–99 | CPU 限额百分比 |
+| cg_path | 可选 | 路径 | 目标 cgroup 路径；缺省则创建 `/sys/fs/cgroup/dcat_quota`（v2）或 `/sys/fs/cgroup/cpu/dcat_quota`（v1） |
+
+**危险等级**: 中 — 影响目标 cgroup 内所有进程的 CPU 调度配额。
+
+**补充说明**: 需要 root 权限写 cgroup。v2 需父 cgroup 已启用 cpu 控制器（`+cpu`）。自定义 `cg_path` 指向已有 cgroup 时，clean 仅恢复原值不删除 cgroup。
+
+---
+
+### 1.4 rCPU_freq — CPU 降频
+
+**UID**: `rCPU_freq`
+
+**描述**: 通过 sysfs 设置 `scaling_max_freq` 限制指定 CPU 核的最高频率（降频），模拟 CPU 性能降级。
+
+**实现原理**: 
+- **inject**: 对每个核，读取 `/sys/devices/system/cpu/cpu<N>/cpufreq/scaling_max_freq` 原值存入 sidecar，再写入 `freq_mhz * 1000`（kHz）作为新的上限。
+- **clean**: 从 sidecar 逐核恢复原 `scaling_max_freq`。
+- **query**: 打印每核当前 `scaling_max_freq` 与 `scaling_cur_freq`。
+
+**使用示例**:
+```bash
+dcat inject rCPU_freq --cores=0,1 --freq_mhz=800
+dcat query  rCPU_freq --cores=0,1
+dcat clean  rCPU_freq
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| cores | inject 必填；query 可选 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 格式 |
+| freq_mhz | inject 必填 | 正整数 | 目标最高频率（MHz），需低于当前 max freq 才有效 |
+
+**危险等级**: 中 — 降低 CPU 频率影响该核上所有任务的计算性能。
+
+**补充说明**: 需要 root 权限写 sysfs；依赖内核 `CONFIG_CPU_FREQ` 及 cpufreq 驱动。部分虚拟化/容器环境不暴露 cpufreq sysfs。频率值必须小于当前 `scaling_max_freq` 才有实际效果。clean 从 sidecar 恢复，无 sidecar 则跳过。
+
+---
+
+### 1.5 rCPU_core_hang — RT 核饿死
+
+**UID**: `rCPU_core_hang`
+
+**描述**: 通过 `chrt -f 99`（SCHED_FIFO 实时调度）+ `taskset` 绑核，在每个目标核上运行 RT 优先级死循环，饿死同核上的普通进程。
+
+**实现原理**: 
+- **inject**: 对每个核，用 `chrt -f 99 taskset -c <n> sh -c 'while :; do :; done'` 启动 RT 99 优先级的忙循环进程。pid 写入 pidfile。
+- **clean**: 读取 pidfile，`kill` 所有 RT 进程。
+- **query**: 统计存活的 RT 循环进程数。
+
+**使用示例**:
+```bash
+dcat inject rCPU_core_hang --cores=0,1
+dcat query  rCPU_core_hang
+dcat clean  rCPU_core_hang
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| cores | inject 必填 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 格式 |
+
+**危险等级**: 高 — RT 99 优先级会完全霸占目标核，同核普通进程可能长时间无法调度，系统可能卡顿。
+
+**补充说明**: 需要 root 权限和 `chrt`（util-linux）。与 `rCPU_overload` 的区别：overload 用普通调度（SCHED_OTHER）的纯用户态满载；core_hang 用 RT 调度（SCHED_FIFO 99）抢占同核所有普通进程。如果内核 `RT throttling`（`/proc/sys/kernel/sched_rt_runtime_us`）开启，RT 进程会被自动节流。
+
+---
+
+## 第二章 存储模块（5 条）
 
 ### 2.1 rDISK_write_overload — 磁盘写压（dd 多实例）
 
@@ -202,11 +331,135 @@ dcat clean rDISK_write_overload --device=/data
 
 ---
 
-## 第三章 网络模块（11 条）
+### 2.2 rDISK_part_full — 分区填满
 
-本章涵盖 DemonCAT 网络故障注入模块的全部 11 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动等多种网络异常场景。
+**UID**: `rDISK_part_full`
 
-> **互斥说明**：基于 `tc qdisc` 的故障（rNET_delay / rNET_loss / rNET_reorder / rNET_bw_limit / rNET_degrade / rNET_jitter）在同一网卡上**互斥**——一个网卡只能有一个 root qdisc。如需在同一网卡注入新故障，必须先 `dcat clean` 恢复旧故障后再注入。若注入失败提示"已有 root qdisc"，执行 `dcat clean --all` 或 `tc qdisc del dev <iface> root` 清理残留后重试。
+**描述**: 在目标路径创建大填充文件，快速消耗磁盘空间直至填满（或达到指定大小）。
+
+**实现原理**: 
+- **inject**: 在 `path` 下创建填充文件 `dcat.fill.<pid>`。若指定 `size`，用 `dd` 或 `fallocate` 创建指定大小文件（支持 `100M`/`2G` 等单位）；若省略 `size`，持续写入直到 ENOSPC。路径存入 sidecar。
+- **clean**: 从 sidecar 读取路径，删除填充文件。
+- **query**: 检查填充文件是否存在，打印大小与 `df`。
+
+**使用示例**:
+```bash
+# 填 2GB
+dcat inject rDISK_part_full --path=/data --size=2G
+dcat query  rDISK_part_full --path=/data
+dcat clean  rDISK_part_full
+
+# 持续填充直至磁盘满
+dcat inject rDISK_part_full --path=/data
+dcat clean  rDISK_part_full
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| path | inject 必填；query 可选 | 目录路径 | 目标挂载点/目录 |
+| size | 可选 | 大小字符串 | 填充大小（`100`=`100MB`、`100M`、`2G`）；省略则持续填充至 ENOSPC |
+
+**危险等级**: 高 — 填满磁盘会导致同分区所有写入操作失败（ENOSPC），可能影响数据库、日志等服务。
+
+**补充说明**: 需要 root 或对目标路径的写权限。优先使用 `fallocate`（快速），回退 `dd`。clean 删除 sidecar 中记录的填充文件路径。
+
+---
+
+### 2.3 rDISK_inode_exhaust — inode 耗尽
+
+**UID**: `rDISK_inode_exhaust`
+
+**描述**: 在目标路径下创建大量空文件，耗尽文件系统 inode（即使磁盘空间未满也无法创建新文件）。
+
+**实现原理**: 
+- **inject**: 在 `path/dcat.inodes.<pid>/` 下循环创建空文件 `f0, f1, ...`，直到达到 `count` 或创建失败（inode 耗尽）。目录路径存入 sidecar。
+- **clean**: `rm -rf` sidecar 中记录的目录。
+- **query**: 打印创建的文件数与 `df -i`。
+
+**使用示例**:
+```bash
+dcat inject rDISK_inode_exhaust --path=/data --count=100000
+dcat query  rDISK_inode_exhaust
+dcat clean  rDISK_inode_exhaust
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| path | inject 必填 | 目录路径 | 目标挂载点/目录 |
+| count | 可选 | 整数 | 最多创建的文件数，默认 `100000` |
+
+**危险等级**: 高 — inode 耗尽后无法创建任何新文件，即使磁盘空间充足。影响同分区内所有创建文件/目录的操作。
+
+**补充说明**: 需要对目标路径的写权限。inode 耗尽比空间填满更隐蔽（`df` 显示空间充足但 `df -i` 显示 inode 已满）。clean 删除整个 `dcat.inodes.*` 目录。
+
+---
+
+### 2.4 rDISK_io_delay — IO 延迟（dm-delay）
+
+**UID**: `rDISK_io_delay`
+
+**描述**: 通过 device-mapper `delay` 目标在块设备上叠加读延迟，所有 IO 操作被延迟指定毫秒数。
+
+**实现原理**: 
+- **inject**: 在块设备 `device` 上创建 dm-delay 设备 `dcat-delay-<devname>`，使用 `dmsetup create` 设置 `delay <delay_ms>`。dm 设备名存入 sidecar。
+- **clean**: `dmsetup remove` 删除 dm-delay 设备。
+- **query**: `dmsetup info/table` 检查 dm-delay 设备是否存在。
+
+**使用示例**:
+```bash
+dcat inject rDISK_io_delay --device=/dev/sdb --delay_ms=200
+dcat query  rDISK_io_delay
+dcat clean  rDISK_io_delay
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| device | inject 必填 | 块设备路径 | 目标块设备（如 `/dev/sdb`），必须是未挂载或可安全操作的设备 |
+| delay_ms | inject 必填 | 正整数 | IO 延迟毫秒数 |
+
+**危险等级**: 高 — 对正在使用的设备施加延迟可能导致 IO 超时、进程卡顿甚至文件系统损坏。仅在空闲设备上测试。
+
+**补充说明**: 需要 root + `dmsetup`（device-mapper 包）+ 内核 `dm-delay` 模块。**严禁对已挂载的根分区或关键设备执行**。测试前用 `lsblk` 确认目标设备未被使用。
+
+---
+
+### 2.5 rDISK_io_error — IO 错误（dm-error）
+
+**UID**: `rDISK_io_error`
+
+**描述**: 通过 device-mapper `error` 目标使块设备的所有 IO 返回 EIO（输入/输出错误），模拟磁盘故障。
+
+**实现原理**: 
+- **inject**: 在块设备 `device` 上创建 dm-error 设备 `dcat-error-<devname>`，使用 `dmsetup create` 设置 `error` target。dm 设备名存入 sidecar。
+- **clean**: `dmsetup remove` 删除 dm-error 设备。
+- **query**: `dmsetup info/table` 检查 dm-error 设备是否存在。
+
+**使用示例**:
+```bash
+dcat inject rDISK_io_error --device=/dev/sdb
+dcat query  rDISK_io_error
+dcat clean  rDISK_io_error
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| device | inject 必填 | 块设备路径 | 目标块设备（如 `/dev/sdb`） |
+
+**危险等级**: 高 — 所有 IO 返回 EIO，可能导致文件系统只读、数据损坏。仅在空闲设备上测试。
+
+**补充说明**: 需要 root + `dmsetup` + 内核 `dm-error` 模块。**严禁对已挂载的根分区或关键设备执行**。与 `rDISK_io_delay` 的区别：delay 是延迟 IO，error 是直接返回错误。
+
+---
+
+## 第三章 网络模块（13 条）
+
+本章涵盖 DemonCAT 网络故障注入模块的全部 13 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动、包损坏、连接耗尽等多种网络异常场景。
+
+> **互斥说明**：基于 `tc qdisc` 的故障（rNET_delay / rNET_loss / rNET_reorder / rNET_bw_limit / rNET_degrade / rNET_jitter / rNET_corrupt）在同一网卡上**互斥**——一个网卡只能有一个 root qdisc。如需在同一网卡注入新故障，必须先 `dcat clean` 恢复旧故障后再注入。若注入失败提示"已有 root qdisc"，执行 `dcat clean --all` 或 `tc qdisc del dev <iface> root` 清理残留后重试。
 
 所有故障均支持 `inject`（注入）、`clean`（清理）、`query`（查询）三个操作。注入时通过 sidecar 临时状态文件（`/tmp/dcat-rNET_*`，用于记录注入前的原始值，便于 clean 时恢复）或 PID 文件记录状态，便于后续清理与查询。
 
@@ -245,7 +498,7 @@ dcat clean rNET_delay --iface=eth0
 
 **描述**: 通过 `tc netem` 在指定网卡出向流量上注入随机丢包。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem loss random <loss_pct>%`，在网卡根队列上挂载 netem qdisc 并设置随机丢包百分比；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_loss-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*loss` 匹配判断丢包规则是否生效。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem loss random <loss_pct>%`，在网卡根队列上挂载 netem qdisc 并设置随机丢包百分比；将网卡名写入 sidecar 文件。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*loss` 匹配判断丢包规则是否生效。
 
 **使用示例**:
 ```bash
@@ -272,7 +525,7 @@ dcat clean rNET_loss --iface=eth0
 
 **描述**: 通过 `tc netem` 在指定网卡出向流量上注入包乱序（reorder）。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem delay 10ms reorder <reorder_pct>% 50%`，在网卡根队列上挂载 netem qdisc，内含固定 10ms 延迟作为乱序基准，并按指定百分比和 50% 相关度（correlation）触发包重排；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_reorder-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*reorder` 匹配判断乱序规则是否生效。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem delay 10ms reorder <reorder_pct>% 50%`，在网卡根队列上挂载 netem qdisc，内含固定 10ms 延迟作为乱序基准，并按指定百分比和 50% 相关度（correlation）触发包重排；将网卡名写入 sidecar 文件。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*reorder` 匹配判断乱序规则是否生效。
 
 **使用示例**:
 ```bash
@@ -289,7 +542,7 @@ dcat clean rNET_reorder --iface=eth0
 
 **危险等级**: 低 — 主要影响 TCP 性能（触发乱序检测与快速重传），通常不中断连接。注意 netem reorder 需配合 delay 参数，脚本内部固定为 10ms 延迟和 50% correlation，不可通过参数修改。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；乱序的 delay 基准（10ms）和 correlation（50%）为脚本硬编码值，无法通过参数调整；同一网卡已有 qdisc 或注入了其他 qdisc 故障时注入会失败。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；乱序的 delay 基准（10ms）和 correlation（50%）为脚本硬编码值，无法通过参数调整。
 
 ---
 
@@ -299,7 +552,7 @@ dcat clean rNET_reorder --iface=eth0
 
 **描述**: 通过 `ip link set down` 将指定网卡置为 DOWN 状态，模拟网卡链路中断。
 
-**实现原理**: `inject` 执行 `ip link set dev <iface> down`，将网卡链路状态置为 DOWN；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_down-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `ip link set dev <iface> up` 恢复链路并删除 sidecar 文件。`query` 执行 `ip -o link show dev <iface>`，通过匹配 `state DOWN` 判断网卡是否处于 DOWN 状态。
+**实现原理**: `inject` 执行 `ip link set dev <iface> down`，将网卡链路状态置为 DOWN；将网卡名写入 sidecar 文件。`clean` 从 sidecar 读取网卡名，执行 `ip link set dev <iface> up` 恢复链路并删除 sidecar 文件。`query` 执行 `ip -o link show dev <iface>`，通过匹配 `state DOWN` 判断网卡是否处于 DOWN 状态。
 
 **使用示例**:
 ```bash
@@ -315,7 +568,7 @@ dcat clean rNET_down --iface=eth0
 
 **危险等级**: 高 — 网卡 DOWN 后该网卡所有 IP 不可达，所有经过该网卡的连接立即中断。若目标为管理网卡或 SSH 所用网卡，将导致远程连接丢失，需通过带外管理或物理终端恢复。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `ip` 命令（iproute2 包）；严禁对管理网卡/SSH 网卡执行；clean 仅恢复链路 UP 状态，不恢复 IP 地址/DHCP/路由等上层配置，若网卡依赖 DHCP 可能需要额外等待或手动 `dhclient`。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `ip` 命令（iproute2 包）；严禁对管理网卡/SSH 网卡执行；clean 仅恢复链路 UP 状态，不恢复 IP 地址/DHCP/路由等上层配置。
 
 ---
 
@@ -325,7 +578,7 @@ dcat clean rNET_down --iface=eth0
 
 **描述**: 通过 `tc tbf` 限速模拟网卡性能降级。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root tbf rate <speed_mbps>mbit burst <speed_mbps>kbit latency 400ms`，将网卡出向带宽限制为指定速率（默认 10Mbps）；将 `iface speed` 写入 sidecar 文件 `/tmp/dcat-rNET_degrade-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除限速规则，删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，检查是否存在 tbf 规则。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root tbf rate <speed_mbps>mbit burst <speed_mbps>kbit latency 400ms`，将网卡出向带宽限制为指定速率（默认 10Mbps）；将 `iface speed` 写入 sidecar 文件。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除限速规则，删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，检查是否存在 tbf 规则。
 
 **使用示例**:
 ```bash
@@ -342,7 +595,7 @@ dcat clean rNET_degrade --iface=eth0
 
 **危险等级**: 中 — 限速后网卡带宽大幅降低（如从 1000Mbps 降至 10Mbps），大流量场景下可能导致拥塞、丢包和应用超时。
 
-**补充说明**: 需要 root 权限；依赖 `tc` 命令；与 `rNET_bw_limit` 同为 tc tbf 机制但语义不同（degrade=模拟慢网卡，bw_limit=模拟带宽拥塞）；dummy 虚拟网卡和真实物理网卡均可测试。
+**补充说明**: 需要 root 权限；依赖 `tc` 命令；与 `rNET_bw_limit` 同为 tc tbf 机制但语义不同（degrade=模拟慢网卡，bw_limit=模拟带宽拥塞）。
 
 ---
 
@@ -352,7 +605,7 @@ dcat clean rNET_degrade --iface=eth0
 
 **描述**: 通过 Python socket 占用指定 TCP/UDP 端口，阻止其他进程绑定该端口，模拟端口冲突。
 
-**实现原理**: `inject` 使用 `python3` 创建 socket，设置 `SO_REUSEADDR`，绑定 `0.0.0.0:<port>`；TCP 模式下调用 `listen(1)`，之后进入 `sleep(3600)` 循环保持占用；以后台进程运行，将 PID 写入 PID 文件 `/tmp/dcat-rNET_port_occupy-<port>.pid`。`clean` 从 PID 文件读取进程号，执行 `kill` 终止占用进程并删除 PID 文件；若 PID 文件不存在则报错退出。`query` 优先使用 `ss -tulnp`（回退 `netstat -tulnp`）列出监听端口，通过正则 `[:.]<port>` 匹配判断端口是否被占用。
+**实现原理**: `inject` 使用 `python3` 创建 socket，设置 `SO_REUSEADDR`，绑定 `0.0.0.0:<port>`；TCP 模式下调用 `listen(1)`，之后进入 `sleep(3600)` 循环保持占用；以后台进程运行，将 PID 写入 PID 文件。`clean` 从 PID 文件读取进程号，执行 `kill` 终止占用进程并删除 PID 文件。`query` 优先使用 `ss -tulnp`（回退 `netstat -tulnp`）列出监听端口，通过正则匹配判断端口是否被占用。
 
 **使用示例**:
 ```bash
@@ -367,9 +620,9 @@ dcat clean rNET_port_occupy --port=8080
 | port | 必填 | 整数 | 目标端口号，范围 1–65535。占用 1024 以下端口需要 root 权限 |
 | protocol | 可选 | 字符串 | 协议类型，`tcp` 或 `udp`，默认 `tcp` |
 
-**危险等级**: 低 — 仅占用单个端口，不影响其他端口的网络通信。但若占用的是关键服务端口（如 80、443、22），则该服务无法启动。占用系统端口（<1024）需要 root。
+**危险等级**: 低 — 仅占用单个端口，不影响其他端口的网络通信。但若占用的是关键服务端口（如 80、443、22），则该服务无法启动。
 
-**补充说明**: 依赖 `python3`，未安装时报错退出；query 依赖 `ss` 或 `netstat`（至少其一）；不需要 `CAP_NET_ADMIN`，但绑定 <1024 端口需要 root 或 `CAP_NET_BIND_SERVICE`；设置了 `SO_REUSEADDR`，但 TCP `listen` 模式仍会阻止其他进程 `bind` 同端口（TIME_WAIT 场景除外）；进程以 nohup 风格后台运行，系统重启后自动释放。
+**补充说明**: 依赖 `python3`；不需要 `CAP_NET_ADMIN`，但绑定 <1024 端口需要 root 或 `CAP_NET_BIND_SERVICE`。
 
 ---
 
@@ -379,7 +632,7 @@ dcat clean rNET_port_occupy --port=8080
 
 **描述**: 通过 `systemctl stop` 或 `pkill` 停止指定网络服务，模拟服务级网络故障。
 
-**实现原理**: `inject` 优先检测 `systemctl` 是否可用：若可用则执行 `systemctl stop <service>`，否则执行 `pkill -x <service>` 按进程名精确杀停；将服务名写入 sidecar 文件 `/tmp/dcat-rNET_service_stop-<service>.sidecar`。`clean` 从 sidecar 读取服务名：若 `systemctl` 可用则执行 `systemctl start <service>`，否则执行 `service <service> start`（容错），删除 sidecar 文件。`query` 若 `systemctl` 可用则执行 `systemctl is-active <service>`，当状态为 `inactive`、`failed` 或 `deactivating` 时判定服务已停止（退出码 0），否则退出码 1；无 systemctl 时通过 `pgrep -x <service>` 判断，无进程则退出码 0。
+**实现原理**: `inject` 优先检测 `systemctl` 是否可用：若可用则执行 `systemctl stop <service>`，否则执行 `pkill -x <service>` 按进程名精确杀停；将服务名写入 sidecar 文件。`clean` 从 sidecar 读取服务名恢复启动。`query` 检查服务是否处于 inactive/failed 状态。
 
 **使用示例**:
 ```bash
@@ -391,11 +644,11 @@ dcat clean rNET_service_stop --service=nginx
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| service | 必填 | 字符串 | 服务名称。systemd 环境下为 unit 名（如 nginx、sshd、httpd）；非 systemd 环境下为进程名（用于 pkill -x） |
+| service | 必填 | 字符串 | 服务名称（systemd unit 名或进程名） |
 
-**危险等级**: 高 — 停止关键网络服务（如 sshd、nginx、kubelet）会导致远程管理中断、Web 服务不可用、集群节点异常等。clean 通过 systemctl start 或 service start 恢复，但若服务配置异常可能无法成功启动。
+**危险等级**: 高 — 停止关键网络服务（如 sshd、nginx、kubelet）会导致远程管理中断、Web 服务不可用、集群节点异常等。
 
-**补充说明**: 需要 root 权限；优先使用 `systemctl`（systemd 环境），回退 `pkill`/`service`（非 systemd 环境）；严禁停止 sshd 等管理服务以免失联；pkill -x 为精确匹配进程名，若服务主进程名与 unit 名不同可能无效；clean 的非 systemd 路径 `service start` 带 `|| true` 容错，若服务启动失败不会报错，需手动确认。
+**补充说明**: 需要 root 权限；严禁停止 sshd 等管理服务以免失联。
 
 ---
 
@@ -405,7 +658,7 @@ dcat clean rNET_service_stop --service=nginx
 
 **描述**: 通过后台循环执行 `ip link set down/up`，模拟网卡链路反复抖动（link flap）。
 
-**实现原理**: `inject` 启动后台子 shell，循环执行 `ip link set dev <iface> down` → `sleep <cycle_sec>` → `ip link set dev <iface> up` → `sleep <cycle_sec>`，重复 `<count>` 次后自动结束；将子 shell 的 PID 写入 PID 文件 `/tmp/dcat-rNET_link_flap-<iface>.pid`。`clean` 从 PID 文件读取进程号并 `kill` 终止循环，删除 PID 文件，并确保网卡执行 `ip link set dev <iface> up` 恢复 UP 状态。`query` 检查 PID 文件是否存在且对应进程仍存活（`kill -0`），存活则退出码 0，否则退出码 1。
+**实现原理**: `inject` 启动后台子 shell，循环执行 `ip link set dev <iface> down` → `sleep <cycle_sec>` → `ip link set dev <iface> up` → `sleep <cycle_sec>`，重复 `<count>` 次后自动结束；将子 shell 的 PID 写入 PID 文件。`clean` 从 PID 文件读取进程号并 `kill` 终止循环，删除 PID 文件，并确保网卡恢复 UP 状态。`query` 检查 PID 文件是否存在且对应进程仍存活。
 
 **使用示例**:
 ```bash
@@ -417,13 +670,13 @@ dcat clean rNET_link_flap --iface=eth0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33 |
+| iface | 必填 | 网卡名 | 目标网卡 |
 | cycle_sec | 可选 | 整数 | 每次 down/up 的间隔秒数，默认 2 |
 | count | 可选 | 整数 | 抖动循环次数，默认 10 |
 
-**危险等级**: 高 — 链路反复 down/up 会导致该网卡上所有连接频繁中断重建，可能触发上层协议重连、ARP 刷新、HA 脑裂、负载均衡剔除节点等连锁反应。严禁对管理网卡执行。
+**危险等级**: 高 — 链路反复 down/up 会导致该网卡上所有连接频繁中断重建，可能触发上层协议重连、HA 脑裂等。严禁对管理网卡执行。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `ip` 命令（iproute2）；后台进程以子 shell 形式运行，系统重启后自动停止；循环结束后网卡最终为 UP 状态（最后一次循环为 up + sleep），但 clean 仍会强制确保 UP；严禁对管理/SSH 网卡执行；query 仅判断后台进程是否存活，不判断当前链路状态。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；后台进程以子 shell 形式运行，系统重启后自动停止。
 
 ---
 
@@ -433,7 +686,7 @@ dcat clean rNET_link_flap --iface=eth0
 
 **描述**: 通过 `tc tbf`（Token Bucket Filter）在指定网卡上注入带宽限速。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root tbf rate <rate_kbps>kbit burst 32kbit latency 400ms`，在网卡根队列上挂载 TBF qdisc，按指定速率限速（burst 32kbit，延迟上限 400ms）；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_bw_limit-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `qdisc tbf` 匹配判断限速规则是否生效。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root tbf rate <rate_kbps>kbit burst 32kbit latency 400ms`，在网卡根队列上挂载 TBF qdisc，按指定速率限速；将网卡名写入 sidecar 文件。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `qdisc tbf` 匹配判断限速规则是否生效。
 
 **使用示例**:
 ```bash
@@ -445,12 +698,12 @@ dcat clean rNET_bw_limit --iface=eth0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33 |
-| rate_kbps | 必填 | 整数 | 限速速率（KB/s），脚本内部转换为 kbit。如 1024 表示约 1MB/s（8Mbit/s）带宽上限 |
+| iface | 必填 | 网卡名 | 目标网卡 |
+| rate_kbps | 必填 | 整数 | 限速速率（KB/s），脚本内部转换为 kbit |
 
-**危险等级**: 低 — 仅限制出向带宽，不中断连接。低速率值会导致大文件传输、视频流等高带宽应用明显卡顿或超时。burst 和 latency 为固定值（32kbit / 400ms），极端低速率下可能不够精细。
+**危险等级**: 低 — 仅限制出向带宽，不中断连接。低速率值会导致大文件传输明显卡顿或超时。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_tbf` 模块；同一网卡已有 qdisc 或注入了其他 qdisc 故障时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc；TBF 为出向限速，入向不限速。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_tbf` 模块。
 
 ---
 
@@ -460,7 +713,7 @@ dcat clean rNET_bw_limit --iface=eth0
 
 **描述**: 通过 `tc netem` 在指定网卡出向流量上注入延迟抖动（delay + jitter）。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem delay <delay_ms>ms <jitter_ms>ms`，在网卡根队列上挂载 netem qdisc，设置基础延迟及附加抖动范围（netem 默认使用正态分布抖动）；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_jitter-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*delay [0-9]+[a-z]* [0-9]+[a-z]*` 匹配两个数值（delay + jitter），判断抖动规则是否生效。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem delay <delay_ms>ms <jitter_ms>ms`，在网卡根队列上挂载 netem qdisc，设置基础延迟及附加抖动范围；将网卡名写入 sidecar 文件。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root`。`query` 检查是否存在两个数值的 delay（delay + jitter）。
 
 **使用示例**:
 ```bash
@@ -472,13 +725,13 @@ dcat clean rNET_jitter --iface=eth0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| iface | 必填 | 网卡名 | 目标网卡，如 eth0、ens33 |
-| delay_ms | 必填 | 整数 | 基础延迟毫秒数，如 100 表示 100ms 基础延迟 |
-| jitter_ms | 必填 | 整数 | 抖动范围毫秒数，如 20 表示 ±20ms 抖动。实际延迟在 [delay-jitter, delay+jitter] 范围内波动 |
+| iface | 必填 | 网卡名 | 目标网卡 |
+| delay_ms | 必填 | 整数 | 基础延迟毫秒数 |
+| jitter_ms | 必填 | 整数 | 抖动范围毫秒数，实际延迟在 [delay-jitter, delay+jitter] 范围内波动 |
 
-**危险等级**: 低 — 主要影响实时音视频、在线游戏等对抖动敏感的应用，通常不中断 TCP 连接。大 jitter 值可能导致 TCP 超时重传。注意 delay 与 jitter 均作用于出向流量。
+**危险等级**: 低 — 主要影响实时音视频等对抖动敏感的应用，通常不中断 TCP 连接。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块；同一网卡已有 qdisc 或注入了其他 qdisc 故障时 `tc qdisc add` 会失败；clean 会删除网卡上所有 root qdisc；query 的正则要求 delay 行有两个数值（delay + jitter），仅有一个数值的纯延迟规则不会匹配。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块。
 
 ---
 
@@ -488,7 +741,7 @@ dcat clean rNET_jitter --iface=eth0
 
 **描述**: 通过 `iptables DROP` 规则在指定端口上注入 TCP 包丢弃，模拟端口级 TCP 丢包。
 
-**实现原理**: `inject` 根据 `direction` 参数在 iptables 中插入 DROP 规则：`in` 方向执行 `iptables -I INPUT -p tcp --dport <port> -j DROP`（丢弃入站目标端口包）；`out` 方向执行 `iptables -I OUTPUT -p tcp --sport <port> -j DROP`（丢弃出站源端口包）；`both` 方向同时插入两条规则；将 `port dir` 写入 sidecar 文件 `/tmp/dcat-rNET_tcp_loss-<port>.rule`。`clean` 从 sidecar 读取 `port dir`（回退默认 `both`），执行 `iptables -D INPUT ...` 和/或 `iptables -D OUTPUT ...` 删除对应规则，删除 sidecar 文件。`query` 根据 `direction` 执行 `iptables -L INPUT -n` 和/或 `iptables -L OUTPUT -n`，通过正则 `DROP.*dpt:<port>`（INPUT）和 `DROP.*spt:<port>`（OUTPUT）匹配判断规则是否存在，任一匹配则退出码 0。
+**实现原理**: `inject` 根据 `direction` 参数在 iptables 中插入 DROP 规则：`in` 方向执行 `iptables -I INPUT -p tcp --dport <port> -j DROP`；`out` 方向执行 `iptables -I OUTPUT -p tcp --sport <port> -j DROP`；`both` 方向同时插入两条规则。`clean` 从 sidecar 读取参数，执行 `iptables -D` 删除对应规则。`query` 检查 iptables 规则是否存在。
 
 **使用示例**:
 ```bash
@@ -500,14 +753,70 @@ dcat clean rNET_tcp_loss --port=8080 --direction=both
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| port | 必填 | 整数 | 目标 TCP 端口号，范围 1–65535 |
-| direction | 可选 | 字符串 | 丢包方向：`in`（入向）、`out`（出向）、`both`（双向），默认 `both` |
+| port | 必填 | 整数 | 目标 TCP 端口号 |
+| direction | 可选 | 字符串 | 丢包方向：`in`、`out`、`both`（默认） |
 
-**危险等级**: 高 — DROP 规则会导致该端口上所有 TCP 连接的包被静默丢弃，新建连接无法建立、已有连接超时断开。`both` 方向影响最大。注意此规则在 iptables 层面生效，影响所有协议栈上层，且重启后规则不自动清除。
+**危险等级**: 高 — DROP 规则会导致该端口上所有 TCP 连接的包被静默丢弃，新建连接无法建立、已有连接超时断开。
 
-**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `iptables` 命令（传统 iptables，非 nftables）；clean 通过 `-D` 删除规则，若规则已被手动删除或顺序变化，`-D` 可能静默失败；sidecar 文件后缀为 `.rule`（非 `.sidecar`）；`direction=both` 时 inject 只要任一方向插入失败即整体报错退出；query 的 `direction` 参数需与 inject 时一致才能正确匹配；防火墙后端为 nftables 时 `iptables` 命令可能行为不同，需确认兼容性。
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `iptables` 命令；重启后规则不自动清除。
 
-## 第四章 进程模块（3 条）
+---
+
+### 3.12 rNET_corrupt — 包损坏（tc netem corrupt）
+
+**UID**: `rNET_corrupt`
+
+**描述**: 通过 `tc netem corrupt` 在指定网卡出向流量上注入随机包损坏（比特翻转）。
+
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem corrupt <corrupt_pct>%`，在网卡根队列上挂载 netem qdisc 并设置随机包损坏百分比。`clean` 执行 `tc qdisc del dev <iface> root`。`query` 检查是否存在 `netem corrupt` 规则。
+
+**使用示例**:
+```bash
+dcat inject rNET_corrupt --iface=eth0 --corrupt_pct=5
+dcat query rNET_corrupt --iface=eth0
+dcat clean rNET_corrupt --iface=eth0
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| iface | 必填 | 网卡名 | 目标网卡 |
+| corrupt_pct | 必填 | 整数 | 包损坏百分比，范围 0–100 |
+
+**危险等级**: 中 — 损坏的包会被接收方校验失败并丢弃，导致上层重传。高损坏率等效于高丢包率，但表现更隐蔽（包已发送但内容损坏）。
+
+**补充说明**: 需要 root 权限及 `CAP_NET_ADMIN` 能力；依赖 `tc` 命令及内核 `sch_netem` 模块。与其他 tc qdisc 故障在同一网卡上互斥。
+
+---
+
+### 3.13 rNET_conn_exhaust — 连接耗尽
+
+**UID**: `rNET_conn_exhaust`
+
+**描述**: 向目标 `host:port` 发起大量 TCP 连接并保持不关闭，耗尽目标端的连接资源（模拟连接耗尽攻击）。
+
+**实现原理**: `inject` 使用 Python socket 向 `target`（`host:port` 格式）发起 `count` 个 TCP 连接，建立后保持不关闭，以后台进程运行。PID 写入 pidfile。`clean` 读取 pidfile，kill 持有连接的进程。`query` 检查进程是否存活及 `ss -s` 连接数统计。
+
+**使用示例**:
+```bash
+dcat inject rNET_conn_exhaust --target=192.168.1.1:80 --count=1000
+dcat query rNET_conn_exhaust
+dcat clean rNET_conn_exhaust
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| target | inject 必填 | host:port | 目标地址和端口，格式 `IP:port` |
+| count | 可选 | 整数 | 发起连接数，默认 1000 |
+
+**危险等级**: 中 — 大量连接占用目标端资源，可能导致目标服务拒绝新连接。对本机测试时也会消耗本机端口和文件描述符。
+
+**补充说明**: 依赖 `python3`。连接耗尽效果取决于目标端的 `somaxconn`、`nf_conntrack_max`、文件描述符限制等。count 过大可能先耗尽本机资源。
+
+---
+
+## 第四章 进程模块（6 条）
 
 ### 4.1 rPROC_exit — 进程退出（kill -9，inject-only）
 
@@ -515,7 +824,7 @@ dcat clean rNET_tcp_loss --port=8080 --direction=both
 
 **描述**: 通过 `kill -9`（SIGKILL）强制终止目标进程，操作不可逆。
 
-**实现原理**: inject 对目标 PID 发送 `kill -9`，进程被立即终止且无法恢复。本故障为 inject-only（`supported_ops = inject`），不支持 clean/query。脚本内含防御性 clean/query 分支但不作为官方支持的操作。
+**实现原理**: inject 对目标 PID 发送 `kill -9`，进程被立即终止且无法恢复。本故障为 inject-only（`supported_ops = inject`），不支持 clean/query。
 
 **使用示例**:
 ```bash
@@ -532,8 +841,6 @@ dcat inject rPROC_exit --pid=12345
 **补充说明**: inject-only 故障，不支持 clean/query（dcat 在 precheck 阶段拒绝，退出码 3）。需具备对目标进程发送信号的权限。
 
 ---
-
-
 
 ### 4.2 rPROC_hang — 进程挂起（SIGSTOP）
 
@@ -560,9 +867,9 @@ dcat clean rPROC_hang --pid=12345
 
 **危险等级**: 中 — 进程被暂停但可由 `SIGCONT` 恢复，可逆。
 
-**补充说明**: 可逆故障，STOP/CONT 成对出现。clean 时可不带参数（从 sidecar 自动恢复 PID）。query 依赖 `/proc` 文件系统，仅 Linux 有效。
+**补充说明**: 可逆故障，STOP/CONT 成对出现。clean 时可不带参数（从 sidecar 自动恢复 PID）。
 
-> **适用对象**：rPROC_hang 适用于**非终端控制的后台进程**（守护进程/工作进程/服务/`sleep`/构建任务等不持有控制终端的进程）。交互式终端程序（`top`/`vim`/`less`/`htop`）被 SIGSTOP 后，shell 作业控制会回收终端，clean 的 SIGCONT 使其在后台恢复→试图读终端→被终端驱动以 `SIGTTIN` 再次停止，故无法仅靠 `kill -CONT` 恢复（需 shell `fg` 重回前台进程组）。对交互终端程序的"挂起"用 shell 作业控制（Ctrl+Z / `fg`）更合适。
+> **适用对象**：rPROC_hang 适用于**非终端控制的后台进程**。交互式终端程序（`top`/`vim`/`less`）被 SIGSTOP 后，shell 作业控制会回收终端，clean 的 SIGCONT 使其在后台恢复→试图读终端→被 `SIGTTIN` 再次停止，故无法仅靠 `kill -CONT` 恢复。
 
 ---
 
@@ -573,9 +880,9 @@ dcat clean rPROC_hang --pid=12345
 **描述**: 将指定进程 kill 后变为僵尸进程（进程退出但父进程未调用 wait 回收，残留为 Z 状态）。
 
 **实现原理**: 
-- **inject**: 读取 `DCAT_PARAM_PID` 获取目标进程 PID，记录其父进程 PID（PPID）到 sidecar 文件，然后 `kill -9` 目标进程。进程退出后，如果父进程没有调用 wait 回收，则成为僵尸进程（Z 状态）。如果父进程立即回收，则僵尸不会持续存在（此为正常现象）。
-- **clean**: 从 sidecar 读取目标 PID 和父进程 PID。如果僵尸仍存在，kill 父进程使僵尸 reparent 到 init（PID 1），init 自动回收僵尸。如果僵尸已被父进程回收，则无需操作。
-- **query**: 检查目标 PID 的 `/proc/<pid>/status` 中 State 是否为 Z（僵尸）。是则返回 confirmed:true，否则返回 confirmed:false。
+- **inject**: 读取 `DCAT_PARAM_PID` 获取目标进程 PID，记录其父进程 PID（PPID）到 sidecar 文件，然后 `kill -9` 目标进程。进程退出后，如果父进程没有调用 wait 回收，则成为僵尸进程。
+- **clean**: 从 sidecar 读取目标 PID 和 PPID。如果僵尸仍存在，kill 父进程使僵尸 reparent 到 init（PID 1），init 自动回收。
+- **query**: 检查目标 PID 的 `/proc/<pid>/status` 中 State 是否为 Z。
 
 **使用示例**:
 ```bash
@@ -591,17 +898,366 @@ dcat clean rPROC_zstate --pid=12345
 
 **危险等级**: 中 — 会 kill 目标进程和其父进程，操作不可逆。clean 后目标进程已死，需手动重启。
 
-**补充说明**: inject 后如果父进程立即回收子进程，则僵尸不会持续（这是正常行为，说明父进程实现良好）。clean 通过杀父进程强制 reparent 到 init 回收僵尸——如果父进程是关键服务，kill 父进程可能影响其他子进程。clean 后目标进程和父进程均已终止，无法自动恢复，需手动重启相关进程。
+**补充说明**: inject 后如果父进程立即回收子进程，则僵尸不会持续（正常行为）。clean 通过杀父进程强制 reparent 到 init 回收僵尸——如果父进程是关键服务，kill 父进程可能影响其他子进程。
 
 ---
 
-## 第五章 NPU 模块（16 条）
+### 4.4 rPROC_fork_bomb — fork 炸弹（受控）
 
-NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool` 对 RoCE 网口注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
+**UID**: `rPROC_fork_bomb`
 
-> ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「④ 前置参数查询」查出目标机器实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth2 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
+**描述**: 创建 `count` 个子进程（受控版 fork 炸弹），消耗进程表与内存资源。
 
-### 0 前置准备：实机参数查询与调整
+**实现原理**: 
+- **inject**: 启动一个 supervisor 进程，在循环中 `fork` 出 `count` 个 `sleep 3600` 子进程。supervisor 的 PID 写入 pidfile，trap SIGTERM 时 kill 所有子进程。
+- **clean**: 读取 pidfile，kill supervisor（supervisor 的 trap 会 kill 所有子进程）。
+- **query**: 统计 supervisor 的子进程数。
+
+**使用示例**:
+```bash
+dcat inject rPROC_fork_bomb --count=500
+dcat query rPROC_fork_bomb
+dcat clean rPROC_fork_bomb
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| count | inject 必填 | 正整数 | 要创建的子进程数量 |
+
+**危险等级**: 高 — 大量进程消耗 PID 表、内存、调度资源，可能导致系统无法创建新进程（fork 失败）。count 过大可导致系统不可用。
+
+**补充说明**: 与经典 fork 炸弹 `:(){ :|:& };:` 的区别：本故障创建固定数量的进程（可控），clean 可全部回收。需注意系统 `ulimit -u`（max user processes）限制。
+
+---
+
+### 4.5 rPROC_loop — 死循环
+
+**UID**: `rPROC_loop`
+
+**描述**: 启动一个（或多线程）进程运行无限忙循环，持续消耗 CPU 资源。
+
+**实现原理**: 
+- **inject**: 根据 `threads` 参数，启动单线程（`perl -e '1 while 1'` 或 `yes`）或多线程（Python `threading`）忙循环进程。PID 写入 pidfile。
+- **clean**: 读取 pidfile，kill 进程。
+- **query**: 检查进程存活及 CPU 占用、线程数。
+
+**使用示例**:
+```bash
+# 单线程死循环
+dcat inject rPROC_loop --threads=1
+dcat query rPROC_loop
+dcat clean rPROC_loop
+
+# 4 线程死循环
+dcat inject rPROC_loop --threads=4
+dcat clean rPROC_loop
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| threads | 可选 | 正整数 | 线程数，默认 1。threads=1 用 perl/yes（单进程），threads>1 用 Python threading |
+
+**危险等级**: 中 — 持续消耗 CPU 资源（每个线程 100%），但不影响其他核的调度。多线程时可影响多个核。
+
+**补充说明**: 与 `rCPU_overload` 的区别：overload 用 `taskset` 绑定到指定核；loop 不绑核，由调度器自由分配。threads>1 时依赖 `python3`。
+
+---
+
+### 4.6 rPROC_fd_exhaust — FD 耗尽
+
+**UID**: `rPROC_fd_exhaust`
+
+**描述**: 单个进程不断打开文件描述符直至达到 RLIMIT_NOFILE（或指定 count），模拟进程级 FD 耗尽。
+
+**实现原理**: 
+- **inject**: 使用 Python 不断 `os.open('/dev/null')` 打开 FD，直到达到 `RLIMIT_NOFILE` 或指定 `count`。PID 写入 pidfile。
+- **clean**: kill 进程，所有 FD 自动关闭。
+- **query**: 检查进程存活及 `/proc/<pid>/fd` 下的 FD 数量。
+
+**使用示例**:
+```bash
+# 耗尽到 RLIMIT_NOFILE 上限
+dcat inject rPROC_fd_exhaust
+dcat query rPROC_fd_exhaust
+dcat clean rPROC_fd_exhaust
+
+# 只打开 1000 个 FD
+dcat inject rPROC_fd_exhaust --count=1000
+dcat clean rPROC_fd_exhaust
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| count | 可选 | 整数 | 要打开的 FD 数量，默认 0（= 直到 RLIMIT_NOFILE） |
+
+**危险等级**: 中 — 被注入的进程无法打开新文件/套接字，但仅影响该进程本身，不影响系统其他进程的 FD 分配。
+
+**补充说明**: 依赖 `python3`。与系统级 `fs.file-max` 耗尽不同，本故障仅耗尽单个进程的 `RLIMIT_NOFILE`。进程级 FD 耗尽时，该进程的 `open()`/`socket()`/`pipe()` 等调用返回 EMFILE。
+
+---
+
+## 第五章 内存模块（4 条）
+
+### 5.1 rMEM_leak — 内存泄漏
+
+**UID**: `rMEM_leak`
+
+**描述**: 分配 `size_mb` 内存并持有不释放，模拟内存泄漏。
+
+**实现原理**: 
+- **inject**: 使用 perl（`"x" x (size*1024*1024)`）或 Python 持有 `size_mb` 的内存块，进程阻塞在 `sleep` 中。PID 写入 pidfile。
+- **clean**: kill 进程，内存自动回收。
+- **query**: 检查进程存活及其 RSS（`ps -o rss`）。
+
+**使用示例**:
+```bash
+dcat inject rMEM_leak --size_mb=2048
+dcat query rMEM_leak
+dcat clean rMEM_leak
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| size_mb | inject 必填 | 正整数 | 要分配的内存大小（MB） |
+
+**危险等级**: 中 — 持续占用物理内存，减少系统可用内存。size 过大可能触发 OOM killer。
+
+**补充说明**: 优先使用 perl（内存分配效率高），回退 python3。与 `rMEM_oom` 的区别：leak 分配固定大小后持有；oom 持续增长直到 OOM killer 触发。
+
+---
+
+### 5.2 rMEM_oom — OOM
+
+**UID**: `rMEM_oom`
+
+**描述**: 以 `rate_mb`（MB/秒）的速率持续分配内存不释放，直到触发 OOM killer。
+
+**实现原理**: 
+- **inject**: 使用 perl 或 Python 在循环中每 0.05 秒分配 `rate_mb` MB 内存，持续增长直到 OOM killer 触发杀掉进程。PID 写入 pidfile。
+- **clean**: kill 进程（可能已被 OOM killer 杀掉），删除 pidfile。
+- **query**: 检查进程存活，或在 `dmesg` 中搜索最近的 OOM-kill 事件。
+
+**使用示例**:
+```bash
+dcat inject rMEM_oom --rate_mb=64
+dcat query rMEM_oom
+dcat clean rMEM_oom
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| rate_mb | 可选 | 正整数 | 内存分配速率（MB/秒），默认 64 |
+
+**危险等级**: 高 — 持续内存分配会导致系统可用内存耗尽，触发 OOM killer 可能杀掉其他关键进程。
+
+**补充说明**: OOM killer 的行为取决于内核的 `oom_score_adj` 和 `oom_score`。被 OOM kill 的进程不一定是本故障的进程，可能是系统中内存占用最大的任意进程。建议在测试环境中使用。
+
+---
+
+### 5.3 rMEM_fragment — 内存碎片
+
+**UID**: `rMEM_fragment`
+
+**描述**: 分配 N 个内存块后释放其中一半，制造内存碎片化（用户空间空洞），模拟内存碎片导致的性能降级。
+
+**实现原理**: 
+- **inject**: 使用 perl 或 Python 分配 `blocks` 个 `block_kb` KB 的内存块，然后释放偶数索引的块（保留奇数块），形成用户空间碎片化。PID 写入 pidfile。
+- **clean**: kill 进程。
+- **query**: 检查进程存活及 `/proc/buddyinfo`（内核空闲块分布）。
+
+**使用示例**:
+```bash
+dcat inject rMEM_fragment --blocks=200 --block_kb=1024
+dcat query rMEM_fragment
+dcat clean rMEM_fragment
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| blocks | 可选 | 正整数 | 内存块数量，默认 200 |
+| block_kb | 可选 | 正整数 | 每块大小（KB），默认 1024（1MB） |
+
+**危险等级**: 低 — 用户空间碎片化不直接消耗额外内存（总量 = blocks/2 * block_kb），但可能影响 `malloc` 性能和内核页面分配器的高阶页分配。
+
+**补充说明**: 用户空间碎片化与内核碎片化（buddy allocator）是不同层面。本故障主要制造用户空间碎片，间接影响 `/proc/buddyinfo` 的高阶页可用性。
+
+---
+
+### 5.4 rMEM_swap_overload — Swap 过载
+
+**UID**: `rMEM_swap_overload`
+
+**描述**: 分配 `size_mb`（大于系统可用 RAM）的内存并逐页写入（dirty），强制系统将内存页换出到 swap。
+
+**实现原理**: 
+- **inject**: 使用 perl 或 Python 分配 `size_mb` 内存，以 16MB 为块逐块写入（touch each page），强制 swap-out。PID 写入 pidfile。
+- **clean**: kill 进程，内存自动回收，swap 页释放。
+- **query**: 检查进程存活及 `free -m` 中 Swap used。
+
+**使用示例**:
+```bash
+dcat inject rMEM_swap_overload --size_mb=16384
+dcat query rMEM_swap_overload
+dcat clean rMEM_swap_overload
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| size_mb | inject 必填 | 正整数 | 要分配的内存大小（MB），应大于系统可用 RAM 才能触发 swap |
+
+**危险等级**: 高 — 大量 swap-out 导致系统性能严重下降（磁盘 IO 飙高、响应延迟增大），可能触发 OOM killer。如果 swap 空间不足则直接 OOM。
+
+**补充说明**: 需要 root 权限（或足够大的 `ulimit -v`）。`size_mb` 应设置得比 `free -m` 的 available 列大，才能有效触发 swap。系统未配置 swap 时无法使用此故障。
+
+---
+
+## 第六章 文件系统模块（2 条）
+
+### 6.1 rFS_file_lock — 文件锁
+
+**UID**: `rFS_file_lock`
+
+**描述**: 通过 `chmod` 或 `chattr +i` 锁定文件，使其不可读/不可写/不可删除。
+
+**实现原理**: 
+- **inject**: 根据 `mode` 参数：
+  - `noread`: `chmod 000`（不可读）
+  - `nowrite`: `chmod 444`（只读）
+  - `norw`: `chmod 000`（不可读写）
+  - `nodelete`: `chattr +i`（不可删/改/重命名）
+  - 原始 mode 和 immutable 状态存入 sidecar。
+- **clean**: 从 sidecar 恢复原始 mode；若注入了 `+i` 则 `chattr -i`。
+- **query**: 打印当前 mode 与 lsattr。
+
+**使用示例**:
+```bash
+# 不可读写
+dcat inject rFS_file_lock --path=/data/app.conf --mode=norw
+dcat query  rFS_file_lock --path=/data/app.conf
+dcat clean  rFS_file_lock
+
+# 不可删除
+dcat inject rFS_file_lock --path=/data/app.conf --mode=nodelete
+dcat clean  rFS_file_lock
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| path | inject 必填；query 可选 | 文件路径 | 目标文件（必须已存在） |
+| mode | inject 必填 | 枚举 | 锁定模式：`noread` / `nowrite` / `norw` / `nodelete` |
+
+**危险等级**: 中 — 锁定关键文件可能导致依赖该文件的服务异常。`nodelete`（immutable）需要 root 且文件系统支持 ext attrs。
+
+**补充说明**: `nodelete` 使用 `chattr +i`（需要 root，仅 ext2/3/4、xfs 等支持）。其他模式使用 `chmod`（需要文件属主或 root）。clean 恢复 sidecar 中保存的原始 mode。
+
+---
+
+### 6.2 rFS_iowait_high — iowait 飙高
+
+**UID**: `rFS_iowait_high`
+
+**描述**: 在目标挂载点上启动多个 worker 执行 `dd` 写入+`fdatasync`，推高该文件系统的 iowait。
+
+**实现原理**: 
+- **inject**: 在 `path`（应为挂载点）下创建临时目录，启动 `workers` 个 worker 循环执行 `dd bs=4k count=100 conv=fdatasync`。PID 写入 pidfile。
+- **clean**: kill 所有 worker，删除临时目录。
+- **query**: 检查 worker 进程存活及 `mpstat` iowait 统计。
+
+**使用示例**:
+```bash
+dcat inject rFS_iowait_high --path=/data --workers=4
+dcat query rFS_iowait_high
+dcat clean rFS_iowait_high
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| path | inject 必填 | 目录路径 | 目标挂载点目录（应为 `mount` 输出第 3 列的挂载点） |
+| workers | 可选 | 整数 | dd worker 数量，默认 4 |
+
+**危险等级**: 中 — 高 iowait 影响同文件系统上其他 IO 任务的响应延迟。不会损坏数据。
+
+**补充说明**: 与 `rDISK_write_overload` 的区别：write_overload 面向块设备写吞吐过载；iowait_high 面向挂载点的 iowait 指标。path 应为挂载点而非裸设备。
+
+---
+
+## 第七章 Docker 模块（2 条）
+
+### 7.1 rDOCKER_kill — 容器 kill
+
+**UID**: `rDOCKER_kill`
+
+**描述**: 通过 `docker kill` 强制停止容器；clean 通过 `docker start` 恢复。
+
+**实现原理**: 
+- **inject**: 执行 `docker kill <container>`，容器被强制停止（SIGKILL）。容器名存入 sidecar。
+- **clean**: 从 sidecar 读取容器名，执行 `docker start <container>` 恢复。
+- **query**: `docker inspect` 检查容器 State.Status。
+
+**使用示例**:
+```bash
+dcat inject rDOCKER_kill --container=myapp
+dcat query rDOCKER_kill --container=myapp
+dcat clean rDOCKER_kill --container=myapp
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| container | inject/clean/query 必填 | 字符串 | 容器名或 ID |
+
+**危险等级**: 高 — 容器内进程被 SIGKILL 立即终止，数据可能丢失。clean 通过 `docker start` 恢复容器，但容器内进程的状态（如内存数据）不可恢复。
+
+**补充说明**: 依赖 `docker` 命令。inject 前检查容器是否存在（`docker inspect`）。与 `docker stop` 的区别：`kill` 发送 SIGKILL（不可拦截），`stop` 发送 SIGTERM（可拦截）后超时再 SIGKILL。
+
+---
+
+### 7.2 rDOCKER_mem_overload — 容器内存过载
+
+**UID**: `rDOCKER_mem_overload`
+
+**描述**: 通过 `docker exec` 在容器内分配 `size` 内存，触发容器 OOM 或内存压力。
+
+**实现原理**: 
+- **inject**: 通过 `docker exec <container>` 在容器内执行 Python 或 perl 内存持有进程，分配 `size`（支持 `512M`/`2G` 等单位）内存。`docker exec` 的宿主机 PID 写入 pidfile。
+- **clean**: kill 宿主机 docker-exec PID（容器内 holder 随之终止）。
+- **query**: 检查 docker-exec PID 存活及 `docker stats`。
+
+**使用示例**:
+```bash
+dcat inject rDOCKER_mem_overload --container=myapp --size=2G
+dcat query rDOCKER_mem_overload --container=myapp
+dcat clean rDOCKER_mem_overload --container=myapp
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| container | inject/clean/query 必填 | 字符串 | 容器名或 ID |
+| size | inject 必填 | 大小字符串 | 要分配的内存大小（如 `512`=`512MB`、`512M`、`2G`） |
+
+**危险等级**: 高 — 容器内内存过载会触发容器 OOM killer（如果设了 `--memory` 限制），或导致宿主机内存压力（如果未设限制）。
+
+**补充说明**: 依赖 `docker` 命令。容器内需有 `python3` 或 `perl`。如果容器设了 `--memory` 限制且 size 超过限制，容器内 OOM killer 会杀掉 holder 进程（故障自动结束）。
+
+---
+
+## 第八章 NPU 模块（19 条）
+
+NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool`、`npu-smi`、ACL（Ascend CL）及 PCIe sysfs 对 RoCE 网口、芯片硬件注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）、`npu_validate_chip`（校验芯片号）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
+
+> ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「8.0 前置参数查询」查出目标机器实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth2 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
+
+### 8.0 前置准备：实机参数查询与调整
 
 所有 NPU 用例注入前，按下列步骤确认目标机器的实际参数。命令中 `chip` 用目标芯片号（示例取 2，请替换成可用芯片号）。
 
@@ -612,7 +1268,7 @@ npu-smi info                      # 查看目标机 NPU 拓扑，确认 0-7 内�
 hccn_tool -i 2 -status -g          # 查询芯片 2 的网口名，输出 "Settings for eth2:" → dev 为 eth2（示例机）
 ```
 
-> **关键**：`hccn_tool` 的 `dev` 是 **NPU 内部网卡名**（示例机为 `eth2`，不同机器可能是 `eth0`/`eth2` 等），不是 Linux 系统接口名（如 `enp125s0f1`）。用 `hccn_tool -i <chip> -status -g` 可查询，输出首行 `Settings for ethX:` 中的 `ethX` 即为该芯片的 dev 值；各芯片 dev 需逐一确认（不同芯片可能不同）。**注入前务必用该命令确认目标芯片的真实 dev**，不要照抄示例的 eth2。
+> **关键**：`hccn_tool` 的 `dev` 是 **NPU 内部网卡名**（示例机为 `eth2`，不同机器可能是 `eth0`/`eth2` 等），不是 Linux 系统接口名。用 `hccn_tool -i <chip> -status -g` 可查询，输出首行 `Settings for ethX:` 中的 `ethX` 即为该芯片的 dev 值。
 
 **② 查询 NPU IP 与掩码（确定网段）**
 
@@ -625,39 +1281,39 @@ hccn_tool -i 2 -ip -g
 
 ```bash
 hccn_tool -i 2 -gateway -g
-# 示例输出 10.30.12.254（同机芯片 0/1/3 也多为 .254）
+# 示例输出 10.30.12.254
 ```
 
-> 所有涉及 `gateway`/`via` 的注入（gw_change、route_add、iproute_add），该值**必须与 NPU IP 同网段**，否则 `hccn_tool` 报 `segment doesn't match`。若查询输出 `none`（未设网关），注入前需先 `hccn_tool -i <chip> -gateway -s gateway <同网段gw>` 预设一个，或接受 clean 时跳过恢复。
+> 所有涉及 `gateway`/`via` 的注入，该值**必须与 NPU IP 同网段**，否则 `hccn_tool` 报 `segment doesn't match`。
 
-**④ 查询路由 / ARP / ip rule / ip route / MTU（判断存量与前提条件）**
+**④ 查询路由 / ARP / ip rule / ip route / MTU**
 
 ```bash
-hccn_tool -i 2 -route -g                       # 路由表（route_add/route_del 用）
-hccn_tool -i 2 -arp -g                         # ARP 表（arp_poison/arp_del 用）
-hccn_tool -i 2 -ip_rule -g                     # 策略路由规则（iprule_add/del 用）
-hccn_tool -i 2 -ip_route -g table 100          # 指定路由表的 ip route（iproute_add/del 用）
-hccn_tool -i 2 -mtu -g                         # 当前 MTU（mtu_mismatch 用）
+hccn_tool -i 2 -route -g                       # 路由表
+hccn_tool -i 2 -arp -g                         # ARP 表
+hccn_tool -i 2 -ip_rule -g                     # 策略路由规则
+hccn_tool -i 2 -ip_route -g table 100          # 指定路由表的 ip route
+hccn_tool -i 2 -mtu -g                         # 当前 MTU
 ```
 
 **⑤ 测试网段选择原则**
 
-- `route_add/route_del/iproute_add/iproute_del` 使用的**目标网段**（`address`/`ip`）必须是**目标机器尚未使用、且与 NPU 网段不冲突**的地址（示例中取 `10.30.40.0`、`10.30.50.0` 等），否则查询/断言会误判。注入前用 `-route -g`/`-ip_route -g` 确认目标网段不存在。
-- `_del` 类用例的**前提**是目标项已存在：先注入对应 `_add` 类用例（或按 ④ 确认已在表内）再注入删除，否则报 `configuration does not exist` / `Route not exist`。
-- 这些是**机器相关**参数：在另一台机器上请换成未占用的网段，如 `172.16.x.0`、`192.168.x.0`。
+- `route`/`iproute` 使用的**目标网段**（`address`/`ip`）必须是**目标机器尚未使用、且与 NPU 网段不冲突**的地址，否则查询/断言会误判。
+- `action=del` 类用例的**前提**是目标项已存在：先注入对应 `action=add` 类用例再注入删除。
+- 这些是**机器相关**参数：在另一台机器上请换成未占用的网段。
 
-**⑥ MTU 取值原则**
+**⑥ ACL 设备映射（硬件故障用）**
 
-- `mtu_mismatch` 的 `size` 必须**不同于当前真实 MTU**（示例中芯片 2 为 1500，故测试用 1280），否则 `-mtu -s` 是 no-op，query 会报「动作未生效」。
-- 若前面用例把 MTU 改成了非 1500 的值且未恢复，需先 `hccn_tool -i 2 -mtu -s size 1500` 复位再注入（run_e2e 的 atexit 清理会自动恢复）。
-
-**⑦ 状态残留与多用例串接**
-
-NPU 注入会**真实改动芯片配置**。`_del` 类用例的 clean 依赖临时状态文件（sidecar）中保存的原值，若该文件丢失或进程被 kill，可能残留路由/IP rule。执行完一批用例后建议用 ④ 的命令核对并清理；run_e2e.py 在进程退出时会对 chip 2/5 做路由、arp、ip_rule、mtu 的自动清理。
+`rNPU_aic_fault`/`aiv_fault`/`hbm_fault` 使用 ACL C 程序 `_npu_stress` 施加压力，需要 chip→ACL dev ID 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <acl_dev_id>`，由环境初始化脚本生成。示例：
+```
+2 0
+5 1
+```
+表示 card 2 = ACL dev 0，card 5 = ACL dev 1。
 
 ---
 
-### 5.1 rNPU_link_down — RoCE 链路 down
+### 8.1 rNPU_link_down — RoCE 链路 down
 
 **UID**: `rNPU_link_down`
 
@@ -683,13 +1339,13 @@ dcat clean rNPU_link_down --chip=0
 
 ---
 
-### 5.2 rNPU_ip_change — RoCE IP 变更
+### 8.2 rNPU_ip_change — RoCE IP 变更
 
 **UID**: `rNPU_ip_change`
 
 **描述**: 修改指定芯片 RoCE 端口 IP 地址与掩码，导致连接中断。
 
-**实现原理**: inject 先 `-ip -g` 取原值存入临时状态文件（sidecar，位于 `/tmp/dcat-<uid>-<chip>.bak`），再 `-ip -s address <addr> netmask <mask>` 覆盖；clean 从 sidecar 还原（缺省 `0.0.0.0/255.255.255.0`）；query 比对当前 IP 与原值。
+**实现原理**: inject 先 `-ip -g` 取原值存入 sidecar，再 `-ip -s address <addr> netmask <mask>` 覆盖；clean 从 sidecar 还原；query 比对当前 IP 与原值。
 
 **使用示例**:
 ```bash
@@ -707,46 +1363,41 @@ dcat clean rNPU_ip_change --chip=0
 
 **危险等级**: 高 — IP 变更后该芯片所有 RoCE 连接立即失效。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。临时状态文件存于 /tmp，重启或清理 /tmp 后无法 clean。
-
 ---
 
-### 5.3 rNPU_gw_change — RoCE 网关变更
+### 8.3 rNPU_gw_change — RoCE 网关变更
 
 **UID**: `rNPU_gw_change`
 
 **描述**: 修改指定芯片 RoCE 网关地址，导致跨网段路由失效。
 
-**实现原理**: inject 先 `-gateway -g` 取原值存 sidecar（无原网关时存 `none`），再 `-gateway -s gateway <gw>` 修改；clean 从 sidecar 还原（原为 `none` 时跳过恢复）；query 比对当前网关与原值。
+**实现原理**: inject 先 `-gateway -g` 取原值存 sidecar，再 `-gateway -s gateway <gw>` 修改；clean 从 sidecar 还原；query 比对当前网关与原值。
 
 **使用示例**:
 ```bash
-# ① 先查询当前 NPU IP 与网段（见「④ 前置参数查询」②）
+# 先查询 NPU IP 网段与当前网关
 hccn_tool -i 2 -ip -g          # 示例输出 ipaddr:10.30.12.9 netmask:255.255.255.0
-# ② 查询当前网关，确认同网段基线值
 hccn_tool -i 2 -gateway -g     # 示例输出 10.30.12.254
 
-# ③ 注入一个新网关（必须与 NPU IP 同网段，且≠当前网关，否则 no-op）
-dcat inject rNPU_gw_change --chip=2 --gateway=10.30.12.1   # 示例：基线 .254 → 改 .1
+# 注入新网关（必须与 NPU IP 同网段，且≠当前网关）
+dcat inject rNPU_gw_change --chip=2 --gateway=10.30.12.1
 dcat query rNPU_gw_change --chip=2
 dcat clean rNPU_gw_change --chip=2
 ```
-
-> **参数说明**：`chip` 替换为目标芯片；`gateway` 必须是 **NPU IP 同网段**的一个地址（先在网段里换一个不同的主句号，如 .1/.2，不要与真实网关/对端冲突）。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| gateway | 必填 | IPv4 | 新网关地址，**必须与 NPU 当前 IP 同网段**，否则 `hccn_tool` 报 "segment doesn't match" |
+| gateway | 必填 | IPv4 | 新网关地址，**必须与 NPU 当前 IP 同网段** |
 
 **危险等级**: 高 — 网关错误后所有跨网段 RoCE 流量无法转发。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**网关网段匹配**：注入前用 `hccn_tool -i <chip> -ip -g` 查询当前 NPU IP，网关必须在该 IP 的网段内。若 NPU 未设网关，inject 时原值保存为 `none`，clean 时跳过恢复（不设回任何网关）。**no-op 风险**：注入的 `gateway` 若与当前网关相同，`hccn_tool -gateway -s` 不会触发变更，query 会因状态未变而误判——务必先 `-gateway -g` 确认当前值，再注入一个不同的同网段地址。
+**补充说明**: **网关网段匹配**：注入前用 `hccn_tool -i <chip> -ip -g` 查询当前 NPU IP，网关必须在该 IP 的网段内。**no-op 风险**：注入的 `gateway` 若与当前网关相同，不会触发变更。
 
 ---
 
-### 5.4 rNPU_netdetect_change — Netdetect IP 变更
+### 8.4 rNPU_netdetect_change — Netdetect IP 变更
 
 **UID**: `rNPU_netdetect_change`
 
@@ -769,304 +1420,173 @@ dcat clean rNPU_netdetect_change --chip=0
 
 **危险等级**: 中 — netdetect 失效会导致健康检测误报，影响上层调度。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。
-
 ---
 
-### 5.5 rNPU_arp_poison — ARP 毒化
+### 8.5 rNPU_arp — ARP 操控
 
-**UID**: `rNPU_arp_poison`
+**UID**: `rNPU_arp`
 
-**描述**: 向指定芯片注入错误 ARP 表项（伪造 MAC），使流量被误导。
+**描述**: 向指定芯片 ARP 表注入伪造条目（`action=add`，等效 ARP 毒化）或删除 ARP 条目（`action=del`），导致流量被误导或停滞。
 
-**实现原理**: inject 执行 `-arp -a dev <dev> ip <ip> mac <mac>` 添加伪造 ARP；clean 执行 `-arp -d dev <dev> ip <ip>` 删除；query 检查 ARP 表中是否同时存在指定 ip 与 mac。
+**实现原理**: 
+- **action=add**: 执行 `-arp -a dev <dev> ip <ip> mac <mac>` 添加伪造 ARP。
+- **action=del**: 先 `-arp -g` 查询原 MAC 存 sidecar，再 `-arp -d` 删除。clean 从 sidecar 恢复原 MAC。
+- **clean**: add 模式执行 `-arp -d` 删除伪造条目；del 模式从 sidecar 取原 MAC 执行 `-arp -a` 恢复。
+- **query**: add 模式检查 ARP 表中是否同时存在 ip+mac；del 模式检查 ip 是否已不存在。
 
 **使用示例**:
 ```bash
-# ① 查出目标芯片的 RoCE 网口名（见「④ 前置参数查询」①）：示例机芯片 2 为 eth2
-hccn_tool -i 2 -status -g   # 输出 "Settings for eth2" → dev 为 eth2
+# ARP 毒化（注入伪造 ARP）
+dcat inject rNPU_arp --chip=2 --action=add --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
+dcat query rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
+dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 
-# ② 向该网口注入一条伪造 ARP（ip 选用 NPU 网段内一个未被占用的地址）
-dcat inject rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
-dcat query rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
-dcat clean rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
+# ARP 删除（前提：条目已存在）
+dcat inject rNPU_arp --chip=2 --action=del --dev=eth2 --ip=10.30.12.200
+dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 ```
-
-> **参数说明**：`dev` 必须用 `hccn_tool -i <chip> -status -g` 查出的真实网口名（示例为 eth2，勿照抄，不同机器可能为 eth0）；`ip` 用 NPU 同网段内未占用的地址。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| dev | 必填 | 字符串 | 网卡设备名（**NPU 内部名**，用 `hccn_tool -i <chip> -status -g` 确认目标芯片真实值；示例机 chip 2 为 eth2，勿照抄） |
-| ip | 必填 | IPv4 | 被 poisoning 的目标 IP |
-| mac | 必填 | MAC | 伪造的错误 MAC 地址 |
+| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| action | inject 必填 | add/del | `add`=注入伪造 ARP（需 mac），`del`=删除 ARP 条目 |
+| dev | 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认，勿照抄示例的 eth2） |
+| ip | 必填 | IPv4 | ARP 条目的 IP |
+| mac | action=add 时必填 | MAC | 伪造的 MAC 地址 |
 
 **危险等级**: 高 — 流量被静默导向错误 MAC，可能导致数据泄漏或连接中断。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 仅按 ip+dev 删除。**`dev` 是 NPU 内部网口名**（示例机 chip 2 为 eth2，机器相关），不是 Linux 系统接口名（enp125s0f1 之类），配错会注入失败。
+**补充说明**: `dev` 是 NPU 内部网口名（机器相关），不是 Linux 系统接口名。`action=del` 前提条件：目标 ARP 条目必须已存在，否则报 "configuration does not exist"。
 
 ---
 
-### 5.6 rNPU_arp_del — ARP 条目删除
+### 8.6 rNPU_route — RoCE 路由操控
 
-**UID**: `rNPU_arp_del`
+**UID**: `rNPU_route`
 
-**描述**: 删除指定芯片 ARP 表项，导致对应 IP 流量停滞。
+**描述**: 向指定芯片路由表添加路由（`action=add`）或删除路由（`action=del`），可能误导流量走向错误网关或导致网段不可达。
 
-**实现原理**: inject 先 `-arp -g` 查询原 MAC 并存 sidecar，再 `-arp -d` 删除；clean 从 sidecar 取原 MAC 执行 `-arp -a` 重新添加（缺省 `00:00:00:00:00:00`）；query 检查指定 ip 是否已不存在。
+**实现原理**: 
+- **action=add**: 执行 `-route -a address <addr> netmask <mask> gateway <gw>` 添加路由。
+- **action=del**: 先 `-route -g` 查询原 gateway 存 sidecar，再 `-route -d` 删除。clean 从 sidecar 恢复。
+- **clean**: add 模式执行 `-route -d` 删除；del 模式从 sidecar 取原 gateway 执行 `-route -a` 恢复。
+- **query**: add 模式检查路由表是否包含该网段；del 模式检查该网段是否已不存在。
 
 **使用示例**:
 ```bash
-# 前提：该 ARP 条目必须已存在！（dev 用目标芯片实际网口名，示例机 chip 2 为 eth2）
-hccn_tool -i 2 -arp -g | grep 10.30.12.200   # 确认 ARP 条目存在
+# 添加路由
+dcat inject rNPU_route --chip=2 --action=add --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.30.12.254
+dcat query rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
+dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 
-# 若不存在，先用 arp_poison 创建（ip 必须是 NPU 网段内未占用地址）
-dcat inject rNPU_arp_poison --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=de:ad:be:ef:00:01
-
-# 删除 ARP 条目（inject 会自动保存原 MAC 到 sidecar）
-dcat inject rNPU_arp_del --chip=2 --dev=eth2 --ip=10.30.12.200
-dcat query rNPU_arp_del --chip=2 --dev=eth2 --ip=10.30.12.200
-# clean 从 sidecar 恢复原 MAC
-dcat clean rNPU_arp_del --chip=2 --dev=eth2 --ip=10.30.12.200
+# 删除路由（前提：路由已存在）
+dcat inject rNPU_route --chip=2 --action=del --address=10.30.40.0 --netmask=255.255.255.0
+dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 ```
-
-> **参数说明**：`dev` 用 `hccn_tool -i <chip> -status -g` 查出的真实网口名（示例机为 eth2）；`ip` 用 NPU 同网段未占用地址。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| dev | 必填 | 字符串 | NPU 内部网卡设备名（用 `hccn_tool -i <chip> -status -g` 确认目标芯片真实值，示例机 chip 2 为 eth2） |
-| ip | 必填 | IPv4 | 要删除 ARP 表项的 IP |
-
-**危险等级**: 中 — 删除后流量短暂停滞，通常可通过 ARP 重新学习自愈。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ARP 条目必须已存在，否则 `hccn_tool -arp -d` 报 "The configuration does not exist"。建议先用 `rNPU_arp_poison` 创建 ARP 条目，再用 `rNPU_arp_del` 删除。clean 从 sidecar 读取原 MAC 恢复；若 sidecar 丢失则恢复为全零 MAC。**`dev` 必须与创建时的网口名一致**，否则 sidecar 匹配不到、clean 恢复失败。
-
----
-
-### 5.7 rNPU_route_add — 添加 RoCE 路由
-
-**UID**: `rNPU_route_add`
-
-**描述**: 向指定芯片添加一条路由，可能误导流量走向错误网关。
-
-**实现原理**: inject 执行 `-route -a address <addr> netmask <mask> gateway <gw>`；clean 执行 `-route -d address <addr> netmask <mask>` 删除；query 检查路由表是否包含该地址。
-
-**使用示例**:
-```bash
-# ① 查询 NPU 当前 IP/网段与网关（见「④ 前置参数查询」②③）
-hccn_tool -i 2 -ip -g         # 示例输出 ipaddr:10.30.12.9 netmask:255.255.255.0
-hccn_tool -i 2 -gateway -g    # 示例输出 10.30.12.254
-
-# ② gateway 必须与 NPU IP 同网段；address 选一个本机未使用的目标网段
-dcat inject rNPU_route_add --chip=2 --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.30.12.254
-dcat query rNPU_route_add --chip=2
-dcat clean rNPU_route_add --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
-```
-
-> **参数说明**：`gateway` 用 `-gateway -g` 查出的真实网关；`address` 选一个未占用的目标网段（如 `172.16.x.0`），且不能与 NPU 网段冲突。
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| address | 必填 | IPv4 | 目标网段地址（如 `10.30.40.0`，须未使用、不与 NPU 网段冲突） |
-| netmask | 必填 | IPv4 | 子网掩码（如 `255.255.255.0`） |
-| gateway | 必填 | IPv4 | 下一跳网关，**必须与 NPU 当前 IP 同网段** |
-
-**危险等级**: 中 — 错误路由可能将流量导向不可达网关。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**网关网段匹配**：gateway 必须与 `hccn_tool -i <chip> -ip -g` 输出的 IP 同网段，否则 `hccn_tool` 报 "segment doesn't match"。**link 状态**：若 RoCE link 为 DOWN，需先 `hccn_tool -i <chip> -link -s up` 设置管理 UP（物理 link 可仍为 DOWN），否则 `route -a` 报 "Command execute failed"。**目标网段冲突**：`address` 若与已存在路由冲突，query 会因状态混乱断言失败，注入前用 `-route -g` 确认该网段不存在。
-
----
-
-### 5.8 rNPU_route_del — 删除 RoCE 路由
-
-**UID**: `rNPU_route_del`
-
-**描述**: 删除指定芯片路由，导致对应网段不可达。
-
-**实现原理**: inject 先 `-route -g` 查询原路由的 gateway 并存 sidecar，再 `-route -d` 删除；clean 从 sidecar 取原 gateway 执行 `-route -a` 重新添加（缺省 `0.0.0.0`）；query 检查该地址是否已不存在。
-
-**使用示例**:
-```bash
-# 前提：该路由必须已存在！先用 route_add 创建，或确认路由表已有
-hccn_tool -i 2 -route -g | grep 10.30.41.0   # 确认目标网段路由存在
-
-# 若不存在，先注入 route_add（gateway 必须与 NPU IP 同网段）
-dcat inject rNPU_route_add --chip=2 --address=10.30.41.0 --netmask=255.255.255.0 --gateway=10.30.12.254
-
-# 删除路由（inject 会自动保存原 gateway 到 sidecar）
-dcat inject rNPU_route_del --chip=2 --address=10.30.41.0 --netmask=255.255.255.0
-dcat query rNPU_route_del --chip=2
-# clean 会从 sidecar 读取原 gateway 自动恢复
-dcat clean rNPU_route_del --chip=2 --address=10.30.41.0 --netmask=255.255.255.0
-```
-
-> **参数说明**：`address` 选一个未占用的目标网段，并先用 `route_add` 创建对应路由。
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| address | 必填 | IPv4 | 要删除路由的目标网段（须未使用、不与 NPU 网段冲突） |
+| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| action | inject 必填 | add/del | `add`=添加路由（需 gateway），`del`=删除路由 |
+| address | 必填 | IPv4 | 目标网段地址（须未使用、不与 NPU 网段冲突） |
 | netmask | 必填 | IPv4 | 子网掩码 |
+| gateway | action=add 时必填 | IPv4 | 下一跳网关，**必须与 NPU IP 同网段** |
 
-**危险等级**: 高 — 删除关键路由后对应网段立即不可达。
+**危险等级**: 中/高 — add=错误路由可能将流量导向不可达网关；del=删除关键路由后对应网段立即不可达。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标路由必须已存在，否则 `hccn_tool -route -d` 报 "Route not exist in routing table, can not delete!"。建议先用 `rNPU_route_add` 创建路由，再用 `rNPU_route_del` 删除。clean 会从 sidecar 读取原 gateway 自动恢复路由；若 sidecar 丢失则恢复为 `0.0.0.0`。**注意**：`route_add`/`route_del` 的 `address` 与 `route` 模块（5.7）不能使用同一网段以免相互干扰——示例中 route_add 用 `10.30.40.0`，route_del 用 `10.30.41.0`。
+**补充说明**: `gateway` 必须与 NPU IP 同网段，否则报 "segment doesn't match"。`action=del` 前提：目标路由必须已存在。
 
 ---
 
-### 5.9 rNPU_iprule_add — 添加 ip rule
+### 8.7 rNPU_iprule — ip rule 操控
 
-**UID**: `rNPU_iprule_add`
+**UID**: `rNPU_iprule`
 
-**描述**: 向指定芯片添加策略路由规则，可能改变流量选路。
+**描述**: 向指定芯片添加策略路由规则（`action=add`）或删除规则（`action=del`），可能改变流量选路。
 
-**实现原理**: inject 执行 `-ip_rule -a dir <dir> ip <ip> table <table>`；clean 执行 `-ip_rule -d dir <dir> ip <ip>` 删除；query 检查是否同时存在指定 ip 与 table。
+**实现原理**: 
+- **action=add**: 执行 `-ip_rule -a dir <dir> ip <ip> table <table>` 添加规则。
+- **action=del**: 先 `-ip_rule -g` 查询原 table 存 sidecar，再 `-ip_rule -d` 删除。clean 从 sidecar 恢复。
+- **clean**: add 模式执行 `-ip_rule -d` 删除；del 模式从 sidecar 取原 table 执行 `-ip_rule -a` 恢复。
+- **query**: add 模式检查是否同时存在 ip+table；del 模式检查 ip 是否已不存在。
 
 **使用示例**:
 ```bash
-# ip 选用 NPU 网段内一个未被占用、且与已有 ip_rule 不冲突的地址
-dcat inject rNPU_iprule_add --chip=2 --dir=from --ip=10.30.12.210 --table=150
-dcat query rNPU_iprule_add --chip=2
-dcat clean rNPU_iprule_add --chip=2 --dir=from --ip=10.30.12.210 --table=150
-```
+# 添加 ip rule
+dcat inject rNPU_iprule --chip=2 --action=add --dir=from --ip=10.30.12.210 --table=150
+dcat query rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
+dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 
-> **参数说明**：`ip` 用 NPU 同网段内未占用地址，并避免与 iprule_del（5.10）用同一 ip；`table` 用一个未被占用的表号。
+# 删除 ip rule（前提：规则已存在）
+dcat inject rNPU_iprule --chip=2 --action=del --dir=from --ip=10.30.12.210
+dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
+```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| action | inject 必填 | add/del | `add`=添加规则（需 table），`del`=删除规则 |
 | dir | 必填 | from/to/in/out | 策略匹配方向 |
-| ip | 必填 | IPv4 | 策略匹配的源/目的 IP（示例中用 10.30.12.210，须未占用） |
-| table | 必填 | 整数 | 路由表编号（本机用 150，须未被占用） |
+| ip | 必填 | IPv4 | 策略匹配的源/目的 IP |
+| table | action=add 时必填 | 整数 | 路由表编号 |
 
 **危险等级**: 中 — 受匹配的流量将改走指定路由表，可能改变选路结果。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。注入前用 `hccn_tool -i <chip> -ip_rule -g` 查看已有 ip rule，避免 `ip`/`table` 与现有规则冲突，否则 query 会误判。iprule_add 与 iprule_del（5.10）在示例中分别用 10.30.12.210 与 10.30.12.211，避免相互干扰。
+**补充说明**: `action=del` 前提：目标 ip rule 必须已存在。注入前用 `-ip_rule -g` 查看已有规则避免冲突。
 
 ---
 
-### 5.10 rNPU_iprule_del — 删除 ip rule
+### 8.8 rNPU_iproute — ip route 操控
 
-**UID**: `rNPU_iprule_del`
+**UID**: `rNPU_iproute`
 
-**描述**: 删除指定芯片策略路由规则，可能破坏策略选路。
+**描述**: 向指定芯片策略路由表添加路由（`action=add`）或删除路由（`action=del`），可能误导流量或导致网段不可达。
 
-**实现原理**: inject 先 `-ip_rule -g` 取原 table 存 sidecar，再 `-ip_rule -d` 删除；clean 从 sidecar 取原 table 执行 `-ip_rule -a` 重新添加（缺省 table 0）；query 检查该 ip 是否已不存在。
+**实现原理**: 
+- **action=add**: 执行 `-ip_route -a ip <ip> ip_mask <mask> via <via> dev <dev> table <table>` 添加路由。
+- **action=del**: 先 `-ip_route -g table <table>` 查询原 via/dev 存 sidecar，再 `-ip_route -d` 删除。clean 从 sidecar 恢复。
+- **clean**: add 模式执行 `-ip_route -d` 删除；del 模式从 sidecar 取原 via/dev 执行 `-ip_route -a` 恢复。
+- **query**: add 模式检查该 table 是否包含指定 ip；del 模式检查 ip 是否已不存在。
 
 **使用示例**:
 ```bash
-# 前提：该 ip rule 必须已存在！先注入 iprule_add 创建
-dcat inject rNPU_iprule_add --chip=2 --dir=from --ip=10.30.12.211 --table=150
+# 添加 ip route
+dcat inject rNPU_iproute --chip=2 --action=add --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
+dcat query rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
+dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 
-# 删除 ip rule（inject 自动保存原 table 到 sidecar）
-dcat inject rNPU_iprule_del --chip=2 --dir=from --ip=10.30.12.211
-dcat query rNPU_iprule_del --chip=2
-dcat clean rNPU_iprule_del --chip=2 --dir=from --ip=10.30.12.211
+# 删除 ip route（前提：路由已存在）
+dcat inject rNPU_iproute --chip=2 --action=del --ip=10.30.50.0 --ip_mask=24 --table=100
+dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 ```
-
-> **参数说明**：`ip` 用 NPU 同网段未占用地址，并先注入 `iprule_add` 创建该规则。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| dir | 必填 | from/to/in/out | 策略匹配方向 |
-| ip | 必填 | IPv4 | 策略匹配的源/目的 IP |
-
-**危险等级**: 中 — 删除策略规则后受影响的流量可能回落到主路由表。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip rule 必须已存在，否则 `hccn_tool -ip_rule -d` 报 "configuration does not exist"。建议先用 `rNPU_iprule_add` 创建规则（确保 `dir`/`ip` 一致）再删除。clean 从临时状态文件读取原 table 恢复；示例中 iprule_del 与 iprule_add 分别用 10.30.12.211/210，避免相互干扰。
-
----
-
-### 5.11 rNPU_iproute_add — 添加 ip route
-
-**UID**: `rNPU_iproute_add`
-
-**描述**: 向指定芯片策略路由表添加一条路由，可能误导流量。
-
-**实现原理**: inject 执行 `-ip_route -a ip <ip> ip_mask <mask> via <via> dev <dev> table <table>`；clean 执行 `-ip_route -d ip <ip> ip_mask <mask> table <table>` 删除；query 检查该 table 是否包含指定 ip。
-
-**使用示例**:
-```bash
-# ① 查询 NPU 当前 IP/网段与网关（见「④ 前置参数查询」②③）
-hccn_tool -i 2 -ip -g         # 示例输出 ipaddr:10.30.12.9 netmask:255.255.255.0
-hccn_tool -i 2 -gateway -g    # 示例输出 10.30.12.254
-
-# ② via 必须与 NPU IP 同网段；ip_mask 是 CIDR 位数；dev 是 NPU 内部名（示例机为 eth2）
-dcat inject rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
-dcat query rNPU_iproute_add --chip=2
-dcat clean rNPU_iproute_add --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
-```
-
-> **参数说明**：`via` 用真实网关；`dev` 用 `hccn_tool -i <chip> -status -g` 查出的真实网口名（示例机为 eth2）；`ip` 选一个未占用的目标网段；`table` 用未被占用的表号。
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| ip | 必填 | IPv4 | 目标网段地址（如 `10.30.50.0`，须未使用、不与 NPU 网段冲突） |
+| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| action | inject 必填 | add/del | `add`=添加路由（需 via/dev），`del`=删除路由 |
+| ip | 必填 | IPv4 | 目标网段地址 |
 | ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24），不是点分掩码 |
-| via | 必填 | IPv4 | 下一跳地址，**必须与 NPU 当前 IP 同网段** |
-| dev | 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认目标芯片真实值，示例机为 eth2，非 Linux 接口名） |
+| via | action=add 时必填 | IPv4 | 下一跳地址，**必须与 NPU IP 同网段** |
+| dev | action=add 时必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认） |
 | table | 必填 | 整数 0-255 | 路由表编号 |
 
-**危险等级**: 中 — 添加路由可能改变选路结果。
+**危险等级**: 中/高 — add=添加路由可能改变选路结果；del=删除路由后对应网段立即不可达。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**ip_mask 是 CIDR 位数**（0-32），不是点分十进制掩码（如 `255.255.255.0`→`24`）。**via 网段匹配**：via 必须与 NPU IP 同网段。**dev 是 NPU 内部名**：机器相关，示例机为 `eth2`，可用 `hccn_tool -i <chip> -status -g` 确认目标芯片真实值，不是 Linux 系统接口名（如 `enp125s0f1`）。**目标网段冲突**：`ip` 与已存在路由冲突会使 query 断言失败。
+**补充说明**: **ip_mask 是 CIDR 位数**（0-32），不是点分掩码。`via` 必须与 NPU IP 同网段。`dev` 是 NPU 内部名（机器相关），不是 Linux 系统接口名。`action=del` 前提：目标 ip_route 必须已存在。
 
 ---
 
-### 5.12 rNPU_iproute_del — 删除 ip route
-
-**UID**: `rNPU_iproute_del`
-
-**描述**: 删除指定芯片路由表中指定路由，导致对应网段不可达。
-
-**实现原理**: inject 先 `-ip_route -g table <table>` 取原 via/dev 存 sidecar，再 `-ip_route -d` 删除；clean 从 sidecar 取原 via/dev 执行 `-ip_route -a` 重新添加（缺省 `via=0.0.0.0 dev=eth0`）；query 检查该 ip 是否已不存在。
-
-**使用示例**:
-```bash
-# 前提：该 ip_route 必须已存在！先用 iproute_add 创建（via 与 NPU IP 同网段，dev 用实际网口名，示例机为 eth2）
-dcat inject rNPU_iproute_add --chip=2 --ip=10.30.51.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
-
-# 删除 ip_route
-dcat inject rNPU_iproute_del --chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100
-dcat query rNPU_iproute_del --chip=2 --table=100
-# clean 从 sidecar 恢复原路由
-dcat clean rNPU_iproute_del --chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100
-```
-
-> **参数说明**：`ip`/`table` 与 iproute_add（5.11）保持一致（示例分别用 10.30.51.0/10.30.50.0、table 100），`ip_mask` 为 CIDR 位数，`dev` 为真实网口名。
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
-| ip | 必填 | IPv4 | 要删除路由的目标网段 |
-| ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24） |
-| table | 必填 | 整数 0-255 | 路由表编号 |
-
-**危险等级**: 高 — 删除路由后对应网段立即不可达，clean 依赖 sidecar 中的原 via/dev。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**前提条件**：目标 ip_route 必须已存在，否则 `hccn_tool -ip_route -d` 报 "configuration does not exist"。建议先用 `rNPU_iproute_add` 创建路由。**ip_mask 是 CIDR 位数**（0-32），不是点分掩码。clean 从临时状态文件读取原 via/dev/table 恢复；示例中 iproute_del 与 iproute_add 分别用 10.30.51.0/10.30.50.0 避免网段冲突。
-
----
-
-### 5.13 rNPU_bw_limit — RoCE 带宽限速
+### 8.9 rNPU_bw_limit — RoCE 带宽限速
 
 **UID**: `rNPU_bw_limit`
 
 **描述**: 对指定芯片 RoCE 流量进行带宽限速，降低吞吐。
 
-**实现原理**: inject 执行 `-shaping -s bw_limit <bw>` 设置限速；clean 执行 `-shaping -s bw_limit 100000`（MAX_BW 常量）恢复为最大带宽；query 检查当前 bw_limit 是否小于 MAX_BW。
+**实现原理**: inject 执行 `-shaping -s bw_limit <bw>` 设置限速；clean 执行 `-shaping -s bw_limit 100000`（MAX_BW）恢复；query 检查当前 bw_limit 是否小于 MAX_BW。
 
 **使用示例**:
 ```bash
@@ -1083,11 +1603,11 @@ dcat clean rNPU_bw_limit --chip=0
 
 **危险等级**: 中 — 限速不破坏链路，但显著降低 RoCE 吞吐。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 恢复值为硬编码 MAX_BW=100000，若芯片原始限速非该值则无法精确还原。
+**补充说明**: clean 恢复值为硬编码 MAX_BW=100000，若芯片原始限速非该值则无法精确还原。
 
 ---
 
-### 5.14 rNPU_mtu_mismatch — RoCE MTU 变更
+### 8.10 rNPU_mtu_mismatch — RoCE MTU 变更
 
 **UID**: `rNPU_mtu_mismatch`
 
@@ -1097,42 +1617,37 @@ dcat clean rNPU_bw_limit --chip=0
 
 **使用示例**:
 ```bash
-# ① 查询当前 MTU（见「④ 前置参数查询」④）：示例中芯片 2 为 1500
-hccn_tool -i 2 -mtu -g   # 输出 1500
-
-# ② size 必须 ≠ 当前 MTU；若之前用例已改成非 1500，先复位
+hccn_tool -i 2 -mtu -g   # 查询当前 MTU，示例输出 1500
 dcat inject rNPU_mtu_mismatch --chip=2 --size=1280
 dcat query rNPU_mtu_mismatch --chip=2
 dcat clean rNPU_mtu_mismatch --chip=2
 ```
 
-> **参数说明**：`size` 用一个与当前 MTU **不同**的字节数（示例中当前 1500 → 注入 1280）。若当前 MTU 已是 1280，则改成 1500 或 9000 才有效。
-
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| size | 必填 | 整数 (字节) | MTU 字节数，如 1500、9000 |
+| size | 必填 | 整数 (字节) | MTU 字节数，必须 ≠ 当前 MTU 才有效 |
 
-**危险等级**: 中 — MTU 与对端不匹配导致大包分片或被丢弃，小包不受影响，问题隐蔽。
+**危险等级**: 中 — MTU 与对端不匹配导致大包分片或被丢弃。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。**no-op 风险**：注入的 `size` 若与当前 MTU 相同，`-mtu -s` 不会触发变更，query 会报「动作未生效」。注入前用 `-mtu -g` 确认当前值，选择一个不同的 size；若前面用例把 MTU 改为非 1500 且未恢复，需先 `hccn_tool -i <chip> -mtu -s size <原值>` 复位再注入。
+**补充说明**: **no-op 风险**：注入的 `size` 若与当前 MTU 相同，不会触发变更。注入前用 `-mtu -g` 确认当前值。
 
 ---
 
-### 5.15 rNPU_dscp_tc_change — DSCP→TC 映射变更
+### 8.11 rNPU_dscp_tc_change — DSCP→TC 映射变更
 
 **UID**: `rNPU_dscp_tc_change`
 
 **描述**: 修改指定芯片 DSCP 到 TC 映射，打乱 QoS 流量分类。
 
-**实现原理**: inject 先 `-dscp_to_tc -g dscp <dscp>` 取原 tc 存 sidecar，再 `-dscp_to_tc -s dscp <dscp> tc <tc>` 修改；clean 从 sidecar 还原（缺省 0）；query 比对当前 tc 与原值。
+**实现原理**: inject 先 `-dscp_to_tc -g dscp <dscp>` 取原 tc 存 sidecar，再 `-dscp_to_tc -s dscp <dscp> tc <tc>` 修改；clean 从 sidecar 还原；query 比对当前 tc 与原值。
 
 **使用示例**:
 ```bash
 dcat inject rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
 dcat query rNPU_dscp_tc_change --chip=0 --dscp=46
-dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
+dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46
 ```
 
 **参数可选范围**:
@@ -1142,19 +1657,17 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46 --tc=0
 | dscp | 必填 | 0-63 | DSCP 差分服务代码点 |
 | tc | 必填 | 整数 | 流量类编号，通常 0-7 |
 
-**危险等级**: 中 — 映射错误使高优先级流量被降级调度，QoS 失效，但链路本身仍通。
-
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。仅影响指定 DSCP 值的映射。
+**危险等级**: 中 — 映射错误使高优先级流量被降级调度，QoS 失效。
 
 ---
 
-### 5.16 rNPU_roce_port_change — RoCE UDP 端口变更
+### 8.12 rNPU_roce_port_change — RoCE UDP 端口变更
 
 **UID**: `rNPU_roce_port_change`
 
 **描述**: 修改指定芯片 RoCE UDP 端口，导致与对端 RoCEv2 通信中断。
 
-**实现原理**: inject 先 `-udp -g` 取原 port 存 sidecar，再 `-udp -s port <port>` 修改；clean 从 sidecar 还原（缺省 4791，即 RoCEv2 标准端口）；query 比对当前 port 与原值。
+**实现原理**: inject 先 `-udp -g` 取原 port 存 sidecar，再 `-udp -s port <port>` 修改；clean 从 sidecar 还原（缺省 4791）；query 比对当前 port 与原值。
 
 **使用示例**:
 ```bash
@@ -1171,17 +1684,285 @@ dcat clean rNPU_roce_port_change --chip=0
 
 **危险等级**: 高 — 端口非 4791 时对端按标准 RoCEv2 发包将无法匹配，该芯片所有 RoCEv2 流量中断。
 
-**补充说明**: 需要 hccn_tool + Atlas NPU 硬件、需要 root。clean 缺省回退值为 4791（RoCEv2 标准端口）。
+---
+
+### 8.13 rNPU_freq_down — NPU 降频
+
+**UID**: `rNPU_freq_down`
+
+**描述**: 通过 `pydcmi` 查询 AICore 当前/最大频率，检测是否处于降频状态。
+
+**实现原理**: 
+- **inject**: 使用 `pydcmi` 查询 chip 的 AICore 当前频率与最大频率，记录到 sidecar。如果当前频率 < 最大频率，报告降频状态。
+- **clean**: 清除 sidecar。
+- **query**: `npu-smi info -t usages` 查看频率信息。
+
+> **注意**：910B4 不支持 SETTING 频率（`npu-smi set -t cpu-freq-up/power-state/pwm-duty-ratio` 均返回 "does not support"），此故障为查询模式，仅报告当前频率状态。
+
+**使用示例**:
+```bash
+dcat inject rNPU_freq_down --chip=2
+dcat query rNPU_freq_down --chip=2
+dcat clean rNPU_freq_down --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+| freq | 可选 | 整数 (MHz) | 期望降频后的频率（仅用于校验比较，实际不设置） |
+| bmc_ip | 可选 | IPv4 | BMC IP 地址（预留给 BMC 降频路径，当前未使用） |
+| bmc_user | 可选 | 字符串 | BMC 用户名（预留给 BMC 降频路径） |
+| bmc_pass | 可选 | 字符串 | BMC 密码（预留给 BMC 降频路径） |
+
+**危险等级**: 低 — 仅查询操作，不改变芯片状态。
+
+**补充说明**: 依赖 `pydcmi`（Python NPU 管理库）和 CANN 环境。910B4 的 AICore 频率由固件管理，无法手动设置。当前/最大频率典型值：800MHz / 1650MHz。
 
 ---
 
-## 第六章 Web 控制台（dcat serve）
+### 8.14 rNPU_aic_fault — AICore 故障
 
-### 6.1 概述
+**UID**: `rNPU_aic_fault`
+
+**描述**: 通过 ACL（Ascend CL）C 程序对指定芯片 AICore 施加 d2d memcpy 压力，模拟 AICore 计算故障/过载。
+
+**实现原理**: 
+- **inject**: 查找 chip→ACL dev ID 映射（`/tmp/dcat-npu-dev-map`），运行 `build/_npu_stress aicore <dev_id>` 后台进程，执行 d2d memcpy 持续施压。PID 写入 sidecar。
+- **clean**: kill stress 进程。
+- **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。
+
+**使用示例**:
+```bash
+dcat inject rNPU_aic_fault --chip=2
+dcat query rNPU_aic_fault --chip=2
+dcat clean rNPU_aic_fault --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+| duration | 可选 | 整数 (秒) | 运行时长，0=持续运行直到 clean，默认 0 |
+
+**危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。
+
+**补充说明**: 依赖 CANN + ACL（libascendcl.so），需编译 `_npu_stress`（`cmake .. && make _npu_stress`）。不依赖 torch_npu。需要 chip→ACL dev 映射文件。
+
+---
+
+### 8.15 rNPU_aiv_fault — AIVector 故障
+
+**UID**: `rNPU_aiv_fault`
+
+**描述**: 通过 ACL C 程序对指定芯片 AIVector 单元施加 d2d memcpy 压力，模拟 AIVector 计算故障/过载。
+
+**实现原理**: 与 `rNPU_aic_fault` 类似，运行 `build/_npu_stress aivector <dev_id>` 后台进程。
+- **clean**: kill stress 进程。
+- **query**: `npu-smi info -t usages` 检查 Aivector Usage Rate。
+
+**使用示例**:
+```bash
+dcat inject rNPU_aiv_fault --chip=2
+dcat query rNPU_aiv_fault --chip=2
+dcat clean rNPU_aiv_fault --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+| duration | 可选 | 整数 (秒) | 运行时长，0=持续运行直到 clean，默认 0 |
+
+**危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。
+
+**补充说明**: 依赖 CANN + ACL，需编译 `_npu_stress`。不依赖 torch_npu。
+
+---
+
+### 8.16 rNPU_hbm_fault — HBM 故障
+
+**UID**: `rNPU_hbm_fault`
+
+**描述**: 通过 ACL C 程序对指定芯片 HBM（高带宽内存）施加 malloc+memset 压力，模拟 HBM 内存故障/过载。
+
+**实现原理**: 
+- **inject**: 运行 `build/_npu_stress hbm <dev_id> [size_gb]` 后台进程，使用 `aclrtMalloc` + `aclrtMemset` 分配并填充 HBM 内存。PID 写入 sidecar。
+- **clean**: kill stress 进程。
+- **query**: `npu-smi info -t usages` 检查 HBM Usage Rate。
+
+**使用示例**:
+```bash
+dcat inject rNPU_hbm_fault --chip=2 --size_gb=4
+dcat query rNPU_hbm_fault --chip=2
+dcat clean rNPU_hbm_fault --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+| size_gb | 可选 | 正整数 | 每轮分配的 HBM 大小（GB），默认 1 |
+| duration | 可选 | 整数 (秒) | 运行时长，0=持续运行直到 clean，默认 0 |
+
+**危险等级**: 中 — HBM 持续高占用，影响同芯片上其他任务的显存分配，可能导致 OOM。
+
+**补充说明**: 依赖 CANN + ACL，需编译 `_npu_stress`。不依赖 torch_npu。`size_gb` 过大可能导致 HBM OOM。
+
+---
+
+### 8.17 rNPU_chip_reset — 芯片复位
+
+**UID**: `rNPU_chip_reset`
+
+**描述**: 通过 `npu-smi set -t reset` 复位指定 NPU 芯片，模拟芯片级硬件复位。
+
+**实现原理**: 
+- **inject**: 执行 `printf 'y\n' | npu-smi set -t reset -i <chip> -c 0`（自动确认），芯片被复位，服务中断。
+- **clean**: 等待 3 秒后执行 `hccn_tool -i <chip> -cfg recovery` 恢复配置。
+- **query**: `npu-smi info` 检查 Health 列。
+
+**使用示例**:
+```bash
+dcat inject rNPU_chip_reset --chip=2
+dcat query rNPU_chip_reset --chip=2
+dcat clean rNPU_chip_reset --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+
+**危险等级**: 高 — 芯片复位后该芯片上所有训练/推理任务立即中断，数据丢失。复位后需等待芯片自动恢复（约 3-10 秒）。
+
+**补充说明**: 需要 root + `npu-smi`。inject 使用 `printf 'y\n'` 自动回答 npu-smi 的确认提示。clean 的 `sleep 3` 等待芯片恢复后再执行 `cfg recovery`。
+
+---
+
+### 8.18 rNPU_driver_unbind — 驱动解绑
+
+**UID**: `rNPU_driver_unbind`
+
+**描述**: 将 NPU 从 `devdrv_device_driver` 驱动解绑（`echo <pcie_addr> > unbind`），模拟驱动异常/设备失联。
+
+**实现原理**: 
+- **inject**: 查找 chip 的 PCIe 地址（`npu-smi info` 或 `lspci` + `/dev/davinci*` 回退），`echo <pcie_addr> > /sys/bus/pci/drivers/devdrv_device_driver/unbind`。
+- **clean**: `echo <pcie_addr> > bind` 重新绑定，然后执行 FLR（Function Level Reset）。
+- **query**: 检查设备是否仍绑定到驱动。
+
+**使用示例**:
+```bash
+dcat inject rNPU_driver_unbind --chip=2
+dcat query rNPU_driver_unbind --chip=2
+dcat clean rNPU_driver_unbind --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+
+**危险等级**: 高 — 驱动解绑后该芯片不可用，所有 NPU 操作失败。
+
+**补充说明**: 需要 root。PCIe 地址通过 `npu-smi info` 输出中的 `0000:xx:xx.x` 格式获取，或通过 `lspci -D` + `/dev/davinci*` 映射回退。**910B4 恢复行为**：驱动重新绑定后驱动绑定恢复，但 NPU 固件可能未完全恢复，**需要温重启（reboot）**才能完全恢复 NPU。
+
+---
+
+### 8.19 rNPU_pcie_remove — PCIe 拔卡
+
+**UID**: `rNPU_pcie_remove`
+
+**描述**: 从 PCIe 总线移除 NPU 设备（`echo 1 > /sys/bus/pci/devices/<addr>/remove`），模拟 NPU 卡物理拔出。
+
+**实现原理**: 
+- **inject**: 查找 chip 的 PCIe 地址，`echo 1 > /sys/bus/pci/devices/<pcie_addr>/remove`。设备从 PCIe 总线消失。
+- **clean**: `echo 1 > /sys/bus/pci/rescan` 重新扫描 PCIe 总线，然后执行 FLR。
+- **query**: 检查 NPU 设备是否仍存在于 PCIe 总线。
+
+**使用示例**:
+```bash
+dcat inject rNPU_pcie_remove --chip=2
+dcat query rNPU_pcie_remove --chip=2
+dcat clean rNPU_pcie_remove --chip=2
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| chip | 必填 | 0-7 | NPU 芯片号 |
+
+**危险等级**: 高 — PCIe 设备移除后该芯片完全消失，所有 NPU 操作失败。
+
+**补充说明**: 需要 root。**910B4 恢复行为**：PCIe rescan 恢复设备条目但 NPU 固件不会重新初始化，**需要冷启动（关机再开机）**才能完全恢复 NPU。温重启（reboot）可能不够。与 `rNPU_driver_unbind` 的区别：driver_unbind 仅断开驱动绑定（软件层），pcie_remove 从 PCIe 总线移除设备（更接近物理拔卡）。
+
+---
+
+## 第九章 系统模块（2 条）
+
+> ⚠️ **危险故障**：本章故障均为 inject-only 且不可逆，会导致系统宕机或关机。仅在测试环境中使用，确保有带外管理或物理访问能力。
+
+### 9.1 rSYS_panic — 内核 panic
+
+**UID**: `rSYS_panic`
+
+**描述**: 通过 sysrq 触发内核 panic（系统立即崩溃重启），inject-only 不可逆。
+
+**实现原理**: inject 执行 `echo c > /proc/sysrq-trigger`（sysrq 'c' = crash），内核立即 panic。系统崩溃后自动重启（如果配置了 `panic=timeout`）。
+
+**使用示例**:
+```bash
+# 确保 sysrq 已开启
+echo 1 > /proc/sys/kernel/sysrq
+
+dcat inject rSYS_panic
+```
+
+**参数可选范围**: 无参数。
+
+**危险等级**: 极高 — 系统立即崩溃，所有未保存数据丢失，所有连接中断。系统重启后可恢复。
+
+**补充说明**: inject-only，不支持 clean/query。需要 root + 可写的 `/proc/sysrq-trigger`。如果内核禁用了 sysrq，注入失败。部分内核配置下 sysrq 'c' 可能被屏蔽。
+
+---
+
+### 9.2 rSYS_poweroff — 下电重启
+
+**UID**: `rSYS_poweroff`
+
+**描述**: 关机或重启机器，inject-only 不可逆。
+
+**实现原理**: 
+- **mode=0**: 执行 `reboot`（或 `shutdown -r now`），系统下电后重启。
+- **mode=1**: 执行 `poweroff`（或 `shutdown -h now`），系统下电后保持关机状态（不自动重启）。
+
+**使用示例**:
+```bash
+# 重启
+dcat inject rSYS_poweroff --mode=0
+
+# 关机（不重启）
+dcat inject rSYS_poweroff --mode=1
+```
+
+**参数可选范围**:
+| 参数 | 是否必填 | 类型 | 说明 |
+|---|---|---|---|
+| mode | inject 必填 | 0 或 1 | `0`=下电后重启（reboot），`1`=下电后不重启（poweroff） |
+
+**危险等级**: 极高 — 系统立即下电/重启，所有未保存数据丢失，所有连接中断。
+
+**补充说明**: inject-only，不支持 clean/query。需要 root。`mode=0` 后系统重启可恢复；`mode=1` 后需要手动开机或通过 BMC/iDRAC 远程开机。
+
+---
+
+## 第十章 Web 控制台（dcat serve）
+
+### 10.1 概述
 
 `dcat serve` 在二进制内内置 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器。默认**只读**（`--allow-write` 开启注入/清理），无外部 HTTP 依赖。
 
-### 6.2 命令
+### 10.2 命令
 
 ```bash
 # 只读模式（默认），绑定 127.0.0.1
@@ -1191,7 +1972,7 @@ dcat serve --port 8080
 dcat serve --port 8080 --bind 0.0.0.0 --allow-write
 ```
 
-### 6.3 参数
+### 10.3 参数
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
@@ -1200,7 +1981,7 @@ dcat serve --port 8080 --bind 0.0.0.0 --allow-write
 | `--webroot DIR` | 内置 | 自定义静态前端目录（覆盖内置 `src/web/`） |
 | `--allow-write` | 关闭 | 开启注入/清理写操作（默认只读） |
 
-### 6.4 API 端点
+### 10.4 API 端点
 
 | 端点 | 方法 | 说明 |
 |---|---|---|
@@ -1210,7 +1991,7 @@ dcat serve --port 8080 --bind 0.0.0.0 --allow-write
 | `/api/inject` | POST | 注入故障（需 `--allow-write`） |
 | `/api/clean` | POST | 清理故障（需 `--allow-write`） |
 
-### 6.5 安全
+### 10.5 安全
 
 - `realpath()` 路径穿越防护
 - `%2e` URL 编码检测

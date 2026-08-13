@@ -1,4 +1,4 @@
-name: PR CI
+name: E2E_Test
 
 # 单一入口：一次 push/PR 只跑这一条 workflow（取代旧的 pr_test_light + pr_test_full）。
 #

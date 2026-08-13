@@ -27,6 +27,13 @@ add_executable(dcat src/main.c ${DCAT_CORE})
 target_include_directories(dcat PRIVATE src src/core src/injectors src/plugins third_party/cjson)
 target_link_libraries(dcat PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})
 
+# test_serve 需 #include "serve.c" 测其 static 纯函数,该 target 排除 serve.c(防重复定义)
+set(DCAT_CORE_NO_SERVE
+    src/core/types.c src/core/cli.c src/core/registry.c src/core/executor.c
+    src/core/precheck.c src/core/state.c src/core/config.c
+    src/core/output.c src/core/dispatch.c src/core/reinject.c src/core/help.c
+    src/injectors/injectors.c src/plugins/plugin_manager.c)
+
 # ---- 全局入口：符号链接指向项目树 build/dcat ----
 # config/scripts/plugins/web 均按可执行文件位置解析（/proc/self/exe 解引用到项目树），
 # git pull 更新脚本/配置后立即生效，无需重新 install。
@@ -76,6 +83,13 @@ dcat_test(test_reinject     tests/test_reinject.c)
 dcat_test(test_cli          tests/test_cli.c)
 dcat_test(test_faults       tests/test_faults.c)
 dcat_test(test_help         tests/test_help.c)
+
+# ---- Tier 0c: serve.c static 纯函数(直接 #include serve.c;不复用 dcat_test 宏防重复定义) ----
+add_executable(test_serve tests/test_serve.c ${DCAT_CORE_NO_SERVE})
+target_include_directories(test_serve PRIVATE src src/core src/injectors src/plugins third_party/cjson tests)
+target_link_libraries(test_serve PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})
+add_test(NAME test_serve COMMAND test_serve)
+set_tests_properties(test_serve PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # ---- Tier 0b: 插件测试 ----
 dcat_test(test_plugin_manager     tests/test_plugin_manager.c)

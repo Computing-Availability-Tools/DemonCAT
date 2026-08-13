@@ -53,10 +53,56 @@ int test_params_equal_subset(void) {
     return 0;
 }
 
+int test_params_set_overflow(void) {
+    params_t p;
+    params_init(&p);
+    char key[8];
+    for (int i = 0; i < DCAT_MAX_PARAMS; i++) {
+        snprintf(key, sizeof key, "k%d", i);
+        ASSERT_INT_EQ(params_set(&p, key, "v"), 0);
+    }
+    ASSERT_INT_EQ(p.count, DCAT_MAX_PARAMS);
+    ASSERT_INT_EQ(params_set(&p, "extra", "v"), -1); /* 满返 -1 */
+    ASSERT_INT_EQ(p.count, DCAT_MAX_PARAMS);         /* count 不变 */
+    return 0;
+}
+
+int test_params_match_subset_key_missing(void) {
+    /* query 的 key 不在 record 中:params_find 返回 NULL → 不匹配(覆盖 !v 分支) */
+    params_t rec;
+    params_init(&rec);
+    params_set(&rec, "iface", "eth0");
+    params_t q;
+    params_init(&q);
+    params_set(&q, "nope", "x");
+    ASSERT_TRUE(!params_match_subset(&q, &rec));
+    return 0;
+}
+
+int test_key_to_env_truncation(void) {
+    /* buf[64],"DCAT_PARAM_" 11 字符前缀 → 最多 63 字符;超长 key 截断,且全为大写/_ */
+    char longkey[128];
+    memset(longkey, 'a', sizeof longkey - 1);
+    longkey[sizeof longkey - 1] = '\0';
+    const char *env = dcat_key_to_env(longkey);
+    ASSERT_INT_EQ((int)strlen(env), 63);
+    ASSERT_STR_CONTAINS(env, "DCAT_PARAM_");
+    for (const char *c = env; *c; c++) {
+        if (!((*c >= 'A' && *c <= 'Z') || *c == '_')) {
+            fprintf(stderr, "unexpected char '%c' in env\n", *c);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_params_set_find);
     RUN_TEST(test_params_count);
     RUN_TEST(test_key_to_env);
     RUN_TEST(test_params_equal_subset);
+    RUN_TEST(test_params_set_overflow);
+    RUN_TEST(test_params_match_subset_key_missing);
+    RUN_TEST(test_key_to_env_truncation);
     return TEST_MAIN_RETURN();
 }

@@ -5,7 +5,7 @@ on:
     tags:
       - 'v*'
   schedule:
-    - cron: '0 20 * * 1'
+    - cron: '0 00 * * 5'
   workflow_dispatch:
 
 concurrency:
@@ -74,7 +74,7 @@ jobs:
         with:
           name: dcat-binary-${{ steps.ver.outputs.version }}-${{ steps.ver.outputs.arch }}
           path: dcat-*.tar.gz
-          retention-days: 30
+          retention-days: 14
 
   release:
     name: Create GitHub release (on tag)

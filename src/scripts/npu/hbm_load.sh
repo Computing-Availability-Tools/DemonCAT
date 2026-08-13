@@ -68,17 +68,17 @@ case "${DCAT_OP:-inject}" in
                 pid=$(cat "$f" 2>/dev/null)
                 kill -0 "$pid" 2>/dev/null || { rm -f "$f"; continue; }
                 echo "FAULT CONFIRMED: HBM stress active on chip $c (pid $pid)"
-                hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $c /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)
-                echo "  HBM Usage: ${hbm_raw:-?}"
+                card_chip=$(npu_phy_to_card "$c"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
+                hbm_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
+                echo "  HBM Usage(%): ${hbm_pct:-?}"
                 found=1
             done
             [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE: no HBM stress"; exit 1; }
         elif [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
-            hbm_pct=$(npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
-            hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $chip /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)
-            echo "HBM Usage: ${hbm_raw:-?} (${hbm_pct:-?}%)"
-            npu-smi info 2>/dev/null | grep '_npu_stress' | awk -F'|' '{gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$5); print $4": "$5"MB"}'
+            card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
+            hbm_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
+            echo "HBM Usage(%): ${hbm_pct:-?}"
             exit 0
         else
             rm -f "$SIDECAR" 2>/dev/null

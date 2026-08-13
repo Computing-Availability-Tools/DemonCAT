@@ -1,7 +1,12 @@
 # _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
-# Ensure CANN OPP path is set for aclnn operators
-export ASCEND_OPP_PATH="${ASCEND_OPP_PATH:-/usr/local/Ascend/ascend-toolkit/latest/opp}"
+# Always prefer toolkit OPP (has aclnn operators); only fall back if toolkit missing
+_TK_OPP="/usr/local/Ascend/ascend-toolkit/latest/opp"
+if [ -d "$_TK_OPP" ]; then
+    export ASCEND_OPP_PATH="$_TK_OPP"
+elif [ -z "$ASCEND_OPP_PATH" ]; then
+    export ASCEND_OPP_PATH="$_TK_OPP"
+fi
 
 DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
 
@@ -46,6 +51,23 @@ npu_phy_to_bdf() {
         fi
     done
     return 1
+}
+
+# Convert Phy-ID to "<npu_card_id> <chip_within_card>" for npu-smi -i -c queries.
+# Auto-detects chips-per-card from /dev/davinci count vs npu-smi card count.
+npu_phy_to_card() {
+    local phy_id="$1" n_davinci n_cards per_card
+    n_davinci=$(ls /dev/davinci[0-9]* 2>/dev/null | wc -l)
+    n_cards=$(npu-smi info 2>/dev/null | grep -cE '^\| [0-9]+ .*(OK|NG|Warning)')
+    if [ "$n_davinci" -gt 0 ] && [ "$n_cards" -gt 0 ]; then
+        per_card=$((n_davinci / n_cards))
+        if [ "$per_card" -ge 1 ]; then
+            echo "$((phy_id / per_card)) $((phy_id % per_card))"
+            return 0
+        fi
+    fi
+    # Fallback: 1 chip per card (910B4 where Phy-ID = NPU card ID)
+    echo "$phy_id 0"
 }
 
 # List all valid NPU Phy-IDs (from /dev/davinci* or DCAT_NPU_CHIPS if set)

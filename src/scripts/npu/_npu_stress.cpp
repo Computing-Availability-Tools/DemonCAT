@@ -23,18 +23,21 @@ static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id>
                            "  duration 0 = run forever (until killed)\n"
                            "  load_pct 1-100 (default 100)\n";
 
-static int in_compute_phase(int load_pct, struct timespec *cycle_start) {
-    if (load_pct >= 100) return 1;
-    int cycle_ms = 10;
-    int on_ms = cycle_ms * load_pct / 100;
+/* After sync, measure actual compute time and sleep proportionally.
+ * Calibrated: 100% duty only reaches ~max_achievable on NPU (host overhead).
+ * So to get target T%, set duty = T / max_achievable, then sleep the rest. */
+static void pace_load(int load_pct, struct timespec *batch_start, float max_achievable) {
+    if (load_pct >= 100) return;
+    int duty = (int)(load_pct / max_achievable);
+    if (duty < 1) duty = 1;
+    if (duty > 100) duty = 100;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    long elapsed = (now.tv_sec - cycle_start->tv_sec) * 1000 + (now.tv_nsec - cycle_start->tv_nsec) / 1000000;
-    if (elapsed < on_ms) return 1;
-    int off_ms = cycle_ms - on_ms;
-    if (off_ms > 0) usleep(off_ms * 1000);
-    clock_gettime(CLOCK_MONOTONIC, cycle_start);
-    return 1;
+    long compute_us = (now.tv_sec - batch_start->tv_sec) * 1000000 + (now.tv_nsec - batch_start->tv_nsec) / 1000;
+    if (compute_us <= 0) compute_us = 1;
+    long off_us = compute_us * (100 - duty) / duty;
+    if (off_us > 0) usleep(off_us);
+    clock_gettime(CLOCK_MONOTONIC, batch_start);
 }
 
 /* helper: create a 2D FP16 tensor backed by device memory */
@@ -67,8 +70,8 @@ int main(int argc, char **argv) {
 
     aclrtStream stream;
     aclrtCreateStream(&stream);
-    struct timespec cycle_start;
-    clock_gettime(CLOCK_MONOTONIC, &cycle_start);
+    struct timespec batch_start;
+    clock_gettime(CLOCK_MONOTONIC, &batch_start);
 
     if (strcmp(mode, "hbm") == 0) {
         size_t bytes = (size_t)size_mb * 1024 * 1024;
@@ -113,7 +116,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.96f);
             }
         } else {
             while (1) {
@@ -123,7 +126,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.96f);
             }
         }
         if (ws) aclrtFree(ws);
@@ -164,7 +167,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.89f);
             }
         } else {
             while (1) {
@@ -174,7 +177,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.89f);
             }
         }
         if (ws) aclrtFree(ws);

@@ -89,9 +89,9 @@
   - [8.11 rNPU_dscp_tc_change](#811-rnpu_dscp_tc_change) — DSCP→TC 映射变更
   - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
   - [8.13 rNPU_freq_down](#813-rnpu_freq_down) — NPU 降频
-  - [8.14 rNPU_aic_fault](#814-rnpu_aic_fault) — AICore 负载
-  - [8.15 rNPU_aiv_fault](#815-rnpu_aiv_fault) — AIVector 负载
-  - [8.16 rNPU_hbm_fault](#816-rnpu_hbm_fault) — HBM 负载
+  - [8.14 rNPU_aic_load](#814-rnpu_aic_load) — AICore 负载
+  - [8.15 rNPU_aiv_load](#815-rnpu_`aiv_load) — AIVector 负载
+  - [8.16 rNPU_hbm_load](#816-rnpu_`hbm_load) — HBM 负载
   - [8.17 rNPU_chip_reset](#817-rnpu_chip_reset) — 芯片复位
   - [8.18 rNPU_driver_unbind](#818-rnpu_driver_unbind) — 驱动解绑
   - [8.19 rNPU_pcie_remove](#819-rnpu_pcie_remove) — PCIe 拔卡
@@ -1304,7 +1304,7 @@ hccn_tool -i 2 -mtu -g                         # 当前 MTU
 
 **⑥ device 映射（硬件故障用）**
 
-`rNPU_aic_fault`/`aiv_fault`/`hbm_fault` 使用 CANN 算子 API 施加负载，需要 chip→device 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <device_id>`，由环境初始化脚本生成。示例：
+`rNPU_aic_load`/``aiv_load`/``hbm_load` 使用 CANN 算子 API 施加负载，需要 chip→device 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <device_id>`，由环境初始化脚本生成。示例：
 ```
 2 0
 5 1
@@ -1721,9 +1721,9 @@ dcat clean rNPU_freq_down --chip=2
 
 ---
 
-### 8.14 rNPU_aic_fault — AICore 负载
+### 8.14 rNPU_aic_load — AICore 负载
 
-**UID**: `rNPU_aic_fault`
+**UID**: `rNPU_aic_load`
 
 **描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（2048×2048×2048），持续施压 Cube 计算单元，拉高 AICore 使用率。
 
@@ -1734,10 +1734,10 @@ dcat clean rNPU_freq_down --chip=2
 
 **使用示例**:
 ```bash
-dcat inject rNPU_aic_fault --chip=2
-dcat inject rNPU_aic_fault --chip=2 --load_pct=50   # 50% 负载
-dcat query rNPU_aic_fault --chip=2
-dcat clean rNPU_aic_fault --chip=2
+dcat inject rNPU_aic_load --chip=2
+dcat inject rNPU_aic_load --chip=2 --load_pct=50   # 50% 负载
+dcat query rNPU_aic_load --chip=2
+dcat clean rNPU_aic_load --chip=2
 ```
 
 **参数可选范围**:
@@ -1755,9 +1755,9 @@ dcat clean rNPU_aic_fault --chip=2
 
 ---
 
-### 8.15 rNPU_aiv_fault — AIVector 负载
+### 8.15 rNPU_aiv_load — AIVector 负载
 
-**UID**: `rNPU_aiv_fault`
+**UID**: `rNPU_aiv_load`
 
 **描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（16M 元素），持续施压 Vector 计算单元，拉高 AIVector 使用率。
 
@@ -1768,10 +1768,10 @@ dcat clean rNPU_aic_fault --chip=2
 
 **使用示例**:
 ```bash
-dcat inject rNPU_aiv_fault --chip=2
-dcat inject rNPU_aiv_fault --chip=2 --load_pct=50   # 50% 负载
-dcat query rNPU_aiv_fault --chip=2
-dcat clean rNPU_aiv_fault --chip=2
+dcat inject rNPU_aiv_load --chip=2
+dcat inject rNPU_aiv_load --chip=2 --load_pct=50   # 50% 负载
+dcat query rNPU_aiv_load --chip=2
+dcat clean rNPU_aiv_load --chip=2
 ```
 
 **参数可选范围**:
@@ -1780,16 +1780,16 @@ dcat clean rNPU_aiv_fault --chip=2
 | chip | 必填 | 0-7 | NPU 芯片号 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_fault`，自适应占空比 + 校准。AIVector 满载上限约 89%。
+**负载率原理**：同 `rNPU_aic_load`，自适应占空比 + 校准。AIVector 满载上限约 89%。
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 
 
 ---
 
-### 8.16 rNPU_hbm_fault — HBM 负载
+### 8.16 rNPU_hbm_load — HBM 负载
 
-**UID**: `rNPU_hbm_fault`
+**UID**: `rNPU_hbm_load`
 
 **描述**: 通过 `aclrtMalloc`+`aclrtMemset` 分配并填充指定大小的 HBM 内存并持续持有，占满 HBM 显存空间。
 
@@ -1800,9 +1800,9 @@ dcat clean rNPU_aiv_fault --chip=2
 
 **使用示例**:
 ```bash
-dcat inject rNPU_hbm_fault --chip=2 --size=20G
-dcat query rNPU_hbm_fault --chip=2
-dcat clean rNPU_hbm_fault --chip=2
+dcat inject rNPU_hbm_load --chip=2 --size=20G
+dcat query rNPU_hbm_load --chip=2
+dcat clean rNPU_hbm_load --chip=2
 ```
 
 **参数可选范围**:

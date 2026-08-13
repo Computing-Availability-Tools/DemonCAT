@@ -118,29 +118,29 @@ int main(void) {
         check_param_env("chip", "0"); check_param_env("freq", "800"); result_free(r);
         r = dispatch_route("rNPU_freq_down", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_aic_fault (chip) */
+    /* rNPU_aic_load (chip) */
     {
         params_t p = mkparams("chip", "0", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_aic_fault", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("aic_fault.sh");
+        result_t *r = dispatch_route("rNPU_aic_load", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("aic_load.sh");
         check_param_env("chip", "0"); result_free(r);
-        r = dispatch_route("rNPU_aic_fault", "clean", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rNPU_aic_load", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_aiv_fault (chip) */
+    /* rNPU_aiv_load (chip) */
     {
         params_t p = mkparams("chip", "0", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_aiv_fault", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("aiv_fault.sh");
+        result_t *r = dispatch_route("rNPU_aiv_load", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("aiv_load.sh");
         check_param_env("chip", "0"); result_free(r);
-        r = dispatch_route("rNPU_aiv_fault", "clean", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rNPU_aiv_load", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_hbm_fault (chip, size) */
+    /* rNPU_hbm_load (chip, size) */
     {
         params_t p = mkparams("chip", "0", "size", "2G", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rNPU_hbm_fault", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("hbm_fault.sh");
+        result_t *r = dispatch_route("rNPU_hbm_load", "inject", &p);
+        CK(r && r->code == 0); CMD_CONTAINS("hbm_load.sh");
         check_param_env("chip", "0"); check_param_env("size", "2G"); result_free(r);
-        r = dispatch_route("rNPU_hbm_fault", "clean", &p); CK(r && r->code == 0); result_free(r);
+        r = dispatch_route("rNPU_hbm_load", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
 
     faults_teardown();

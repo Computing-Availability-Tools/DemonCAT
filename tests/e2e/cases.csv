@@ -110,12 +110,12 @@ E2E-108,FUNC-rNET_tcp_loss,0,network,rNET_tcp_loss,setup,,0,,,,free_port,provisi
 E2E-109,FUNC-rNET_tcp_loss,1,network,rNET_tcp_loss,inject,./build/dcat inject rNET_tcp_loss --port={port},0,"""status"":""ok""",iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:{port}',>=1,,fault active after inject
 E2E-110,FUNC-rNET_tcp_loss,2,network,rNET_tcp_loss,clean,./build/dcat clean rNET_tcp_loss --port={port},0,,iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:{port}',==0,,"fault cleaned, system restored"
 E2E-111,FUNC-rNET_tcp_loss,3,network,rNET_tcp_loss,query,./build/dcat query,0,,,state_not_contains:rNET_tcp_loss,,no ghost record after clean
-E2E-112,FUNC-rNPU_aic_fault,0,npu,rNPU_aic_fault,inject,./build/dcat inject rNPU_aic_fault --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_aic_fault,>=1,,fault active after inject
-E2E-113,FUNC-rNPU_aic_fault,1,npu,rNPU_aic_fault,clean,./build/dcat clean rNPU_aic_fault --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_aic_fault,==0,,"fault cleaned, system restored"
-E2E-114,FUNC-rNPU_aic_fault,2,npu,rNPU_aic_fault,query,./build/dcat query,0,,,state_not_contains:rNPU_aic_fault,,no ghost record after clean
-E2E-115,FUNC-rNPU_aiv_fault,0,npu,rNPU_aiv_fault,inject,./build/dcat inject rNPU_aiv_fault --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_aiv_fault,>=1,,fault active after inject
-E2E-116,FUNC-rNPU_aiv_fault,1,npu,rNPU_aiv_fault,clean,./build/dcat clean rNPU_aiv_fault --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_aiv_fault,==0,,"fault cleaned, system restored"
-E2E-117,FUNC-rNPU_aiv_fault,2,npu,rNPU_aiv_fault,query,./build/dcat query,0,,,state_not_contains:rNPU_aiv_fault,,no ghost record after clean
+E2E-112,FUNC-rNPU_aic_load,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_aic_load,>=1,,fault active after inject
+E2E-113,FUNC-rNPU_aic_load,1,npu,rNPU_aic_load,clean,./build/dcat clean rNPU_aic_load --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_aic_load,==0,,"fault cleaned, system restored"
+E2E-114,FUNC-rNPU_aic_load,2,npu,rNPU_aic_load,query,./build/dcat query,0,,,state_not_contains:rNPU_aic_load,,no ghost record after clean
+E2E-115,FUNC-rNPU_aiv_load,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_aiv_load,>=1,,fault active after inject
+E2E-116,FUNC-rNPU_aiv_load,1,npu,rNPU_aiv_load,clean,./build/dcat clean rNPU_aiv_load --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_aiv_load,==0,,"fault cleaned, system restored"
+E2E-117,FUNC-rNPU_aiv_load,2,npu,rNPU_aiv_load,query,./build/dcat query,0,,,state_not_contains:rNPU_aiv_load,,no ghost record after clean
 E2E-118,FUNC-rNPU_arp,0,npu,rNPU_arp,inject,./build/dcat inject rNPU_arp --action=add --chip=2 --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55,0,"""status"":""ok""",hccn_tool -i 2 -arp -g 2>/dev/null,contains:00:11:22:33:44:55,,fault active after inject
 E2E-119,FUNC-rNPU_arp,1,npu,rNPU_arp,clean,./build/dcat clean rNPU_arp --chip=2 --dev=eth0 --ip=10.30.12.200,0,,hccn_tool -i 2 -arp -g 2>/dev/null,notcontains:00:11:22:33:44:55,,"fault cleaned, system restored"
 E2E-120,FUNC-rNPU_arp,2,npu,rNPU_arp,query,./build/dcat query,0,,,state_not_contains:rNPU_arp,,no ghost record after clean
@@ -140,9 +140,9 @@ E2E-138,FUNC-rNPU_gw_change,0,npu,rNPU_gw_change,setup,hccn_tool -i 2 -link -s u
 E2E-139,FUNC-rNPU_gw_change,1,npu,rNPU_gw_change,inject,./build/dcat inject rNPU_gw_change --chip=2 --gateway=10.20.10.1,0,"""status"":""ok""",hccn_tool -i 2 -gateway -g 2>/dev/null,contains:10.20.10.1,,fault active after inject
 E2E-140,FUNC-rNPU_gw_change,2,npu,rNPU_gw_change,clean,./build/dcat clean rNPU_gw_change --chip=2,0,,hccn_tool -i 2 -gateway -g 2>/dev/null,notcontains:10.20.10.1,,"fault cleaned, system restored"
 E2E-141,FUNC-rNPU_gw_change,3,npu,rNPU_gw_change,query,./build/dcat query,0,,,state_not_contains:rNPU_gw_change,,no ghost record after clean
-E2E-142,FUNC-rNPU_hbm_fault,0,npu,rNPU_hbm_fault,inject,./build/dcat inject rNPU_hbm_fault --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_hbm_fault,>=1,,fault active after inject
-E2E-143,FUNC-rNPU_hbm_fault,1,npu,rNPU_hbm_fault,clean,./build/dcat clean rNPU_hbm_fault --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_hbm_fault,==0,,"fault cleaned, system restored"
-E2E-144,FUNC-rNPU_hbm_fault,2,npu,rNPU_hbm_fault,query,./build/dcat query,0,,,state_not_contains:rNPU_hbm_fault,,no ghost record after clean
+E2E-142,FUNC-rNPU_hbm_load,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_hbm_load,>=1,,fault active after inject
+E2E-143,FUNC-rNPU_hbm_load,1,npu,rNPU_hbm_load,clean,./build/dcat clean rNPU_hbm_load --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_hbm_load,==0,,"fault cleaned, system restored"
+E2E-144,FUNC-rNPU_hbm_load,2,npu,rNPU_hbm_load,query,./build/dcat query,0,,,state_not_contains:rNPU_hbm_load,,no ghost record after clean
 E2E-145,FUNC-rNPU_ip_change,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip=2 --address=10.0.0.99 --netmask=255.255.255.0,0,"""status"":""ok""",hccn_tool -i 2 -ip -g 2>/dev/null,contains:10.0.0.99,,fault active after inject
 E2E-146,FUNC-rNPU_ip_change,1,npu,rNPU_ip_change,clean,./build/dcat clean rNPU_ip_change --chip=2,0,,hccn_tool -i 2 -ip -g 2>/dev/null,notcontains:10.0.0.99,,"fault cleaned, system restored"
 E2E-147,FUNC-rNPU_ip_change,2,npu,rNPU_ip_change,query,./build/dcat query,0,,,state_not_contains:rNPU_ip_change,,no ghost record after clean
@@ -317,12 +317,12 @@ E2E-315,BOUND-78,0,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill -
 E2E-316,BOUND-79,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/nonexistent_dir_xyz,1,,,exitcode:1,,path: not a directory
 E2E-317,BOUND-80,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=,3,missing required parameter,,exitcode:3,,path: empty
 E2E-318,BOUND-81,0,storage,rDISK_io_error,inject,./build/dcat inject rDISK_io_error --device=/tmp/not_a_block_dev,1,,,exitcode:1,,device: not a block device
-E2E-319,BOUND-82,0,npu,rNPU_aic_fault,inject,./build/dcat inject rNPU_aic_fault --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-320,BOUND-83,0,npu,rNPU_aic_fault,inject,./build/dcat inject rNPU_aic_fault ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-321,BOUND-84,0,npu,rNPU_aiv_fault,inject,./build/dcat inject rNPU_aiv_fault --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-322,BOUND-85,0,npu,rNPU_aiv_fault,inject,./build/dcat inject rNPU_aiv_fault ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-323,BOUND-86,0,npu,rNPU_hbm_fault,inject,./build/dcat inject rNPU_hbm_fault --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-324,BOUND-87,0,npu,rNPU_hbm_fault,inject,./build/dcat inject rNPU_hbm_fault ,3,missing required parameter,,exitcode:3,,chip: missing
+E2E-319,BOUND-82,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
+E2E-320,BOUND-83,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load ,3,missing required parameter,,exitcode:3,,chip: missing
+E2E-321,BOUND-84,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
+E2E-322,BOUND-85,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load ,3,missing required parameter,,exitcode:3,,chip: missing
+E2E-323,BOUND-86,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
+E2E-324,BOUND-87,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load ,3,missing required parameter,,exitcode:3,,chip: missing
 E2E-325,BOUND-88,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=abc --freq=1000,1,,,exitcode:1,,chip: non-numeric
 E2E-326,BOUND-89,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=2 --freq=abc,1,,,exitcode:1,,freq: non-numeric
 E2E-327,BOUND-90,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down ,3,missing required parameter,,exitcode:3,,chip: missing

@@ -21,7 +21,7 @@
 | 6 | 系统内存不足 vs 内存泄漏 | `rMEM_leak` = 泄漏指定 `size_mb` 并持有;`rMEM_oom` = 无上限分配直至 OOM killer 触发 | 有界 vs 无界;前者可量化,后者触发事件 |
 | 7 | swap 内存过载 | `rMEM_swap_overload` = 分配超过空闲 RAM 的 `size_mb` 并 dirty,强制换出至 swap | 与 oom 区别:有界、定向压 swap |
 | 8 | NPU 降频(ipmitool) | `rNPU_freq_down`:优先 `npu-smi info -t freq -i <chip>` 设频;不可用则 `ipmitool` 做 BMC 级 power-cap 降频。参数 `chip` + `freq`/`ratio`。需 NPU+管理权限,脚本带能力探测与降级 | 用户明指 ipmitool;真实 NPU 频率由 npu-smi/hccn_tool 管,ipmitool 走 BMC 兜底。P3 需硬件验证 |
-| 9 | aic/aiv/HBM NPU 故障 | 拆 3 条:`rNPU_aic_fault`(AI 核)/`rNPU_aiv_fault`(AI 向量核)/`rNPU_hbm_fault`(高带宽内存)。均 `chip` 参数,调 `npu-smi` 子命令注入对应子单元故障,clean 走 `npu-smi -cfg recovery` 兜底 | 具体子命令需在 Atlas 硬件上确认;脚本写好结构 + 能力探测,P3 现场标定 |
+| 9 | aic/aiv/HBM NPU 故障 | 拆 3 条:`rNPU_aic_load`(AI 核)/`rNPU_aiv_load`(AI 向量核)/`rNPU_hbm_load`(高带宽内存)。均 `chip` 参数,调 `npu-smi` 子命令注入对应子单元故障,clean 走 `npu-smi -cfg recovery` 兜底 | 具体子命令需在 Atlas 硬件上确认;脚本写好结构 + 能力探测,P3 现场标定 |
 | 10 | 磁盘 io 延迟/错误 机制 | `rDISK_io_delay` = device-mapper `delay` 目标;`rDISK_io_error` = device-mapper `error` 目标。`rDISK_scsi_error` = SCSI 级 `fail_function`/debugfs(`make-it-fail`),需 CONFIG_FAIL_MAKE_REQUEST,能力探测降级 | dm-delay/dm-error 可移植;SCSI 注错是更底层的独立机制,三者保持区分 |
 | 11 | 磁盘丢失 恢复 | `rDISK_loss`:`echo 1 > /sys/block/<dev>/device/delete` 摘盘;clean 走 `echo "- - -" > /sys/class/scsi_host/hostN/scan` 重扫。可恢复但需 rescan | 标准 SCSI 摘/扫机制 |
 | 12 | 系统panic / 机器下电 恢复性 | 均仅 `inject`:`rSYS_panic` 用 `echo c > /proc/sysrq-trigger`(需 sysrq);`rSYS_poweroff` 用 `poweroff`。不可 clean,机器重启/上电才恢复 | 整机级不可逆,符合 inject-only 约定,入 manual_test_guide |
@@ -76,9 +76,9 @@
 | UID | module | supported_ops | inject_required | inject_optional | 机制 | 恢复 |
 |---|---|---|---|---|---|---|
 | `rNPU_freq_down` | npu | inject,clean,query | chip,freq | — | npu-smi 设频(降级 ipmitool power-cap) | clean 还原最大频率 |
-| `rNPU_aic_fault` | npu | inject,clean,query | chip | — | npu-smi 注入 AI 核故障 | clean npu-smi -cfg recovery |
-| `rNPU_aiv_fault` | npu | inject,clean,query | chip | — | npu-smi 注入 AI 向量核故障 | clean npu-smi -cfg recovery |
-| `rNPU_hbm_fault` | npu | inject,clean,query | chip | — | npu-smi 注入 HBM 故障 | clean npu-smi -cfg recovery |
+| `rNPU_aic_load` | npu | inject,clean,query | chip | — | npu-smi 注入 AI 核故障 | clean npu-smi -cfg recovery |
+| `rNPU_aiv_load` | npu | inject,clean,query | chip | — | npu-smi 注入 AI 向量核故障 | clean npu-smi -cfg recovery |
+| `rNPU_hbm_load` | npu | inject,clean,query | chip | — | npu-smi 注入 HBM 故障 | clean npu-smi -cfg recovery |
 
 > P3 全部未在真实环境测试;脚本写好结构 + 能力探测 + 降级,需在 Atlas NPU 硬件上验证。
 

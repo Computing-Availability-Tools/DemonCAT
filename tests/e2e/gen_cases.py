@@ -262,18 +262,18 @@ OBS = {
         provision="none", precondition="hccn_tool",
         v_cmd="ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l", c_assert="==0"),
-    "rNPU_aic_fault": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+    "rNPU_aic_load": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
-        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_fault", v_assert=">=1",
-        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_fault", c_assert="==0"),
-    "rNPU_aiv_fault": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_load", v_assert=">=1",
+        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_load", c_assert="==0"),
+    "rNPU_aiv_load": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
-        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_fault", v_assert=">=1",
-        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_fault", c_assert="==0"),
-    "rNPU_hbm_fault": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_load", v_assert=">=1",
+        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_load", c_assert="==0"),
+    "rNPU_hbm_load": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
-        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_fault", v_assert=">=1",
-        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_fault", c_assert="==0"),
+        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", v_assert=">=1",
+        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", c_assert="==0"),
     "rNPU_chip_reset": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
         provision="none", precondition="npu-smi",
         v_cmd="ls /tmp/dcat-rNPU_chip_reset-2.bak 2>/dev/null | wc -l", v_assert=">=1",
@@ -518,12 +518,12 @@ def gen():
 
     # ---- NPU 新故障 BOUND ----
     # chip (NPU aic/aiv/hbm)
-    b_reject("rNPU_aic_fault", "--chip=abc", 1, '', "chip: non-numeric")
-    b_reject("rNPU_aic_fault", "", 3, 'missing required parameter', "chip: missing")
-    b_reject("rNPU_aiv_fault", "--chip=abc", 1, '', "chip: non-numeric")
-    b_reject("rNPU_aiv_fault", "", 3, 'missing required parameter', "chip: missing")
-    b_reject("rNPU_hbm_fault", "--chip=abc", 1, '', "chip: non-numeric")
-    b_reject("rNPU_hbm_fault", "", 3, 'missing required parameter', "chip: missing")
+    b_reject("rNPU_aic_load", "--chip=abc", 1, '', "chip: non-numeric")
+    b_reject("rNPU_aic_load", "", 3, 'missing required parameter', "chip: missing")
+    b_reject("rNPU_aiv_load", "--chip=abc", 1, '', "chip: non-numeric")
+    b_reject("rNPU_aiv_load", "", 3, 'missing required parameter', "chip: missing")
+    b_reject("rNPU_hbm_load", "--chip=abc", 1, '', "chip: non-numeric")
+    b_reject("rNPU_hbm_load", "", 3, 'missing required parameter', "chip: missing")
     # chip + freq (NPU freq_down)
     b_reject("rNPU_freq_down", "--chip=abc --freq=1000", 1, '', "chip: non-numeric")
     b_reject("rNPU_freq_down", "--chip=2 --freq=abc", 1, '', "freq: non-numeric")

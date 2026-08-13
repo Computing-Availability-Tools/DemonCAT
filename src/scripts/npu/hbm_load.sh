@@ -1,12 +1,12 @@
 #!/bin/sh
-# rNPU_hbm_fault: HBM stress via ACL malloc+memset (no torch_npu required).
+# rNPU_hbm_load: HBM stress via ACL malloc+memset (no torch_npu required).
 # inject: run _npu_stress hbm in background, write sidecar
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check HBM Usage Rate)
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
-SIDECAR="/tmp/dcat-rNPU_hbm_fault-$chip.pid"
+SIDECAR="/tmp/dcat-rNPU_hbm_load-$chip.pid"
 STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
 DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
 
@@ -69,7 +69,7 @@ case "${DCAT_OP:-inject}" in
     query)
         if [ -z "$chip" ]; then
             found=0
-            for f in /tmp/dcat-rNPU_hbm_fault-*.pid; do
+            for f in /tmp/dcat-rNPU_hbm_load-*.pid; do
                 [ -f "$f" ] || continue
                 c=$(echo "$f" | sed 's/.*-//;s/\.pid//')
                 pid=$(cat "$f" 2>/dev/null)

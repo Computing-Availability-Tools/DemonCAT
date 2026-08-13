@@ -134,12 +134,12 @@ int main(void) {
         check_param_env("chip", "0"); result_free(r);
         r = dispatch_route("rNPU_aiv_fault", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rNPU_hbm_fault (chip) */
+    /* rNPU_hbm_fault (chip, size) */
     {
-        params_t p = mkparams("chip", "0", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
+        params_t p = mkparams("chip", "0", "size", "2G", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
         result_t *r = dispatch_route("rNPU_hbm_fault", "inject", &p);
         CK(r && r->code == 0); CMD_CONTAINS("hbm_fault.sh");
-        check_param_env("chip", "0"); result_free(r);
+        check_param_env("chip", "0"); check_param_env("size", "2G"); result_free(r);
         r = dispatch_route("rNPU_hbm_fault", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
 

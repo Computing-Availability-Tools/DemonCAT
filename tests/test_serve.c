@@ -6,6 +6,12 @@
  *
  * 注:此 target 在 CMake 中不再单独编译 serve.c(本 TU 已 #include 进来),
  * 避免重复定义;其余 core 文件照常链接以满足 dispatch/state/registry 符号。 */
+
+/* _GNU_SOURCE 必须在所有系统头之前定义:本 TU 经 test.h(<stdio.h>)首次拉入 glibc <features.h>,
+ * 若晚于该首次包含再定义(serve.c 内的 #define 已来不及),realpath 等符号不声明
+ * → -Werror=implicit-function-declaration(ubuntu 宽松可过,openEuler/NPU glibc 严格会挂)。
+ * 故置于此处,先于 #include "test.h"。serve.c 内的同名 #define 是同值重定义,合法。 */
+#define _GNU_SOURCE
 #include "test.h"
 #include "../src/core/serve.c" /* 引入 static 函数与全部依赖 */
 #include <cJSON.h>

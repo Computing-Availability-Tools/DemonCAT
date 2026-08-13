@@ -24,14 +24,18 @@ case "${DCAT_OP:-inject}" in
     inject)
         spec=${DCAT_PARAM_CORES:?missing required param: cores}
         case "$spec" in *[!0-9,-]*) echo "invalid cores spec '$spec'" >&2; exit 1;; esac
+
+        # Test if RT scheduling is available (requires CAP_SYS_NICE)
+        USE_CHRT=0
+        if command -v chrt >/dev/null 2>&1 && chrt -f 1 true 2>/dev/null; then
+            USE_CHRT=1
+        fi
+
         pids=""
         for n in $(parse_cores "$spec"); do
-            # RT priority 1 (not 99): SCHED_FIFO enough to starve normal tasks
-            # without triggering kernel RT throttling kill.
-            # Use perl (reliable under RT), fallback to yes.
-            if command -v chrt >/dev/null 2>&1 && command -v perl >/dev/null 2>&1; then
+            if [ "$USE_CHRT" = 1 ] && command -v perl >/dev/null 2>&1; then
                 chrt -f 1 taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
-            elif command -v chrt >/dev/null 2>&1; then
+            elif [ "$USE_CHRT" = 1 ]; then
                 chrt -f 1 taskset -c "$n" yes >/dev/null 2>&1 &
             elif command -v perl >/dev/null 2>&1; then
                 taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
@@ -42,14 +46,16 @@ case "${DCAT_OP:-inject}" in
         done
         echo "$pids" > "$PIDFILE"
         sleep 1
-        # Verify processes are alive
         alive=0
         for pid in $pids; do
             kill -0 "$pid" 2>/dev/null && alive=$((alive + 1))
         done
         total=$(echo "$pids" | wc -w)
         if [ "$alive" -lt "$total" ]; then
-            echo "WARNING: only $alive/$total RT loops alive" >&2
+            echo "ERROR: only $alive/$total loops alive" >&2
+            for pid in $pids; do kill "$pid" 2>/dev/null; done
+            rm -f "$PIDFILE"
+            exit 1
         fi
         echo "hung cores [$spec] ($alive/$total alive, pids:$pids)"
         ;;

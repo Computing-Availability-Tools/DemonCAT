@@ -54,11 +54,12 @@ npu_phy_to_bdf() {
 }
 
 # Convert Phy-ID to "<npu_card_id> <chip_within_card>" for npu-smi -i -c queries.
-# Auto-detects chips-per-card from /dev/davinci count vs npu-smi card count.
+# Auto-detects chips-per-card from /dev/davinci count vs unique NPU card count.
 npu_phy_to_card() {
     local phy_id="$1" n_davinci n_cards per_card
     n_davinci=$(ls /dev/davinci[0-9]* 2>/dev/null | wc -l)
-    n_cards=$(npu-smi info 2>/dev/null | grep -cE '^\| [0-9]+ .*(OK|NG|Warning)')
+    # Count unique NPU card IDs from npu-smi info first column (deduplicated)
+    n_cards=$(npu-smi info 2>/dev/null | grep -oE '^\| [0-9]+' | awk '{print $2}' | sort -nu | wc -l)
     if [ "$n_davinci" -gt 0 ] && [ "$n_cards" -gt 0 ]; then
         per_card=$((n_davinci / n_cards))
         if [ "$per_card" -ge 1 ]; then

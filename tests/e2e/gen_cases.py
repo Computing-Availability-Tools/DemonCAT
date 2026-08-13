@@ -270,7 +270,7 @@ OBS = {
         provision="none", precondition="hccn_tool",
         v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_load", v_assert=">=1",
         c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_load", c_assert="==0"),
-    "rNPU_hbm_load": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+    "rNPU_hbm_load": dict(module="npu", inject_args="--chip=2 --size=2G", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
         v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", v_assert=">=1",
         c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", c_assert="==0"),

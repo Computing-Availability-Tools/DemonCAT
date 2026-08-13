@@ -1,5 +1,5 @@
 #!/bin/sh
-# rNPU_aic_load: AICore stress via ACL d2d memcpy (no torch_npu required).
+# rNPU_aic_load: AICore stress via aclnnMatmul (no torch_npu required).
 # inject: run _npu_stress aicore in background, write sidecar
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aicore Usage Rate)

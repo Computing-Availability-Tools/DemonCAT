@@ -1,5 +1,5 @@
 #!/bin/sh
-# rNPU_aiv_load: AIVector stress via ACL d2d memcpy (no torch_npu required).
+# rNPU_aiv_load: AIVector stress via aclnnExp (no torch_npu required).
 # inject: run _npu_stress aivector in background, write sidecar
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aivector Usage Rate)

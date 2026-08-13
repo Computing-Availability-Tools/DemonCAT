@@ -137,7 +137,7 @@ E2E-135,FUNC-rNPU_gw_change,0,npu,rNPU_gw_change,setup,hccn_tool -i 2 -link -s u
 E2E-136,FUNC-rNPU_gw_change,1,npu,rNPU_gw_change,inject,./build/dcat inject rNPU_gw_change --chip=2 --gateway=10.20.10.1,0,"""status"":""ok""",hccn_tool -i 2 -gateway -g 2>/dev/null,contains:10.20.10.1,,fault active after inject
 E2E-137,FUNC-rNPU_gw_change,2,npu,rNPU_gw_change,clean,./build/dcat clean rNPU_gw_change --chip=2,0,,hccn_tool -i 2 -gateway -g 2>/dev/null,notcontains:10.20.10.1,,"fault cleaned, system restored"
 E2E-138,FUNC-rNPU_gw_change,3,npu,rNPU_gw_change,query,./build/dcat query,0,,,state_not_contains:rNPU_gw_change,,no ghost record after clean
-E2E-139,FUNC-rNPU_hbm_load,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=2,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_hbm_load,>=1,,fault active after inject
+E2E-139,FUNC-rNPU_hbm_load,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=2 --size=2G,0,"""status"":""ok""",./build/dcat query 2>/dev/null | grep -c rNPU_hbm_load,>=1,,fault active after inject
 E2E-140,FUNC-rNPU_hbm_load,1,npu,rNPU_hbm_load,clean,./build/dcat clean rNPU_hbm_load --chip=2,0,,./build/dcat query 2>/dev/null | grep -c rNPU_hbm_load,==0,,"fault cleaned, system restored"
 E2E-141,FUNC-rNPU_hbm_load,2,npu,rNPU_hbm_load,query,./build/dcat query,0,,,state_not_contains:rNPU_hbm_load,,no ghost record after clean
 E2E-142,FUNC-rNPU_ip_change,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip=2 --address=10.0.0.99 --netmask=255.255.255.0,0,"""status"":""ok""",hccn_tool -i 2 -ip -g 2>/dev/null,contains:10.0.0.99,,fault active after inject

@@ -1746,7 +1746,7 @@ dcat clean rNPU_pcie_down --npu_id=2
 **描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（2048×2048×2048），持续施压 Cube 计算单元，拉高 AICore 使用率。
 
 **实现原理**: 
-- **inject**: 查找 chip→device 映射（`/tmp/dcat-npu-dev-map`），运行 `build/_npu_stress aicore <dev_id>` 后台进程。每批次提交 100 次矩阵乘法算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
+- **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次矩阵乘法算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AICore Usage Rate。
 
@@ -1780,7 +1780,7 @@ dcat clean rNPU_aic_load --chip=2
 **描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（16M 元素），持续施压 Vector 计算单元，拉高 AIVector 使用率。
 
 **实现原理**: 
-- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。每批次提交 100 次 exp 算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
+- **inject**: 运行 `build/_npu_stress aivector <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次 exp 算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
 
@@ -1812,7 +1812,7 @@ dcat clean rNPU_aiv_load --chip=2
 **描述**: 通过 `aclrtMalloc`+`aclrtMemset` 分配并填充指定大小的 HBM 内存并持续持有，占满 HBM 显存空间。
 
 **实现原理**: 
-- **inject**: 运行 `build/_npu_stress hbm <dev_id> [size_gb]` 后台进程，使用 `aclrtMalloc` + `aclrtMemset` 分配并填充 HBM 内存。PID 写入 sidecar。
+- **inject**: 运行 `build/_npu_stress hbm <dev_id> 0 <size_mb>` 后台进程，使用 `aclrtMalloc` + `aclrtMemset` 分配并填充 HBM 内存。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 HBM Usage Rate。
 
@@ -1863,7 +1863,7 @@ dcat clean rNPU_chip_reset --npu_id=2
 
 **危险等级**: 高 — 芯片复位后该芯片上所有训练/推理任务立即中断，数据丢失。多芯片卡上可能整卡重启。复位后需等待芯片自动恢复（约 3-10 秒）。
 
-**补充说明**: 需要 root + `npu-smi`。inject 使用 `printf 'y\n'` 自动回答 npu-smi 的确认提示。clean 的 `sleep 3` 等待芯片恢复后再执行 `cfg recovery`。
+**补充说明**: 需要 root + `npu-smi`。inject 使用 `printf 'y\n'` 自动回答 npu-smi 的确认提示。芯片复位后自动恢复，clean 仅清除 sidecar 状态。
 
 ---
 

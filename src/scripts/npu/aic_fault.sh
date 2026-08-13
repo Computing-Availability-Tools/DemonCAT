@@ -26,10 +26,9 @@ case "${DCAT_OP:-inject}" in
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && dev_id=0
-        duration=${DCAT_PARAM_DURATION:-30}
-        "$STRESS_BIN" aicore "$dev_id" "$duration" 512 >/dev/null 2>&1 &
+        "$STRESS_BIN" aicore "$dev_id" 0 512 >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
-        echo "AICore stress started on chip $chip (acl dev $dev_id, pid $!, ${duration}s)"
+        echo "AICore stress started on chip $chip (acl dev $dev_id, pid $!)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then

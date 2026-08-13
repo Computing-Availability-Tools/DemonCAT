@@ -13,7 +13,8 @@
 #include <unistd.h>
 #include <time.h>
 
-static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb]\n";
+static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb]\n"
+                           "  duration 0 = run forever (until killed)\n";
 
 int main(int argc, char **argv) {
     if (argc < 4) { fprintf(stderr, "%s", usage); return 1; }
@@ -24,7 +25,7 @@ int main(int argc, char **argv) {
     int size_mb = 512;
     if (argc > 4) size_mb = atoi(argv[4]);
 
-    if (duration <= 0) duration = 10;
+    /* duration <= 0 means run forever (until killed) */
     if (size_mb <= 0) size_mb = 512;
 
     aclError ret = aclInit(NULL);
@@ -40,8 +41,12 @@ int main(int argc, char **argv) {
         ret = aclrtMalloc(&d_ptr, bytes, ACL_MEM_MALLOC_HUGE_FIRST);
         if (ret != ACL_SUCCESS) { fprintf(stderr, "aclrtMalloc %dMB fail: %d\n", size_mb, ret); goto done; }
         aclrtMemset(d_ptr, bytes, 0xAA, bytes);
-        printf("HBM stress: %dMB allocated+filled on dev %d, holding %ds\n", size_mb, dev_id, duration);
-        sleep(duration);
+        printf("HBM stress: %dMB allocated+filled on dev %d, holding %s\n", size_mb, dev_id, duration > 0 ? "" : "forever");
+        if (duration > 0) {
+            sleep(duration);
+        } else {
+            while (1) pause();
+        }
         aclrtFree(d_ptr);
         printf("HBM stress done\n");
     } else if (strcmp(mode, "aicore") == 0 || strcmp(mode, "aivector") == 0) {
@@ -56,15 +61,23 @@ int main(int argc, char **argv) {
         aclrtStream stream;
         aclrtCreateStream(&stream);
 
-        printf("%s stress: %dMB x2, d2d memcpy loop on dev %d for %ds\n",
-               mode, size_mb, dev_id, duration);
+        printf("%s stress: %dMB x2, d2d memcpy loop on dev %d %s\n",
+               mode, size_mb, dev_id, duration > 0 ? "" : "forever");
 
         int iter = 0;
-        time_t end = time(NULL) + duration;
-        while (time(NULL) < end) {
-            aclrtMemcpyAsync(d_dst, bytes, d_src, bytes, ACL_MEMCPY_DEVICE_TO_DEVICE, stream);
-            aclrtSynchronizeStream(stream);
-            iter++;
+        if (duration > 0) {
+            time_t end = time(NULL) + duration;
+            while (time(NULL) < end) {
+                aclrtMemcpyAsync(d_dst, bytes, d_src, bytes, ACL_MEMCPY_DEVICE_TO_DEVICE, stream);
+                aclrtSynchronizeStream(stream);
+                iter++;
+            }
+        } else {
+            while (1) {
+                aclrtMemcpyAsync(d_dst, bytes, d_src, bytes, ACL_MEMCPY_DEVICE_TO_DEVICE, stream);
+                aclrtSynchronizeStream(stream);
+                iter++;
+            }
         }
         printf("%s stress done: %d iterations\n", mode, iter);
 

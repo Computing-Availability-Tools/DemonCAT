@@ -1743,9 +1743,8 @@ dcat clean rNPU_aic_fault --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| duration | 可选 | 整数 (秒) | 运行时长，0=持续运行直到 clean，默认 0 |
 
-**危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。
+**危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。持续运行直到 clean。
 
 **补充说明**: 依赖 CANN + ACL（libascendcl.so），需编译 `_npu_stress`（`cmake .. && make _npu_stress`）。不依赖 torch_npu。需要 chip→ACL dev 映射文件。
 
@@ -1772,9 +1771,8 @@ dcat clean rNPU_aiv_fault --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| duration | 可选 | 整数 (秒) | 运行时长，0=持续运行直到 clean，默认 0 |
 
-**危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。
+**危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 
 **补充说明**: 依赖 CANN + ACL，需编译 `_npu_stress`。不依赖 torch_npu。
 
@@ -1793,7 +1791,7 @@ dcat clean rNPU_aiv_fault --chip=2
 
 **使用示例**:
 ```bash
-dcat inject rNPU_hbm_fault --chip=2 --size_gb=4
+dcat inject rNPU_hbm_fault --chip=2 --size=20G
 dcat query rNPU_hbm_fault --chip=2
 dcat clean rNPU_hbm_fault --chip=2
 ```
@@ -1802,10 +1800,9 @@ dcat clean rNPU_hbm_fault --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| size_gb | 可选 | 正整数 | 每轮分配的 HBM 大小（GB），默认 1 |
-| duration | 可选 | 整数 (秒) | 运行时长，0=持续运行直到 clean，默认 0 |
+| size | 可选 | 大小字符串 | 分配的 HBM 大小，支持 `2G`/`500M`/`500`（裸数=MB），默认 `2G` |
 
-**危险等级**: 中 — HBM 持续高占用，影响同芯片上其他任务的显存分配，可能导致 OOM。
+**危险等级**: 中 — HBM 持续高占用，影响同芯片上其他任务的显存分配，可能导致 OOM。持续运行直到 clean。
 
 **补充说明**: 依赖 CANN + ACL，需编译 `_npu_stress`。不依赖 torch_npu。`size_gb` 过大可能导致 HBM OOM。
 

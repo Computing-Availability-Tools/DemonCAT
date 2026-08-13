@@ -1259,14 +1259,17 @@ NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool`、`npu-smi`�
 
 ### 8.0 前置准备：实机参数查询与调整
 
-所有 NPU 用例注入前，按下列步骤确认目标机器的实际参数。命令中 `chip` 用目标芯片号（示例取 2，请替换成可用芯片号）。
+所有 NPU 用例注入前，按下列步骤确认目标机器的实际参数。命令中 `chip` 用目标芯片号（Phy-ID，示例取 2，请替换为本机可用芯片号）。
 
 **① 确认可注入的芯片与 RoCE 网口名 `dev`**
 
 ```bash
-npu-smi info                      # 查看目标机 NPU 拓扑，确认 0-7 内可用的芯片
+ls /dev/davinci*                  # 查看可用芯片 Phy-ID（davinci 后的数字）
+npu-smi info                      # 查看 NPU 卡拓扑、芯片状态与健康
 hccn_tool -i 2 -status -g          # 查询芯片 2 的网口名，输出 "Settings for eth2:" → dev 为 eth2（示例机）
 ```
+
+> **chip vs npu_id**：多数 NPU 故障使用 `chip`（物理芯片 Phy-ID，`ls /dev/davinci*` 查看）；`pcie_down` 和 `chip_reset` 使用 `npu_id`（NPU 卡号，`npu-smi info` 第一列）。详见 8.0 节⑥。
 
 > **关键**：`hccn_tool` 的 `dev` 是 **NPU 内部网卡名**（示例机为 `eth2`，不同机器可能是 `eth0`/`eth2` 等），不是 Linux 系统接口名。用 `hccn_tool -i <chip> -status -g` 可查询，输出首行 `Settings for ethX:` 中的 `ethX` 即为该芯片的 dev 值。
 

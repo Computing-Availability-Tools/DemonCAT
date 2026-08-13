@@ -5,20 +5,20 @@
 ## CPU 模块（2 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rCPU_overload` | cores | load_pct | CPU overload (multi-core burn, pure user-space) |
 | `rCPU_core_offline` | cores | — | CPU core offline via sysfs |
 
 ## 存储模块（1 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rDISK_write_overload` | device | workers,size_mb | Disk write IO overload (dd writers) |
 
 ## 网络模块（11 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rNET_delay` | iface,delay_ms | — | Network egress delay via tc netem |
 | `rNET_loss` | iface,loss_pct | — | Network packet loss (tc netem) |
 | `rNET_reorder` | iface,reorder_pct | — | Network packet reorder (tc netem) |
@@ -34,7 +34,7 @@
 ## 进程模块（3 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rPROC_exit` | pid | — | Process exit (kill -9, irreversible) |
 | `rPROC_hang` | pid | — | Process hang (SIGSTOP) |
 | `rPROC_zstate` | pid | — | Zombie process (kill target → zombie, clean kills parent to reap) |
@@ -42,7 +42,7 @@
 ## NPU 模块（16 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rNPU_link_down` | chip | — | RoCE link down (hccn_tool -cfg recovery) |
 | `rNPU_ip_change` | chip,address,netmask | — | RoCE IP change |
 | `rNPU_gw_change` | chip,gateway | — | RoCE gateway change |

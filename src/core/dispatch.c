@@ -18,7 +18,12 @@ static int is_inject_only(const fault_def_t *f) {
 }
 
 /* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非裸 JSON。 */
-typedef struct { const char *uid; const char *module; const char *ops; const char *desc; } list_row_t;
+typedef struct {
+    const char *uid;
+    const char *module;
+    const char *ops;
+    const char *desc;
+} list_row_t;
 #define MAX_LIST_ROWS 128
 
 static result_t *dispatch_list(void) {
@@ -26,12 +31,15 @@ static result_t *dispatch_list(void) {
     char opsbuf[MAX_LIST_ROWS][64];
     int m = 0;
 
-    int n = 0; const fault_def_t *list = registry_list(&n);
+    int n = 0;
+    const fault_def_t *list = registry_list(&n);
     for (int i = 0; i < n && m < MAX_LIST_ROWS; i++) {
         rows[m].uid = list[i].uid;
         rows[m].module = list[i].module;
-        char buf[64]; strncpy(buf, list[i].supported_ops, sizeof(buf)-1); buf[sizeof(buf)-1]='\0';
-        strncpy(opsbuf[m], buf, sizeof(opsbuf[m])-1); opsbuf[m][sizeof(opsbuf[m])-1]='\0';
+        char buf[64];
+        strncpy(buf, list[i].supported_ops, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        snprintf(opsbuf[m], sizeof(opsbuf[m]), "%s", buf);
         rows[m].ops = opsbuf[m];
         rows[m].desc = list[i].desc;
         m++;
@@ -43,8 +51,10 @@ static result_t *dispatch_list(void) {
         if (plugs[i]->name && strcmp(plugs[i]->name, "sample") == 0) continue;
         rows[m].uid = plugs[i]->uid;
         rows[m].module = plugs[i]->name ? plugs[i]->name : "";
-        char pbuf[64]; strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf)-1); pbuf[sizeof(pbuf)-1]='\0';
-        strncpy(opsbuf[m], pbuf, sizeof(opsbuf[m])-1); opsbuf[m][sizeof(opsbuf[m])-1]='\0';
+        char pbuf[64];
+        strncpy(pbuf, plugs[i]->supported_ops, sizeof(pbuf) - 1);
+        pbuf[sizeof(pbuf) - 1] = '\0';
+        snprintf(opsbuf[m], sizeof(opsbuf[m]), "%s", pbuf);
         rows[m].ops = opsbuf[m];
         rows[m].desc = (plugs[i]->description && plugs[i]->description[0]) ? plugs[i]->description : "";
         m++;
@@ -53,33 +63,48 @@ static result_t *dispatch_list(void) {
     /* 计算各列最大宽度(含表头) */
     int w_uid = 4, w_mod = 6, w_ops = 3, w_desc = 4;
     for (int i = 0; i < m; i++) {
-        int lu=(int)strlen(rows[i].uid), lm=(int)strlen(rows[i].module),
-            lo=(int)strlen(rows[i].ops), ld=(int)strlen(rows[i].desc);
+        int lu = (int)strlen(rows[i].uid), lm = (int)strlen(rows[i].module),
+            lo = (int)strlen(rows[i].ops), ld = (int)strlen(rows[i].desc);
         if (lu > w_uid) w_uid = lu;
         if (lm > w_mod) w_mod = lm;
         if (lo > w_ops) w_ops = lo;
         if (ld > w_desc) w_desc = ld;
     }
-    if (w_desc > 60) w_desc = 60;   /* 描述列过长则截断，保持可读 */
+    if (w_desc > 60) w_desc = 60; /* 描述列过长则截断，保持可读 */
 
     size_t cap = (size_t)(m + 2) * (size_t)(w_uid + w_mod + w_ops + w_desc + 4) + 64;
     char *out = malloc(cap);
     if (!out) return result_err("list", NULL, 1, "out of memory");
     size_t off = 0;
-#define LF_APPEND(...) do { \
+#define LF_APPEND(...)                                        \
+    do {                                                      \
         int lf = snprintf(out + off, cap - off, __VA_ARGS__); \
-        if (lf < 0) { off = 0; break; } \
-        off += (size_t)lf; if (off >= cap) { off = cap - 2; break; } } while (0)
+        if (lf < 0) {                                         \
+            off = 0;                                          \
+            break;                                            \
+        }                                                     \
+        off += (size_t)lf;                                    \
+        if (off >= cap) {                                     \
+            off = cap - 2;                                    \
+            break;                                            \
+        }                                                     \
+    } while (0)
     const char *dash = "----------------------------------------------------------------------------------------------------";
     LF_APPEND("%-*s  %-*s  %-*s  %s\n", w_uid, "uid", w_mod, "module", w_ops, "ops", "desc");
     LF_APPEND("%.*s  %.*s  %.*s  %.*s\n", w_uid, dash, w_mod, dash, w_ops, dash, w_desc, dash);
     for (int i = 0; i < m; i++) {
-        char d[61]; strncpy(d, rows[i].desc, sizeof(d)-1); d[sizeof(d)-1]='\0';
+        char d[61];
+        strncpy(d, rows[i].desc, sizeof(d) - 1);
+        d[sizeof(d) - 1] = '\0';
         LF_APPEND("%-*s  %-*s  %-*s  %s\n", w_uid, rows[i].uid, w_mod, rows[i].module, w_ops, rows[i].ops, d);
     }
 #undef LF_APPEND
     out[off] = '\0';
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = out; r->raw = 1; return r;
+    result_t *r = malloc(sizeof(result_t));
+    r->code = 0;
+    r->json = out;
+    r->raw = 1;
+    return r;
 }
 
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
@@ -89,7 +114,7 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
         if (id < 0) {
             result_free(r);
             return result_err("inject", f->uid, 1,
-                "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                              "state table full, cannot track injection — run 'dcat query' and clean existing faults");
         }
         cJSON *root = cJSON_Parse(r->json);
         if (root) {
@@ -126,7 +151,10 @@ static void fmt_record_params(const injection_record_t *rec, char *out, size_t c
         int w = snprintf(out + len, cap - len, "%s%s=%s",
                          len ? "," : "", rec->params.items[i].key, rec->params.items[i].value);
         if (w < 0) break;
-        if ((size_t)w >= cap - len) { out[cap - 1] = '\0'; break; }
+        if ((size_t)w >= cap - len) {
+            out[cap - 1] = '\0';
+            break;
+        }
         len += (size_t)w;
     }
 }
@@ -135,7 +163,8 @@ static void fmt_record_params(const injection_record_t *rec, char *out, size_t c
  * 标 inactive，使 query 与系统一致（不残留幽灵记录）。内存空（state 丢失/无记录）时
  * state_find_by_params 返回 0，自然 no-op。 */
 static void reconcile_uid_state(const char *uid) {
-    params_t empty; params_init(&empty);
+    params_t empty;
+    params_init(&empty);
     long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(uid, &empty, ids, DCAT_MAX_RECORDS);
     for (int i = 0; i < n; i++) state_mark_inactive(ids[i]);
@@ -168,10 +197,15 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
  * stateless，不依赖 state.json（脚本自行 glob /tmp 工件，插件自行幂等清理）。聚合每 uid 结果。
  * 输出：全成功 → 一行摘要；有失败 → 表格 + 汇总（人类可读）。 */
 result_t *dispatch_clean_all(void) {
-    params_t empty; params_init(&empty);
-    int n = 0; const fault_def_t *list = registry_list(&n);
+    params_t empty;
+    params_init(&empty);
+    int n = 0;
+    const fault_def_t *list = registry_list(&n);
     int ok = 0, err = 0;
-    struct { char uid[64]; int failed; } rows[128];
+    struct {
+        char uid[64];
+        int failed;
+    } rows[128];
     int rc = 0;
 
     for (int i = 0; i < n; i++) {
@@ -184,7 +218,12 @@ result_t *dispatch_clean_all(void) {
         } else {
             err++;
         }
-        if (rc < 128) { strncpy(rows[rc].uid, list[i].uid, 63); rows[rc].uid[63]='\0'; rows[rc].failed = failed; rc++; }
+        if (rc < 128) {
+            strncpy(rows[rc].uid, list[i].uid, 63);
+            rows[rc].uid[63] = '\0';
+            rows[rc].failed = failed;
+            rc++;
+        }
         if (r) result_free(r);
     }
 
@@ -202,28 +241,41 @@ result_t *dispatch_clean_all(void) {
         } else {
             err++;
         }
-        if (rc < 128) { strncpy(rows[rc].uid, p->uid, 63); rows[rc].uid[63]='\0'; rows[rc].failed = failed; rc++; }
+        if (rc < 128) {
+            strncpy(rows[rc].uid, p->uid, 63);
+            rows[rc].uid[63] = '\0';
+            rows[rc].failed = failed;
+            rc++;
+        }
         if (r) result_free(r);
     }
 
-    result_t *res = malloc(sizeof(result_t)); res->code = (err > 0) ? 1 : 0;
+    result_t *res = malloc(sizeof(result_t));
+    res->code = (err > 0) ? 1 : 0;
     if (err == 0) {
         char *buf = malloc(128);
         snprintf(buf, 128, "cleaned %d faults (all ok)\n", ok);
-        res->json = buf; res->raw = 1; return res;
+        res->json = buf;
+        res->raw = 1;
+        return res;
     }
     /* 有失败：表格 + 汇总 */
     size_t cap = 256 + (size_t)rc * 80;
     char *buf = malloc(cap);
     size_t off = 0;
-    off += snprintf(buf+off, cap-off, "%-24s  %s\n", "UID", "RESULT");
-    off += snprintf(buf+off, cap-off, "%-24s  %s\n", "------------------------", "------");
+    off += snprintf(buf + off, cap - off, "%-24s  %s\n", "UID", "RESULT");
+    off += snprintf(buf + off, cap - off, "%-24s  %s\n", "------------------------", "------");
     for (int i = 0; i < rc; i++) {
-        if (off >= cap - 80) { off += snprintf(buf+off, cap-off, "... (truncated)\n"); break; }
-        off += snprintf(buf+off, cap-off, "%-24s  %s\n", rows[i].uid, rows[i].failed ? "error" : "cleaned");
+        if (off >= cap - 80) {
+            off += snprintf(buf + off, cap - off, "... (truncated)\n");
+            break;
+        }
+        off += snprintf(buf + off, cap - off, "%-24s  %s\n", rows[i].uid, rows[i].failed ? "error" : "cleaned");
     }
-    off += snprintf(buf+off, cap-off, "\n%d cleaned, %d error\n", ok, err);
-    res->json = buf; res->raw = 1; return res;
+    (void)snprintf(buf + off, cap - off, "\n%d cleaned, %d error\n", ok, err);
+    res->json = buf;
+    res->raw = 1;
+    return res;
 }
 
 /* 重注入冲突错误（退出码 5）：列出重叠记录 id 与参数，提示 --force。 */
@@ -231,21 +283,31 @@ static result_t *reinject_conflict_err(const char *uid, const long long *ids, in
     char msg[512];
     int off = 0;
     int w = snprintf(msg, sizeof msg, "resource already injected");
-    if (w < 0) off = (int)sizeof msg; else off = w;
+    if (w < 0)
+        off = (int)sizeof msg;
+    else
+        off = w;
     int shown = on < 3 ? on : 3;
     for (int k = 0; k < shown && off < (int)sizeof msg; k++) {
         const injection_record_t *rec = state_find_by_id(ids[k]);
-        char pstr[256]; pstr[0] = '\0';
+        char pstr[256];
+        pstr[0] = '\0';
         if (rec) fmt_record_params(rec, pstr, sizeof pstr);
         const char *sep = (k == 0) ? " (" : "; ";
         w = snprintf(msg + off, sizeof msg - (size_t)off,
                      "%srecord id %lld: %s", sep, ids[k], pstr);
-        if (w < 0) { off = (int)sizeof msg; break; }
+        if (w < 0) {
+            off = (int)sizeof msg;
+            break;
+        }
         off += w;
     }
     if (on > 3 && off < (int)sizeof msg) {
         w = snprintf(msg + off, sizeof msg - (size_t)off, "; +%d more", on - 3);
-        if (w < 0) off = (int)sizeof msg; else off += w;
+        if (w < 0)
+            off = (int)sizeof msg;
+        else
+            off += w;
     }
     if (off < (int)sizeof msg)
         snprintf(msg + off, sizeof msg - (size_t)off, "); use --force to replace");
@@ -262,7 +324,8 @@ static result_t *force_clean_overlap(const char *uid, void *ctx, const long long
         if (!rec) continue;
         result_t *rc = clean_one(ctx, rec);
         if (rc && rc->code != 0) {
-            char m[320]; const char *detail = "";
+            char m[320];
+            const char *detail = "";
             cJSON *root = cJSON_Parse(rc->json);
             if (root) {
                 cJSON *e = cJSON_GetObjectItem(root, "error");
@@ -294,8 +357,10 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
         return result_err(op, p->uid, 3, msg);
     }
     const char *op_req = NULL;
-    if (strcmp(op, "inject") == 0)     op_req = p->inject_required;
-    else if (strcmp(op, "clean") == 0) op_req = p->clean_required;
+    if (strcmp(op, "inject") == 0)
+        op_req = p->inject_required;
+    else if (strcmp(op, "clean") == 0)
+        op_req = p->clean_required;
     /* query 不强制必填参数（无参时脚本自行展示全部），与 cnf 路径 precheck 一致 */
     if (op_req && !required_params_present(op_req, params))
         return result_err(op, p->uid, 3, "missing required params");
@@ -312,7 +377,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
             if (id < 0) {
                 result_free(r);
                 return result_err("inject", p->uid, 1,
-                    "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                                  "state table full, cannot track injection — run 'dcat query' and clean existing faults");
             }
             cJSON *root = cJSON_Parse(r->json);
             if (root) {
@@ -371,11 +436,14 @@ static result_t *dispatch_query_all(void) {
         /* 多条记录：表格输出（人类可读） */
         size_t cap = 256 + (size_t)n * 256;
         char *out = malloc(cap);
-        if (!out) { cJSON_Delete(arr); return result_err("query", NULL, 1, "out of memory"); }
+        if (!out) {
+            cJSON_Delete(arr);
+            return result_err("query", NULL, 1, "out of memory");
+        }
         size_t off = 0;
-        off += snprintf(out+off, cap-off, "%-6s  %-24s  %-6s  %-20s  %s\n",
+        off += snprintf(out + off, cap - off, "%-6s  %-24s  %-6s  %-20s  %s\n",
                         "ID", "UID", "ACT", "STARTED", "PARAMS");
-        off += snprintf(out+off, cap-off, "%-6s  %-24s  %-6s  %-20s  %s\n",
+        off += snprintf(out + off, cap - off, "%-6s  %-24s  %-6s  %-20s  %s\n",
                         "------", "------------------------", "------", "--------------------", "------");
         cJSON *o;
         cJSON_ArrayForEach(o, arr) {
@@ -384,16 +452,20 @@ static result_t *dispatch_query_all(void) {
             cJSON *jactive = cJSON_GetObjectItem(o, "active");
             cJSON *jstarted = cJSON_GetObjectItem(o, "started_at");
             cJSON *jparams = cJSON_GetObjectItem(o, "params");
-            char pstr[256] = ""; int plen = 0;
+            char pstr[256] = "";
+            int plen = 0;
             if (jparams) {
                 cJSON *jp;
                 cJSON_ArrayForEach(jp, jparams) {
                     if (jp->string && jp->valuestring)
-                        plen += snprintf(pstr+plen, sizeof(pstr)-plen, "%s=%s ", jp->string, jp->valuestring);
+                        plen += snprintf(pstr + plen, sizeof(pstr) - plen, "%s=%s ", jp->string, jp->valuestring);
                 }
             }
-            if (off >= cap - 256) { off += snprintf(out+off, cap-off, "... (truncated)\n"); break; }
-            off += snprintf(out+off, cap-off, "%-6d  %-24s  %-6s  %-20s  %s\n",
+            if (off >= cap - 256) {
+                off += snprintf(out + off, cap - off, "... (truncated)\n");
+                break;
+            }
+            off += snprintf(out + off, cap - off, "%-6d  %-24s  %-6s  %-20s  %s\n",
                             jid ? (int)jid->valuedouble : 0,
                             juid ? juid->valuestring : "",
                             (jactive && jactive->type == cJSON_True) ? "yes" : "no",
@@ -402,15 +474,24 @@ static result_t *dispatch_query_all(void) {
         }
         cJSON_Delete(arr);
         out[off] = '\0';
-        result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = out; r->raw = 1; return r;
+        result_t *r = malloc(sizeof(result_t));
+        r->code = 0;
+        r->json = out;
+        r->raw = 1;
+        return r;
     }
     /* 0-1 条记录：保持 JSON */
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
     cJSON_AddStringToObject(root, "op", "query");
     cJSON_AddItemToObject(root, "data", arr);
-    char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-    result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; r->raw = 0; return r;
+    char *s = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    result_t *r = malloc(sizeof(result_t));
+    r->code = 0;
+    r->json = s;
+    r->raw = 0;
+    return r;
 }
 
 result_t *dispatch_route_force(const char *uid, const char *op, const params_t *params, int force) {
@@ -434,7 +515,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
             }
             return cnf_inject(f, params);
         }
-        if (strcmp(op, "clean") == 0)   return cnf_clean(f, params);
+        if (strcmp(op, "clean") == 0) return cnf_clean(f, params);
         if (strcmp(op, "query") == 0) {
             int rc = executor_run_raw_fault(f, "query", params);
             printf("---\n");
@@ -444,8 +525,13 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
             cJSON_AddStringToObject(root, "uid", uid);
             cJSON *data = cJSON_AddObjectToObject(root, "data");
             cJSON_AddBoolToObject(data, "confirmed", rc == 0);
-            char *s = cJSON_PrintUnformatted(root); cJSON_Delete(root);
-            result_t *r = malloc(sizeof(result_t)); r->code = 0; r->json = s; r->raw = 0; return r;
+            char *s = cJSON_PrintUnformatted(root);
+            cJSON_Delete(root);
+            result_t *r = malloc(sizeof(result_t));
+            r->code = 0;
+            r->json = s;
+            r->raw = 0;
+            return r;
         }
     }
     const injector_t *inj = injector_find(uid);
@@ -460,7 +546,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
                 if (id < 0) {
                     result_free(r);
                     return result_err("inject", uid, 1,
-                        "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                                      "state table full, cannot track injection — run 'dcat query' and clean existing faults");
                 }
             }
             return r;
@@ -474,7 +560,8 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
                 if (!rec) continue;
                 result_t *r = inj->clean(&rec->params);
                 if (r->code != 0) return r;
-                state_mark_inactive(ids[i]); result_free(r);
+                state_mark_inactive(ids[i]);
+                result_free(r);
             }
             return result_ok("clean", uid, 0, "cleaned");
         }

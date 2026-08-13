@@ -20,7 +20,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
+#define CK(cond)                                  \
+    do {                                          \
+        if (!(cond)) {                            \
+            fprintf(stderr, "FAIL: %s\n", #cond); \
+            return 1;                             \
+        }                                         \
+    } while (0)
 
 static const char *SFILE = "/tmp/dcat_smoke_state_lost.json";
 
@@ -30,16 +36,16 @@ static void setup(void) {
     registry_init(&cfg);
     state_reset();
     state_set_file(SFILE);
-    state_load();                 /* 首次文件不存在 → state_is_lost()=1，内存空 */
+    state_load(); /* 首次文件不存在 → state_is_lost()=1，内存空 */
     executor_set_mock(NULL);
-    system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null");
+    if (system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null")) {}
 }
 
 static void teardown(void) {
     state_reset();
     state_set_file("");
     unlink(SFILE);
-    system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null");
+    if (system("rm -f /tmp/dcat-rPROC_hang-*.sidecar 2>/dev/null")) {}
 }
 
 /* fork 一个 sleep 子进程并注入 rPROC_hang（SIGSTOP + 写 sidecar + 写 state）；
@@ -47,10 +53,17 @@ static void teardown(void) {
 static pid_t inject_hang(void) {
     pid_t pid = fork();
     if (pid < 0) return -1;
-    if (pid == 0) { sleep(60); _exit(0); }
-    char pidstr[16]; snprintf(pidstr, sizeof pidstr, "%d", pid);
-    params_t p; memset(&p, 0, sizeof p);
-    strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, pidstr); p.count = 1;
+    if (pid == 0) {
+        sleep(60);
+        _exit(0);
+    }
+    char pidstr[16];
+    snprintf(pidstr, sizeof pidstr, "%d", pid);
+    params_t p;
+    memset(&p, 0, sizeof p);
+    strcpy(p.items[0].key, "pid");
+    strcpy(p.items[0].value, pidstr);
+    p.count = 1;
     result_t *r = dispatch_route("rPROC_hang", "inject", &p);
     int ok = (r && r->code == 0);
     result_free(r);
@@ -58,16 +71,21 @@ static pid_t inject_hang(void) {
 }
 
 static int is_stopped(pid_t pid) {
-    char path[64]; snprintf(path, sizeof path, "/proc/%d/status", pid);
-    FILE *f = fopen(path, "r"); if (!f) return -1;
-    char line[256]; int stopped = 0;
+    char path[64];
+    snprintf(path, sizeof path, "/proc/%d/status", pid);
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char line[256];
+    int stopped = 0;
     while (fgets(line, sizeof line, f))
         if (strstr(line, "State:") && strchr(line, 'T')) stopped = 1;
-    fclose(f); return stopped;
+    fclose(f);
+    return stopped;
 }
 
 static int sidecar_exists(pid_t pid) {
-    char path[64]; snprintf(path, sizeof path, "/tmp/dcat-rPROC_hang-%d.sidecar", pid);
+    char path[64];
+    snprintf(path, sizeof path, "/tmp/dcat-rPROC_hang-%d.sidecar", pid);
     return access(path, F_OK) == 0;
 }
 
@@ -81,63 +99,82 @@ static void lose_state(void) {
 
 /* kill+回收残留子进程，避免污染后续测试 */
 static void reap(pid_t pid) {
-    kill(pid, SIGCONT); kill(pid, SIGKILL); waitpid(pid, NULL, 0);
+    kill(pid, SIGCONT);
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
 }
 
 /* ---- Test 1: clean <uid> --params（state 丢失 → 回退用用户参数调脚本） ---- */
 static int t_clean_with_params_after_state_lost(void) {
     setup();
-    pid_t pid = inject_hang(); CK(pid > 0);
+    pid_t pid = inject_hang();
+    CK(pid > 0);
     sleep(1);
-    CK(is_stopped(pid) == 1);          /* 故障在系统上生效 */
-    CK(sidecar_exists(pid));           /* /tmp 工件存在 */
+    CK(is_stopped(pid) == 1); /* 故障在系统上生效 */
+    CK(sidecar_exists(pid));  /* /tmp 工件存在 */
 
-    lose_state();                      /* 误删 state.json */
-    CK(state_is_lost());               /* 标记为丢失 */
+    lose_state();        /* 误删 state.json */
+    CK(state_is_lost()); /* 标记为丢失 */
     /* state 无记录 → 带参 clean 必须回退到脚本（用用户 pid） */
-    char pidstr[16]; snprintf(pidstr, sizeof pidstr, "%d", pid);
-    params_t p; memset(&p, 0, sizeof p);
-    strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, pidstr); p.count = 1;
+    char pidstr[16];
+    snprintf(pidstr, sizeof pidstr, "%d", pid);
+    params_t p;
+    memset(&p, 0, sizeof p);
+    strcpy(p.items[0].key, "pid");
+    strcpy(p.items[0].value, pidstr);
+    p.count = 1;
     result_t *r = dispatch_route("rPROC_hang", "clean", &p);
     CK(r && r->code == 0);
     result_free(r);
     sleep(1);
-    CK(is_stopped(pid) == 0);          /* SIGCONT 恢复运行 */
-    CK(!sidecar_exists(pid));          /* sidecar 已清 */
-    reap(pid); teardown();
+    CK(is_stopped(pid) == 0); /* SIGCONT 恢复运行 */
+    CK(!sidecar_exists(pid)); /* sidecar 已清 */
+    reap(pid);
+    teardown();
     return 0;
 }
 
 /* ---- Test 2: clean <uid>（无参，stateless glob /tmp 工件） ---- */
 static int t_clean_no_params_after_state_lost(void) {
     setup();
-    pid_t pid = inject_hang(); CK(pid > 0);
-    sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
-    lose_state(); CK(state_is_lost());
-    params_t empty; memset(&empty, 0, sizeof empty);   /* count=0 */
+    pid_t pid = inject_hang();
+    CK(pid > 0);
+    sleep(1);
+    CK(is_stopped(pid) == 1);
+    CK(sidecar_exists(pid));
+    lose_state();
+    CK(state_is_lost());
+    params_t empty;
+    memset(&empty, 0, sizeof empty); /* count=0 */
     result_t *r = dispatch_route("rPROC_hang", "clean", &empty);
     CK(r && r->code == 0);
     result_free(r);
     sleep(1);
     CK(is_stopped(pid) == 0);
     CK(!sidecar_exists(pid));
-    reap(pid); teardown();
+    reap(pid);
+    teardown();
     return 0;
 }
 
 /* ---- Test 3: clean --all（fan-out 无参 clean，stateless） ---- */
 static int t_clean_all_after_state_lost(void) {
     setup();
-    pid_t pid = inject_hang(); CK(pid > 0);
-    sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
-    lose_state(); CK(state_is_lost());
+    pid_t pid = inject_hang();
+    CK(pid > 0);
+    sleep(1);
+    CK(is_stopped(pid) == 1);
+    CK(sidecar_exists(pid));
+    lose_state();
+    CK(state_is_lost());
     result_t *r = dispatch_clean_all();
     CK(r && r->code == 0);
     result_free(r);
     sleep(1);
     CK(is_stopped(pid) == 0);
     CK(!sidecar_exists(pid));
-    reap(pid); teardown();
+    reap(pid);
+    teardown();
     return 0;
 }
 
@@ -145,34 +182,43 @@ static int t_clean_all_after_state_lost(void) {
  *              但无参 stateless clean 仍可恢复。锁定“仅在完全丢失才回退”的边界。 ---- */
 static int t_clean_partial_state_safe_no_fallback(void) {
     setup();
-    pid_t pid = inject_hang(); CK(pid > 0);
-    sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
+    pid_t pid = inject_hang();
+    CK(pid > 0);
+    sleep(1);
+    CK(is_stopped(pid) == 1);
+    CK(sidecar_exists(pid));
 
     /* 模拟部分损坏：把 state.json 重写为有效但空记录（运维手编辑/截断记录） */
-    state_reset();                    /* 清内存记录，g_state_lost=0 */
-    state_save();                      /* 覆盖为合法 JSON（空记录） */
-    state_load();                      /* 文件合法 → state_is_lost()=0 */
+    state_reset(); /* 清内存记录，g_state_lost=0 */
+    state_save();  /* 覆盖为合法 JSON（空记录） */
+    state_load();  /* 文件合法 → state_is_lost()=0 */
     CK(!state_is_lost());
 
-    char pidstr[16]; snprintf(pidstr, sizeof pidstr, "%d", pid);
-    params_t p; memset(&p, 0, sizeof p);
-    strcpy(p.items[0].key, "pid"); strcpy(p.items[0].value, pidstr); p.count = 1;
+    char pidstr[16];
+    snprintf(pidstr, sizeof pidstr, "%d", pid);
+    params_t p;
+    memset(&p, 0, sizeof p);
+    strcpy(p.items[0].key, "pid");
+    strcpy(p.items[0].value, pidstr);
+    p.count = 1;
     result_t *r = dispatch_route("rPROC_hang", "clean", &p);
-    CK(r && r->code != 0);           /* "no active injection"，不触碰进程 */
+    CK(r && r->code != 0); /* "no active injection"，不触碰进程 */
     result_free(r);
     sleep(1);
-    CK(is_stopped(pid) == 1);         /* 仍处于 STOP（clean 未动它） */
-    CK(sidecar_exists(pid));          /* sidecar 仍在 */
+    CK(is_stopped(pid) == 1); /* 仍处于 STOP（clean 未动它） */
+    CK(sidecar_exists(pid));  /* sidecar 仍在 */
 
     /* 恢复手段：无参 stateless clean（glob /tmp 工件） */
-    params_t empty; memset(&empty, 0, sizeof empty);
+    params_t empty;
+    memset(&empty, 0, sizeof empty);
     result_t *r2 = dispatch_route("rPROC_hang", "clean", &empty);
     CK(r2 && r2->code == 0);
     result_free(r2);
     sleep(1);
     CK(is_stopped(pid) == 0);
     CK(!sidecar_exists(pid));
-    reap(pid); teardown();
+    reap(pid);
+    teardown();
     return 0;
 }
 
@@ -181,35 +227,63 @@ static int t_clean_partial_state_safe_no_fallback(void) {
  * state 记录被标 inactive（query 不再残留幽灵）。 */
 static int t_clean_no_params_reconciles_state(void) {
     setup();
-    pid_t pid = inject_hang(); CK(pid > 0);
-    sleep(1); CK(is_stopped(pid) == 1); CK(sidecar_exists(pid));
-    CK(state_list_active() == 1);       /* state 有该记录（区别于前 3 例误删后 state 为空） */
-    params_t empty; memset(&empty, 0, sizeof empty);   /* count=0 */
+    pid_t pid = inject_hang();
+    CK(pid > 0);
+    sleep(1);
+    CK(is_stopped(pid) == 1);
+    CK(sidecar_exists(pid));
+    CK(state_list_active() == 1); /* state 有该记录（区别于前 3 例误删后 state 为空） */
+    params_t empty;
+    memset(&empty, 0, sizeof empty); /* count=0 */
     result_t *r = dispatch_route("rPROC_hang", "clean", &empty);
     CK(r && r->code == 0);
     result_free(r);
     sleep(1);
-    CK(is_stopped(pid) == 0);            /* 系统层：SIGCONT 恢复 */
-    CK(!sidecar_exists(pid));           /* 系统层：sidecar 已删 */
+    CK(is_stopped(pid) == 0); /* 系统层：SIGCONT 恢复 */
+    CK(!sidecar_exists(pid)); /* 系统层：sidecar 已删 */
     /* state 层：记录应已 reconcile 为 inactive（无幽灵） */
-    params_t q; memset(&q, 0, sizeof q);
+    params_t q;
+    memset(&q, 0, sizeof q);
     long long ids[DCAT_MAX_RECORDS];
     CK(state_find_by_params("rPROC_hang", &q, ids, DCAT_MAX_RECORDS) == 0);
-    reap(pid); teardown();
+    reap(pid);
+    teardown();
     return 0;
 }
 
 int main(void) {
     int fail = 0;
-    fprintf(stderr, "  -> t_clean_with_params_after_state_lost ... "); fflush(stderr);
-    fail |= t_clean_with_params_after_state_lost(); fprintf(stderr, "%s\n", fail & 1 ? "FAIL" : "ok");
-    fprintf(stderr, "  -> t_clean_no_params_after_state_lost ... "); fflush(stderr);
-    { int r = t_clean_no_params_after_state_lost(); fail |= (r << 1); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
-    fprintf(stderr, "  -> t_clean_all_after_state_lost ... "); fflush(stderr);
-    { int r = t_clean_all_after_state_lost(); fail |= (r << 2); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
-    fprintf(stderr, "  -> t_clean_partial_state_safe_no_fallback ... "); fflush(stderr);
-    { int r = t_clean_partial_state_safe_no_fallback(); fail |= (r << 3); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
-    fprintf(stderr, "  -> t_clean_no_params_reconciles_state ... "); fflush(stderr);
-    { int r = t_clean_no_params_reconciles_state(); fail |= (r << 4); fprintf(stderr, "%s\n", r ? "FAIL" : "ok"); }
+    fprintf(stderr, "  -> t_clean_with_params_after_state_lost ... ");
+    fflush(stderr);
+    fail |= t_clean_with_params_after_state_lost();
+    fprintf(stderr, "%s\n", fail & 1 ? "FAIL" : "ok");
+    fprintf(stderr, "  -> t_clean_no_params_after_state_lost ... ");
+    fflush(stderr);
+    {
+        int r = t_clean_no_params_after_state_lost();
+        fail |= (r << 1);
+        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
+    }
+    fprintf(stderr, "  -> t_clean_all_after_state_lost ... ");
+    fflush(stderr);
+    {
+        int r = t_clean_all_after_state_lost();
+        fail |= (r << 2);
+        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
+    }
+    fprintf(stderr, "  -> t_clean_partial_state_safe_no_fallback ... ");
+    fflush(stderr);
+    {
+        int r = t_clean_partial_state_safe_no_fallback();
+        fail |= (r << 3);
+        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
+    }
+    fprintf(stderr, "  -> t_clean_no_params_reconciles_state ... ");
+    fflush(stderr);
+    {
+        int r = t_clean_no_params_reconciles_state();
+        fail |= (r << 4);
+        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
+    }
     return fail ? 1 : 0;
 }

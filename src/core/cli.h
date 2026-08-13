@@ -3,18 +3,18 @@
 #include "types.h"
 
 typedef struct {
-    const char *op;        /* 子命令 inject|clean|query|list；无则 NULL */
+    const char *op; /* 子命令 inject|clean|query|list；无则 NULL */
     char uid[64];
     params_t params;
-    int  help;             /* --help 出现过 */
-    int  force;            /* --force 出现过 (仅 inject 路径生效) */
-    int  all;              /* --all 出现过 (仅 clean 路径生效：无参 clean 全部故障) */
-    int  port;             /* --port <n> (仅 serve); 0=默认 8080 */
-    const char *bind;      /* --bind <addr> (仅 serve); NULL=0.0.0.0 (全接口) */
-    const char *webroot;   /* --webroot <dir> (仅 serve); NULL=派生 */
-    int  allow_write;      /* --allow-write (仅 serve); 0=只读默认,1=开 POST inject/clean */
-    const char *config;    /* --config <path> 值（可选） */
-    const char *plugins;   /* --plugins <dir> 值（可选） */
+    int help;            /* --help 出现过 */
+    int force;           /* --force 出现过 (仅 inject 路径生效) */
+    int all;             /* --all 出现过 (仅 clean 路径生效：无参 clean 全部故障) */
+    int port;            /* --port <n> (仅 serve); 0=默认 8080 */
+    const char *bind;    /* --bind <addr> (仅 serve); NULL=0.0.0.0 (全接口) */
+    const char *webroot; /* --webroot <dir> (仅 serve); NULL=派生 */
+    int allow_write;     /* --allow-write (仅 serve); 0=只读默认,1=开 POST inject/clean */
+    const char *config;  /* --config <path> 值（可选） */
+    const char *plugins; /* --plugins <dir> 值（可选） */
 } parsed_cmd_t;
 
 /* 解析 argv：argv[1]=子命令(可选), argv[2]=uid(可选), 剩余 --key=value。

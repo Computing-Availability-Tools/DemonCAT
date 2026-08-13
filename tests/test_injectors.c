@@ -7,4 +7,7 @@ int test_injector_find_empty(void) {
     return 0;
 }
 
-int main(void) { RUN_TEST(test_injector_find_empty); return TEST_MAIN_RETURN(); }
+int main(void) {
+    RUN_TEST(test_injector_find_empty);
+    return TEST_MAIN_RETURN();
+}

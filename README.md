@@ -7,7 +7,7 @@
 加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 版本号 | v0.1.0 |
 | 发布时间 | 2026-08-11 |
 | 许可证 | Apache-2.0 |
@@ -19,7 +19,7 @@
 ### 编译依赖
 
 | 依赖 | 包名 (apt) | 包名 (yum) | 用途 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | cmake ≥ 3.10 | `cmake` | `cmake` | 构建系统 |
 | C 编译器 | `gcc` | `gcc` | 编译 dcat 二进制 |
 | pthread | `libc6-dev` | `glibc-devel` | 状态锁 |
@@ -28,7 +28,7 @@
 ### 运行时依赖（按模块）
 
 | 模块 | 工具 | 包名 (apt) | 包名 (yum) | 需要 root |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **CPU** | `perl`, `taskset` | `perl`, `util-linux` | `perl`, `util-linux` | core_offline 需要 |
 | **存储** | `dd` | `coreutils` | `coreutils` | — |
 | **网络** | `tc`, `ip` | `iproute2` | `iproute` | ✅ |
@@ -76,12 +76,12 @@ E2E 测试（CSV 驱动，8 类分类，354 步骤 / 165 流程）详见 [tests/
 
 ## 命令格式
 
-```
+```bash
 dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
 | 子命令 | 说明 | 示例 |
-|---|---|---|
+| --- | --- | --- |
 | `inject <uid> --p1=v1 ...` | 注入故障，同步阻塞执行 | `dcat inject rCPU_overload --cores=4` |
 | `clean <uid> [--k1=v1 ...]` | 带参数：按参数匹配清除活跃注入；无参数：stateless 清该 uid 全部 `/tmp` 工件（state.json 丢失仍可清） | `dcat clean rCPU_overload --cores=4` / `dcat clean rCPU_overload` |
 | `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless） | `dcat clean --all` |
@@ -104,7 +104,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ## 退出码
 
 | 码 | 含义 |
-|---|---|
+| --- | --- |
 | 0 | 成功 |
 | 1 | 运行错误（脚本失败等） |
 | 2 | 解析错误（命令格式不合法） |
@@ -123,7 +123,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ## 文档
 
 | 文档 | 说明 |
-|------|------|
+| ------ | ------ |
 | [SPEC.md](SPEC.md) | 功能规格说明书 |
 | [User_Manual.md](User_Manual.md) | 使用手册 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 架构设计 |

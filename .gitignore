@@ -7,3 +7,6 @@ tests/plugins/*.so
 Testing/Temporary/
 tests/e2e/results_*.csv
 tests/e2e/report.md
+tests/e2e/e2e_run.log
+tests/e2e/failures_*.log
+build/ctest_run.log

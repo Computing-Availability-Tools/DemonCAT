@@ -5,7 +5,7 @@ CSV 驱动的 `dcat` 二进制端到端测试框架：**混沌工程 8 类测试
 ## 文件
 
 | 文件 | 说明 |
-|---|---|
+| --- | --- |
 | `gen_cases.py` | 从故障目录 + 观测/边界/安全知识自动生成 `cases.csv`（354 步骤 / 165 流程） |
 | `cases.csv` | 用例表（354 步骤 / 165 流程，8 类分类） |
 | `run_e2e.py` | 执行框架（读 cases.csv → 串行执行 → 写 results/report） |
@@ -15,7 +15,7 @@ CSV 驱动的 `dcat` 二进制端到端测试框架：**混沌工程 8 类测试
 ## 8 类混沌工程测试矩阵
 
 | 分类 | 前缀 | 用例数(步骤) | 流程数 | 覆盖内容 | 混沌工程维度 |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | **FUNC** | `FUNC-` | 149 | 41 | 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 功能基线 |
 | **BOUND** | `BOUND-` | 49 | 46 | 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法），含 NPU bw_limit/size/port/dscp | 边界值 |
 | **SEC** | `SEC-` | 50 | 37 | 命令注入(inject+clean+query) + 权限边界 + 主机安全 + symlink 攻击 | 安全 |
@@ -25,12 +25,12 @@ CSV 驱动的 `dcat` 二进制端到端测试框架：**混沌工程 8 类测试
 | **CONC** | `CONC-` | 9 | 3 | 同时 inject+clean / 双进程写 state / clean --all + inject | **并发竞争** |
 | **INTER** | `INTER-` | 14 | 3 | 多故障叠加 / clean 一个不影响其他 / clean --all 后逐 verify | **故障交互** |
 | **总计（步骤）** | | *354* | | | |
-| **总计（流程）** | | | *165* | | | |
+| **总计（流程）** | | | *165* | | |
 
 ### 分类演进（v1 → v2）
 
 | 旧分类（14 类） | 新分类（8 类） | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | F + Q + PLG | **FUNC** | 功能基线合并：故障全链路 + query\<uid\> confirmed + 插件 |
 | B | **BOUND** | 边界值扩展：从 17 条（rCPU_overload 独占 11 条）→ 49 条系统性覆盖 |
 | I + P + H | **SEC** | 安全合并：命令注入(inject+clean+query) + 权限边界 + symlink 攻击 |
@@ -82,14 +82,15 @@ python3 tests/e2e/run_e2e.py --no-append
 
 ## 产物
 
-- `results_<时间戳>.csv`：每步 `actual_exit_code/actual_json/verify_actual/result/error_code/duration/timestamp`。
-- `report.md`：汇总 + 8 类分类统计 + 失败用例 + 跳过原因。
-- `test_report.md` §10：追加 e2e 汇总段（`--no-append` 可关）。
+- `results_<时间戳>.csv`：每步 `actual_exit_code/actual_json/verify_actual/result/error_code/duration/timestamp`，含 `expected_behavior` 列（测试目的）。
+- `report.md`：汇总 + **测试用例明细（含测试目的）** + 8 类分类统计(含分类说明) + 失败用例 + 跳过原因。
+- `test_report.md` §10：追加 e2e 汇总段，含逐用例测试目的表（`--no-append` 可关）。
+- CI artifact（`e2e-x86` / `e2e-arm64`）仅含本次运行相关产物：`report.md` + `results_*.csv` + `e2e_run.log` + `failures_*.log`，不含全量用例库 `cases.csv`。
 
 ## 断言 DSL（verify_assert 列）
 
 | 断言 | 说明 | 作用对象 |
-|---|---|---|
+| --- | --- | --- |
 | `>=N <=N ==N !=N` | 数值比较 | verify_out |
 | `eq:STR ne:STR` | 字符串相等/不等 | verify_out |
 | `contains:STR notcontains:STR` | 包含/不包含 | verify_out |

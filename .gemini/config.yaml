@@ -1,0 +1,17 @@
+# Gemini Code Assist 仓库级行为配置
+# 文档: https://developers.google.com/gemini-code-assist/docs/customize-gemini-behavior-github
+#
+# 安装: 在 https://github.com/apps/gemini-code-assist 安装 App 并授权给本仓库。
+# 装好后无需 workflow,PR 打开/sync 即自动出摘要 + 逐行审视(gemini-code-assist[bot])。
+
+have_fun: false
+memory_config:
+  disabled: false
+code_review:
+  comment_severity_threshold: HIGH   # 仅 HIGH+ 评论以降噪;想要更多建议可降为 MEDIUM
+  pull_request_opened:
+    summary: true                     # PR 打开时发变更摘要评论
+    code_review: true                 # PR 打开时发逐行代码审视
+ignore_patterns:
+  - "third_party/**"                  # vendored cjson,不在审视范围
+  - "build/**"                        # 构建产物

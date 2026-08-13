@@ -14,7 +14,7 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 ### 1.2 技术栈
 
 | 项目 | 选型 |
-|------|------|
+| ------ | ------ |
 | 开发语言 | C11（ISO/IEC 9899:2011） |
 | 构建 | CMake ≥ 3.10 |
 | 目标平台 | Linux（glibc / musl），WSL 兼容 |
@@ -31,7 +31,7 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 4. **故障隔离**：单个故障注入不影响其他操作；
 5. **开闭原则**：对扩展开放（新故障），对修改关闭（不动二进制）；
 6. **预检护栏**：注入前预检，校验参数完整性与脚本可执行性；
-7. **可追溯**：每次注入记录日志，支持查询注入状态； 
+7. **可追溯**：每次注入记录日志，支持查询注入状态；
 8. **可测**：通过 `mock_executor` 捕获实际下发的命令串与环境变量，做表驱动断言。
 9. **TDD 驱动开发**：每个模块先编写测试用例定义期望行为，再实现功能代码使测试通过；测试用例是行为的权威定义。
 
@@ -46,7 +46,7 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 
 ## 2. 统一命令格式
 
-```
+```bash
 dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
@@ -58,7 +58,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ### 2.1 命令集
 
 | 命令 | 语义 | 适用 supported_ops |
-|---|---|---|
+| --- | --- | --- |
 | `inject <uid> --p1=v1 --p2=v2 ...` | 注入指定故障，按参数配置；**同步阻塞执行脚本，执行完返回** | `inject` 或 `inject,clean,query` |
 | `clean <uid> [--k1=v1 ...]` | 清除该 uid 活跃注入。**带参数**：按参数匹配 state 记录逐条清理；**无参数**：stateless 模式，脚本自行 glob `/tmp` 工件（pidfile/sidecar）清理该 uid 全部注入，不依赖 state.json | 仅 `inject,clean,query` |
 | `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless，不依赖 state.json）；聚合每 uid 结果。state.json 丢失/损坏时仍可清 | — |
@@ -70,7 +70,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 
 ### 2.2 示例
 
-```
+```bash
 # 可恢复故障：需手动 clean
 dcat inject rNET_loss --iface=eth0 --loss_pct=5
 dcat clean rNET_loss --iface=eth0
@@ -103,7 +103,7 @@ dcat list
 每个故障在 `demoncat.conf` 中以 `[fault.<uid>]` 段声明，字段如下：
 
 | 字段 | 必填 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | `module` | 是 | 模块归类：`cpu` / `memory` / `storage` / `network` / `process` / `npu` |
 | `desc` | 否 | 一句话描述 |
 | `script` | 是 | 外部脚本路径（绝对或相对；相对路径基于项目根目录自动解析为绝对），须可执行 |
@@ -127,7 +127,7 @@ dcat list
 > 上表仅列 inject 操作的 required/optional 参数；clean / query 的 per-op 参数见 `demoncat.conf`（§7）。
 
 | UID | module | supported_ops | inject_required | inject_optional |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rCPU_overload` * | cpu | inject,clean,query | cores | — |
 | `rNET_delay` * | network | inject,clean,query | iface,delay_ms | — |
 | `rNET_loss` | network | inject,clean,query | iface,loss_pct | — |
@@ -203,7 +203,7 @@ query_optional  = iface,direction
 > 允许同 uid 重复注入（含相同参数），dcat 不做并发拦截；脚本自行处理幂等性。
 > `clean` / `query` 请求校验第 1、2、4 步；`clean` 按用户参数匹配活跃记录（`state_find_by_params`）。**`clean <uid>` 带参数时按参数匹配 state 记录逐条清理；`clean <uid>` 无参数时走 stateless 路径（脚本自行 glob `/tmp` 工件清理该 uid 全部注入，不查 state，`clean_required` 在零参数时跳过校验）；`clean --all` 对全部支持 clean 的故障 fan-out 无参 clean（stateless）。`query`（带 uid）不强制必填参数——无参时脚本自行展示全部（如全部核/全部网卡/读 sidecar），有参则按参过滤；仅校验参数是否已声明（未声明的 `--foo=bar` 仍拒绝，退出码 3）。`query`（不带 uid）查全部活跃记录，不受此限制。**
 > 所有命令（inject / clean / query）均校验用户提供的参数是否在该操作对应的 required/optional 列表（`inject_required`/`inject_optional`、`clean_required`/`clean_optional`、`query_required`/`query_optional`）中声明，未声明的参数（`--foo=bar`）直接拒绝（退出码 3）。
-
+>
 > **参数校验分层**：dcat 负责**结构校验**（`inject_required`/`clean_required` 是否齐全且非空，即第 3 步；**`query` 不强制必填**）；参数值的**语义校验**（如核号范围、iface 是否存在、chip 是否有效）由脚本自行校验。
 
 ---
@@ -213,7 +213,7 @@ query_optional  = iface,direction
 dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语言无关）：
 
 | 环境变量 | 含义 |
-|---|---|
+| --- | --- |
 | `DCAT_OP` | `inject` / `clean` / `query` |
 | `DCAT_UID` | 故障 uid |
 | `DCAT_PARAM_<KEY>` | 每个参数，KEY 为参数名大写、非字母数字字符替换为 `_` |
@@ -251,7 +251,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 - 脚本检查**实际系统状态**（如 `top`/`tc qdisc show`/`pgrep`/`sysfs`），输出任意格式的证据文本（表格、多行文本）到 stdout。
 - **退出码**：`0` = 故障确认生效 / 非 `0` = 未生效。
 - **输出格式**（方案 A）：dcat 原样输出脚本 stdout，然后打印 `---` 分隔符，最后输出 JSON：
-  ```
+  ```text
   <脚本原始输出（表格/文本）>
   ---
   {"status":"ok","op":"query","uid":"rCPU_overload","data":{"confirmed":true}}
@@ -263,8 +263,8 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 
 - **资源键** = 故障的 `clean_required` 各参数（资源标识，非值参数）。例：`rCPU_overload` 资源键=`cores`；`rNET_delay` 资源键=`iface`；`rNPU_arp_poison` 资源键=`chip,dev,ip`。
 - **重叠判定**：
-  - `cores` 参数走**集合交集**（核集语义）：`0,1` 与 `0-8` 重叠（核 0、1 相交），`0,1` 与 `2,3` 不重叠。
-  - 其余参数（device/iface/port/pid/chip/...）走**精确等值**；多参资源键（如 chip,dev,ip）各参精确 AND。
+    - `cores` 参数走**集合交集**（核集语义）：`0,1` 与 `0-8` 重叠（核 0、1 相交），`0,1` 与 `2,3` 不重叠。
+    - 其余参数（device/iface/port/pid/chip/...）走**精确等值**；多参资源键（如 chip,dev,ip）各参精确 AND。
 - **默认拒绝**：inject 时若已有同 uid + 同资源键重叠的活动记录 → 返回 `code:5` 拒绝，message 列出重叠记录的 record id + 其参数（最多 3 条，超出显示 `+N more`），如 `resource already injected (record id 3: cores=0,1); use --force to replace`，不执行注入。
 - **--force 原子替换**：`dcat inject <uid> ... --force` → 先逐个 clean 所有重叠记录（复用 clean 路径），全成功后再 inject。非真原子（两步脚本，有窗口）：clean 中途失败则中止后续注入（**已 clean 的记录保持已清理**，message 带出失败的 record id + 底层脚本错误；操作者可再次 `--force` 重试清理剩余并注入）；注入失败则旧已清（操作者可重注）。
 - **作用范围**：v1 仅对 catalog（CNF/config 驱动）故障生效；插件与 legacy injector 路径暂不接入 reinject 检测（同资源重注入不拒绝、`--force` 不替换）。
@@ -275,7 +275,8 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 **BREAKING 变更**（相对 v0.1 加法并集）：`rCPU_overload` 同核/重叠核重注入从"幂等共存"改为"默认拒绝"。迁移：重注入改加 `--force`；不同核并发不变。
 
 示例：
-```
+
+```bash
 # 同资源重注入 → 默认拒绝 (code 5)
 dcat inject rCPU_overload --cores=0,1
 dcat inject rCPU_overload --cores=0,1           # REJECT
@@ -300,37 +301,45 @@ dcat inject rNET_delay --iface=eth1 --delay_ms=100   # OK (不同 iface)
 统一向 stdout 输出 JSON：
 
 **成功（可恢复 inject）**：
+
 ```json
 {"status":"ok","op":"inject","uid":"rCPU_overload","data":{"message":"...","record_id":3}}
 ```
 
 **成功（inject-only）**：
+
 ```json
 {"status":"ok","op":"inject","uid":"rPROC_exit","data":{"message":"killed pid 12345"}}
 ```
+
 > inject-only 不返回 `record_id`（无 state 记录）。
 
 **失败**：
+
 ```json
 {"status":"error","op":"inject","uid":"rCPU_overload","error":{"code":3,"message":"missing required param: cores"}}
 ```
 
 **`query`（无 uid，state 查询）**：
+
 ```json
 {"status":"ok","op":"query","data":[{"uid":"rCPU_overload","record_id":3,"started_at":1721000000,"active":true,"params":{"cores":"4"}}]}
 ```
 
 **`query`（有 uid，故障验证 — 方案 A 输出）**：
-```
+
+```text
 yes_processes: 2
 --- cpu usage ---
 %Cpu(s): 98.0 us, 1.0 sy, 0.0 ni, 0.0 id
 ---
 {"status":"ok","op":"query","uid":"rCPU_overload","data":{"confirmed":true}}
 ```
+
 > 脚本原始输出在前，`---` 分隔，JSON 在后。`confirmed: true` = 故障确认生效。
 
 **`list`**：
+
 ```json
 {"status":"ok","op":"list","data":[{"uid":"rCPU_overload","module":"cpu","supported_ops":["inject","clean","query"],"desc":"..."}]}
 ```
@@ -338,7 +347,7 @@ yes_processes: 2
 ### 6.1 退出码
 
 | 退出码 | 含义 |
-|---|---|
+| --- | --- |
 | 0 | 成功 |
 | 1 | 运行错误（脚本非 0 退出、fork/exec 失败等） |
 | 2 | 解析错误（命令格式不合法） |
@@ -382,7 +391,7 @@ inject_required = pid
 
 `dcat` 通过 `/proc/self/exe` 解析自身路径，推导出**固定相对路径**：
 
-```
+```text
 <binary_dir>/../config/demoncat.conf
 ```
 
@@ -395,7 +404,7 @@ inject_required = pid
 DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新增模块（如 `memory`）或在现有模块内加故障均属正常扩充。
 
 | 批次 | 范围 | 状态 |
-|---|---|---|
+| --- | --- | --- |
 | **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 19）+ 测试 | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
@@ -414,7 +423,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 ### 9.2 测试覆盖范围
 
 | 层级 | 范围 | 工具 | 测试文件 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 单元测试 | cli 解析、registry 查找、预检全路径、state 记录 | CTest + mock_executor | test_cli / test_registry / test_precheck / test_state |
 | 执行器 mock | executor_run/run_raw 的 mock 钩子 | CTest | test_executor_mock |
 | 输出格式 | result_t 构建/打印/释放 | CTest | test_output |
@@ -431,7 +440,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 ## 10. 非功能性需求
 
 | 项目 | 要求 |
-|---|---|
+| --- | --- |
 | 日志 | stderr 输出；级别由 `log_level` 控制（`debug/info/warn/error`）；生产默认 `warn` |
 | 错误隔离 | 单个故障 inject/clean 失败不影响 dcat 主流程与其他故障 |
 | 资源占用 | 静态二进制；核心路径零动态分配 |

@@ -12,7 +12,7 @@ DemonCAT dispatch 三层扩展机制，前两层分别为 cnf 数据驱动（脚
 
 `dispatch_route(uid, op, params)`（`src/core/dispatch.c:149-203`）：
 
-```
+```text
 dispatch_route(uid, op, params)
   ├─ op == "list"        → dispatch_list（cnf + 动态插件 納入文本表格）     [dispatch.c:19-55]
   ├─ uid 空（非 list）   → exit 2 "uid required (use 'dcat list' to see available faults)"
@@ -54,6 +54,7 @@ const dcat_plugin_t *dcat_plugin_get(void);
 ```
 
 要点：
+
 - `abi_version` 在结构首字段，加载时强制校验，不匹配则 `dlclose` + stderr 警告（防 ABI 漂移崩溃）
 - **per-op 参数声明**：6 个 `*_required`/`*_optional` 字段与 `fault_def_t`（`src/core/types.h:21-26`）格式统一，precheck 按 op 取对应字段校验，避免 clean 误用 inject 参数
 - `init`/`fini` 生命周期钩子（硬件设备打开/连接清理）
@@ -73,6 +74,7 @@ void plugin_fini(void);                            /* 调每个 fini + dlclose *
 ```
 
 加载流程（`plugin_manager.c:12-60`）：
+
 1. `opendir(dir)` —— 失败（目录不存在）直接 `return 0`
 2. `readdir` 循环，跳过非 `*.so`
 3. `snprintf` 拼路径 → `dlopen(path, RTLD_NOW | RTLD_LOCAL)`
@@ -102,6 +104,7 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
 `precheck(f, op, params)`（`precheck.c:73-96`）流程：op_in_supported → declared_params_only（6 串）→ 按 op 取 `f->*_required` 调 `first_missing_required` → `executor_check_tool`（脚本可执行）。
 
 错误提示具体化：
+
 - `unknown parameter '%s' (not declared for %s)` —— 未声明参数
 - `missing required parameter '%s' for %s` —— 缺必填参数
 - `op not in supported_ops`
@@ -111,7 +114,7 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
 
 ### 6.1 `plugin_dispatch(p, op, params)`（`dispatch.c:95-147`）
 
-```
+```text
 1. op_in_supported(p->supported_ops, op)        → 失败 exit 3 "op not in supported_ops"
 2. declared_params_only(p->inject_required, p->inject_optional,
                        p->clean_required,  p->clean_optional,
@@ -141,12 +144,14 @@ result_t *precheck(const fault_def_t *f, const char *op, const params_t *params)
 ### 6.2 `dispatch_list`（`dispatch.c:19-55`）
 
 list 输出文本表格：
+
 - cnf 故障：`uid` / `module` / `supported_ops`（按逗号拆数组）/ `desc`（非空才输出）
 - 动态插件：`uid` / `module`(=`p->name`，空则 `""`) / `supported_ops` / `desc`(=`p->description`，非空才输出)
 
 ## 7. main.c 集成 `src/main.c`
 
 启动序列（`main.c:27-88`）：
+
 1. `cli_parse(argc, argv, &pc)` —— 含 `--plugins <dir>` / `--config <path>` 全局选项
 2. `--help` 优先输出后退出 0（即使其余参数 malformed）
 3. `resolve_cfgpath(pc.config, ...)` —— `pc.config` 覆盖，否则 `readlink("/proc/self/exe")` 推导 `<binary_dir>/../config/demoncat.conf`，再退化 `"config/demoncat.conf"`
@@ -167,18 +172,20 @@ list 输出文本表格：
 - `target_link_libraries(dcat PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})`
 - `dcat_test` 函数同样链接 `${CMAKE_DL_LIBS}`
 - 示例插件 `src/plugins/sample/sample_plugin.c` + `src/core/output.c` + `src/core/types.c` 编为 MODULE 库：
-  - `OUTPUT_NAME "sample"` / `PREFIX "lib"` / `LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/plugins"`
-  - 产物：`plugins/libsample.so`（构建产物，`.gitignore` 忽略 `plugins/*.so`，不入仓）
+    - `OUTPUT_NAME "sample"` / `PREFIX "lib"` / `LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/plugins"`
+    - 产物：`plugins/libsample.so`（构建产物，`.gitignore` 忽略 `plugins/*.so`，不入仓）
 - `add_dependencies(test_plugin_integration sample_plugin)` —— 集成测试依赖 `.so` 先构建
 
 ## 9. 相关集成
 
 ### 9.1 `cli.c` / `cli.h`
+
 - `parsed_cmd_t.plugins` 字段（`cli.h:11`）记录 `--plugins <dir>` 值
 - `cli_parse` 解析 `--plugins <dir>` 与 `--config <path>` 为全局选项，不进 `params`（`cli.c:54-60`）
 
 ### 9.2 `help.c`
-- 全局帮助列 `--plugins <dir>`：`  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）`（`help.c:128`）
+
+- 全局帮助列 `--plugins <dir>`：`--plugins <dir>              指定动态插件目录（默认 <root>/plugins）`（`help.c:128`）
 - list 子命令说明：`运行 \`dcat list\` 查看完整故障目录（含动态插件）`（`help.c:141`）
 - inject/clean/query 子命令帮助尾部提示：`动态插件故障参数见 \`dcat list\``（`help.c:163`）
 
@@ -209,12 +216,13 @@ const dcat_plugin_t *dcat_plugin_get(void) {
 ## 11. 测试策略
 
 | 测试 | 文件 | 覆盖 |
-|---|---|---|
+| --- | --- | --- |
 | `test_plugin_manager` | `tests/test_plugin_manager.c` | `plugin_find("nope")==NULL`、`plugin_count()==0`；`plugin_load_dir("/tmp/dcat-no-plugins-here-xyz")==0` |
 | `test_plugin_integration` | `tests/test_plugin_integration.c` | `plugin_load_dir("plugins")>=1`；`plugin_find("rSAMPLE_test")!=NULL`；`dispatch_route inject` 返回 ok + 含 `record_id` + `state_list_active()==1`；`dispatch_route clean` 返回 ok + `state_list_active()==0` |
 | 全 ctest 24 项 | — | precheck 重构保持行为（per-op 字段对齐 fault_def）；cnf/injector/plugin 三级优先级不变 |
 
 CMake 注册（`CMakeLists.txt:45-47`）：
+
 - Tier 0b：`test_plugin_manager`、`test_plugin_integration`
 - `test_plugin_integration` 通过 `add_dependencies` 依赖 `sample_plugin` 目标
 

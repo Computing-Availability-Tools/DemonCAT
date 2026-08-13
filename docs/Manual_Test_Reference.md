@@ -8,7 +8,7 @@
 ## 必须手动测试（可能导致硬件不可用 / 远程失联）
 
 | UID | 模块 | 原因 | 如果出问题怎么恢复 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rNPU_link_down` | npu | RoCE 链路 down，若 `-cfg recovery` 失败，NPU 卡可能需要物理重启 | 物理重启 NPU / 重新加载驱动 |
 | `rNPU_ip_change` | npu | RoCE IP 变更，若 clean 失败则 NPU IP 错误且不可达 | `hccn_tool -i <chip> -cfg recovery` 或物理重启 |
 | `rNPU_gw_change` | npu | 网关变更，若 clean 失败则 NPU 无法路由 | `hccn_tool -i <chip> -cfg recovery` |

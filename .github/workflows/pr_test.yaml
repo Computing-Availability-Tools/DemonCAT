@@ -1,0 +1,156 @@
+name: PR CI
+
+# 单一入口：一次 push/PR 只跑这一条 workflow（取代旧的 pr_test_light + pr_test_full）。
+#
+# Light 层（lint/unit/e2e-light）对所有触发都跑（fork 安全，ubuntu）。
+# Full 层（e2e-full NPU / clang-tidy / coverage）仅在源仓库 Computing-Availability-Tools/DemonCAT 跑：
+#   push（合并验证） 或 PR 带 ready/ready-for-test 标签（fork PR 也可，经 /e2e 评论加标签触发，vllm 式）。
+# PR labeled 非 ready 标签 → 全部跳过（省 CI）。
+# 参考 vllm-ascend pr_test.yaml。
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# 源仓库全名（Full 仅在此 repo 跑：NPU runner + secrets 在此）
+# fork 仓库 push 时 github.repository != 此值 → Full 跳过（fork 无 NPU runner）。
+
+jobs:
+  # ───────── Light 层（fork 安全，ubuntu）─────────
+  lint:
+    name: Lint (pre-commit + PR title)
+    if: ${{ github.event.action != 'labeled' || contains(fromJSON('["ready","ready-for-test"]'), github.event.label.name) }}
+    uses: ./.github/workflows/_pre_commit.yaml
+
+  unit-test:
+    name: Unit tests (${{ matrix.runner }})
+    needs: lint
+    if: ${{ always() && needs.lint.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    uses: ./.github/workflows/_unit_test.yaml
+    with:
+      runner: ${{ matrix.runner }}
+
+  e2e-light:
+    name: E2E smoke (${{ matrix.runner }})
+    needs: lint
+    if: ${{ always() && needs.lint.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: '["${{ matrix.runner }}"]'
+      # 冒烟核心用例（非 root，覆盖 PR 易引入严重回归的核心不变量）：
+      # [功能 happy-path] 各非硬件模块 inject→clean→query 全链路
+      # [状态引擎一致性] STATE-1..6 / [状态韧性] RES-1..5 / [并发安全] CONC-1..3
+      # 排除 STATE-7(NPU)/RES-6(rNET_port_occupy 压测)/RES-7(NPU)；网络/NPU/core_offline 留给 full/nightly
+      flows: "CLI,FUNC-rCPU_overload,FUNC-rDISK_write_overload,FUNC-rPROC_hang,FUNC-rPROC_zstate,FUNC-PLG,FUNC-Q1,STATE,RES,CONC"
+      exclude: "STATE-7,RES-6,RES-7"
+      run-as-root: false
+
+  # ───────── Full 层（仅源仓库 + push 或 PR+ready 标签）─────────
+  e2e-full:
+    name: E2E full (NPU runner)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
+      runner: '["self-hosted", "npu-server", "ARM64"]'
+      flows: ""
+      exclude: ""
+      run-as-root: true
+
+  clang-tidy:
+    name: clang-tidy (advisory)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_clang_tidy.yaml
+
+  coverage:
+    name: Coverage (gcov → Codecov)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_unit_test.yaml
+    with:
+      runner: ubuntu-latest
+      coverage: true
+
+  ci-gate:
+    name: CI Gate
+    needs: [lint, unit-test, e2e-light, e2e-full, clang-tidy, coverage]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check required jobs
+        env:
+          LINT: ${{ needs.lint.result }}
+          UNIT: ${{ needs.unit-test.result }}
+          E2EL: ${{ needs.e2e-light.result }}
+          E2EF: ${{ needs.e2e-full.result }}
+          CLANG: ${{ needs.clang-tidy.result }}
+          COV: ${{ needs.coverage.result }}
+        run: |
+          set -eu
+          echo "=== PR CI Gate Summary ==="
+          echo "lint:        ${LINT}"
+          echo "unit-test:   ${UNIT}"
+          echo "e2e-light:   ${E2EL}"
+          echo "e2e-full:    ${E2EF}"
+          echo "clang-tidy: ${CLANG} (advisory)"
+          echo "coverage:   ${COV} (advisory)"
+          # lint/unit/e2e-light：必须成功或跳过（labeled 非 ready 时全跳过）
+          for r in "${LINT}" "${UNIT}" "${E2EL}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::Required light job did not succeed: ${r}"; exit 1 ;;
+            esac
+          done
+          # e2e-full：跑了须成功；未触发则 skipped（放行）
+          case "${E2EF}" in
+            success|skipped) ;;
+            *) echo "::error::e2e-full did not succeed: ${E2EF}"; exit 1 ;;
+          esac
+          # clang-tidy / coverage 为建议性，仅报告不阻断
+          echo "=== CI Gate: PASSED ==="

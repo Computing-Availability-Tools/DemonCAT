@@ -7,7 +7,7 @@
 ## v0.1.0
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 版本号 | v0.1.0 |
 | 发布时间 | 2026-08-11 |
 | 发布人 | sunnytao |
@@ -140,11 +140,11 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 ### 测试
 
 - **ctest**：26/26 全通过
-  - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / cli / faults / help / plugin_manager + plugin_integration）
-  - Tier 1 mock 表驱动故障测试（33 条全覆盖）
-  - Tier 2 脚本语法检查（sh -n 全部 33 脚本 + _common.sh）
-  - Tier 3 真实执行测试（非 root 故障）
-  - root 冒烟测试（smoke_root.sh）
+    - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / cli / faults / help / plugin_manager + plugin_integration）
+    - Tier 1 mock 表驱动故障测试（33 条全覆盖）
+    - Tier 2 脚本语法检查（sh -n 全部 33 脚本 + _common.sh）
+    - Tier 3 真实执行测试（非 root 故障）
+    - root 冒烟测试（smoke_root.sh）
 - **E2E**：354 步骤 / 165 流程，8 类混沌工程测试矩阵
 
 ### 已知限制

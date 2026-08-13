@@ -1,0 +1,120 @@
+name: E2E Test
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: "JSON array of runs-on labels, e.g. [\"ubuntu-latest\"] or [\"self-hosted\",\"linux-arm64-npu-static-8\"]"
+        type: string
+        default: '["ubuntu-latest"]'
+      flows:
+        description: "Comma-separated flow_id prefixes; empty string = all flows"
+        type: string
+        default: CLI
+      exclude:
+        description: "Comma-separated flow_id prefixes to exclude (e.g. NPU/hardware flows on ubuntu)"
+        type: string
+        default: ""
+      run-as-root:
+        type: boolean
+        default: false
+      ref:
+        description: "Git ref to checkout; empty = event default"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: E2E (${{ inputs.flows || 'ALL' }}${{ inputs.exclude != '' && ' excl' || '' }})
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        id: co1
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+        # NPU 自托管 runner 到 github.com:443 不稳定，仅 self-hosted 时启用 2 次重试（共 3 次尝试）
+        continue-on-error: ${{ contains(inputs.runner, 'self-hosted') }}
+      - name: Checkout (retry 1/2)
+        if: ${{ contains(inputs.runner, 'self-hosted') && steps.co1.outcome == 'failure' }}
+        id: co2
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+        continue-on-error: true
+      - name: Checkout (retry 2/2)
+        if: ${{ contains(inputs.runner, 'self-hosted') && steps.co2.outcome == 'failure' }}
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      - name: Install build deps (only if missing)
+        run: |
+          if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+            bash scripts/install_deps.sh --build
+          fi
+
+      - name: Install runtime deps
+        continue-on-error: true
+        run: |
+          bash scripts/install_deps.sh --runtime
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Ensure python3 + curl
+        run: |
+          command -v python3 >/dev/null 2>&1 || sudo apt-get install -y -qq python3 || bash scripts/install_deps.sh --runtime
+          command -v curl >/dev/null 2>&1 || sudo apt-get install -y -qq curl || bash scripts/install_deps.sh --runtime
+
+      - name: Run E2E
+        env:
+          FLOWS: ${{ inputs.flows }}
+          EXCLUDE: ${{ inputs.exclude }}
+          AS_ROOT: ${{ inputs.run-as-root }}
+        run: |
+          set -o pipefail
+          if [ "$AS_ROOT" = "true" ]; then
+            sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append 2>&1 | tee tests/e2e/e2e_run.log
+          else
+            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append 2>&1 | tee tests/e2e/e2e_run.log
+          fi
+
+      - name: Print failure summary (on failure)
+        if: failure()
+        run: |
+          echo "===== E2E 失败诊断摘要 ====="
+          for f in tests/e2e/failures_*.log; do
+            [ -e "$f" ] || continue
+            echo "--- $f (失败用例完整 stdout/stderr/verify 输出) ---"
+            cat "$f" 2>/dev/null || true
+          done
+          echo "--- report.md (汇总+失败用例表) ---"
+          cat tests/e2e/report.md 2>/dev/null || true
+          echo "===== 完整产物已作为 artifact 上传 ====="
+
+      - name: Upload E2E results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          # arch 标签避免 matrix(x86/arm 两腿)同名冲突；
+          # 仅上传本次运行相关产物：report.md(含逐用例测试目的) + results_*.csv(含 expected_behavior 列) + 日志
+          # 不含 cases.csv(全量用例库 355 行，非本次运行特有，避免 artifact 冗余)
+          name: e2e-${{ (contains(inputs.runner, 'arm') || contains(inputs.runner, 'ARM')) && 'arm64' || 'x86' }}
+          path: |
+            tests/e2e/e2e_run.log
+            tests/e2e/failures_*.log
+            tests/e2e/results_*.csv
+            tests/e2e/report.md
+          if-no-files-found: ignore
+          retention-days: 7

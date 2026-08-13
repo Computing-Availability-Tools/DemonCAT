@@ -2,11 +2,11 @@
 #define DCAT_REINJECT_H
 #include "types.h"
 
-#define DCAT_REINJECT_CONFLICT 5   /* error code: 同资源已注入 */
+#define DCAT_REINJECT_CONFLICT 5 /* error code: 同资源已注入 */
 
 /* 理论上限需覆盖真实主机核数(如 640 核的 aarch64 服务器)。 */
 #define DCAT_MAX_CORES 1024
-#define DCAT_CORES_BYTES (DCAT_MAX_CORES / 8)   /* 128 字节位图 */
+#define DCAT_CORES_BYTES (DCAT_MAX_CORES / 8) /* 128 字节位图 */
 
 /* cores 规格解析：spec="0,1"|"0-3"|"0,1,4-6"|"0" → bits[DCAT_CORES_BYTES] 位图(核 0-1023)。
  * 成功返回 0，非法(空/非数字/越界/lo>hi/尾随逗号)返回 -1。 */

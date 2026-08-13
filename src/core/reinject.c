@@ -15,7 +15,7 @@ int cores_parse(const char *spec, unsigned char bits[DCAT_CORES_BYTES]) {
     size_t len = strlen(spec);
     if (spec[0] == ',' || spec[len - 1] == ',') return -1;
     if (strstr(spec, ",,")) return -1;
-    if (len > 255) return -1;                    /* 防 buf 截断; 现实 cores 规格远短于此 */
+    if (len > 255) return -1; /* 防 buf 截断; 现实 cores 规格远短于此 */
 
     memset(bits, 0, DCAT_CORES_BYTES);
     char buf[256];
@@ -29,7 +29,7 @@ int cores_parse(const char *spec, unsigned char bits[DCAT_CORES_BYTES]) {
         if (dash) {
             *dash = '\0';
             if (!is_uint(tok) || strlen(tok) > 4 ||
-                !is_uint(dash + 1) || strlen(dash + 1) > 4) return -1;  /* 防 atoi 溢出 */
+                !is_uint(dash + 1) || strlen(dash + 1) > 4) return -1; /* 防 atoi 溢出 */
             long lo = atol(tok);
             long hi = atol(dash + 1);
             if (lo > hi || hi >= DCAT_MAX_CORES) return -1;
@@ -67,11 +67,17 @@ static int resource_overlaps(const params_t *new_params, const params_t *rec_par
     while (tok) {
         const char *nv = params_find(new_params, tok);
         const char *rv = params_find(rec_params, tok);
-        if (!nv || !rv) { tok = strtok_r(NULL, ",", &save); continue; }
+        if (!nv || !rv) {
+            tok = strtok_r(NULL, ",", &save);
+            continue;
+        }
         if (strcmp(tok, "cores") == 0) {
             unsigned char nb[DCAT_CORES_BYTES], rb[DCAT_CORES_BYTES];
-            if (cores_parse(nv, nb) != 0) return 0;   /* 新参 malformed → 不判 overlap, 留给脚本报错 */
-            if (cores_parse(rv, rb) != 0) { tok = strtok_r(NULL, ",", &save); continue; }  /* 记录异常 → 跳过 */
+            if (cores_parse(nv, nb) != 0) return 0; /* 新参 malformed → 不判 overlap, 留给脚本报错 */
+            if (cores_parse(rv, rb) != 0) {
+                tok = strtok_r(NULL, ",", &save);
+                continue;
+            } /* 记录异常 → 跳过 */
             if (!cores_intersect(nb, rb)) return 0;
         } else {
             if (strcmp(nv, rv) != 0) return 0;

@@ -1,0 +1,119 @@
+name: Unit Tests
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
+      coverage:
+        description: "Enable C coverage instrumentation (Debug+gcov) + gcovr collect + Codecov upload"
+        type: boolean
+        default: false
+      ref:
+        description: "Git ref to checkout; empty = event default"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  unit-test:
+    name: Unit tests (ctest)
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      - name: Install build deps (only if missing)
+        run: |
+          if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+            bash scripts/install_deps.sh --build
+          fi
+
+      - name: Configure
+        env:
+          COVERAGE: ${{ inputs.coverage }}
+        run: |
+          if [ "$COVERAGE" = "true" ]; then
+            # Debug + 覆盖率插桩（-O0 避免 inline，行/分支覆盖率更准）
+            cmake -B build -DCMAKE_BUILD_TYPE=Debug -DDCAT_COVERAGE=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          else
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          fi
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Run ctest
+        run: |
+          set -o pipefail
+          ctest --test-dir build --output-on-failure --timeout 60 --output-junit ctest-junit.xml 2>&1 | tee build/ctest_run.log
+
+      - name: Unit test summary
+        if: always()
+        run: python3 tests/ctest_summary.py
+
+      - name: Collect coverage (gcovr)
+        if: ${{ !cancelled() && inputs.coverage }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcovr
+          # gcovr 7.0 (Ubuntu 24.04) API 变更：
+          #   --branch-coverage 已移除（分支覆盖率默认开启，XML/HTML/summary 均含 branch-rate）
+          #   --sort-percentage 已弃用 → --sort uncovered-percent
+          #   --txt-branches 已弃用 → --txt-metric branch
+          # 生成 XML 报告用于 Codecov
+          gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
+                --xml-pretty --output coverage.xml
+          # 生成 HTML 报告（单文件自包含，所有文件详情可展开查看）
+          mkdir -p coverage-html
+          gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
+                --html-nested --output coverage-html/index.html --sort uncovered-percent
+          # 汇总写入 job summary（仅显示 Total 行）
+          {
+            echo "## Coverage Summary"
+            echo '```'
+            gcovr --root . --filter 'src/' --exclude 'third_party/' --exclude 'tests/' \
+                  --txt-summary
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload to Codecov
+        if: ${{ !cancelled() && inputs.coverage }}
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Remove raw coverage data
+        if: ${{ !cancelled() && inputs.coverage }}
+        run: rm -f coverage.info coverage.xml
+
+      - name: Upload coverage HTML report
+        if: ${{ !cancelled() && inputs.coverage }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-html
+          path: coverage-html/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload ctest logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ctest-logs-${{ contains(inputs.runner, 'arm') && 'arm64' || 'x86' }}
+          path: |
+            build/ctest_run.log
+            build/ctest-junit.xml
+            build/Testing/Temporary/
+          if-no-files-found: ignore
+          retention-days: 7

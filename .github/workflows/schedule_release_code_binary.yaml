@@ -1,0 +1,120 @@
+name: Release (code + binary)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  schedule:
+    - cron: '0 20 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build dcat (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install build deps (only if missing)
+        run: |
+          if ! command -v cmake >/dev/null 2>&1 || ! command -v gcc >/dev/null 2>&1; then
+            bash scripts/install_deps.sh --build
+          fi
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Smoke-run binary
+        run: ./build/dcat --help >/dev/null && echo "dcat binary runs"
+
+      - name: Determine version & arch
+        id: ver
+        run: |
+          if [ -n "${GITHUB_REF_NAME:-}" ] && printf '%s' "${GITHUB_REF_NAME}" | grep -q '^v'; then
+            VER="${GITHUB_REF_NAME}"
+          else
+            VER="nightly-$(date -u +%Y%m%d)"
+          fi
+          ARCH="$(uname -m)"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "arch=${ARCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Package binary tarball
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+          ARCH: ${{ steps.ver.outputs.arch }}
+        run: |
+          mkdir -p stage/dcat
+          cp build/dcat stage/dcat/
+          cp -r config src/scripts stage/dcat/
+          cp README.md stage/dcat/
+          cp Release_Notes.md stage/dcat/ 2>/dev/null || true
+          tar -czf "dcat-${VER}-${ARCH}.tar.gz" -C stage dcat
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: dcat-binary-${{ steps.ver.outputs.version }}-${{ steps.ver.outputs.arch }}
+          path: dcat-*.tar.gz
+          retention-days: 30
+
+  release:
+    name: Create GitHub release (on tag)
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: ver
+        run: |
+          VER="${GITHUB_REF_NAME}"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Package source tarball
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          git archive --format=tar.gz --prefix="dcat-${VER}/" HEAD -o "dcat-${VER}-source.tar.gz"
+
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: dcat-binary-*
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dcat-*-x86_64.tar.gz
+            dcat-*-aarch64.tar.gz
+            dcat-*-source.tar.gz
+          body_path: Release_Notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

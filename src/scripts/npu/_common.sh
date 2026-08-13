@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
 npu_check_env() {

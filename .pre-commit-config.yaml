@@ -1,0 +1,64 @@
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types: [pre-commit]
+exclude: 'third_party/.*'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.2
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.43.5
+    hooks:
+      - id: typos
+        args: [--force-exclude]
+
+  - repo: local
+    hooks:
+      - id: clang-format
+        name: clang-format (C/H, -style=file)
+        entry: clang-format -i -style=file
+        language: system
+        files: '.*\.(c|h)$'
+        exclude: 'third_party/.*'
+
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck
+        language: system
+        types: [shell]
+        args:
+          - --format=gcc
+          - --severity=warning
+          - --exclude=SC2086
+          - --exclude=SC2046
+          - --exclude=SC2006
+          - --exclude=SC2155
+          - --exclude=SC2154
+          - --exclude=SC1090
+          - --exclude=SC1091
+          - --exclude=SC2128
+
+      - id: e2e-cases-sync
+        name: E2E cases in sync with fault catalog
+        entry: bash -c 'python3 tests/e2e/gen_cases.py && git diff --exit-code --stat -- tests/e2e/cases.csv'
+        language: system
+        pass_filenames: false
+        always_run: true

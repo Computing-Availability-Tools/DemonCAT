@@ -11,7 +11,8 @@ int test_ok_recoverable_has_record_id(void) {
     ASSERT_STR_CONTAINS(r->json, "\"record_id\":3");
     ASSERT_STR_CONTAINS(r->json, "\"message\":\"ok\"");
     ASSERT_INT_EQ(r->code, 0);
-    result_free(r); return 0;
+    result_free(r);
+    return 0;
 }
 
 /* 成功（inject-only）：无 record_id 字段 */
@@ -19,7 +20,8 @@ int test_ok_inject_only_no_record_id(void) {
     result_t *r = result_ok("inject", "rPROC_exit", 0, "killed");
     ASSERT_STR_CONTAINS(r->json, "\"status\":\"ok\"");
     ASSERT_TRUE(strstr(r->json, "record_id") == NULL);
-    result_free(r); return 0;
+    result_free(r);
+    return 0;
 }
 
 /* 失败 */
@@ -29,7 +31,8 @@ int test_err(void) {
     ASSERT_STR_CONTAINS(r->json, "\"code\":3");
     ASSERT_STR_CONTAINS(r->json, "missing required param");
     ASSERT_INT_EQ(r->code, 3);
-    result_free(r); return 0;
+    result_free(r);
+    return 0;
 }
 
 int main(void) {

@@ -5,65 +5,65 @@
 ## 目录
 
 - [1. 架构设计](#1-架构设计)
-  - [1.1 分层架构](#11-分层架构)
-  - [1.2 扩展机制：cnf + 脚本驱动](#12-扩展机制cnf--脚本驱动)
-  - [1.3 数据流](#13-数据流)
-  - [1.4 与编译注入器的关系](#14-与编译注入器的关系)
+    - [1.1 分层架构](#11-分层架构)
+    - [1.2 扩展机制：cnf + 脚本驱动](#12-扩展机制cnf--脚本驱动)
+    - [1.3 数据流](#13-数据流)
+    - [1.4 与编译注入器的关系](#14-与编译注入器的关系)
 - [2. 数据结构](#2-数据结构)
 - [3. 模块职责](#3-模块职责)
-  - [3.1 main.c](#31-mainc)
-  - [3.2 cli.c（命令解析器）](#32-clic命令解析器)
-  - [3.3 registry.c](#33-registryc)
-  - [3.4 executor.c](#34-executorc)
-  - [3.5 precheck.c](#35-precheckc)
-  - [3.6 state.c](#36-statec)
-  - [3.7 config.c](#37-configc)
-  - [3.8 output.c](#38-outputc)
-  - [3.9 dispatch.c](#39-dispatchc)
+    - [3.1 main.c](#31-mainc)
+    - [3.2 cli.c（命令解析器）](#32-clic命令解析器)
+    - [3.3 registry.c](#33-registryc)
+    - [3.4 executor.c](#34-executorc)
+    - [3.5 precheck.c](#35-precheckc)
+    - [3.6 state.c](#36-statec)
+    - [3.7 config.c](#37-configc)
+    - [3.8 output.c](#38-outputc)
+    - [3.9 dispatch.c](#39-dispatchc)
 - [4. 故障详设（按模块分组）](#4-故障详设按模块分组)
-  - [4.1 网络模块（network）](#41-网络模块network)
-  - [4.2 进程模块（process）](#42-进程模块process)
-  - [4.3 CPU 模块（cpu）](#43-cpu-模块cpu)
-  - [4.4 存储模块（storage）](#44-存储模块storage)
-  - [4.5 NPU 模块（npu）](#45-npu-模块npu)
+    - [4.1 网络模块（network）](#41-网络模块network)
+    - [4.2 进程模块（process）](#42-进程模块process)
+    - [4.3 CPU 模块（cpu）](#43-cpu-模块cpu)
+    - [4.4 存储模块（storage）](#44-存储模块storage)
+    - [4.5 NPU 模块（npu）](#45-npu-模块npu)
 - [5. 关键流程](#5-关键流程)
-  - [5.1 inject（含 inject-only 分支 + 注入器回退）](#51-inject含-inject-only-分支--注入器回退)
-  - [5.2 clean](#52-clean)
-  - [5.3 query / list](#53-query--list)
+    - [5.1 inject（含 inject-only 分支 + 注入器回退）](#51-inject含-inject-only-分支--注入器回退)
+    - [5.2 clean](#52-clean)
+    - [5.3 query / list](#53-query--list)
 - [6. 脚本契约（实现约定）](#6-脚本契约实现约定)
-  - [6.1 通用约定](#61-通用约定)
-  - [6.2 可恢复故障脚本](#62-可恢复故障脚本)
-  - [6.3 inject-only 故障脚本](#63-inject-only-故障脚本)
-  - [6.4 默认值约定](#64-默认值约定)
+    - [6.1 通用约定](#61-通用约定)
+    - [6.2 可恢复故障脚本](#62-可恢复故障脚本)
+    - [6.3 inject-only 故障脚本](#63-inject-only-故障脚本)
+    - [6.4 默认值约定](#64-默认值约定)
 - [7. 注入器设计实现](#7-注入器设计实现)
-  - [7.1 设计动机与定位](#71-设计动机与定位)
-  - [7.2 injector_t 接口定义](#72-injector_t-接口定义)
-  - [7.3 接口契约](#73-接口契约)
-  - [7.4 注册与查找](#74-注册与查找)
-  - [7.5 dispatch 路由](#75-dispatch-路由)
-  - [7.6 与 cnf+脚本路径的关系](#76-与-cnf脚本路径的关系)
+    - [7.1 设计动机与定位](#71-设计动机与定位)
+    - [7.2 injector_t 接口定义](#72-injector_t-接口定义)
+    - [7.3 接口契约](#73-接口契约)
+    - [7.4 注册与查找](#74-注册与查找)
+    - [7.5 dispatch 路由](#75-dispatch-路由)
+    - [7.6 与 cnf+脚本路径的关系](#76-与-cnf脚本路径的关系)
 - [8. Reinject 默认拒绝与原子替换（--force）](#8-reinject-默认拒绝与原子替换--force)
-  - [8.1 目标与动机](#81-目标与动机)
-  - [8.2 适用范围（v1）](#82-适用范围v1)
-  - [8.3 资源键](#83-资源键)
-  - [8.4 overlap 检测算法](#84-overlap-检测算法)
-  - [8.5 cores 解析器](#85-cores-解析器)
-  - [8.6 CLI（--force）](#86-cli--force)
-  - [8.7 dispatch 路由改动](#87-dispatch-路由改动)
-  - [8.8 向后兼容（BREAKING）](#88-向后兼容breaking)
-  - [8.9 测试计划（TDD）](#89-测试计划tdd)
-  - [8.10 deferred 与约束](#810-deferred-与约束)
+    - [8.1 目标与动机](#81-目标与动机)
+    - [8.2 适用范围（v1）](#82-适用范围v1)
+    - [8.3 资源键](#83-资源键)
+    - [8.4 overlap 检测算法](#84-overlap-检测算法)
+    - [8.5 cores 解析器](#85-cores-解析器)
+    - [8.6 CLI（--force）](#86-cli--force)
+    - [8.7 dispatch 路由改动](#87-dispatch-路由改动)
+    - [8.8 向后兼容（BREAKING）](#88-向后兼容breaking)
+    - [8.9 测试计划（TDD）](#89-测试计划tdd)
+    - [8.10 deferred 与约束](#810-deferred-与约束)
 - [9. 目录结构](#9-目录结构)
 - [10. 构建](#10-构建)
 - [11. 测试设计](#11-测试设计)
-  - [11.1 mock_executor](#111-mock_executor)
-  - [11.2 表驱动](#112-表驱动)
-  - [11.3 故障覆盖矩阵](#113-故障覆盖矩阵)
-  - [11.4 真实环境冒烟](#114-真实环境冒烟)
+    - [11.1 mock_executor](#111-mock_executor)
+    - [11.2 表驱动](#112-表驱动)
+    - [11.3 故障覆盖矩阵](#113-故障覆盖矩阵)
+    - [11.4 真实环境冒烟](#114-真实环境冒烟)
 - [12. 命令行与使用场景](#12-命令行与使用场景)
-  - [12.1 命令结构](#121-命令结构)
-  - [12.2 全局参数](#122-全局参数)
-  - [12.3 使用场景](#123-使用场景)
+    - [12.1 命令结构](#121-命令结构)
+    - [12.2 全局参数](#122-全局参数)
+    - [12.3 使用场景](#123-使用场景)
 - [13. 与 SPEC 的对应](#13-与-spec-的对应)
 
 ---
@@ -72,7 +72,7 @@
 
 ### 1.1 分层架构
 
-```
+```text
         ┌──────────────────────────────────────────────┐
         │ main.c  (流程编排: 读配置→解析→调度→输出)        │
         └───────────────┬──────────────────────────────┘
@@ -125,7 +125,7 @@ query_optional   = dimm
 
 ### 1.3 数据流
 
-```
+```text
   argv (subcommand + uid + flags)
      │
      ▼
@@ -205,7 +205,7 @@ typedef struct {
 ```
 
 > `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
-
+>
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 
 ---
@@ -213,14 +213,19 @@ typedef struct {
 ## 3. 模块职责
 
 ### 3.1 main.c
+
 读取配置（`config_load`，固定路径见 SPEC §7）→ 注册 `fault_def` 表到 registry → 读取 argv（subcommand + uid + flags，含 `--config` / `--help`）→ `cli_parse` → `registry_find`（未命中回退 `injector_find`，见 §7.4）→ 按 op 分发（`dispatch_route`）→ `output_print` → 返回退出码。
 
 ### 3.2 cli.c（命令解析器）
+
 解析 `subcommand uid [flags]`，产出：
+
 ```c
 typedef struct { const char *op; char uid[64]; params_t params; int force; } parsed_cmd_t;
 ```
+
 解析流程：
+
 1. `argv[1]` = subcommand（`inject` / `clean` / `query` / `list`）；`--help` 直接输出帮助并退出
 2. `argv[2]` = uid（若存在且不以 `--` 开头）；`query` 和 `list` 可省略 uid
 3. 剩余 argv = `--key=value` 标志，逐对解析进 `params_t`（`--config` / `--help` 为全局选项，不进 params）
@@ -231,12 +236,14 @@ typedef struct { const char *op; char uid[64]; params_t params; int force; } par
 错误返回解析错误 JSON（退出码 2）。
 
 ### 3.3 registry.c
+
 - `registry_init(config)`：从 config 载入 `fault_def` 到静态数组。
 - `const fault_def_t *registry_find(const char *uid)`：cnf 查找。
 - `registry_list()`：返回全部 cnf 故障，供 `list` 命令。
 - **注入器回退**：`registry_find` 未命中时，dispatch 转 `injector_find(uid)`（§7.4）查 `builtin_injectors[]`。本期为空数组，回退永不命中。
 
 ### 3.4 executor.c
+
 ```c
 result_t *executor_run(const char *cmd);                   /* 同步: fork/exec+pipe, 捕获 stdout/stderr */
 int        executor_run_raw(const char *cmd);              /* 同步: system() 直通 stdout, 返回退出码 */
@@ -245,6 +252,7 @@ void       executor_set_env(const char *op, const char *uid, const params_t *p);
 void       executor_clear_env_params(const fault_def_t *f); /* 清除 fault 声明的 DCAT_PARAM_* 环境变量 */
 void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 ```
+
 - 命令构造：`build_cmd(fault_def, params, op)` 拼 `"<script>"`，参数通过**环境变量**传递（`DCAT_OP` / `DCAT_UID` / `DCAT_PARAM_<KEY>`），不走 argv，免注入。
 - `executor_run`：用 `fork/exec + pipe` 同步执行，`waitpid` 等待子进程结束；用于 cnf 故障的 inject / clean 路径——dcat 等待脚本执行完返回。
 - `executor_run_raw`：用 `system()` 直接执行，stdout/stderr 继承父进程终端（不 pipe 捕获）。用于 cnf 故障的 query 路径——用户需要看到脚本的原始输出（表格/多行文本），而非 JSON 包装。返回脚本退出码（0=成功）。
@@ -254,6 +262,7 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 - **不提供** `executor_spawn` / `executor_kill` / `timer_create` 超时：本期统一同步阻塞执行，dcat 不托管子进程 pid。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar，clean 时重跑脚本读取清理。
 
 ### 3.5 precheck.c
+
 - `precheck(fault_def, op, params)`：执行 SPEC §4.2 预检 4 步；返回 `result_t`（成功 / 带错误码）。
 - 本模块只做静态校验（uid 存在、op 合法、参数齐全、脚本可执行），**不做交互确认**（本期不实现 safety_confirm）。
 - **参数校验边界**：precheck 按 op 取对应的 `*_required` 列表校验齐全且非空（**结构校验**：inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部）；参数值合法性（如 `cores` 范围、`iface` 是否存在）由脚本自行校验（**语义校验**）。`declared_params_only(inject_req, inject_opt, clean_req, clean_opt, query_req, query_opt, params)` 接收 6 个 per-op required/optional 列表，校验用户参数是否全部在声明范围内，未声明的参数直接拒绝（报错退出码 3）。query 跳过必填校验；inject/clean 若 `*_required` 列表为空，则空参数允许通过。
@@ -261,6 +270,7 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 - 注入器故障的预检由 `injector_t->precheck` 函数指针实现（§7.3），不走本模块。
 
 ### 3.6 state.c
+
 - 静态 `injection_record_t g_records[DCAT_MAX_RECORDS]` + `pthread_mutex_t`。
 - `state_add(uid, params)` → 分配 `record_id`，写 `params` / `started_at` / `active=1`。**仅 `inject,clean,query` 故障调用**（cnf 与注入器均如此）。
 - `state_find_by_params(uid, params)`：按 uid + 用户提供的参数匹配活跃记录（用户提供的参数须与 inject 时参数一致才匹配）。供 `clean` 使用。
@@ -272,7 +282,9 @@ void       executor_set_mock(mock_fn fn);                   /* 测试钩子 */
 - **不区分故障来源**：cnf 故障与注入器故障共用同一 state 表。
 
 ### 3.7 config.c
+
 INI 解析 `demoncat.conf`：
+
 - `[demoncat]` 段：`state_file` / `log_level`。
 - `[fault.<uid>]` 段：载入 `fault_def_t`（含 6 个 per-op required/optional 字段，不含 `safety` / `timeout`）。
 - 固定路径见 SPEC §7；`--config` 覆盖。
@@ -281,15 +293,18 @@ INI 解析 `demoncat.conf`：
 - 输出 `config_t { state_file, log_level, fault_def_t faults[], int fault_count }`。
 
 ### 3.8 output.c
+
 - `result_t *result_ok(op, uid, cJSON *data)` / `result_err(op, uid, code, msg)`。
 - `output_print(result_t*)`：JSON 打印到 stdout，`result_free` 释放。
 - 统一 schema 见 SPEC §6。`inject`-only 的 `result_ok` 不写 `record_id` 字段。
 - cnf 故障与注入器故障共用同一输出 schema。
 
 ### 3.9 dispatch.c
+
 按 op 路由，串联各模块（见 §5 关键流程）。`inject` 分支区分 `inject`-only 与可恢复；`clean` / `query` 对 `inject`-only 故障在 precheck 阶段拒绝（退出码 3）。
 
 **按故障来源分流**（§7.5）：
+
 - **cnf 故障**（`registry_find` 命中 `fault_def_t`）：inject/clean 走 `executor_run`，query 走 `executor_run_raw`。
 - **注入器故障**（`injector_find` 命中 `injector_t`）：直接调 `inj->inject/clean/query` 函数指针，不 fork、不设环境变量。
 
@@ -309,7 +324,7 @@ INI 解析 `demoncat.conf`：
 #### 4.1.1 共享机制
 
 | 机制 | 命令 | 适用故障 | clean 策略 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `tc netem` | `tc qdisc add/replace dev <iface> root netem ...` | delay / loss / reorder / jitter | `tc qdisc del dev <iface> root`（幂等） |
 | `tc tbf` | `tc qdisc add dev <iface> root tbf rate <rate>...` | bw_limit | `tc qdisc del` |
 | `ip link` | `ip link set dev <iface> down/up` | down / link_flap | `ip link set up` |
@@ -323,7 +338,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 #### 4.1.2 故障差异表
 
 | UID | 必填参数 | 可选参数 | clean 机制 | 备注 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rNET_delay` * | iface,delay_ms | — | `tc qdisc del` | 示例 |
 | `rNET_loss` | iface,loss_pct | — | `tc qdisc del` | `netem loss random <pct>%` |
 | `rNET_reorder` | iface,reorder_pct | — | `tc qdisc del` | `netem reorder <pct>%` |
@@ -347,14 +362,14 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 #### 4.2.1 共享机制
 
 | 机制 | 命令/工具 | 适用故障 | 备注 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `kill` 信号 | `kill -9/-STOP/-CONT <pid>` | exit / hang | exit 不可逆；hang 可逆 |
 | 僵尸生成 | fork 子进程 + 子 exit + 父不 wait | zstate | count 个僵尸 |
 
 #### 4.2.2 故障差异表
 
 | UID | supported_ops | 必填 | 可选 | clean 机制 | 备注 |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `rPROC_exit` | **inject** | pid | — | **N/A** | `kill -9 <pid>`，不可恢复；**唯一 inject-only 故障** |
 | `rPROC_hang` | inject,clean,query | pid | — | `kill -CONT <pid>` | `kill -STOP`；clean 重跑脚本发 CONT |
 | `rPROC_zstate` | inject,clean,query | pid | — | kill 父进程（子被 init reap） | kill 目标进程 → 僵尸；clean 杀父进程回收 |
@@ -370,7 +385,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 #### 4.3.1 共享机制
 
 | UID | 机制 | 命令 | clean |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rCPU_overload` * | 多核 burn（纯用户态） | `perl -e '1 while 1'` 多实例 + taskset | kill 进程组（脚本读 pidfile） |
 | `rCPU_core_offline` | sysfs 离线 | `echo 0 > /sys/devices/system/cpu/cpu<N>/online` | `echo 1 > ...` |
 
@@ -397,7 +412,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 所有 NPU 故障通过 `hccn_tool -i <chip> <op>` 操作 RoCE 网卡。脚本共享 `src/scripts/npu/_common.sh`（`npu_check_env` / `npu_validate_chip` / `sidecar_save/load/clear`），每脚本内联 `fault_present` 函数实现 query-then-clean 幂等。
 
 | clean 策略 | 适用 UID | 机制 |
-|---|---|---|
+| --- | --- | --- |
 | 反向操作 | arp_poison, route_add, iprule_add, iproute_add | del 加的 / add 删的 |
 | sidecar 回放 | ip_change, gw_change, netdetect_change, arp_del, route_del, iprule_del, iproute_del, mtu, dscp_tc, roce_port | inject 前 -g 存原值；clean 回放 |
 | 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
@@ -419,7 +434,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 
 ### 5.1 inject（含 inject-only 分支 + 注入器回退）
 
-```
+```text
 parse → registry_find(uid)
   ├─ cnf 命中 fault_def:
   │     → precheck(op∈supported_ops, inject_required 齐全, 脚本可执行)
@@ -441,7 +456,7 @@ parse → registry_find(uid)
 
 ### 5.2 clean
 
-```
+```text
 parse → registry_find(uid)
   ├─ cnf 命中 fault_def:
   │     → precheck(op=clean ∈ supported_ops, clean_required 齐全)  # inject-only 故障在此拒绝 (退出码 3)
@@ -465,10 +480,10 @@ parse → registry_find(uid)
 
 - **query（无 uid）**：`state_list` 遍历活跃记录，输出记录数组 JSON。不调用脚本/注入器。
 - **query（有 uid）**：验证故障是否真的生效。用户参数传入（与 inject 参数独立）。
-  - cnf 故障：`executor_run_raw_fault(f, "query", params)`，脚本 stdout 原样输出到终端。
-  - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
-  - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
-  - **query 不强制必填参数**：precheck 对 query 不做必填校验（与 inject/clean 不同）。无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤；query 参数声明在 `query_optional`。`query_required` 已弃用（解析兼容保留，留空）。
+    - cnf 故障：`executor_run_raw_fault(f, "query", params)`，脚本 stdout 原样输出到终端。
+    - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
+    - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
+    - **query 不强制必填参数**：precheck 对 query 不做必填校验（与 inject/clean 不同）。无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤；query 参数声明在 `query_optional`。`query_required` 已弃用（解析兼容保留，留空）。
 - **list**：`registry_list()`，输出 cnf fault 目录文本表格（含 supported_ops / 6 个 per-op required/optional 字段 / desc）。注入器故障本期不纳入 list 输出。
 
 ---
@@ -565,7 +580,7 @@ const injector_t *injector_find(const char *uid);
 注入器函数指针的契约与脚本契约（§6）对齐，但**直接在 dcat 进程内执行**，不走 fork/exec、不走环境变量：
 
 | 函数指针 | 等价脚本路径 | 返回 `result_t` 语义 |
-|---|---|---|
+| --- | --- | --- |
 | `inject` | `DCAT_OP=inject` | 成功：`result_ok(op=inject, data={message})`；失败：`result_err(code, msg)` |
 | `clean` | `DCAT_OP=clean` | 成功：`result_ok(op=clean, data={message})`；失败：`result_err` |
 | `query` | `DCAT_OP=query` | 成功：`result_ok(op=query, data={confirmed, <证据文本>})`；失败：`result_err` |
@@ -619,7 +634,7 @@ const injector_t *injector_find(const char *uid) {
 
 dispatch 按 fault 来源分流（§3.9 / §5）：
 
-```
+```text
 dispatch_route(uid, op, params):
   fault = registry_find(uid)            # cnf 优先
   if fault != NULL:
@@ -641,7 +656,7 @@ dispatch_route(uid, op, params):
 ### 7.6 与 cnf+脚本路径的关系
 
 | 维度 | cnf+脚本 | 编译注入器 |
-|---|---|---|
+| --- | --- | --- |
 | 实现方式 | 外部 `.sh` 脚本 | C 函数，编译进二进制 |
 | 新增成本 | 加脚本+cnf 段，**免重编译** | 改 `injectors.c`，**需重编译** |
 | 执行方式 | `fork/exec` 子进程 | 进程内直接调用 |
@@ -683,7 +698,7 @@ dispatch_route(uid, op, params):
 
 对每个同 uid 的活动记录 R（经 `state_snapshot_by_uid` 在锁内拷贝快照，避免回调重入死锁，§3.6）：
 
-```
+```text
 resource_overlaps(new, R, clean_required):
   for tok in clean_required.split(','):
     nv = params_find(new, tok); rv = params_find(R, tok)
@@ -717,7 +732,7 @@ resource_overlaps(new, R, clean_required):
 
 `dispatch_route_force(uid, op, params, force)` 承载 force 参数（§3.9）；`dispatch_route(...)` 退化为 `force=0` 的 wrapper，保后向兼容，现有调用零改动。CNF inject 分支：
 
-```
+```c
 if (strcmp(op, "inject") == 0) {
     int ids[DCAT_MAX_RECORDS];
     int n = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);   // §8.4
@@ -737,8 +752,8 @@ if (strcmp(op, "inject") == 0) {
 ### 8.8 向后兼容（BREAKING）
 
 - **CPU `cores` 加法并集（PR#15）→ 默认拒绝**：有意 breaking（用户的动机场景）。
-  - `0,1` 已注入 → 再 `0,1`（同）：旧 idempotent-ok，现 **REJECT**。
-  - `0,1` 已注入 → `0-8`（重叠）：旧并集共存，现 **REJECT**。
+    - `0,1` 已注入 → 再 `0,1`（同）：旧 idempotent-ok，现 **REJECT**。
+    - `0,1` 已注入 → `0-8`（重叠）：旧并集共存，现 **REJECT**。
 - 网络 / 进程 / 存储：本就同资源不可并存（tc qdisc / ipset / 单 pid），只是把隐式打架显式化为 reject，基本非 breaking。
 - 迁移：重注入改加 `--force`；不同资源（不重叠核 / 不同 iface）仍并发 OK。
 
@@ -769,7 +784,7 @@ if (strcmp(op, "inject") == 0) {
 
 ## 9. 目录结构
 
-```
+```text
 CAT/
 ├── CMakeLists.txt              # C11, 静态链接, 含 third_party/cjson
 ├── SPEC.md  docs/DESIGN.md  README.md
@@ -886,7 +901,7 @@ CAT/
 ### 11.3 故障覆盖矩阵
 
 | 故障 | inject | clean | query | mock 断言 | 真实冒烟 |
-|---|:---:|:---:|:---:|---|---|
+| --- | :---: | :---: | :---: | --- | --- |
 | rNET_loss / reorder / bw_limit / jitter | ✓ | ✓ | ✓ | 命令串含 `tc qdisc add ... netem/tbf`；env 含 iface/... | 可选（需 root + iface） |
 | rNET_down | ✓ | ✓ | ✓ | 命令串含 `ip link set down` | 可选 |
 | rNET_degrade | ✓ | ✓ | ✓ | 命令串含 `tc qdisc … tbf` | 可选 |
@@ -914,7 +929,7 @@ CAT/
 
 ### 12.1 命令结构
 
-```
+```bash
 dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
@@ -923,7 +938,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ### 12.2 全局参数
 
 | 参数 | 默认值 | 说明 |
-|---|---|---|
+| --- | --- | --- |
 | `--config <path>` | 固定路径见 SPEC §7 | 配置文件路径覆盖 |
 | `--help` | — | 显示帮助 |
 

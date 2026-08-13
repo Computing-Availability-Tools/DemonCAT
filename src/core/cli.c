@@ -71,6 +71,7 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
     }
 
     for (; i < argc; i++) {
+        if (!argv[i]) continue;
         if (strcmp(argv[i], "--help") == 0) {
             out->help = 1;
             continue;
@@ -90,8 +91,10 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
         }
         if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--plugins") == 0) {
             if (i + 1 < argc) {
-                if (strcmp(argv[i], "--config") == 0) out->config  = argv[i + 1];
-                else                                    out->plugins = argv[i + 1];
+                if (strcmp(argv[i], "--config") == 0)
+                    out->config = argv[i + 1];
+                else
+                    out->plugins = argv[i + 1];
                 i++;
             } else {
                 snprintf(g_cli_error, sizeof g_cli_error, "option '%s' requires a value (use '%s=<path>')", argv[i], argv[i]);
@@ -177,9 +180,9 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
         if (!out->op && is_subcommand(argv[i])) {
             out->op = argv[i];
             /* uid may follow */
-            if (i + 1 < argc && argv[i+1][0] != '-' && argv[i+1][0] != '\0' &&
-                strcmp(argv[i+1], "values") != 0 && strcmp(argv[i+1], "where") != 0) {
-                strncpy(out->uid, argv[i+1], sizeof(out->uid) - 1);
+            if (i + 1 < argc && argv[i + 1][0] != '-' && argv[i + 1][0] != '\0' &&
+                strcmp(argv[i + 1], "values") != 0 && strcmp(argv[i + 1], "where") != 0) {
+                strncpy(out->uid, argv[i + 1], sizeof(out->uid) - 1);
                 out->uid[sizeof(out->uid) - 1] = '\0';
                 i++;
             }
@@ -205,7 +208,8 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                 size_t kl = (size_t)(eq2 - argv[i]);
                 const char *vv = eq2 + 1;
                 if (kl < sizeof(k)) {
-                    memcpy(k, argv[i], kl); k[kl] = '\0';
+                    memcpy(k, argv[i], kl);
+                    k[kl] = '\0';
                     snprintf(g_cli_error, sizeof g_cli_error,
                              "argument '%s' is missing the '--' prefix; did you mean '--%s=%s'?", argv[i], k, vv);
                 } else {
@@ -238,7 +242,8 @@ int cli_parse(int argc, char **argv, parsed_cmd_t *out) {
                      "parameter name too long in '%s' (max %d)", argv[i], (int)(sizeof(key) - 1));
             return -1;
         }
-        memcpy(key, kv, kl); key[kl] = '\0';
+        memcpy(key, kv, kl);
+        key[kl] = '\0';
         const char *val = eq + 1;
         if (params_set(&out->params, key, val) != 0) {
             snprintf(g_cli_error, sizeof g_cli_error, "too many parameters (max %d)", DCAT_MAX_PARAMS);

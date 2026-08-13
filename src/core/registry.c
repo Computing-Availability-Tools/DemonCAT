@@ -15,5 +15,8 @@ const fault_def_t *registry_find(const char *uid) {
     return NULL; /* 未命中：dispatch 回退 injector_find（DESIGN §7.4） */
 }
 
-const fault_def_t *registry_list(int *count) { if (count) *count = g_count; return g_faults; }
+const fault_def_t *registry_list(int *count) {
+    if (count) *count = g_count;
+    return g_faults;
+}
 int registry_count(void) { return g_count; }

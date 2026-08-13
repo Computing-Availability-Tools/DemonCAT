@@ -19,7 +19,7 @@
 | 内存 | 4 | 内存泄漏 / OOM / 内存碎片 / Swap 过载 |
 | 文件系统 | 2 | 文件锁 / iowait 飙高 |
 | Docker | 2 | 容器 kill / 容器内存过载 |
-| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / 降频 / AICore 故障 / AIVector 故障 / HBM 故障 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
+| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / 降频 / AICore 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
 | 系统 | 2 | 内核 panic / 下电重启 |
 | **合计** | **58** | |
 
@@ -89,9 +89,9 @@
   - [8.11 rNPU_dscp_tc_change](#811-rnpu_dscp_tc_change) — DSCP→TC 映射变更
   - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
   - [8.13 rNPU_freq_down](#813-rnpu_freq_down) — NPU 降频
-  - [8.14 rNPU_aic_fault](#814-rnpu_aic_fault) — AICore 故障
-  - [8.15 rNPU_aiv_fault](#815-rnpu_aiv_fault) — AIVector 故障
-  - [8.16 rNPU_hbm_fault](#816-rnpu_hbm_fault) — HBM 故障
+  - [8.14 rNPU_aic_fault](#814-rnpu_aic_fault) — AICore 负载
+  - [8.15 rNPU_aiv_fault](#815-rnpu_aiv_fault) — AIVector 负载
+  - [8.16 rNPU_hbm_fault](#816-rnpu_hbm_fault) — HBM 负载
   - [8.17 rNPU_chip_reset](#817-rnpu_chip_reset) — 芯片复位
   - [8.18 rNPU_driver_unbind](#818-rnpu_driver_unbind) — 驱动解绑
   - [8.19 rNPU_pcie_remove](#819-rnpu_pcie_remove) — PCIe 拔卡
@@ -1304,7 +1304,7 @@ hccn_tool -i 2 -mtu -g                         # 当前 MTU
 
 **⑥ device 映射（硬件故障用）**
 
-`rNPU_aic_fault`/`aiv_fault`/`hbm_fault` 使用 C 程序 `_npu_stress` 施加压力，需要 chip→device 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <acl_dev_id>`，由环境初始化脚本生成。示例：
+`rNPU_aic_fault`/`aiv_fault`/`hbm_fault` 使用 CANN 算子 API 施加负载，需要 chip→device 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <device_id>`，由环境初始化脚本生成。示例：
 ```
 2 0
 5 1
@@ -1721,16 +1721,16 @@ dcat clean rNPU_freq_down --chip=2
 
 ---
 
-### 8.14 rNPU_aic_fault — AICore 故障
+### 8.14 rNPU_aic_fault — AICore 负载
 
 **UID**: `rNPU_aic_fault`
 
-**描述**: 通过 C 程序对指定芯片 AICore 施加 d2d memcpy 压力，模拟 AICore 计算故障/过载。
+**描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（2048×2048×2048），持续施压 Cube 计算单元，拉高 AICore 使用率。
 
 **实现原理**: 
-- **inject**: 查找 chip→device 映射（`/tmp/dcat-npu-dev-map`），运行 `build/_npu_stress aicore <dev_id>` 后台进程，执行 d2d memcpy 持续施压。PID 写入 sidecar。
+- **inject**: 查找 chip→device 映射（`/tmp/dcat-npu-dev-map`），运行 `build/_npu_stress aicore <dev_id>` 后台进程。每批次提交 100 次矩阵乘法算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
-- **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。
+- **query**: `npu-smi info -t usages` 检查 AICore Usage Rate。
 
 **使用示例**:
 ```bash
@@ -1746,7 +1746,7 @@ dcat clean rNPU_aic_fault --chip=2
 | chip | 必填 | 0-7 | NPU 芯片号 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：`load_pct` 控制故障对 NPU 计算单元的占用率。内部实现为自适应占空比：每批次提交 100 次算子后同步等待 NPU 完成，测量实际计算耗时，再按 `sleep = compute × (1 - duty) / duty` 休眠。校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~89%，因 API 调用开销无法达到 100%）。
+**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：每批次提交 100 次算子后同步等待 NPU 完成，测量实际计算耗时，再按 `sleep = compute × (1 - duty) / duty` 休眠。校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~89%，因 API 调用开销无法达到 100%）。
 
 > **精度说明**：实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。`load_pct=100` 时 AICore 实际约 96%、AIVector 约 89%。
 
@@ -1755,15 +1755,16 @@ dcat clean rNPU_aic_fault --chip=2
 
 ---
 
-### 8.15 rNPU_aiv_fault — AIVector 故障
+### 8.15 rNPU_aiv_fault — AIVector 负载
 
 **UID**: `rNPU_aiv_fault`
 
-**描述**: 通过 C 程序对指定芯片 AIVector 单元施加 d2d memcpy 压力，模拟 AIVector 计算故障/过载。
+**描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（16M 元素），持续施压 Vector 计算单元，拉高 AIVector 使用率。
 
-**实现原理**: 与 `rNPU_aic_fault` 类似，运行 `build/_npu_stress aivector <dev_id>` 后台进程。
+**实现原理**: 
+- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。每批次提交 100 次 exp 算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
-- **query**: `npu-smi info -t usages` 检查 Aivector Usage Rate。
+- **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
 
 **使用示例**:
 ```bash
@@ -1786,11 +1787,11 @@ dcat clean rNPU_aiv_fault --chip=2
 
 ---
 
-### 8.16 rNPU_hbm_fault — HBM 故障
+### 8.16 rNPU_hbm_fault — HBM 负载
 
 **UID**: `rNPU_hbm_fault`
 
-**描述**: 通过 C 程序对指定芯片 HBM（高带宽内存）施加 malloc+memset 压力，模拟 HBM 内存故障/过载。
+**描述**: 通过 `aclrtMalloc`+`aclrtMemset` 分配并填充指定大小的 HBM 内存并持续持有，占满 HBM 显存空间。
 
 **实现原理**: 
 - **inject**: 运行 `build/_npu_stress hbm <dev_id> [size_gb]` 后台进程，使用 `aclrtMalloc` + `aclrtMemset` 分配并填充 HBM 内存。PID 写入 sidecar。

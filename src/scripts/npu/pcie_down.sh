@@ -1,5 +1,5 @@
 #!/bin/sh
-# rNPU_freq_down: PCIe link speed downgrade.
+# rNPU_pcie_down: PCIe link speed downgrade.
 # Reduces PCIe link speed from Gen4 (16GT/s) to Gen1 (2.5GT/s) by default,
 # cutting PCIe bandwidth ~6.4x. NPU remains accessible at lower speed.
 #
@@ -10,7 +10,7 @@
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 gen=${DCAT_PARAM_GEN:-1}
-SIDECAR="/tmp/dcat-rNPU_freq_down-$chip.bak"
+SIDECAR="/tmp/dcat-rNPU_pcie_down-$chip.bak"
 
 # PCIe speed by generation
 gen_speed() { case "$1" in 1) echo "2.5";; 2) echo "5";; 3) echo "8";; 4) echo "16";; 5) echo "32";; *) echo "2.5";; esac; }
@@ -106,7 +106,7 @@ case "${DCAT_OP:-inject}" in
         esac
         ;;
     clean)
-        [ -f "$SIDECAR" ] || { echo "no freq_down state for chip $chip" >&2; exit 1; }
+        [ -f "$SIDECAR" ] || { echo "no pcie_down state for chip $chip" >&2; exit 1; }
         state=$(cat "$SIDECAR")
         npu_bdf=${state%%|*}; rest=${state#*|}
         parent_bdf=${rest%%|*}; rest=${rest#*|}

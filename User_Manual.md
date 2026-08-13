@@ -88,7 +88,7 @@
   - [8.10 rNPU_mtu_mismatch](#810-rnpu_mtu_mismatch) — RoCE MTU 变更
   - [8.11 rNPU_dscp_tc_change](#811-rnpu_dscp_tc_change) — DSCP→TC 映射变更
   - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
-  - [8.13 rNPU_freq_down](#813-rnpu_freq_down) — NPU PCIe 降速
+  - [8.13 rNPU_pcie_down](#813-rnpu_pcie_down) — NPU PCIe 降速
   - [8.14 rNPU_aic_load](#814-rnpu_aic_load) — AICore 负载
   - [8.15 rNPU_aiv_load](#815-rnpu_`aiv_load) — AIVector 负载
   - [8.16 rNPU_hbm_load](#816-rnpu_`hbm_load) — HBM 负载
@@ -1686,9 +1686,9 @@ dcat clean rNPU_roce_port_change --chip=0
 
 ---
 
-### 8.13 rNPU_freq_down — NPU PCIe 降速
+### 8.13 rNPU_pcie_down — NPU PCIe 降速
 
-**UID**: `rNPU_freq_down`
+**UID**: `rNPU_pcie_down`
 
 **描述**: 通过 `setpci` 修改 PCIe Link Control 2 寄存器的 Target Link Speed，将 NPU PCIe 链路从 Gen4 (16GT/s) 降至 Gen1 (2.5GT/s)，带宽降低约 6.4 倍。NPU 在降速后仍可正常访问。
 
@@ -1699,10 +1699,10 @@ dcat clean rNPU_roce_port_change --chip=0
 
 **使用示例**:
 ```bash
-dcat inject rNPU_freq_down --chip=2           # 默认降至 Gen1 (2.5GT/s)
-dcat inject rNPU_freq_down --chip=2 --gen=2   # 降至 Gen2 (5GT/s)
-dcat query rNPU_freq_down --chip=2
-dcat clean rNPU_freq_down --chip=2
+dcat inject rNPU_pcie_down --chip=2           # 默认降至 Gen1 (2.5GT/s)
+dcat inject rNPU_pcie_down --chip=2 --gen=2   # 降至 Gen2 (5GT/s)
+dcat query rNPU_pcie_down --chip=2
+dcat clean rNPU_pcie_down --chip=2
 ```
 
 **参数可选范围**:

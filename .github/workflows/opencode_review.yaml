@@ -1,0 +1,61 @@
+name: opencode-review
+
+# 用 opencode 免费模型(opencode/deepseek-v4-flash-free)自动审视 PR。
+#
+# 触发:
+#   1) pull_request_target(opened/synchronize/reopened/ready_for_review) — 自动审视
+#   2) issue_comment(created) — 评论 /opencode 或 /oc 手动触发(限维护者或 PR 作者)
+#
+# fork PR 安全:
+#   - pull_request_target 跑 base 分支本 workflow(防 fork 篡改),且该事件下 secret 可用;
+#   - issue_comment 事件下 secret 天然不扣留;
+#   - opencode.json 锁只读(bash/edit 全 deny)→ /opencode 仅能审视/分析,不能改代码,fork 注入风险消除。
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  issues: read
+
+concurrency:
+  group: opencode-review-pr-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # issue_comment:仅在 /opencode|/oc + PR 评论 + (维护者 OR PR 作者) 时跑;pull_request_target 全跑
+    if: |
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')) &&
+       (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+        github.event.comment.user.login == github.event.issue.user.login))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          # pull_request_target 取 head.sha;issue_comment 取 refs/pull/<num>/head
+          ref: ${{ github.event.pull_request.head.sha || format('refs/pull/{0}/head', github.event.issue.number) }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run opencode
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: opencode/deepseek-v4-flash-free
+          use_github_token: true
+          # 不设 prompt:pull_request_target 时 opencode 默认 review PR;
+          # issue_comment 时 opencode 自动用 /opencode 评论内容作任务。
+          # DemonCAT 审视规则全在仓库根 AGENTS.md(opencode 自动读取)。

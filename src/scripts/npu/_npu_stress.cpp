@@ -12,7 +12,7 @@
 #include "acl/ops/acl_cblas.h"
 #include "aclnn/aclnn_base.h"
 #include "aclnn/acl_meta.h"
-#include "aclnnop/aclnn_add.h"
+#include "aclnnop/aclnn_exp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,53 +110,58 @@ int main(int argc, char **argv) {
         aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
 
     } else if (strcmp(mode, "aivector") == 0) {
-        /* FP16 element-wise Add: out = self + alpha * other → Vector units */
-        int64_t count = 524288;  /* 512K elements = 1MB (FP16) */
+        /* FP16 element-wise Exp: out = exp(self) → Vector units (compute-intensive) */
+        int64_t count = 16777216;  /* 16M elements = 32MB (FP16) */
         int64_t dims[2] = {1, count};
         int64_t stride[2] = {count, 1};
-        size_t bytes = (size_t)count * 2;  /* FP16 */
-        void *dA = NULL, *dB = NULL, *dC = NULL;
-        if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) || aclrtMalloc(&dB, bytes, ACL_MEM_MALLOC_HUGE_FIRST) || aclrtMalloc(&dC, bytes, ACL_MEM_MALLOC_HUGE_FIRST)) {
-            fprintf(stderr, "Add malloc fail on dev %d\n", dev_id); goto fail;
+        size_t bytes = (size_t)count * 2;
+        void *dA = NULL, *dC = NULL;
+        if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) || aclrtMalloc(&dC, bytes, ACL_MEM_MALLOC_HUGE_FIRST)) {
+            fprintf(stderr, "Exp malloc fail on dev %d\n", dev_id); goto fail;
         }
-        aclrtMemset(dA, bytes, 0x01, bytes); aclrtMemset(dB, bytes, 0x02, bytes);
+        aclrtMemset(dA, bytes, 0x3C, bytes);  /* FP16 ~1.0 */
         aclTensor *tA = aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dA);
-        aclTensor *tB = aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dB);
         aclTensor *tC = aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dC);
-        aclFloat16 alpha_val = aclFloatToFloat16(1.0f);
-        aclScalar *alpha = aclCreateScalar(&alpha_val, ACL_FLOAT16);
 
         uint64_t ws_size = 0;
         aclOpExecutor *exec = NULL;
-        aclnnStatus s1 = aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
+        aclnnStatus s1 = aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
+        if (s1 != 0 || exec == NULL) {
+            fprintf(stderr, "aclnnExpGetWorkspaceSize fail: status=%d exec=%p\n", s1, (void*)exec);
+            goto fail;
+        }
         void *ws = NULL;
         if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
-        printf("AIVector stress: FP16 Add %ldK elem on dev %d load=%d%% ws=%lu init=%d %s\n",
-               count / 1024, dev_id, load_pct, (unsigned long)ws_size, s1, duration > 0 ? "" : "forever");
+        printf("AIVector stress: FP16 Exp %ldM elem on dev %d load=%d%% ws=%lu %s\n",
+               count / 1048576, dev_id, load_pct, (unsigned long)ws_size, duration > 0 ? "" : "forever");
 
         int iter = 0;
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
-                aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
-                aclnnAdd(ws, ws_size, exec, stream);
+                for (int i = 0; i < 100; i++) {
+                    aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
+                    aclnnExp(ws, ws_size, exec, stream);
+                    iter++;
+                }
                 aclrtSynchronizeStream(stream);
-                iter++;
                 if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
             }
             printf("AIVector stress done: %d iterations\n", iter);
         } else {
             while (1) {
-                aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
-                aclnnAdd(ws, ws_size, exec, stream);
+                for (int i = 0; i < 100; i++) {
+                    aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
+                    aclnnExp(ws, ws_size, exec, stream);
+                    iter++;
+                }
                 aclrtSynchronizeStream(stream);
-                iter++;
                 if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
             }
         }
         if (ws) aclrtFree(ws);
-        aclDestroyScalar(alpha); aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
-        aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
+        aclDestroyTensor(tA); aclDestroyTensor(tC);
+        aclrtFree(dA); aclrtFree(dC);
 
     } else {
         fprintf(stderr, "unknown mode: %s\n%s", mode, usage);

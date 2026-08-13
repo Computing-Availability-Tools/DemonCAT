@@ -3,11 +3,25 @@ version: "3.8"
 services:
   demoncat:
     volumes:
+      # Ascend driver: hccn_tool, libdcmi.so, npu-smi
       - /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro
+      # NNAE: libc_sec.so, libmmpa.so
       - /usr/local/Ascend/nnae:/usr/local/Ascend/nnae:ro
-    devices:
-      - /dev/davinci0
-      - /dev/davinci1
+      # CANN toolkit: libopapi.so, libnnopbase.so, OPP operators (for aclnn)
+      # Only needed for rNPU_aic_load / aiv_load / hbm_load
+      - /usr/local/Ascend/ascend-toolkit:/usr/local/Ascend/ascend-toolkit:ro
+      # Pre-built _npu_stress binary from host (ACL load faults)
+      - ${DCAT_BUILD_DIR:-../build}/_npu_stress:/app/build/_npu_stress:ro
+    # --privileged in base compose already provides access to all /dev/davinci*
+    # No explicit devices list needed — all host devices are accessible
     environment:
-      LD_LIBRARY_PATH: /usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64
-      PATH: /usr/local/Ascend/driver/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      LD_LIBRARY_PATH: >-
+        /usr/local/Ascend/driver/lib64/driver:
+        /usr/local/Ascend/nnae/latest/lib64:
+        /usr/local/Ascend/ascend-toolkit/latest/lib64
+      PATH: >-
+        /usr/local/Ascend/driver/tools:
+        /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      ASCEND_OPP_PATH: /usr/local/Ascend/ascend-toolkit/latest/opp
+      # Optional: restrict which NPU chips are visible to dcat
+      # DCAT_NPU_CHIPS: "0,1,2,3"

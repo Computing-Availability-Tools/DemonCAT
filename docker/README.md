@@ -65,9 +65,11 @@ docker run --rm --privileged --network host --pid host \
 docker run -d --name demoncat --privileged --network host --pid host \
   -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \
   -v /usr/local/Ascend/nnae:/usr/local/Ascend/nnae:ro \
-  --device /dev/davinci0 \
-  -e LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64 \
+  -v /usr/local/Ascend/ascend-toolkit:/usr/local/Ascend/ascend-toolkit:ro \
+  -v /path/to/DemonCAT/build/_npu_stress:/app/build/_npu_stress:ro \
+  -e LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64 \
   -e PATH=/usr/local/Ascend/driver/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  -e ASCEND_OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp \
   -v dcat-state:/var/lib/demoncat \
   demoncat serve --port 8080
 ```
@@ -84,9 +86,13 @@ docker run -d --name demoncat --privileged --network host --pid host \
 | util-linux | `taskset`（CPU 绑核） |
 | coreutils | `dd`、`sort` 等基础工具 |
 | procps | `ps`、`kill`（进程故障） |
-| ipmitool | NPU 降频 / BMC 错误注入（未来） |
-| smartmontools | 磁盘 SMART 查询（未来） |
-| dmidecode | 硬件信息查询（未来） |
+| ipmitool | BMC 错误注入（如可用） |
+| smartmontools | 磁盘 SMART 查询 |
+| dmidecode | 硬件信息查询 |
+| pciutils | `setpci`、`lspci`（NPU PCIe 降速/拔卡/驱动解绑） |
+| sysstat | `mpstat`（文件系统 iowait 查询） |
+| dmsetup | device-mapper（磁盘 io_error / io_delay） |
+| e2fsprogs | `chattr`、`lsattr`（文件系统 immutable 锁） |
 
 ## 5. 关键设计
 
@@ -115,26 +121,53 @@ docker run -d --name demoncat --privileged --network host --pid host \
 
 ## 6. NPU 环境配置
 
-### 设备挂载
+### 设备访问
+
+容器使用 `--privileged` 模式（base compose 已配置），自动获得宿主机所有设备访问权限，包括全部 `/dev/davinci*`。无需在 compose 中逐一列出设备。
 
 ```bash
-ls /dev/davinci*    # 查看可用设备
+ls /dev/davinci*    # 宿主机查看可用 NPU 芯片
+docker exec demoncat ls /dev/davinci*    # 容器内验证
 ```
 
-根据实际卡数调整 `docker-compose.npu.yml` 中的 `devices` 列表。
+如需限制容器可见的芯片范围，设置环境变量：
+```yaml
+environment:
+  DCAT_NPU_CHIPS: "0,1,2,3"    # 只允许操作这 4 个 Phy-ID
+```
 
-### 驱动挂载
+### 驱动与库挂载
 
-容器需要以只读方式挂载宿主机的 Ascend 驱动目录：
-- `/usr/local/Ascend/driver` — 含 `hccn_tool`、`libdcmi.so`（未来）
-- `/usr/local/Ascend/nnae` — 含 `libc_sec.so`、`libmmpa.so` 依赖
+容器以只读方式挂载宿主机 Ascend 目录：
 
-### PATH 和 LD_LIBRARY_PATH
+| 挂载路径 | 内容 | 用途 |
+|---|---|---|
+| `/usr/local/Ascend/driver` | `hccn_tool`、`npu-smi`、`libdcmi.so` | NPU 管理/查询 |
+| `/usr/local/Ascend/nnae` | `libc_sec.so`、`libmmpa.so` | 运行时库依赖 |
+| `/usr/local/Ascend/ascend-toolkit` | `libopapi.so`、`libnnopbase.so`、OPP 算子库 | aclnn 负载故障（aic/aiv/hbm_load） |
+
+### _npu_stress 二进制
+
+`_npu_stress`（ACL 负载工具）在镜像构建时**不会**编译（Docker builder 无 CANN）。
+compose.npu.yml 会从宿主机挂载预编译的二进制：
+```yaml
+volumes:
+  - ${DCAT_BUILD_DIR:-../build}/_npu_stress:/app/build/_npu_stress:ro
+```
+
+确保宿主机上已编译 `_npu_stress`（需安装 CANN toolkit）：
+```bash
+cd DemonCAT/build && cmake .. && make _npu_stress
+```
+
+### 环境变量
 
 | 环境变量 | 值 | 作用 |
 |---|---|---|
-| `PATH` | `/usr/local/Ascend/driver/tools:...` | 让 `hccn_tool` 可被找到 |
-| `LD_LIBRARY_PATH` | `/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64` | 运行时库链接（未来 dcmi 用） |
+| `PATH` | `/usr/local/Ascend/driver/tools:...` | `hccn_tool`、`npu-smi` 可被找到 |
+| `LD_LIBRARY_PATH` | driver + nnae + toolkit 的 lib64 | 运行时库链接（ascendcl、opapi、nnopbase） |
+| `ASCEND_OPP_PATH` | `/usr/local/Ascend/ascend-toolkit/latest/opp` | aclnn 算子库路径（aic/aiv/hbm_load 必需） |
+| `DCAT_NPU_CHIPS` | 可选，如 `"0,1,2,3"` | 限制容器内可见的 NPU 芯片范围 |
 
 ## 7. 验证
 
@@ -188,6 +221,18 @@ docker rmi demoncat
 ### Q: NPU 故障报 "hccn_tool not found in PATH"
 
 确保 `docker-compose.npu.yml` 中设置了 `PATH` 环境变量，且宿主机 `/usr/local/Ascend/driver/tools/` 下有 `hccn_tool`。
+
+### Q: NPU 负载故障报 "_npu_stress not built"
+
+`_npu_stress` 需要在有 CANN toolkit 的宿主机上编译，然后挂载到容器。确保宿主机已执行 `cd build && cmake .. && make _npu_stress`，且 compose 中 `_npu_stress` 的 volume 挂载路径正确。
+
+### Q: NPU 负载故障报 ASCEND_OPP_PATH 相关错误
+
+确保 compose 中设置了 `ASCEND_OPP_PATH` 环境变量，且挂载了 `/usr/local/Ascend/ascend-toolkit` 目录。
+
+### Q: 容器内看不到全部 NPU 设备
+
+容器使用 `--privileged` 模式，自动获得所有 `/dev/davinci*` 访问权限。如设备仍不可见，检查宿主机 `/dev/davinci*` 是否存在，以及驱动是否正常加载。
 
 ### Q: 容器内看不到宿主机网卡
 

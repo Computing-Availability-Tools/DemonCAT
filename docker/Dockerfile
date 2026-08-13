@@ -20,6 +20,7 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g; s|security.debian.o
     apt-get install -y --no-install-recommends \
       iproute2 ethtool iptables perl python3 util-linux coreutils procps \
       ipmitool smartmontools dmidecode \
+      pciutils sysstat dmsetup e2fsprogs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

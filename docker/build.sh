@@ -22,15 +22,26 @@ echo ""
 
 # ---- Auto-detect NPU ----
 NPU_DETECTED=0
-if [ -d /usr/local/Ascend/driver ]; then
+NPU_CHIPS=""
+CANN_DETECTED=0
+
+if ls /dev/davinci* >/dev/null 2>&1; then
     NPU_DETECTED=1
-elif ls /dev/davinci* >/dev/null 2>&1; then
-    NPU_DETECTED=1
+    NPU_CHIPS=$(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||' | sort -n | tr '\n' ',' | sed 's/,$//')
+    echo "NPU detected: $NPU_CHIPS chip(s) (/dev/davinci*)"
 fi
 
-if [ "$NPU_DETECTED" -eq 1 ]; then
-    echo "NPU detected (Ascend driver or /dev/davinci* found)"
-else
+if [ -d /usr/local/Ascend/driver ]; then
+    NPU_DETECTED=1
+    echo "Ascend driver found"
+fi
+
+if [ -d /usr/local/Ascend/ascend-toolkit/latest/aarch64-linux/include/acl ]; then
+    CANN_DETECTED=1
+    echo "CANN toolkit found (aclnn operators available)"
+fi
+
+if [ "$NPU_DETECTED" -eq 0 ]; then
     echo "No NPU detected, using generic mode"
 fi
 
@@ -50,12 +61,21 @@ else
         echo "  NPU:           docker run -d --name demoncat --privileged --network host --pid host \\"
         echo "                    -v /usr/local/Ascend/driver:/usr/local/Ascend/driver:ro \\"
         echo "                    -v /usr/local/Ascend/nnae:/usr/local/Ascend/nnae:ro \\"
-        echo "                    --device /dev/davinci0 \\"
-        echo "                    -e LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64 \\"
+        echo "                    -v /usr/local/Ascend/ascend-toolkit:/usr/local/Ascend/ascend-toolkit:ro \\"
+        echo "                    -v $PROJECT_ROOT/build/_npu_stress:/app/build/_npu_stress:ro \\"
+        echo "                    -e LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/nnae/latest/lib64:/usr/local/Ascend/ascend-toolkit/latest/lib64 \\"
         echo "                    -e PATH=/usr/local/Ascend/driver/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\"
+        echo "                    -e ASCEND_OPP_PATH=/usr/local/Ascend/ascend-toolkit/latest/opp \\"
         echo "                    demoncat serve --port 8080"
     fi
 fi
 echo "  Use CLI:       docker run --rm --privileged --network host --pid host $IMAGE_NAME <command>"
 echo "                e.g. docker run --rm --privileged --network host --pid host $IMAGE_NAME list"
 echo "  View web:      http://<server-ip>:8080"
+
+if [ "$NPU_DETECTED" -eq 1 ] && [ "$CANN_DETECTED" -eq 0 ]; then
+    echo ""
+    echo "  NOTE: CANN toolkit not found — rNPU_aic_load/aiv_load/hbm_load require"
+    echo "        _npu_stress binary built on a host with CANN. Install CANN toolkit"
+    echo "        or build _npu_stress separately and mount the binary."
+fi

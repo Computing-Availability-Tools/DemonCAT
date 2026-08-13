@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4-flash-free",
+  "small_model": "opencode/deepseek-v4-flash-free",
+  "enabled_providers": ["opencode"],
+  "share": "disabled",
+  "permission": {
+    "edit": "deny",
+    "write": "deny",
+    "patch": "deny",
+    "bash": "deny",
+    "task": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "external_directory": "deny",
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "lsp": "allow"
+  }
+}

@@ -1,4 +1,4 @@
-name: PR CI
+name: E2E_Test
 
 # 单一入口：一次 push/PR 只跑这一条 workflow（取代旧的 pr_test_light + pr_test_full）。
 #
@@ -20,6 +20,7 @@ on:
       - synchronize
       - reopened
       - labeled
+      - edited  # 改 PR 标题/描述后重跑(否则改标题不会触发新 run,旧快照的标题校验会一直卡)
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

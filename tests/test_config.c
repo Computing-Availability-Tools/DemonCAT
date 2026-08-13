@@ -65,10 +65,65 @@ int test_load_resolves_script_abs(void) {
     return 0;
 }
 
+int test_config_load_not_found(void) {
+    config_t cfg;
+    int rc = config_load("/nonexistent/dcat_test.conf", &cfg);
+    ASSERT_INT_EQ(rc, -1);             /* fopen 失败 → -1 */
+    ASSERT_INT_EQ(cfg.fault_count, 0); /* memset 已清零 */
+    return 0;
+}
+
+int test_derive_project_root_rootless(void) {
+    /* cfgpath 恰为 "/config/demoncat.conf"(rlen==0 分支)→ root="/" */
+    char root[256];
+    derive_project_root("/config/demoncat.conf", root, sizeof root);
+    ASSERT_STREQ(root, "/");
+    return 0;
+}
+
+int test_config_load_edge_cases(void) {
+    /* 临时 conf:覆盖 注释/空行/缺 ]/无 =/未知键/log_level/fault 字段 */
+    const char *path = "/tmp/dcat_test_edge.conf";
+    FILE *fp = fopen(path, "w");
+    ASSERT_TRUE(fp != NULL);
+    fprintf(fp, "# comment line\n");
+    fprintf(fp, "; semicolon comment\n\n");
+    fprintf(fp, "[demoncat]\n");
+    fprintf(fp, "log_level=debug\n");
+    fprintf(fp, "unknown_key=ignored\n");
+    fprintf(fp, "[fault.rTEST]\n");
+    fprintf(fp, "module=test\n");
+    fprintf(fp, "desc=test fault\n");
+    fprintf(fp, "supported_ops=inject\n");
+    fprintf(fp, "inject_required=id\n");
+    fprintf(fp, "unknown_field=skip\n");
+    fprintf(fp, "[badsection_no_close\n"); /* 缺 ] → 整行跳过,不重置 cur */
+    fprintf(fp, "no_equals_here\n");       /* 无 = → 跳过 */
+    fclose(fp);
+
+    config_t cfg;
+    int rc = config_load(path, &cfg);
+    ASSERT_INT_EQ(rc, 0);
+    ASSERT_STREQ(cfg.log_level, "debug");
+    ASSERT_INT_EQ(cfg.fault_count, 1); /* 仅 rTEST;坏 section 不计入 */
+    const fault_def_t *f = config_find(&cfg, "rTEST");
+    ASSERT_TRUE(f != NULL);
+    ASSERT_STREQ(f->module, "test");
+    ASSERT_STREQ(f->desc, "test fault");
+    ASSERT_STREQ(f->supported_ops, "inject");
+    ASSERT_STREQ(f->inject_required, "id");
+    ASSERT_TRUE(config_find(&cfg, "badsection_no_close") == NULL); /* 未成 fault */
+    unlink(path);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_load_faults);
     RUN_TEST(test_resolve_script);
     RUN_TEST(test_derive_project_root);
     RUN_TEST(test_load_resolves_script_abs);
+    RUN_TEST(test_config_load_not_found);
+    RUN_TEST(test_derive_project_root_rootless);
+    RUN_TEST(test_config_load_edge_cases);
     return TEST_MAIN_RETURN();
 }

@@ -37,11 +37,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ github.event.issue.number }}
         run: |
-          set -eu
-          PR_AUTHOR=$(gh pr view "$PR_NUM" --json author --jq '.author.login')
+          set -eux
+          # 用 REST API 显式 owner/repo(issue_comment 无 checkout,gh pr view 推断 repo 偶发失败)
+          PR_AUTHOR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}" --jq '.user.login')
           {
-            echo "pr_number=$PR_NUM"
-            echo "pr_author=$PR_AUTHOR"
+            echo "pr_number=${PR_NUM}"
+            echo "pr_author=${PR_AUTHOR}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check commenter authorization
@@ -73,7 +74,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ steps.pr.outputs.pr_number }}
         run: |
-          gh pr comment "$PR_NUM" --body "/e2e 拒绝 — 仅 PR 作者或 triage+ 权限可触发。"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 拒绝 — 仅 PR 作者或 triage+ 权限可触发。"
           exit 1
 
       - name: Trigger full via label
@@ -85,6 +86,6 @@ jobs:
           set -eu
           # 用 ready 标签触发 pr_test.yaml labeled → Full。先移除(若在)再加,强制新 labeled 事件:
           # 同标签重复 add 不触发新事件;remove 触发 unlabeled,add 触发 labeled。
-          gh pr edit "$PR_NUM" --remove-label "ready" 2>/dev/null || true
-          gh pr edit "$PR_NUM" --add-label "ready"
-          gh pr comment "$PR_NUM" --body "/e2e 已触发：已(重新)加 \`ready\` 标签 → Full 套件即将在 pr_test.yaml 启动。"
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --remove-label "ready" 2>/dev/null || true
+          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 已触发：已(重新)加 \`ready\` 标签 → Full 套件即将在 pr_test.yaml 启动。"

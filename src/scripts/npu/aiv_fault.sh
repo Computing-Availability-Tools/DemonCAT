@@ -28,7 +28,13 @@ case "${DCAT_OP:-inject}" in
         [ -z "$dev_id" ] && dev_id=0
         "$STRESS_BIN" aivector "$dev_id" 0 512 >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
-        echo "AIVector stress started on chip $chip (acl dev $dev_id, pid $!)"
+        sleep 1
+        if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
+            rm -f "$SIDECAR"
+            echo "AIVector stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
+            exit 1
+        fi
+        echo "AIVector stress started on chip $chip (dev $dev_id, pid $!)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
@@ -40,11 +46,13 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     query)
-        if [ -f "$SIDECAR" ]; then
+        if [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             echo "FAULT CONFIRMED: AIVector stress active (pid $(cat $SIDECAR))"
-            npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | grep -E 'Aicore|Aivector'
+            npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | grep -iE 'Aicore|Aivector|HBM'
+            npu-smi info 2>/dev/null | grep -A1 "^| $chip "
             exit 0
         else
+            rm -f "$SIDECAR" 2>/dev/null
             echo "FAULT NOT ACTIVE: no AIVector stress"
             exit 1
         fi

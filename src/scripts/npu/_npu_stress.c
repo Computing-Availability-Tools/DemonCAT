@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
     if (strcmp(mode, "hbm") == 0) {
         void *d_ptr = NULL;
         ret = aclrtMalloc(&d_ptr, bytes, ACL_MEM_MALLOC_HUGE_FIRST);
-        if (ret != ACL_SUCCESS) { fprintf(stderr, "aclrtMalloc %dMB fail: %d\n", size_mb, ret); goto done; }
+        if (ret != ACL_SUCCESS) { fprintf(stderr, "aclrtMalloc %dMB fail: %d\n", size_mb, ret); goto fail; }
         aclrtMemset(d_ptr, bytes, 0xAA, bytes);
         printf("HBM stress: %dMB allocated+filled on dev %d, holding %s\n", size_mb, dev_id, duration > 0 ? "" : "forever");
         if (duration > 0) {
@@ -52,9 +52,9 @@ int main(int argc, char **argv) {
     } else if (strcmp(mode, "aicore") == 0 || strcmp(mode, "aivector") == 0) {
         void *d_src = NULL, *d_dst = NULL;
         ret = aclrtMalloc(&d_src, bytes, ACL_MEM_MALLOC_HUGE_FIRST);
-        if (ret != ACL_SUCCESS) { fprintf(stderr, "malloc src fail: %d\n", ret); goto done; }
+        if (ret != ACL_SUCCESS) { fprintf(stderr, "malloc src fail: %d\n", ret); goto fail; }
         ret = aclrtMalloc(&d_dst, bytes, ACL_MEM_MALLOC_HUGE_FIRST);
-        if (ret != ACL_SUCCESS) { fprintf(stderr, "malloc dst fail: %d\n", ret); aclrtFree(d_src); goto done; }
+        if (ret != ACL_SUCCESS) { fprintf(stderr, "malloc dst fail: %d\n", ret); aclrtFree(d_src); goto fail; }
         aclrtMemset(d_src, bytes, 0xAA, bytes);
         aclrtMemset(d_dst, bytes, 0x55, bytes);
 
@@ -86,11 +86,11 @@ int main(int argc, char **argv) {
         aclrtFree(d_dst);
     } else {
         fprintf(stderr, "unknown mode: %s\n%s", mode, usage);
-        goto done;
+        goto fail;
     }
 
-done:
+fail:
     aclrtResetDevice(dev_id);
     aclFinalize();
-    return 0;
+    return 1;
 }

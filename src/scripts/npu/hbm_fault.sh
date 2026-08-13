@@ -41,7 +41,13 @@ case "${DCAT_OP:-inject}" in
         size_mb=$(size_to_mb "$size_raw") || { echo "invalid size: $size_raw (use 500M, 2G, 500)" >&2; exit 1; }
         "$STRESS_BIN" hbm "$dev_id" 0 "$size_mb" >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
-        echo "HBM stress started on chip $chip (acl dev $dev_id, pid $!, ${size_mb}MB)"
+        sleep 1
+        if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
+            rm -f "$SIDECAR"
+            echo "HBM stress failed: cannot allocate ${size_mb}MB on chip $chip (HBM insufficient?)" >&2
+            exit 1
+        fi
+        echo "HBM stress started on chip $chip (dev $dev_id, pid $!, ${size_mb}MB)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
@@ -53,11 +59,13 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     query)
-        if [ -f "$SIDECAR" ]; then
+        if [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
-            npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | grep -E 'HBM'
+            npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | grep -iE 'HBM'
+            npu-smi info 2>/dev/null | grep -A1 "^| $chip "
             exit 0
         else
+            rm -f "$SIDECAR" 2>/dev/null
             echo "FAULT NOT ACTIVE: no HBM stress"
             exit 1
         fi

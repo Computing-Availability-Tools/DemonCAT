@@ -18,13 +18,11 @@ npu_validate_chip() {
 
 # Generate /tmp/dcat-npu-dev-map if missing.
 # Format: <Phy-ID> <ACL-dev-id>
-# ACL dev ID = sequential index of sorted Phy-IDs from /dev/davinci*
+# ACL dev ID = sequential index of Phy-IDs (numerically sorted)
 npu_gen_dev_map() {
     [ -f "$DEV_MAP_FILE" ] && return 0
-    local acl_id=0 phy_id
-    for d in /dev/davinci[0-9]*; do
-        [ -e "$d" ] || continue
-        phy_id=$(basename "$d" | grep -oE '[0-9]+$')
+    local acl_id=0
+    for phy_id in $(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||;s/[^0-9].*//' | sort -n); do
         echo "$phy_id $acl_id" >> "$DEV_MAP_FILE"
         acl_id=$((acl_id + 1))
     done
@@ -46,7 +44,7 @@ npu_phy_to_bdf() {
     # Fallback: match by davinci driver binding
     [ -z "$pci_addrs" ] && pci_addrs=$(ls -1 /sys/bus/pci/drivers/devdrv_device_driver/ 2>/dev/null | grep '^0000:' | sort)
     # Get all Phy-IDs (sorted numerically)
-    card_ids=$(ls /dev/davinci[0-9] 2>/dev/null | sed 's|/dev/davinci||' | sort -n)
+    card_ids=$(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||;s/[^0-9].*//' | sort -n)
     for p in $pci_addrs; do
         c=$(echo "$card_ids" | sed -n "${idx}p")
         if [ "$c" = "$phy_id" ]; then echo "$p"; return 0; fi

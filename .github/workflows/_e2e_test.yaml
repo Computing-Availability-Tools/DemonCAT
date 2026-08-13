@@ -18,6 +18,10 @@ on:
       run-as-root:
         type: boolean
         default: false
+      ref:
+        description: "Git ref to checkout; empty = event default"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -33,6 +37,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+          ref: ${{ inputs.ref }}
         # NPU 自托管 runner 到 github.com:443 不稳定，仅 self-hosted 时启用 2 次重试（共 3 次尝试）
         continue-on-error: ${{ contains(inputs.runner, 'self-hosted') }}
       - name: Checkout (retry 1/2)
@@ -41,12 +46,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+          ref: ${{ inputs.ref }}
         continue-on-error: true
       - name: Checkout (retry 2/2)
         if: ${{ contains(inputs.runner, 'self-hosted') && steps.co2.outcome == 'failure' }}
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+          ref: ${{ inputs.ref }}
 
       - name: Install build deps (only if missing)
         run: |

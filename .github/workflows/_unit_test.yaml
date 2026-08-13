@@ -10,6 +10,10 @@ on:
         description: "Enable C coverage instrumentation (Debug+gcov) + gcovr collect + Codecov upload"
         type: boolean
         default: false
+      ref:
+        description: "Git ref to checkout; empty = event default"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -24,6 +28,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+          ref: ${{ inputs.ref }}
 
       - name: Install build deps (only if missing)
         run: |

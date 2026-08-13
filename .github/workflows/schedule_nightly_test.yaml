@@ -1,18 +1,17 @@
-name: Nightly_Test_A2
+name: Nightly_Test
 
-# 夜间全量测试：自托管 NPU runner 跑全量 E2E（含 NPU/硬件用例）。
-# push 触发仅走 lint + unit-test（轻量），NPU E2E 仅在 schedule/dispatch 时运行。
+# 夜间全量测试：源仓库 Computing-Availability-Tools/DemonCAT 自托管 NPU runner 跑全量 E2E。
+# 仅 schedule + workflow_dispatch 触发（无 push，避免与 pr_test.yaml 叠加）。
+# 测 main + develop 两条分支（matrix 显式 checkout 目标分支 via ref 输入）。
+
 on:
-  push:
-    branches:
-      - '*'
   schedule:
-    - cron: '0 00 * * *'
+    - cron: '0 00 * * *'   # 每日 00:00 UTC
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false   # nightly 长任务不取消
 
 permissions:
   contents: read
@@ -20,46 +19,67 @@ permissions:
 
 jobs:
   lint:
-    name: Lint (pre-commit)
+    name: Lint (${{ matrix.branch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, develop]
     uses: ./.github/workflows/_pre_commit.yaml
-
-  clang-tidy:
-    name: clang-tidy (advisory)
-    needs: lint
-    if: ${{ github.event_name != 'push' }}
-    uses: ./.github/workflows/_clang_tidy.yaml
+    with:
+      ref: ${{ matrix.branch }}
 
   unit-test:
-    name: Unit tests (${{ matrix.runner }})
+    name: Unit tests (${{ matrix.runner }}, ${{ matrix.branch }})
     needs: lint
     strategy:
       fail-fast: false
       matrix:
+        branch: [main, develop]
         runner: [ubuntu-latest, ubuntu-24.04-arm]
     uses: ./.github/workflows/_unit_test.yaml
     with:
       runner: ${{ matrix.runner }}
+      ref: ${{ matrix.branch }}
 
   e2e-full:
-    name: E2E full (NPU runner)
+    name: E2E full (${{ matrix.branch }})
     needs: lint
-    if: ${{ github.event_name != 'push' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, develop]
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
-      runner: '["self-hosted", "npu-server","ARM64"]'
+      runner: '["self-hosted", "npu-server", "ARM64"]'
       flows: ""
       exclude: ""
       run-as-root: true
+      ref: ${{ matrix.branch }}
+
+  clang-tidy:
+    name: clang-tidy (${{ matrix.branch }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, develop]
+    uses: ./.github/workflows/_clang_tidy.yaml
+    with:
+      ref: ${{ matrix.branch }}
 
   coverage:
-    name: Coverage (gcov → Codecov)
+    name: Coverage (${{ matrix.branch }})
     needs: lint
-    if: ${{ github.event_name != 'push' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, develop]
     uses: ./.github/workflows/_unit_test.yaml
     with:
       runner: ubuntu-latest
       coverage: true
+      ref: ${{ matrix.branch }}
 
   ci-gate:
     name: Nightly Gate
@@ -75,27 +95,20 @@ jobs:
           E2E: ${{ needs.e2e-full.result }}
           CLANG: ${{ needs.clang-tidy.result }}
           COV: ${{ needs.coverage.result }}
-          IS_PUSH: ${{ github.event_name == 'push' }}
         run: |
           set -eu
           echo "=== Nightly Gate Summary ==="
           echo "lint:        ${LINT}"
-          echo "unit-test:  ${UNIT}"
+          echo "unit-test:   ${UNIT}"
           echo "e2e-full:   ${E2E}"
           echo "clang-tidy: ${CLANG} (advisory)"
           echo "coverage:   ${COV} (advisory)"
-          echo "is_push:    ${IS_PUSH}"
-          for r in "${LINT}" "${UNIT}"; do
+          # lint/unit/e2e-full 必须成功（matrix 各腿汇总）
+          for r in "${LINT}" "${UNIT}" "${E2E}"; do
             case "$r" in
               success) ;;
-              *) echo "::error::Job did not succeed: ${r}"; exit 1 ;;
+              *) echo "::error::Required job did not succeed: ${r}"; exit 1 ;;
             esac
           done
-          if [ "${IS_PUSH}" != "true" ]; then
-            case "${E2E}" in
-              success) ;;
-              *) echo "::error::e2e-full did not succeed: ${E2E}"; exit 1 ;;
-            esac
-          fi
           # clang-tidy / coverage 为建议性，仅报告不阻断
           echo "=== Nightly Gate: PASSED ==="

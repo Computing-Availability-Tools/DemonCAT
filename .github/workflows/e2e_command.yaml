@@ -1,0 +1,82 @@
+name: E2E Command
+
+# 评论 /e2e → 校验评论者权限（PR author 或 triage+）→ 给 PR 加 ready-for-test 标签
+# → 触发 pr_test.yaml 的 labeled 事件 → 跑 Full 套件（含 fork PR，vllm 式）。
+# 仅用 GITHUB_TOKEN，无需 PAT。实现参考 vllm-ascend pr_e2e_command.yml（简化为加标签间接）。
+#
+# 前置：源仓库需预先创建标签 `ready` 和 `ready-for-test`（gh pr edit --add-label 在标签不存在时会报错）。
+# 安全：issue_comment workflow 从默认分支读取（不会被 PR 改）；fork PR 的 pull_request 事件下
+#       GitHub 自动屏蔽源仓库 secrets，e2e-full 的 GITHUB_TOKEN 为只读（contents: read）。
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write   # 加标签 + 回写评论
+  issues: read
+
+concurrency:
+  group: e2e-command-${{ github.event.comment.id }}
+  cancel-in-progress: false
+
+jobs:
+  e2e-command:
+    if: ${{ github.event.issue.pull_request != null && github.event.comment.user.type == 'User' && startsWith(github.event.comment.body, '/e2e') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve PR (number + author)
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ github.event.issue.number }}
+        run: |
+          set -eu
+          PR_AUTHOR=$(gh pr view "$PR_NUM" --json author --jq '.author.login')
+          {
+            echo "pr_number=$PR_NUM"
+            echo "pr_author=$PR_AUTHOR"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check commenter authorization
+        id: auth
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.event.comment.user.login }}
+          PR_AUTHOR: ${{ steps.pr.outputs.pr_author }}
+        run: |
+          set -eu
+          # PR author 可直接触发；否则须 triage+ 权限（照搬 vllm-ascend 鉴权逻辑）
+          if [ "$ACTOR" = "$PR_AUTHOR" ]; then
+            echo "authorized=true (PR author)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ROLE=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq '.role_name' 2>/dev/null || echo "")
+          case "$ROLE" in
+            triage|write|maintain|admin)
+              echo "authorized=true ($ROLE)" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "authorized=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Reject unauthorized
+        if: steps.auth.outputs.authorized != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          gh pr comment "$PR_NUM" --body "/e2e 拒绝 — 仅 PR 作者或 triage+ 权限可触发。"
+          exit 1
+
+      - name: Trigger full via label
+        if: steps.auth.outputs.authorized == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          gh pr edit "$PR_NUM" --add-label "ready-for-test"
+          gh pr comment "$PR_NUM" --body "/e2e 已触发：已加 \`ready-for-test\` 标签 → Full 套件即将在 pr_test.yaml 启动。"

@@ -31,6 +31,10 @@ COLUMNS = [
 
 DCAT = "./build/dcat"
 
+# NPU chip/npu_id parameterized via env vars (default: chip=2, npu_id=2)
+E2E_CHIP = os.environ.get("DCAT_E2E_CHIP", "2")
+E2E_NPU_ID = os.environ.get("DCAT_E2E_NPU_ID", "2")
+
 # ---- 每故障观测知识 ----
 OBS = {
     "rCPU_overload": dict(module="cpu", inject_args="--cores=0 --load_pct=100",
@@ -102,80 +106,80 @@ OBS = {
         v_cmd="awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null || echo NONE", v_assert="eq:Z",
         c_cmd="", c_assert=""),
     # NPU (16 faults)
-    "rNPU_link_down": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+    "rNPU_link_down": dict(module="npu", inject_args="--chip={e2e_chip}", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -link -g 2>/dev/null", v_assert="contains:DOWN",
-        c_cmd="hccn_tool -i 2 -link -g 2>/dev/null", c_assert="notcontains:DOWN"),
-    "rNPU_ip_change": dict(module="npu", inject_args="--chip=2 --address=10.0.0.99 --netmask=255.255.255.0",
-        clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip -g 2>/dev/null", v_assert="contains:10.0.0.99",
-        c_cmd="hccn_tool -i 2 -ip -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
-    "rNPU_gw_change": dict(module="npu", inject_args="--chip=2 --gateway=10.20.10.1",
-        clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; hccn_tool -i 2 -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i 2 -gateway -s gateway 10.20.10.254 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", v_assert="contains:10.20.10.1",
-        c_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", c_assert="notcontains:10.20.10.1"),
-    "rNPU_netdetect_change": dict(module="npu", inject_args="--chip=2 --address=10.0.0.99",
-        clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -netdetect -g 2>/dev/null", v_assert="contains:10.0.0.99",
-        c_cmd="hccn_tool -i 2 -netdetect -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
-    "rNPU_arp": dict(module="npu", inject_args="--action=add --chip=2 --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55",
-        clean_args="--chip=2 --dev=eth0 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="contains:00:11:22:33:44:55",
-        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="notcontains:00:11:22:33:44:55"),
-    "rNPU_arp_del": dict(real_uid="rNPU_arp", module="npu", inject_args="--action=del --chip=2 --dev=eth0 --ip=10.30.12.200",
-        clean_args="--chip=2 --dev=eth0 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -link -g 2>/dev/null", v_assert="contains:DOWN",
+        c_cmd="hccn_tool -i {e2e_chip} -link -g 2>/dev/null", c_assert="notcontains:DOWN"),
+    "rNPU_ip_change": dict(module="npu", inject_args="--chip={e2e_chip} --address=10.0.0.99 --netmask=255.255.255.0",
+        clean_args="--chip={e2e_chip}", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -ip -g 2>/dev/null", v_assert="contains:10.0.0.99",
+        c_cmd="hccn_tool -i {e2e_chip} -ip -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
+    "rNPU_gw_change": dict(module="npu", inject_args="--chip={e2e_chip} --gateway=10.20.10.1",
+        clean_args="--chip={e2e_chip}", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i {e2e_chip} -gateway -s gateway 10.20.10.254 2>/dev/null",
+        v_cmd="hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null", v_assert="contains:10.20.10.1",
+        c_cmd="hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null", c_assert="notcontains:10.20.10.1"),
+    "rNPU_netdetect_change": dict(module="npu", inject_args="--chip={e2e_chip} --address=10.0.0.99",
+        clean_args="--chip={e2e_chip}", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null", v_assert="contains:10.0.0.99",
+        c_cmd="hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
+    "rNPU_arp": dict(module="npu", inject_args="--action=add --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55",
+        clean_args="--chip={e2e_chip} --dev=eth0 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -arp -g 2>/dev/null", v_assert="contains:00:11:22:33:44:55",
+        c_cmd="hccn_tool -i {e2e_chip} -arp -g 2>/dev/null", c_assert="notcontains:00:11:22:33:44:55"),
+    "rNPU_arp_del": dict(real_uid="rNPU_arp", module="npu", inject_args="--action=del --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200",
+        clean_args="--chip={e2e_chip} --dev=eth0 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
         flow_suffix="_del",
-        setup_cmd="hccn_tool -i 2 -arp -a dev eth0 ip 10.30.12.200 mac 00:11:22:33:44:55 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="notcontains:10.30.12.200",
-        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="contains:10.30.12.200"),
-    "rNPU_route": dict(module="npu", inject_args="--action=add --chip=2 --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.20.10.1",
-        clean_args="--chip=2 --address=10.30.40.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="contains:10.30.40.0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="notcontains:10.30.40.0"),
-    "rNPU_route_del": dict(real_uid="rNPU_route", module="npu", inject_args="--action=del --chip=2 --address=10.30.41.0 --netmask=255.255.255.0",
-        clean_args="--chip=2 --address=10.30.41.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -arp -a dev eth0 ip 10.30.12.200 mac 00:11:22:33:44:55 2>/dev/null",
+        v_cmd="hccn_tool -i {e2e_chip} -arp -g 2>/dev/null", v_assert="notcontains:10.30.12.200",
+        c_cmd="hccn_tool -i {e2e_chip} -arp -g 2>/dev/null", c_assert="contains:10.30.12.200"),
+    "rNPU_route": dict(module="npu", inject_args="--action=add --chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.20.10.1",
+        clean_args="--chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -link -s up 2>/dev/null",
+        v_cmd="hccn_tool -i {e2e_chip} -route -g 2>/dev/null", v_assert="contains:10.30.40.0",
+        c_cmd="hccn_tool -i {e2e_chip} -route -g 2>/dev/null", c_assert="notcontains:10.30.40.0"),
+    "rNPU_route_del": dict(real_uid="rNPU_route", module="npu", inject_args="--action=del --chip={e2e_chip} --address=10.30.41.0 --netmask=255.255.255.0",
+        clean_args="--chip={e2e_chip} --address=10.30.41.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
         flow_suffix="_del",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; hccn_tool -i 2 -route -a address 10.30.41.0 netmask 255.255.255.0 gateway 10.20.10.1",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="notcontains:10.30.41.0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="contains:10.30.41.0"),
-    "rNPU_iprule": dict(module="npu", inject_args="--action=add --chip=2 --dir=from --ip=10.20.10.50 --table=150",
-        clean_args="--chip=2 --dir=from --ip=10.20.10.50", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="contains:10.20.10.50",
-        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="notcontains:10.20.10.50"),
-    "rNPU_iprule_del": dict(real_uid="rNPU_iprule", module="npu", inject_args="--action=del --chip=2 --dir=from --ip=10.20.10.51",
-        clean_args="--chip=2 --dir=from --ip=10.20.10.51", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -route -a address 10.30.41.0 netmask 255.255.255.0 gateway 10.20.10.1",
+        v_cmd="hccn_tool -i {e2e_chip} -route -g 2>/dev/null", v_assert="notcontains:10.30.41.0",
+        c_cmd="hccn_tool -i {e2e_chip} -route -g 2>/dev/null", c_assert="contains:10.30.41.0"),
+    "rNPU_iprule": dict(module="npu", inject_args="--action=add --chip={e2e_chip} --dir=from --ip=10.20.10.50 --table=150",
+        clean_args="--chip={e2e_chip} --dir=from --ip=10.20.10.50", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null", v_assert="contains:10.20.10.50",
+        c_cmd="hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null", c_assert="notcontains:10.20.10.50"),
+    "rNPU_iprule_del": dict(real_uid="rNPU_iprule", module="npu", inject_args="--action=del --chip={e2e_chip} --dir=from --ip=10.20.10.51",
+        clean_args="--chip={e2e_chip} --dir=from --ip=10.20.10.51", provision="none", precondition="hccn_tool",
         flow_suffix="_del",
-        setup_cmd="hccn_tool -i 2 -ip_rule -d dir from ip 10.20.10.51 2>/dev/null; hccn_tool -i 2 -ip_rule -a dir from ip 10.20.10.51 table 150",
-        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="notcontains:10.20.10.51",
-        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="contains:10.20.10.51"),
-    "rNPU_iproute": dict(module="npu", inject_args="--action=add --chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100",
-        clean_args="--chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="contains:10.30.50.0",
-        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="notcontains:10.30.50.0"),
-    "rNPU_iproute_del": dict(real_uid="rNPU_iproute", module="npu", inject_args="--action=del --chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100",
-        clean_args="--chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -ip_rule -d dir from ip 10.20.10.51 2>/dev/null; hccn_tool -i {e2e_chip} -ip_rule -a dir from ip 10.20.10.51 table 150",
+        v_cmd="hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null", v_assert="notcontains:10.20.10.51",
+        c_cmd="hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null", c_assert="contains:10.20.10.51"),
+    "rNPU_iproute": dict(module="npu", inject_args="--action=add --chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100",
+        clean_args="--chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null", v_assert="contains:10.30.50.0",
+        c_cmd="hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null", c_assert="notcontains:10.30.50.0"),
+    "rNPU_iproute_del": dict(real_uid="rNPU_iproute", module="npu", inject_args="--action=del --chip={e2e_chip} --ip=10.30.51.0 --ip_mask=24 --table=100",
+        clean_args="--chip={e2e_chip} --ip=10.30.51.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
         flow_suffix="_del",
-        setup_cmd="hccn_tool -i 2 -ip_route -a ip 10.30.51.0 ip_mask 24 via 10.20.10.1 dev eth0 table 100",
-        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="notcontains:10.30.51.0",
-        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="contains:10.30.51.0"),
-    "rNPU_bw_limit": dict(module="npu", inject_args="--chip=2 --bw_limit=50000", clean_args="--chip=2",
+        setup_cmd="hccn_tool -i {e2e_chip} -ip_route -a ip 10.30.51.0 ip_mask 24 via 10.20.10.1 dev eth0 table 100",
+        v_cmd="hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null", v_assert="notcontains:10.30.51.0",
+        c_cmd="hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null", c_assert="contains:10.30.51.0"),
+    "rNPU_bw_limit": dict(module="npu", inject_args="--chip={e2e_chip} --bw_limit=50000", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", v_assert="contains:50000",
-        c_cmd="hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", c_assert="notcontains:50000"),
-    "rNPU_mtu_mismatch": dict(module="npu", inject_args="--chip=2 --size=1280", clean_args="--chip=2",
+        v_cmd="hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", v_assert="contains:50000",
+        c_cmd="hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", c_assert="notcontains:50000"),
+    "rNPU_mtu_mismatch": dict(module="npu", inject_args="--chip={e2e_chip} --size=1280", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", v_assert="contains:1280",
-        c_cmd="hccn_tool -i 2 -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", c_assert="notcontains:1280"),
-    "rNPU_dscp_tc_change": dict(module="npu", inject_args="--chip=2 --dscp=46 --tc=1", clean_args="--chip=2 --dscp=46",
+        v_cmd="hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", v_assert="contains:1280",
+        c_cmd="hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", c_assert="notcontains:1280"),
+    "rNPU_dscp_tc_change": dict(module="npu", inject_args="--chip={e2e_chip} --dscp=46 --tc=1", clean_args="--chip={e2e_chip} --dscp=46",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", v_assert="eq:1",
-        c_cmd="hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", c_assert="eq:0"),
-    "rNPU_roce_port_change": dict(module="npu", inject_args="--chip=2 --port=4792", clean_args="--chip=2",
+        v_cmd="hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", v_assert="eq:1",
+        c_cmd="hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", c_assert="eq:0"),
+    "rNPU_roce_port_change": dict(module="npu", inject_args="--chip={e2e_chip} --port=4792", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", v_assert="contains:4792",
-        c_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", c_assert="contains:4791"),
+        v_cmd="hccn_tool -i {e2e_chip} -udp -g 2>/dev/null", v_assert="contains:4792",
+        c_cmd="hccn_tool -i {e2e_chip} -udp -g 2>/dev/null", c_assert="contains:4791"),
     # ---- batch2 新增故障 (26 条, 排除 sys_panic/sys_poweroff) ----
     "rMEM_leak": dict(module="memory", inject_args="--size_mb=32", clean_args="",
         provision="none", precondition="none",
@@ -258,25 +262,25 @@ OBS = {
         provision="docker_container", precondition="docker+python3",
         v_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
-    "rNPU_pcie_down": dict(module="npu", inject_args="--npu_id=2 --gen=1", clean_args="--npu_id=2",
+    "rNPU_pcie_down": dict(module="npu", inject_args="--npu_id={e2e_npu_id} --gen=1", clean_args="--npu_id={e2e_npu_id}",
         provision="none", precondition="hccn_tool",
-        v_cmd="ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l", v_assert=">=1",
-        c_cmd="ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l", c_assert="==0"),
-    "rNPU_aic_load": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        v_cmd="ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l", c_assert="==0"),
+    "rNPU_aic_load": dict(module="npu", inject_args="--chip={e2e_chip} --load_pct=100", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_load", v_assert=">=1",
-        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aic_load", c_assert="==0"),
-    "rNPU_aiv_load": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+        v_cmd=f"{DCAT} query rNPU_aic_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_aic_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_aiv_load": dict(module="npu", inject_args="--chip={e2e_chip} --load_pct=100", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_load", v_assert=">=1",
-        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_aiv_load", c_assert="==0"),
-    "rNPU_hbm_load": dict(module="npu", inject_args="--chip=2 --size=2G", clean_args="--chip=2",
+        v_cmd=f"{DCAT} query rNPU_aiv_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_aiv_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_hbm_load": dict(module="npu", inject_args="--chip={e2e_chip} --size=2G", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", v_assert=">=1",
-        c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", c_assert="==0"),
-    "rNPU_chip_reset": dict(module="npu", inject_args="--npu_id=2", clean_args="--npu_id=2",
+        v_cmd=f"{DCAT} query rNPU_hbm_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_hbm_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_chip_reset": dict(module="npu", inject_args="--npu_id={e2e_npu_id}", clean_args="--npu_id={e2e_npu_id}",
         provision="none", precondition="npu-smi",
-        v_cmd="ls /tmp/dcat-rNPU_chip_reset-2-0.bak 2>/dev/null | wc -l", v_assert=">=1",
+        v_cmd="ls /tmp/dcat-rNPU_chip_reset-{e2e_npu_id}-0.bak 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="npu-smi info 2>/dev/null | grep -c 'OK'", c_assert=">=1"),
     "rNPU_driver_unbind": dict(module="npu", inject_args="--chip=5",
         provision="none", precondition="root+npu-smi",
@@ -356,9 +360,9 @@ def gen():
     q_case("rPROC_hang", "--pid={pid}", "--pid={pid}", "sleep_pid")
     q_case("rPROC_zstate", "--pid={pid}", "--pid={pid}", "sleep_pid")
     # FUNC-Q6: NPU query<uid> confirmed (mtu_mismatch)
-    q_case("rNPU_mtu_mismatch", "--chip=2 --size=1280", "--chip=2", "")
+    q_case("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=1280", "--chip={e2e_chip}", "")
     # FUNC-Q7: NPU query<uid> confirmed (bw_limit)
-    q_case("rNPU_bw_limit", "--chip=2 --bw_limit=50000", "--chip=2", "")
+    q_case("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=50000", "--chip={e2e_chip}", "")
     # FUNC-Q5: query<uid> no-params
     flow = f"FUNC-Q{s_q}"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none",
@@ -448,23 +452,23 @@ def gen():
     # service (string)
     b_reject("rNET_service_stop", "--service=", 3, 'missing required parameter', "service: empty")
     # encoding (enum)
-    b_reject("rNPU_ip_change", "--chip=2 --address=invalid --netmask=255.255.255.0", 1, '', "address: invalid format")
+    b_reject("rNPU_ip_change", "--chip={e2e_chip} --address=invalid --netmask=255.255.255.0", 1, '', "address: invalid format")
     # bitmap (comma-separated digits)
     # bw_limit (positive integer)
-    b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=0", 1, '', "bw_limit: 0 invalid")
-    b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=-1", 1, '', "bw_limit: negative")
-    b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=abc", 1, '', "bw_limit: non-numeric")
+    b_reject("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=0", 1, '', "bw_limit: 0 invalid")
+    b_reject("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=-1", 1, '', "bw_limit: negative")
+    b_reject("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=abc", 1, '', "bw_limit: non-numeric")
     # size (positive integer, 68-9702)
-    b_reject("rNPU_mtu_mismatch", "--chip=2 --size=0", 1, '', "size: 0 invalid")
-    b_reject("rNPU_mtu_mismatch", "--chip=2 --size=-1", 1, '', "size: negative")
-    b_reject("rNPU_mtu_mismatch", "--chip=2 --size=abc", 1, '', "size: non-numeric")
+    b_reject("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=0", 1, '', "size: 0 invalid")
+    b_reject("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=-1", 1, '', "size: negative")
+    b_reject("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=abc", 1, '', "size: non-numeric")
     # port (positive integer)
-    b_reject("rNPU_roce_port_change", "--chip=2 --port=0", 1, '', "port: 0 invalid")
-    b_reject("rNPU_roce_port_change", "--chip=2 --port=-1", 1, '', "port: negative")
-    b_reject("rNPU_roce_port_change", "--chip=2 --port=abc", 1, '', "port: non-numeric")
+    b_reject("rNPU_roce_port_change", "--chip={e2e_chip} --port=0", 1, '', "port: 0 invalid")
+    b_reject("rNPU_roce_port_change", "--chip={e2e_chip} --port=-1", 1, '', "port: negative")
+    b_reject("rNPU_roce_port_change", "--chip={e2e_chip} --port=abc", 1, '', "port: non-numeric")
     # dscp (0-63)
-    b_reject("rNPU_dscp_tc_change", "--chip=2 --dscp=64 --tc=1", 1, '', "dscp: 64 above range")
-    b_reject("rNPU_dscp_tc_change", "--chip=2 --dscp=-1 --tc=1", 1, '', "dscp: negative")
+    b_reject("rNPU_dscp_tc_change", "--chip={e2e_chip} --dscp=64 --tc=1", 1, '', "dscp: 64 above range")
+    b_reject("rNPU_dscp_tc_change", "--chip={e2e_chip} --dscp=-1 --tc=1", 1, '', "dscp: negative")
 
     # ---- batch2 新增参数类型边界值 ----
     # quota_pct (1-99 range)
@@ -526,8 +530,8 @@ def gen():
     b_reject("rNPU_hbm_load", "", 3, 'missing required parameter', "chip: missing")
     # npu_id + gen (NPU pcie_down)
     b_reject("rNPU_pcie_down", "--npu_id=abc --gen=1", 1, '', "npu_id: non-numeric")
-    b_reject("rNPU_pcie_down", "--npu_id=2 --gen=abc", 1, '', "gen: non-numeric")
-    b_reject("rNPU_pcie_down", "--npu_id=2 --gen=5", 1, '', "gen: out of range (1-3)")
+    b_reject("rNPU_pcie_down", "--npu_id={e2e_npu_id} --gen=abc", 1, '', "gen: non-numeric")
+    b_reject("rNPU_pcie_down", "--npu_id={e2e_npu_id} --gen=5", 1, '', "gen: out of range (1-3)")
     b_reject("rNPU_pcie_down", "", 3, 'missing required parameter', "npu_id: missing")
     # npu_id (NPU chip_reset)
     b_reject("rNPU_chip_reset", "--npu_id=abc", 1, '', "npu_id: non-numeric")
@@ -545,8 +549,8 @@ def gen():
         ("rCPU_overload", "--cores=0{x}"),
         ("rDISK_write_overload", "--device=/tmp{x}"),
         ("rNET_service_stop", "--service=cron{x}"),
-        ("rNPU_bw_limit", "--chip=2{x} --bw_limit=10000"),
-        ("rNPU_ip_change", "--chip=2 --address=1.1.1.1{x} --netmask=255.255.255.0"),
+        ("rNPU_bw_limit", "--chip={e2e_chip}{x} --bw_limit=10000"),
+        ("rNPU_ip_change", "--chip={e2e_chip} --address=1.1.1.1{x} --netmask=255.255.255.0"),
         ("rFS_file_lock", "--path=/tmp{x} --mode=nowrite"),
         ("rDISK_part_full", "--path=/tmp{x} --size=10M"),
         ("rMEM_leak", "--size_mb=32{x}"),
@@ -670,10 +674,10 @@ def gen():
     # 前置 setup 重置 MTU 到默认 1500，确保 inject(1280) 始终生效，
     # 避免受前序 flow（如 RES-7 clean --all 丢 state 后）残留 MTU=1280 的影响。
     flow = f"STATE-{s_s}"
-    add(flow, 0, "npu", "rNPU_mtu_mismatch", "setup", "none", "hccn_tool -i 2 -mtu -s size 1500 2>/dev/null", 0, "", "", "", "", "reset MTU baseline 1500")
-    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject1 NPU")
-    add(flow, 2, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
-    add(flow, 3, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip=2", 0, "", "", "", "", "cleanup NPU")
+    add(flow, 0, "npu", "rNPU_mtu_mismatch", "setup", "none", "hccn_tool -i {e2e_chip} -mtu -s size 1500 2>/dev/null", 0, "", "", "", "", "reset MTU baseline 1500")
+    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip={{e2e_chip}} --size=1280", 0, '"status":"ok"', "", "", "", "inject1 NPU")
+    add(flow, 2, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip={{e2e_chip}} --size=1280", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
+    add(flow, 3, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip={{e2e_chip}}", 0, "", "", "", "", "cleanup NPU")
     s_s += 1
     # S8: batch2 新增故障 clean×2 (rMEM_leak, 无参 clean 幂等)
     flow = f"STATE-{s_s}"
@@ -740,7 +744,7 @@ def gen():
     # R7: NPU + CPU 多故障 → 删 state → clean --all
     flow = "RES-7"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject CPU fault")
-    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject NPU fault")
+    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip={{e2e_chip}} --size=1280", 0, '"status":"ok"', "", "", "", "inject NPU fault")
     add(flow, 2, "mixed", "all", "lose_state", "none", "rm -f $E2E_HOME/.demoncat/state.json", 0, "", "", "", "", "simulate state deletion")
     add(flow, 3, "mixed", "all", "clean_all", "none", f"{DCAT} clean --all", 0, "", "pgrep -x perl | wc -l", "==0", "", "one-click recovery (CPU+NPU)")
     add(flow, 4, "mixed", "all", "query_empty", "none", f"{DCAT} query", 0, "", "", "state_empty", "", "no ghost")

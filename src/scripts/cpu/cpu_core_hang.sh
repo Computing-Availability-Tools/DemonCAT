@@ -1,6 +1,6 @@
 #!/bin/sh
 # rCPU_core_hang: pin an RT-priority busy loop to each core, starving normal scheduling.
-# inject: chrt -f 99 + taskset -c <core> busy loop per core; write pidfile
+# inject: chrt -f 1 + taskset -c <core> busy loop per core; write pidfile
 # clean:  kill RT loops
 # query:  count alive RT loops
 # Distinct from rCPU_overload (pure burn, non-RT) and rCPU_core_offline (sysfs down).
@@ -26,16 +26,32 @@ case "${DCAT_OP:-inject}" in
         case "$spec" in *[!0-9,-]*) echo "invalid cores spec '$spec'" >&2; exit 1;; esac
         pids=""
         for n in $(parse_cores "$spec"); do
-            if command -v chrt >/dev/null 2>&1; then
-                chrt -f 99 taskset -c "$n" sh -c 'while :; do :; done' >/dev/null 2>&1 &
+            # RT priority 1 (not 99): SCHED_FIFO enough to starve normal tasks
+            # without triggering kernel RT throttling kill.
+            # Use perl (reliable under RT), fallback to yes.
+            if command -v chrt >/dev/null 2>&1 && command -v perl >/dev/null 2>&1; then
+                chrt -f 1 taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
+            elif command -v chrt >/dev/null 2>&1; then
+                chrt -f 1 taskset -c "$n" yes >/dev/null 2>&1 &
+            elif command -v perl >/dev/null 2>&1; then
+                taskset -c "$n" perl -e '1 while 1' >/dev/null 2>&1 &
             else
-                # fallback: non-RT pin (less effective hang)
-                taskset -c "$n" sh -c 'while :; do :; done' >/dev/null 2>&1 &
+                taskset -c "$n" yes >/dev/null 2>&1 &
             fi
             pids="$pids $!"
         done
         echo "$pids" > "$PIDFILE"
-        echo "hung cores [$spec] (pids:$pids)"
+        sleep 1
+        # Verify processes are alive
+        alive=0
+        for pid in $pids; do
+            kill -0 "$pid" 2>/dev/null && alive=$((alive + 1))
+        done
+        total=$(echo "$pids" | wc -w)
+        if [ "$alive" -lt "$total" ]; then
+            echo "WARNING: only $alive/$total RT loops alive" >&2
+        fi
+        echo "hung cores [$spec] ($alive/$total alive, pids:$pids)"
         ;;
     clean)
         if [ -f "$PIDFILE" ]; then

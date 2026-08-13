@@ -218,7 +218,8 @@ def provision(provs, ctx, iface):
 def substitute(s, ctx):
     if not s:
         return s
-    for k in ("pid", "port", "iface", "svc", "loop_dev", "ctr"):
+    for k in ("pid", "port", "iface", "svc", "loop_dev", "ctr",
+              "e2e_chip", "e2e_npu_id"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
     return s
 
@@ -389,6 +390,9 @@ def main():
         cat = fid.split("-")[0]
         # 不再 skip：生产要求全量跑。资源未就绪(无 hccn_tool/非 root/sysfs 等)→用例自然 FAIL。
         ctx = {}
+        # NPU chip/npu_id from env (default: chip=2, npu_id=2)
+        ctx["e2e_chip"] = os.environ.get("DCAT_E2E_CHIP", "2")
+        ctx["e2e_npu_id"] = os.environ.get("DCAT_E2E_NPU_ID", "2")
 
         # 前置清扫
         sweep(E2E_HOME, TEST_IFACE, tracked_pids)

@@ -1,17 +1,17 @@
 /*
- * _npu_stress.c — NPU stress tool using ACL BLAS + aclnn (no torch_npu required).
+ * _npu_stress.c — NPU stress tool using aclnn operators (no torch_npu required).
  * Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct]
  *   hbm:      allocate HBM memory + memset (HBM bandwidth stress)
- *   aicore:   FP32 GEMM loop (Cube compute unit stress)
- *   aivector: FP32 element-wise Add loop (Vector compute unit stress)
+ *   aicore:   FP16 Matmul loop (Cube compute unit stress → AICore Usage)
+ *   aivector: FP16 Exp loop (Vector compute unit stress → AIVector Usage)
  * duration 0 = run forever (until killed)
  * load_pct 1-100 (default 100), duty-cycle: compute for X ms, sleep for Y ms
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"
-#include "acl/ops/acl_cblas.h"
 #include "aclnn/aclnn_base.h"
 #include "aclnn/acl_meta.h"
+#include "aclnnop/aclnn_matmul.h"
 #include "aclnnop/aclnn_exp.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +23,6 @@ static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id>
                            "  duration 0 = run forever (until killed)\n"
                            "  load_pct 1-100 (default 100)\n";
 
-/* duty-cycle helper: returns 1 if still in compute phase, 0 if should sleep */
 static int in_compute_phase(int load_pct, struct timespec *cycle_start) {
     if (load_pct >= 100) return 1;
     int cycle_ms = 100;
@@ -32,11 +31,17 @@ static int in_compute_phase(int load_pct, struct timespec *cycle_start) {
     clock_gettime(CLOCK_MONOTONIC, &now);
     long elapsed = (now.tv_sec - cycle_start->tv_sec) * 1000 + (now.tv_nsec - cycle_start->tv_nsec) / 1000000;
     if (elapsed < on_ms) return 1;
-    /* sleep for remaining time */
     int off_ms = cycle_ms - on_ms;
     if (off_ms > 0) usleep(off_ms * 1000);
     clock_gettime(CLOCK_MONOTONIC, cycle_start);
     return 1;
+}
+
+/* helper: create a 2D FP16 tensor backed by device memory */
+static aclTensor* make_tensor(void *dev_ptr, int rows, int cols) {
+    int64_t dims[2] = {rows, cols};
+    int64_t stride[2] = {cols, 1};
+    return aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dev_ptr);
 }
 
 int main(int argc, char **argv) {
@@ -76,64 +81,78 @@ int main(int argc, char **argv) {
         aclrtFree(d_ptr);
 
     } else if (strcmp(mode, "aicore") == 0) {
-        /* FP32 GEMM: C = alpha * A * B + beta * C → Cube units */
-        int M = 1024, N = 1024, K = 1024;
-        size_t a_sz = (size_t)M * K * 4, b_sz = (size_t)K * N * 4, c_sz = (size_t)M * N * 4;
-        void *dA = NULL, *dB = NULL, *dC = NULL;
-        if (aclrtMalloc(&dA, a_sz, ACL_MEM_MALLOC_HUGE_FIRST) || aclrtMalloc(&dB, b_sz, ACL_MEM_MALLOC_HUGE_FIRST) || aclrtMalloc(&dC, c_sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
-            fprintf(stderr, "GEMM malloc fail on dev %d\n", dev_id); goto fail;
+        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage */
+        int M = 2048, K = 2048, N = 2048;
+        size_t szA = (size_t)M*K*2, szB = (size_t)K*N*2, szC = (size_t)M*N*2;
+        void *dA=NULL, *dB=NULL, *dC=NULL;
+        if (aclrtMalloc(&dA, szA, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dB, szB, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dC, szC, ACL_MEM_MALLOC_HUGE_FIRST)) {
+            fprintf(stderr, "matmul malloc fail on dev %d\n", dev_id); goto fail;
         }
-        aclrtMemset(dA, a_sz, 0x01, a_sz); aclrtMemset(dB, b_sz, 0x02, b_sz);
-        float alpha = 1.0f, beta = 0.0f;
-        printf("AICore stress: GEMM %dx%dx%d on dev %d load=%d%% %s\n", M, N, K, dev_id, load_pct, duration > 0 ? "" : "forever");
+        aclrtMemset(dA, szA, 0x00, szA); aclrtMemset(dB, szB, 0x00, szB);
+        aclTensor *tA = make_tensor(dA, M, K);
+        aclTensor *tB = make_tensor(dB, K, N);
+        aclTensor *tC = make_tensor(dC, M, N);
+
+        uint64_t ws_size = 0;
+        aclOpExecutor *exec = NULL;
+        aclnnStatus s = aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
+        if (s != 0 || !exec) { fprintf(stderr, "aclnnMatmulGetWorkspaceSize fail: %d\n", s); goto fail; }
+        void *ws = NULL;
+        if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
+        printf("AICore stress: FP16 Matmul %dx%dx%d on dev %d load=%d%% %s\n", M, N, K, dev_id, load_pct, duration > 0 ? "" : "forever");
+
         int iter = 0;
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
-                aclblasGemmEx(ACL_TRANS_N, ACL_TRANS_N, ACL_TRANS_N, M, N, K,
-                              &alpha, dA, M, ACL_FLOAT, dB, K, ACL_FLOAT,
-                              &beta, dC, M, ACL_FLOAT, ACL_COMPUTE_HIGH_PRECISION, stream);
+                for (int i = 0; i < 100; i++) {
+                    aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
+                    aclnnMatmul(ws, ws_size, exec, stream);
+                    iter++;
+                }
                 aclrtSynchronizeStream(stream);
-                iter++;
                 if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
             }
         } else {
             while (1) {
-                aclblasGemmEx(ACL_TRANS_N, ACL_TRANS_N, ACL_TRANS_N, M, N, K,
-                              &alpha, dA, M, ACL_FLOAT, dB, K, ACL_FLOAT,
-                              &beta, dC, M, ACL_FLOAT, ACL_COMPUTE_HIGH_PRECISION, stream);
+                for (int i = 0; i < 100; i++) {
+                    aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
+                    aclnnMatmul(ws, ws_size, exec, stream);
+                    iter++;
+                }
                 aclrtSynchronizeStream(stream);
-                iter++;
                 if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
             }
         }
+        if (ws) aclrtFree(ws);
+        aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
         aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
 
     } else if (strcmp(mode, "aivector") == 0) {
-        /* FP16 element-wise Exp: out = exp(self) → Vector units (compute-intensive) */
-        int64_t count = 16777216;  /* 16M elements = 32MB (FP16) */
-        int64_t dims[2] = {1, count};
-        int64_t stride[2] = {count, 1};
+        /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage */
+        int64_t count = 16777216;  /* 16M elements = 32MB FP16 */
         size_t bytes = (size_t)count * 2;
-        void *dA = NULL, *dC = NULL;
-        if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) || aclrtMalloc(&dC, bytes, ACL_MEM_MALLOC_HUGE_FIRST)) {
-            fprintf(stderr, "Exp malloc fail on dev %d\n", dev_id); goto fail;
+        void *dA=NULL, *dC=NULL;
+        if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dC, bytes, ACL_MEM_MALLOC_HUGE_FIRST)) {
+            fprintf(stderr, "exp malloc fail on dev %d\n", dev_id); goto fail;
         }
         aclrtMemset(dA, bytes, 0x3C, bytes);  /* FP16 ~1.0 */
+        int64_t dims[2] = {1, count};
+        int64_t stride[2] = {count, 1};
         aclTensor *tA = aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dA);
         aclTensor *tC = aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dC);
 
         uint64_t ws_size = 0;
         aclOpExecutor *exec = NULL;
-        aclnnStatus s1 = aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
-        if (s1 != 0 || exec == NULL) {
-            fprintf(stderr, "aclnnExpGetWorkspaceSize fail: status=%d exec=%p\n", s1, (void*)exec);
-            goto fail;
-        }
+        aclnnStatus s = aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
+        if (s != 0 || !exec) { fprintf(stderr, "aclnnExpGetWorkspaceSize fail: %d\n", s); goto fail; }
         void *ws = NULL;
         if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
-        printf("AIVector stress: FP16 Exp %ldM elem on dev %d load=%d%% ws=%lu %s\n",
-               count / 1048576, dev_id, load_pct, (unsigned long)ws_size, duration > 0 ? "" : "forever");
+        printf("AIVector stress: FP16 Exp %ldM elem on dev %d load=%d%% %s\n",
+               count / 1048576, dev_id, load_pct, duration > 0 ? "" : "forever");
 
         int iter = 0;
         if (duration > 0) {
@@ -147,7 +166,6 @@ int main(int argc, char **argv) {
                 aclrtSynchronizeStream(stream);
                 if (load_pct < 100) in_compute_phase(load_pct, &cycle_start);
             }
-            printf("AIVector stress done: %d iterations\n", iter);
         } else {
             while (1) {
                 for (int i = 0; i < 100; i++) {

@@ -49,9 +49,9 @@ case "${DCAT_OP:-inject}" in
         if [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             echo "FAULT CONFIRMED: AICore stress active (pid $(cat $SIDECAR))"
             ai_pct=$(npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | awk '/Aicore/{print $NF}')
-            hbm_raw=$(npu-smi info 2>/dev/null | grep -A1 "^| $chip " | tail -1 | awk -F'|' '{gsub(/^ +| +$/,"",$5); print $5}')
+            hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $chip /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)
             echo "AICore Usage(%): ${ai_pct:-?}"
-            echo "HBM Usage(MB): ${hbm_raw:-?}"
+            echo "HBM Usage: ${hbm_raw:-?}"
             exit 0
         else
             rm -f "$SIDECAR" 2>/dev/null

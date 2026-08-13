@@ -40,14 +40,22 @@ case "${DCAT_OP:-inject}" in
         size_raw=${DCAT_PARAM_SIZE:?missing required param: size}
         size_mb=$(size_to_mb "$size_raw") || { echo "invalid size: $size_raw (use 500M, 2G, 500)" >&2; exit 1; }
         "$STRESS_BIN" hbm "$dev_id" 0 "$size_mb" >/dev/null 2>&1 &
-        echo $! > "$SIDECAR"
-        sleep 1
-        if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
+        pid=$!
+        echo "$pid" > "$SIDECAR"
+        sleep 2
+        if ! kill -0 "$pid" 2>/dev/null; then
             rm -f "$SIDECAR"
             echo "HBM stress failed: cannot allocate ${size_mb}MB on chip $chip (HBM insufficient?)" >&2
             exit 1
         fi
-        echo "HBM stress started on chip $chip (dev $dev_id, pid $!, ${size_mb}MB)"
+        proc_mem=$(npu-smi info 2>/dev/null | grep '_npu_stress' | awk -F'|' '{gsub(/^ +| +$/,"",$5); print $5}')
+        if [ -n "$proc_mem" ] && [ "$proc_mem" -lt $((size_mb / 2)) ] 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null
+            rm -f "$SIDECAR"
+            echo "HBM stress failed: only ${proc_mem}MB allocated (requested ${size_mb}MB), HBM insufficient" >&2
+            exit 1
+        fi
+        echo "HBM stress started on chip $chip (dev $dev_id, pid $pid, ${size_mb}MB)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
@@ -62,8 +70,8 @@ case "${DCAT_OP:-inject}" in
         if [ -f "$SIDECAR" ] && kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
             hbm_pct=$(npu-smi info -t usages -i "$chip" -c 0 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
-            hbm_raw=$(npu-smi info 2>/dev/null | grep -A1 "^| $chip " | tail -1 | awk -F'|' '{gsub(/^ +| +$/,"",$5); print $5}')
-            echo "HBM Usage(MB): ${hbm_raw:-?} (${hbm_pct:-?}%)"
+            hbm_raw=$(npu-smi info 2>/dev/null | awk "/^\\| $chip /{getline;print}" | grep -oE '[0-9]+ */ *[0-9]+' | tail -1)
+            echo "HBM Usage: ${hbm_raw:-?} (${hbm_pct:-?}%)"
             npu-smi info 2>/dev/null | grep '_npu_stress' | awk -F'|' '{gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$5); print $4": "$5"MB"}'
             exit 0
         else

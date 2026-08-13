@@ -28,6 +28,9 @@ jobs:
       - name: Configure (export compile_commands.json)
         run: cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
+      - name: Register clang-tidy problem matcher
+        run: echo "::add-matcher::.github/workflows/matchers/clang-tidy.json"
+
       - name: Run clang-tidy (clang-analyzer only)
         run: |
           set -eu

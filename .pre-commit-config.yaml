@@ -45,6 +45,7 @@ repos:
         language: system
         types: [shell]
         args:
+          - --format=gcc
           - --severity=warning
           - --exclude=SC2086
           - --exclude=SC2046

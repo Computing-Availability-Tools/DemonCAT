@@ -50,5 +50,11 @@ jobs:
           restore-keys: |
             pre-commit-${{ runner.os }}-
 
+      - name: Register problem matchers
+        run: |
+          echo "::add-matcher::.github/workflows/matchers/actionlint.json"
+          echo "::add-matcher::.github/workflows/matchers/markdownlint.json"
+          echo "::add-matcher::.github/workflows/matchers/shellcheck.json"
+
       - name: Run pre-commit
         run: pre-commit run --all-files --show-diff-on-failure

@@ -90,7 +90,7 @@
 | `rNPU_mtu_mismatch` | chip,size | — | RoCE MTU mismatch |
 | `rNPU_dscp_tc_change` | chip,dscp,tc | — | DSCP-to-TC mapping change |
 | `rNPU_roce_port_change` | chip,port | — | RoCE UDP port change |
-| `rNPU_freq_down` | chip | — | AICore frequency query (910B4 不支持设置频率, 仅查询) |
+| `rNPU_freq_down` | chip | gen | PCIe link speed downgrade (Gen4→Gen1, setpci) |
 | `rNPU_aic_load` | chip | duration | AICore stress (ACL d2d memcpy, 无需 torch_npu) |
 | `rNPU_aiv_load` | chip | duration | AIVector stress (ACL d2d memcpy, 无需 torch_npu) |
 | `rNPU_hbm_load` | chip | size_mb,duration | HBM stress (ACL malloc+memset, 无需 torch_npu) |

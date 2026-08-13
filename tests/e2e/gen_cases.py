@@ -258,7 +258,7 @@ OBS = {
         provision="docker_container", precondition="docker+python3",
         v_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
-    "rNPU_freq_down": dict(module="npu", inject_args="--chip=2 --freq=1000", clean_args="--chip=2",
+    "rNPU_freq_down": dict(module="npu", inject_args="--chip=2 --gen=1", clean_args="--chip=2",
         provision="none", precondition="hccn_tool",
         v_cmd="ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l", c_assert="==0"),
@@ -524,9 +524,9 @@ def gen():
     b_reject("rNPU_aiv_load", "", 3, 'missing required parameter', "chip: missing")
     b_reject("rNPU_hbm_load", "--chip=abc", 1, '', "chip: non-numeric")
     b_reject("rNPU_hbm_load", "", 3, 'missing required parameter', "chip: missing")
-    # chip + freq (NPU freq_down)
-    b_reject("rNPU_freq_down", "--chip=abc --freq=1000", 1, '', "chip: non-numeric")
-    b_reject("rNPU_freq_down", "--chip=2 --freq=abc", 1, '', "freq: non-numeric")
+    # chip + gen (NPU freq_down)
+    b_reject("rNPU_freq_down", "--chip=abc --gen=1", 1, '', "chip: non-numeric")
+    b_reject("rNPU_freq_down", "--chip=2 --gen=abc", 1, '', "gen: non-numeric")
     b_reject("rNPU_freq_down", "", 3, 'missing required parameter', "chip: missing")
     # chip (NPU chip_reset)
     b_reject("rNPU_chip_reset", "--chip=abc", 1, '', "chip: non-numeric")

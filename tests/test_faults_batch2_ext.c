@@ -110,12 +110,12 @@ int main(void) {
     }
 
     /* ---- npu extensions ---- */
-    /* rNPU_freq_down (chip,freq) */
+    /* rNPU_freq_down (chip,gen) */
     {
-        params_t p = mkparams("chip", "0", "freq", "800", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
+        params_t p = mkparams("chip", "0", "gen", "1", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
         result_t *r = dispatch_route("rNPU_freq_down", "inject", &p);
         CK(r && r->code == 0); CMD_CONTAINS("freq_down.sh");
-        check_param_env("chip", "0"); check_param_env("freq", "800"); result_free(r);
+        check_param_env("chip", "0"); check_param_env("gen", "1"); result_free(r);
         r = dispatch_route("rNPU_freq_down", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
     /* rNPU_aic_load (chip) */

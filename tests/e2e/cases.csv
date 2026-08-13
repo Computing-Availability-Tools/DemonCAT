@@ -133,7 +133,7 @@ E2E-131,FUNC-rNPU_driver_unbind,0,npu,rNPU_driver_unbind,skip,echo SKIP: dangero
 E2E-132,FUNC-rNPU_dscp_tc_change,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip=2 --dscp=46 --tc=1,0,"""status"":""ok""",hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:1,,fault active after inject
 E2E-133,FUNC-rNPU_dscp_tc_change,1,npu,rNPU_dscp_tc_change,clean,./build/dcat clean rNPU_dscp_tc_change --chip=2 --dscp=46,0,,hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:0,,"fault cleaned, system restored"
 E2E-134,FUNC-rNPU_dscp_tc_change,2,npu,rNPU_dscp_tc_change,query,./build/dcat query,0,,,state_not_contains:rNPU_dscp_tc_change,,no ghost record after clean
-E2E-135,FUNC-rNPU_freq_down,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=2 --freq=1000,0,"""status"":""ok""",ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l,>=1,,fault active after inject
+E2E-135,FUNC-rNPU_freq_down,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=2 --gen=1,0,"""status"":""ok""",ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l,>=1,,fault active after inject
 E2E-136,FUNC-rNPU_freq_down,1,npu,rNPU_freq_down,clean,./build/dcat clean rNPU_freq_down --chip=2,0,,ls /tmp/dcat-rNPU_freq_down-2.bak 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
 E2E-137,FUNC-rNPU_freq_down,2,npu,rNPU_freq_down,query,./build/dcat query,0,,,state_not_contains:rNPU_freq_down,,no ghost record after clean
 E2E-138,FUNC-rNPU_gw_change,0,npu,rNPU_gw_change,setup,hccn_tool -i 2 -link -s up 2>/dev/null; hccn_tool -i 2 -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i 2 -gateway -s gateway 10.20.10.254 2>/dev/null,0,,,,none,provision none
@@ -323,8 +323,8 @@ E2E-321,BOUND-84,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --
 E2E-322,BOUND-85,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load ,3,missing required parameter,,exitcode:3,,chip: missing
 E2E-323,BOUND-86,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
 E2E-324,BOUND-87,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-325,BOUND-88,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=abc --freq=1000,1,,,exitcode:1,,chip: non-numeric
-E2E-326,BOUND-89,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=2 --freq=abc,1,,,exitcode:1,,freq: non-numeric
+E2E-325,BOUND-88,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=abc --gen=1,1,,,exitcode:1,,chip: non-numeric
+E2E-326,BOUND-89,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down --chip=2 --gen=abc,1,,,exitcode:1,,gen: non-numeric
 E2E-327,BOUND-90,0,npu,rNPU_freq_down,inject,./build/dcat inject rNPU_freq_down ,3,missing required parameter,,exitcode:3,,chip: missing
 E2E-328,BOUND-91,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --chip=abc,1,,,exitcode:1,,chip: non-numeric
 E2E-329,BOUND-92,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --chip=99,1,,,exitcode:1,,chip: nonexistent NPU

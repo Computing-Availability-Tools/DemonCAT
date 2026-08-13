@@ -19,7 +19,7 @@
 | 内存 | 4 | 内存泄漏 / OOM / 内存碎片 / Swap 过载 |
 | 文件系统 | 2 | 文件锁 / iowait 飙高 |
 | Docker | 2 | 容器 kill / 容器内存过载 |
-| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / 降频 / AICore 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
+| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / PCIe 降速 / AICore 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
 | 系统 | 2 | 内核 panic / 下电重启 |
 | **合计** | **58** | |
 
@@ -88,7 +88,7 @@
   - [8.10 rNPU_mtu_mismatch](#810-rnpu_mtu_mismatch) — RoCE MTU 变更
   - [8.11 rNPU_dscp_tc_change](#811-rnpu_dscp_tc_change) — DSCP→TC 映射变更
   - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
-  - [8.13 rNPU_freq_down](#813-rnpu_freq_down) — NPU 降频
+  - [8.13 rNPU_freq_down](#813-rnpu_freq_down) — NPU PCIe 降速
   - [8.14 rNPU_aic_load](#814-rnpu_aic_load) — AICore 负载
   - [8.15 rNPU_aiv_load](#815-rnpu_`aiv_load) — AIVector 负载
   - [8.16 rNPU_hbm_load](#816-rnpu_`hbm_load) — HBM 负载
@@ -1686,22 +1686,21 @@ dcat clean rNPU_roce_port_change --chip=0
 
 ---
 
-### 8.13 rNPU_freq_down — NPU 降频
+### 8.13 rNPU_freq_down — NPU PCIe 降速
 
 **UID**: `rNPU_freq_down`
 
-**描述**: 通过 `pydcmi` 查询 AICore 当前/最大频率，检测是否处于降频状态。
+**描述**: 通过 `setpci` 修改 PCIe Link Control 2 寄存器的 Target Link Speed，将 NPU PCIe 链路从 Gen4 (16GT/s) 降至 Gen1 (2.5GT/s)，带宽降低约 6.4 倍。NPU 在降速后仍可正常访问。
 
 **实现原理**: 
-- **inject**: 使用 `pydcmi` 查询 chip 的 AICore 当前频率与最大频率，记录到 sidecar。如果当前频率 < 最大频率，报告降频状态。
-- **clean**: 清除 sidecar。
-- **query**: `npu-smi info -t usages` 查看频率信息。
-
-> **注意**：910B4 不支持 SETTING 频率（`npu-smi set -t cpu-freq-up/power-state/pwm-duty-ratio` 均返回 "does not support"），此故障为查询模式，仅报告当前频率状态。
+- **inject**: 从 `npu-smi info -t board` 获取芯片 PCIe BDF，通过 sysfs 找到上游 Root Port。读取两端 LnkCtl2 原始值并保存到 sidecar。将 Target Link Speed 设为目标 Gen 值，在 Root Port 端触发 Link Retrain。
+- **clean**: 从 sidecar 恢复原 LnkCtl2 值，重新 Retrain 恢复原速。
+- **query**: 检查 sidecar 是否存在，`lspci` 显示当前链路速度。
 
 **使用示例**:
 ```bash
-dcat inject rNPU_freq_down --chip=2
+dcat inject rNPU_freq_down --chip=2           # 默认降至 Gen1 (2.5GT/s)
+dcat inject rNPU_freq_down --chip=2 --gen=2   # 降至 Gen2 (5GT/s)
 dcat query rNPU_freq_down --chip=2
 dcat clean rNPU_freq_down --chip=2
 ```
@@ -1710,14 +1709,11 @@ dcat clean rNPU_freq_down --chip=2
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | chip | 必填 | 0-7 | NPU 芯片号 |
-| freq | 可选 | 整数 (MHz) | 期望降频后的频率（仅用于校验比较，实际不设置） |
-| bmc_ip | 可选 | IPv4 | BMC IP 地址（预留给 BMC 降频路径，当前未使用） |
-| bmc_user | 可选 | 字符串 | BMC 用户名（预留给 BMC 降频路径） |
-| bmc_pass | 可选 | 字符串 | BMC 密码（预留给 BMC 降频路径） |
+| gen | 可选 | 1-5 | 目标 PCIe 代数（默认 1=Gen1 2.5GT/s） |
 
-**危险等级**: 低 — 仅查询操作，不改变芯片状态。
+**危险等级**: 中 — PCIe 带宽大幅降低，影响 NPU 数据传输性能。NPU 仍可访问但带宽受限。可逆（clean 恢复原速）。
 
-**补充说明**: 依赖 `pydcmi`（Python NPU 管理库）和 CANN 环境。910B4 的 AICore 频率由固件管理，无法手动设置。当前/最大频率典型值：800MHz / 1650MHz。
+**补充说明**: 依赖 `setpci`（pciutils 包）。Root Port 和 Endpoint 两端都需设置 Target Link Speed，从 Root Port 端触发 Retrain。实测 910B4 支持 Gen1-Gen4 降速。
 
 ---
 

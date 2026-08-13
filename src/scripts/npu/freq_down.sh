@@ -1,48 +1,147 @@
 #!/bin/sh
-# rNPU_freq_down: query AICore frequency via pydcmi.
-# 910B4 does not support SETTING frequency; this fault QUERIES and reports it.
-# inject: query current/max AICore freq, record in sidecar, report if throttled
-# clean:  clear sidecar
-# query:  npu-smi info -t usages
+# rNPU_freq_down: PCIe link speed downgrade.
+# Reduces PCIe link speed from Gen4 (16GT/s) to Gen1 (2.5GT/s) by default,
+# cutting PCIe bandwidth ~6.4x. NPU remains accessible at lower speed.
+#
+# inject: set Target Link Speed on both root port and endpoint, retrain link
+# clean:  restore original LnkCtl2 values, retrain link
+# query:  show current link speed, compare to original
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
+gen=${DCAT_PARAM_GEN:-1}
 SIDECAR="/tmp/dcat-rNPU_freq_down-$chip.bak"
+
+# PCIe speed by generation
+gen_speed() { case "$1" in 1) echo "2.5";; 2) echo "5";; 3) echo "8";; 4) echo "16";; 5) echo "32";; *) echo "2.5";; esac; }
+
+# Find NPU PCIe BDF from npu-smi
+get_npu_bdf() {
+    npu-smi info -t board -i "$1" 2>/dev/null | grep 'PCIe Bus Info' | awk -F': ' '{print $2}' | tr -d ' '
+}
+
+# Find upstream root port BDF (parent in sysfs)
+get_parent_bdf() {
+    local bdf="$1"
+    local p=$(readlink -f "/sys/bus/pci/devices/$bdf/.." 2>/dev/null)
+    basename "$p"
+}
+
+# Read Express capability offset from config space (byte at 0x34)
+get_cap_off() {
+    setpci -s "$1" 34.B 2>/dev/null
+}
+
+# Read LnkCtl2 (4-byte dword at cap+0x30)
+read_lnkctl2() {
+    local bdf="$1" cap="$2"
+    local off
+    off=$(printf '%x' $((0x$cap + 0x30)))
+    setpci -s "$bdf" "${off}.L" 2>/dev/null
+}
+
+# Write LnkCtl2
+write_lnkctl2() {
+    local bdf="$1" cap="$2" val="$3"
+    local off
+    off=$(printf '%x' $((0x$cap + 0x30)))
+    setpci -s "$bdf" "${off}.L=$val" 2>/dev/null
+}
+
+# Retrain PCIe link (set bit 5 in LnkCtl at cap+0x10)
+retrain_link() {
+    local bdf="$1" cap="$2"
+    local off cur new
+    off=$(printf '%x' $((0x$cap + 0x10)))
+    cur=$(setpci -s "$bdf" "${off}.W" 2>/dev/null)
+    new=$(printf '%04x' $((0x$cur | 0x0020)))
+    setpci -s "$bdf" "${off}.W=$new" 2>/dev/null
+}
+
+# Get current link speed string from lspci
+get_link_speed() {
+    lspci -s "$1" -vvv 2>/dev/null | grep 'LnkSta:' | head -1 | grep -oE 'Speed [0-9.]+GT/s'
+}
 
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
-        npu_check_env
-        freq_info=$(python3 -c "
-import pydcmi.dcmi_api_v2 as d
-d.dcmi_init()
-cur = d.dcmi_get_device_frequency($chip, 0, d.DcmiFreqType.DCMI_FREQ_AICORE_CURRENT_)
-mx  = d.dcmi_get_device_frequency($chip, 0, d.DcmiFreqType.DCMI_FREQ_AICORE_MAX)
-print(f'{cur} {mx}')
-" 2>/dev/null)
-        if [ -z "$freq_info" ]; then
-            echo "failed to query AICore frequency on chip $chip" >&2
-            exit 1
-        fi
-        cur_freq=$(echo "$freq_info" | awk '{print $1}')
-        max_freq=$(echo "$freq_info" | awk '{print $2}')
-        echo "${cur_freq}/${max_freq}" > "$SIDECAR"
-        echo "AICore freq on chip $chip: ${cur_freq}MHz (max ${max_freq}MHz)"
-        if [ "$cur_freq" -lt "$max_freq" ] 2>/dev/null; then
-            echo "WARNING: AICore running below max frequency (${cur_freq}/${max_freq}MHz)"
-        fi
+        command -v setpci >/dev/null 2>&1 || { echo "setpci not found (apt install pciutils)" >&2; exit 1; }
+
+        npu_bdf=$(get_npu_bdf "$chip")
+        [ -z "$npu_bdf" ] && { echo "cannot find PCIe BDF for chip $chip" >&2; exit 1; }
+        parent_bdf=$(get_parent_bdf "$npu_bdf")
+        [ -z "$parent_bdf" ] && { echo "cannot find upstream root port for $npu_bdf" >&2; exit 1; }
+
+        cap_n=$(get_cap_off "$npu_bdf")
+        cap_p=$(get_cap_off "$parent_bdf")
+
+        # Save original LnkCtl2 values
+        orig_n=$(read_lnkctl2 "$npu_bdf" "$cap_n")
+        orig_p=$(read_lnkctl2 "$parent_bdf" "$cap_p")
+        orig_speed=$(get_link_speed "$npu_bdf")
+
+        # Set Target Link Speed to $gen on both sides
+        new_n=$(printf '%08x' $(( (0x$orig_n & 0xFFFFFFF0) | gen )))
+        new_p=$(printf '%08x' $(( (0x$orig_p & 0xFFFFFFF0) | gen )))
+        write_lnkctl2 "$npu_bdf" "$cap_n" "$new_n"
+        write_lnkctl2 "$parent_bdf" "$cap_p" "$new_p"
+
+        # Retrain from root port
+        retrain_link "$parent_bdf" "$cap_p"
+        sleep 3
+
+        cur_speed=$(get_link_speed "$npu_bdf")
+        target_speed="$(gen_speed $gen)GT/s"
+        echo "chip $chip PCIe: $npu_bdf (parent $parent_bdf)"
+        echo "original: $orig_speed -> target: Gen$gen ($target_speed)"
+        echo "current:  $cur_speed"
+
+        # Save state for clean
+        echo "${npu_bdf}|${parent_bdf}|${cap_n}|${cap_p}|${orig_n}|${orig_p}|${orig_speed}" > "$SIDECAR"
+
+        case "$cur_speed" in
+            *"$target_speed"*) echo "OK: link downgraded to Gen$gen" ;;
+            *) echo "WARNING: link speed did not change (may need cold boot)" >&2 ;;
+        esac
         ;;
     clean)
-        rm -f "$SIDECAR" 2>/dev/null
-        echo "frequency monitor cleared on chip $chip"
+        [ -f "$SIDECAR" ] || { echo "no freq_down state for chip $chip" >&2; exit 1; }
+        state=$(cat "$SIDECAR")
+        npu_bdf=${state%%|*}; rest=${state#*|}
+        parent_bdf=${rest%%|*}; rest=${rest#*|}
+        cap_n=${rest%%|*}; rest=${rest#*|}
+        cap_p=${rest%%|*}; rest=${rest#*|}
+        orig_n=${rest%%|*}; rest=${rest#*|}
+        orig_p=${rest%%|*}; rest=${rest#*|}
+        orig_speed=${rest}
+
+        # Restore original LnkCtl2
+        write_lnkctl2 "$npu_bdf" "$cap_n" "$orig_n"
+        write_lnkctl2 "$parent_bdf" "$cap_p" "$orig_p"
+
+        # Retrain from root port
+        retrain_link "$parent_bdf" "$cap_p"
+        sleep 3
+
+        cur_speed=$(get_link_speed "$npu_bdf")
+        echo "restored: $cur_speed (original was $orig_speed)"
+        rm -f "$SIDECAR"
         ;;
     query)
         if [ -f "$SIDECAR" ]; then
-            echo "FAULT CONFIRMED: freq monitor active"
-            cat "$SIDECAR"
+            state=$(cat "$SIDECAR")
+            npu_bdf=${state%%:*}
+            cur_speed=$(get_link_speed "$npu_bdf")
+            echo "FAULT ACTIVE: PCIe link downgraded"
+            echo "current: $cur_speed"
             exit 0
         else
-            echo "FAULT NOT ACTIVE: no freq monitor"
+            if [ -n "$chip" ]; then
+                npu_bdf=$(get_npu_bdf "$chip")
+                [ -n "$npu_bdf" ] && echo "normal: $(get_link_speed "$npu_bdf")" && exit 1
+            fi
+            echo "FAULT NOT ACTIVE"
             exit 1
         fi
         ;;

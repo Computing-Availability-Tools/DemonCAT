@@ -35,20 +35,15 @@ npu_acl_dev_id() {
     awk -v phy="$1" '$1==phy{print $2; exit}' "$DEV_MAP_FILE" 2>/dev/null
 }
 
-# Get PCIe BDF from Phy-ID via lspci + /dev/davinci sorted mapping.
-# Both lists are sorted; matched by index.
+# Get PCIe BDF from Phy-ID via devdrv driver sysfs.
+# devdrv driver's dev_id attribute = Phy-ID (exact mapping, no sorting needed).
 npu_phy_to_bdf() {
-    local phy_id="$1" pci_addrs card_ids idx=1 c p
-    # Get all NPU PCIe BDFs (sorted) — match Huawei processing accelerators
-    pci_addrs=$(lspci -D 2>/dev/null | grep -iE 'Processing accelerators.*19e5|Huawei.*Processing|Processing.*Huawei' | awk '{print $1}' | sort)
-    # Fallback: match by davinci driver binding
-    [ -z "$pci_addrs" ] && pci_addrs=$(ls -1 /sys/bus/pci/drivers/devdrv_device_driver/ 2>/dev/null | grep '^0000:' | sort)
-    # Get all Phy-IDs (sorted numerically)
-    card_ids=$(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||;s/[^0-9].*//' | sort -n)
-    for p in $pci_addrs; do
-        c=$(echo "$card_ids" | sed -n "${idx}p")
-        if [ "$c" = "$phy_id" ]; then echo "$p"; return 0; fi
-        idx=$((idx + 1))
+    local phy_id="$1" bdf
+    for bdf in $(ls -1 /sys/bus/pci/drivers/devdrv_device_driver/ 2>/dev/null | grep '^0000:'); do
+        if [ "$(cat "/sys/bus/pci/drivers/devdrv_device_driver/$bdf/dev_id" 2>/dev/null)" = "$phy_id" ]; then
+            echo "$bdf"
+            return 0
+        fi
     done
     return 1
 }

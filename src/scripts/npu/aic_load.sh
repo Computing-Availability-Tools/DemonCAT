@@ -8,13 +8,6 @@ chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 SIDECAR="/tmp/dcat-rNPU_aic_load-$chip.pid"
 STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
-DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
-
-npu_acl_dev_id() {
-    if [ -f "$DEV_MAP_FILE" ]; then
-        awk -v card="$1" '$1==card{print $2; exit}' "$DEV_MAP_FILE"
-    fi
-}
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -25,7 +18,7 @@ case "${DCAT_OP:-inject}" in
             exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
-        [ -z "$dev_id" ] && dev_id=0
+        [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
         "$STRESS_BIN" aicore "$dev_id" 0 512 "$load_pct" >/dev/null 2>&1 &
         echo $! > "$SIDECAR"

@@ -8,13 +8,6 @@ chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 SIDECAR="/tmp/dcat-rNPU_hbm_load-$chip.pid"
 STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
-DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
-
-npu_acl_dev_id() {
-    if [ -f "$DEV_MAP_FILE" ]; then
-        awk -v card="$1" '$1==card{print $2; exit}' "$DEV_MAP_FILE"
-    fi
-}
 
 # parse size string to MB: 2G=2048, 500M=500, 500=500
 size_to_mb() {
@@ -36,7 +29,7 @@ case "${DCAT_OP:-inject}" in
             exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
-        [ -z "$dev_id" ] && dev_id=0
+        [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         size_raw=${DCAT_PARAM_SIZE:?missing required param: size}
         size_mb=$(size_to_mb "$size_raw") || { echo "invalid size: $size_raw (use 500M, 2G, 500)" >&2; exit 1; }
         "$STRESS_BIN" hbm "$dev_id" 0 "$size_mb" >/dev/null 2>&1 &

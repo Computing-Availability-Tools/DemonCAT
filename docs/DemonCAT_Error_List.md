@@ -90,13 +90,13 @@
 | `rNPU_mtu_mismatch` | chip,size | — | RoCE MTU mismatch |
 | `rNPU_dscp_tc_change` | chip,dscp,tc | — | DSCP-to-TC mapping change |
 | `rNPU_roce_port_change` | chip,port | — | RoCE UDP port change |
-| `rNPU_pcie_down` | chip | gen | PCIe link speed downgrade (Gen4→Gen1, setpci) |
-| `rNPU_aic_load` | chip | duration | AICore stress (ACL d2d memcpy, 无需 torch_npu) |
-| `rNPU_aiv_load` | chip | duration | AIVector stress (ACL d2d memcpy, 无需 torch_npu) |
-| `rNPU_hbm_load` | chip | size_mb,duration | HBM stress (ACL malloc+memset, 无需 torch_npu) |
-| `rNPU_chip_reset` | chip | — | NPU chip reset (npu-smi set -t reset) |
+| `rNPU_pcie_down` | npu_id | gen | PCIe link speed downgrade (Gen4→Gen1, setpci) |
+| `rNPU_aic_load` | chip | load_pct | AICore stress (aclnnMatmul FP16) |
+| `rNPU_aiv_load` | chip | load_pct | AIVector stress (aclnnExp FP16) |
+| `rNPU_hbm_load` | chip | size | HBM stress (aclrtMalloc+memset) |
+| `rNPU_chip_reset` | npu_id | core | NPU chip reset (npu-smi set -t reset, 多芯片卡可能整卡重启) |
 | `rNPU_driver_unbind` | chip | — | 驱动解绑 (PCIe unbind, 需重启恢复) |
-| `rNPU_pcie_remove` | chip | — | PCIe 掉卡 (PCIe remove, 需冷启动恢复) |
+| `rNPU_pcie_remove` | chip | — | PCIe 拔卡 (PCIe remove, 需冷启动恢复) |
 
 ## 系统模块（2 条）
 

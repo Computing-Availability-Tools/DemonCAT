@@ -1302,14 +1302,26 @@ hccn_tool -i 2 -mtu -g                         # 当前 MTU
 - `action=del` 类用例的**前提**是目标项已存在：先注入对应 `action=add` 类用例再注入删除。
 - 这些是**机器相关**参数：在另一台机器上请换成未占用的网段。
 
-**⑥ device 映射（硬件故障用）**
+**⑥ chip 参数语义说明**
 
-`rNPU_aic_load`/``aiv_load`/``hbm_load` 使用 CANN 算子 API 施加负载，需要 chip→device 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，格式为 `<card_id> <device_id>`，由环境初始化脚本生成。示例：
+NPU 故障的 `chip` 参数有两种语义，取决于故障类型：
+
+| 参数名 | 语义 | 范围 | 用于 |
+|--------|------|------|------|
+| `chip` | 物理芯片 Phy-ID | 0-15 | hccn_tool 网络类、ACL 负载类（aic/aiv/hbm_load）、driver_unbind、pcie_remove |
+| `npu_id` | NPU 卡号 | 0-7 | pcie_down（PCIe 降速，per-card）、chip_reset（芯片复位，per-card） |
+
+- **Phy-ID**：每个物理芯片的唯一编号，对应 `/dev/davinciN`。910B4 每卡 1 芯片（Phy-ID = 卡号）；910C 每卡 2 芯片（Phy-ID 0-15）。
+- **NPU 卡号**：`npu-smi info` 中的 NPU ID。PCIe 操作（降速/拔卡/驱动解绑）天然是 per-card。
+
+**⑦ device 映射（ACL 负载类自动生成）**
+
+`rNPU_aic_load`/`aiv_load`/`hbm_load` 使用 CANN 算子 API 施加负载，需要 Phy-ID→ACL device ID 映射。映射文件位于 `/tmp/dcat-npu-dev-map`，首次运行时**自动生成**，格式为 `<Phy-ID> <ACL-dev-id>`。示例（910B4）：
 ```
 2 0
 5 1
 ```
-表示 card 2 = device 0，card 5 = device 1。
+表示 Phy-ID 2 = ACL device 0，Phy-ID 5 = ACL device 1。
 
 ---
 
@@ -1331,7 +1343,7 @@ dcat clean rNPU_link_down --chip=0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 
 **危险等级**: 高 — 直接切断该芯片所有 RoCE 流量，训练/推理任务全部中断。
 
@@ -1357,7 +1369,7 @@ dcat clean rNPU_ip_change --chip=0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | address | 必填 | IPv4 | 新 IP 地址 |
 | netmask | 必填 | IPv4 | 新子网掩码 |
 
@@ -1388,7 +1400,7 @@ dcat clean rNPU_gw_change --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | gateway | 必填 | IPv4 | 新网关地址，**必须与 NPU 当前 IP 同网段** |
 
 **危险等级**: 高 — 网关错误后所有跨网段 RoCE 流量无法转发。
@@ -1415,7 +1427,7 @@ dcat clean rNPU_netdetect_change --chip=0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | address | 必填 | IPv4 | 新 netdetect 探测地址 |
 
 **危险等级**: 中 — netdetect 失效会导致健康检测误报，影响上层调度。
@@ -1449,7 +1461,7 @@ dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | action | inject 必填 | add/del | `add`=注入伪造 ARP（需 mac），`del`=删除 ARP 条目 |
 | dev | 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认，勿照抄示例的 eth2） |
 | ip | 必填 | IPv4 | ARP 条目的 IP |
@@ -1488,7 +1500,7 @@ dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | action | inject 必填 | add/del | `add`=添加路由（需 gateway），`del`=删除路由 |
 | address | 必填 | IPv4 | 目标网段地址（须未使用、不与 NPU 网段冲突） |
 | netmask | 必填 | IPv4 | 子网掩码 |
@@ -1527,7 +1539,7 @@ dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | action | inject 必填 | add/del | `add`=添加规则（需 table），`del`=删除规则 |
 | dir | 必填 | from/to/in/out | 策略匹配方向 |
 | ip | 必填 | IPv4 | 策略匹配的源/目的 IP |
@@ -1566,7 +1578,7 @@ dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | inject 必填 | 0-7 | NPU 芯片号 |
+| chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | action | inject 必填 | add/del | `add`=添加路由（需 via/dev），`del`=删除路由 |
 | ip | 必填 | IPv4 | 目标网段地址 |
 | ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24），不是点分掩码 |
@@ -1598,7 +1610,7 @@ dcat clean rNPU_bw_limit --chip=0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | bw_limit | 必填 | 整数 (Mbps) | 带宽限速值 |
 
 **危险等级**: 中 — 限速不破坏链路，但显著降低 RoCE 吞吐。
@@ -1626,7 +1638,7 @@ dcat clean rNPU_mtu_mismatch --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | size | 必填 | 整数 (字节) | MTU 字节数，必须 ≠ 当前 MTU 才有效 |
 
 **危险等级**: 中 — MTU 与对端不匹配导致大包分片或被丢弃。
@@ -1653,7 +1665,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | dscp | 必填 | 0-63 | DSCP 差分服务代码点 |
 | tc | 必填 | 整数 | 流量类编号，通常 0-7 |
 
@@ -1679,7 +1691,7 @@ dcat clean rNPU_roce_port_change --chip=0
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | port | 必填 | 1-65535 | RoCE UDP 端口号，默认 4791 |
 
 **危险等级**: 高 — 端口非 4791 时对端按标准 RoCEv2 发包将无法匹配，该芯片所有 RoCEv2 流量中断。
@@ -1708,17 +1720,17 @@ dcat clean rNPU_roce_port_change --chip=0
 
 **使用示例**:
 ```bash
-dcat inject rNPU_pcie_down --chip=2           # 默认 Gen1，带宽降至 12.5%
-dcat inject rNPU_pcie_down --chip=2 --gen=2   # Gen2，带宽降至 25%
-dcat inject rNPU_pcie_down --chip=2 --gen=3   # Gen3，带宽降至 50%
-dcat query rNPU_pcie_down --chip=2
-dcat clean rNPU_pcie_down --chip=2
+dcat inject rNPU_pcie_down --npu_id=2           # 默认 Gen1，带宽降至 12.5%
+dcat inject rNPU_pcie_down --npu_id=2 --gen=2   # Gen2，带宽降至 25%
+dcat inject rNPU_pcie_down --npu_id=2 --gen=3   # Gen3，带宽降至 50%
+dcat query rNPU_pcie_down --npu_id=2
+dcat clean rNPU_pcie_down --npu_id=2
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| npu_id | 必填 | 0-7 | NPU 卡号，`npu-smi info` 表格第一列 NPU ID |
 | gen | 可选 | 1-3 | 目标 PCIe 代数（1=Gen1 2.5GT/s，2=Gen2 5GT/s，3=Gen3 8GT/s，默认 1） |
 
 **危险等级**: 中 — PCIe 带宽大幅降低，影响 NPU 数据传输性能。NPU 仍可访问但带宽受限。可逆（clean 恢复原速）。
@@ -1749,7 +1761,7 @@ dcat clean rNPU_aic_load --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
 **负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：每批次提交 100 次算子后同步等待 NPU 完成，测量实际计算耗时，再按 `sleep = compute × (1 - duty) / duty` 休眠。校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~89%，因 API 调用开销无法达到 100%）。
@@ -1783,7 +1795,7 @@ dcat clean rNPU_aiv_load --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
 **负载率原理**：同 `rNPU_aic_load`，自适应占空比 + 校准。AIVector 满载上限约 89%。
@@ -1814,7 +1826,7 @@ dcat clean rNPU_hbm_load --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | size | 必填 | 大小字符串 | 分配的 HBM 大小，支持 `2G`/`500M`/`500`（裸数=MB） |
 
 **危险等级**: 中 — HBM 持续高占用，影响同芯片上其他任务的显存分配，可能导致 OOM。持续运行直到 clean。
@@ -1829,23 +1841,27 @@ dcat clean rNPU_hbm_load --chip=2
 **描述**: 通过 `npu-smi set -t reset` 复位指定 NPU 芯片，模拟芯片级硬件复位。
 
 **实现原理**: 
-- **inject**: 执行 `printf 'y\n' | npu-smi set -t reset -i <chip> -c 0`（自动确认），芯片被复位，服务中断。
-- **clean**: 等待 3 秒后执行 `hccn_tool -i <chip> -cfg recovery` 恢复配置。
+- **inject**: 执行 `printf 'y\n' | npu-smi set -t reset -i <npu_id> -c <core>`（自动确认），芯片被复位，服务中断。
+- **clean**: 清除 sidecar 状态（芯片复位后自动恢复，无需手动 clean）。
 - **query**: `npu-smi info` 检查 Health 列。
+
+> **风险警告**: 在多芯片卡（如 910C，每卡 2 芯片）上，复位单个芯片可能导致**整张卡的所有芯片同时重启**。生产环境慎用。
 
 **使用示例**:
 ```bash
-dcat inject rNPU_chip_reset --chip=2
-dcat query rNPU_chip_reset --chip=2
-dcat clean rNPU_chip_reset --chip=2
+dcat inject rNPU_chip_reset --npu_id=2               # 复位卡 2 的 chip 0（默认）
+dcat inject rNPU_chip_reset --npu_id=2 --core=1      # 复位卡 2 的 chip 1
+dcat query rNPU_chip_reset --npu_id=2
+dcat clean rNPU_chip_reset --npu_id=2
 ```
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| npu_id | 必填 | 0-7 | NPU 卡号，`npu-smi info` 表格第一列 NPU ID |
+| core | 可选 | 0-1 | 卡内芯片号，`npu-smi info -t board -i <npu_id>` 输出中的 Chip ID（默认 0） |
 
-**危险等级**: 高 — 芯片复位后该芯片上所有训练/推理任务立即中断，数据丢失。复位后需等待芯片自动恢复（约 3-10 秒）。
+**危险等级**: 高 — 芯片复位后该芯片上所有训练/推理任务立即中断，数据丢失。多芯片卡上可能整卡重启。复位后需等待芯片自动恢复（约 3-10 秒）。
 
 **补充说明**: 需要 root + `npu-smi`。inject 使用 `printf 'y\n'` 自动回答 npu-smi 的确认提示。clean 的 `sleep 3` 等待芯片恢复后再执行 `cfg recovery`。
 
@@ -1873,7 +1889,7 @@ dcat query rNPU_driver_unbind --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 
 **危险等级**: 高 — 驱动解绑后该芯片不可用，所有 NPU 操作失败。
 
@@ -1903,7 +1919,7 @@ dcat query rNPU_pcie_remove --chip=2
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| chip | 必填 | 0-7 | NPU 芯片号 |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 
 **危险等级**: 高 — PCIe 设备移除后该芯片完全消失，所有 NPU 操作失败。
 

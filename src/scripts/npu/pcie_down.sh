@@ -7,12 +7,12 @@
 # clean:  restore original LnkCtl2 values, retrain link
 # query:  show current link speed, compare to original
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:-}
-if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
+npu_id=${DCAT_PARAM_NPU_ID:-}
+if [ -n "$npu_id" ]; then npu_validate_chip "$npu_id" || { echo "npu_id validation failed" >&2; exit 1; }; fi
 gen=${DCAT_PARAM_GEN:-1}
 # valid range: 1-3 (Gen4=original, Gen5=unsupported on 910B4)
 case "$gen" in 1|2|3) ;; *) echo "gen must be 1-3 (1=Gen1 2.5GT/s, 2=Gen2 5GT/s, 3=Gen3 8GT/s)" >&2; exit 1 ;; esac
-SIDECAR="/tmp/dcat-rNPU_pcie_down-$chip.bak"
+SIDECAR="/tmp/dcat-rNPU_pcie_down-$npu_id.bak"
 
 # PCIe speed by generation
 gen_speed() { case "$1" in 1) echo "2.5";; 2) echo "5";; 3) echo "8";; *) echo "2.5";; esac; }
@@ -67,11 +67,11 @@ get_link_speed() {
 
 case "${DCAT_OP:-inject}" in
     inject)
-        : ${chip:?missing required param: chip}
+        : ${npu_id:?missing required param: npu_id}
         command -v setpci >/dev/null 2>&1 || { echo "setpci not found (apt install pciutils)" >&2; exit 1; }
 
-        npu_bdf=$(get_npu_bdf "$chip")
-        [ -z "$npu_bdf" ] && { echo "cannot find PCIe BDF for chip $chip" >&2; exit 1; }
+        npu_bdf=$(get_npu_bdf "$npu_id")
+        [ -z "$npu_bdf" ] && { echo "cannot find PCIe BDF for npu_id $npu_id" >&2; exit 1; }
         parent_bdf=$(get_parent_bdf "$npu_bdf")
         [ -z "$parent_bdf" ] && { echo "cannot find upstream root port for $npu_bdf" >&2; exit 1; }
 
@@ -95,7 +95,7 @@ case "${DCAT_OP:-inject}" in
 
         cur_speed=$(get_link_speed "$npu_bdf")
         target_speed="$(gen_speed $gen)GT/s"
-        echo "chip $chip PCIe: $npu_bdf (parent $parent_bdf)"
+        echo "card $npu_id PCIe: $npu_bdf (parent $parent_bdf)"
         echo "original: $orig_speed -> target: Gen$gen ($target_speed)"
         echo "current:  $cur_speed"
 
@@ -108,7 +108,7 @@ case "${DCAT_OP:-inject}" in
         esac
         ;;
     clean)
-        [ -f "$SIDECAR" ] || { echo "no pcie_down state for chip $chip" >&2; exit 1; }
+        [ -f "$SIDECAR" ] || { echo "no pcie_down state for npu_id $npu_id" >&2; exit 1; }
         state=$(cat "$SIDECAR")
         npu_bdf=${state%%|*}; rest=${state#*|}
         parent_bdf=${rest%%|*}; rest=${rest#*|}
@@ -139,8 +139,8 @@ case "${DCAT_OP:-inject}" in
             echo "current: $cur_speed"
             exit 0
         else
-            if [ -n "$chip" ]; then
-                npu_bdf=$(get_npu_bdf "$chip")
+            if [ -n "$npu_id" ]; then
+                npu_bdf=$(get_npu_bdf "$npu_id")
                 [ -n "$npu_bdf" ] && echo "normal: $(get_link_speed "$npu_bdf")" && exit 1
             fi
             echo "FAULT NOT ACTIVE"

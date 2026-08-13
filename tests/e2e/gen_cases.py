@@ -258,7 +258,7 @@ OBS = {
         provision="docker_container", precondition="docker+python3",
         v_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
-    "rNPU_pcie_down": dict(module="npu", inject_args="--chip=2 --gen=1", clean_args="--chip=2",
+    "rNPU_pcie_down": dict(module="npu", inject_args="--npu_id=2 --gen=1", clean_args="--npu_id=2",
         provision="none", precondition="hccn_tool",
         v_cmd="ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l", c_assert="==0"),
@@ -274,9 +274,9 @@ OBS = {
         provision="none", precondition="hccn_tool",
         v_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", v_assert=">=1",
         c_cmd=f"{DCAT} query 2>/dev/null | grep -c rNPU_hbm_load", c_assert="==0"),
-    "rNPU_chip_reset": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
+    "rNPU_chip_reset": dict(module="npu", inject_args="--npu_id=2", clean_args="--npu_id=2",
         provision="none", precondition="npu-smi",
-        v_cmd="ls /tmp/dcat-rNPU_chip_reset-2.bak 2>/dev/null | wc -l", v_assert=">=1",
+        v_cmd="ls /tmp/dcat-rNPU_chip_reset-2-0.bak 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="npu-smi info 2>/dev/null | grep -c 'OK'", c_assert=">=1"),
     "rNPU_driver_unbind": dict(module="npu", inject_args="--chip=5",
         provision="none", precondition="root+npu-smi",
@@ -524,15 +524,15 @@ def gen():
     b_reject("rNPU_aiv_load", "", 3, 'missing required parameter', "chip: missing")
     b_reject("rNPU_hbm_load", "--chip=abc", 1, '', "chip: non-numeric")
     b_reject("rNPU_hbm_load", "", 3, 'missing required parameter', "chip: missing")
-    # chip + gen (NPU pcie_down)
-    b_reject("rNPU_pcie_down", "--chip=abc --gen=1", 1, '', "chip: non-numeric")
-    b_reject("rNPU_pcie_down", "--chip=2 --gen=abc", 1, '', "gen: non-numeric")
-    b_reject("rNPU_pcie_down", "--chip=2 --gen=5", 1, '', "gen: out of range (1-3)")
-    b_reject("rNPU_pcie_down", "", 3, 'missing required parameter', "chip: missing")
-    # chip (NPU chip_reset)
-    b_reject("rNPU_chip_reset", "--chip=abc", 1, '', "chip: non-numeric")
-    b_reject("rNPU_chip_reset", "--chip=99", 1, '', "chip: nonexistent NPU")
-    b_reject("rNPU_chip_reset", "", 3, 'missing required parameter', "chip: missing")
+    # npu_id + gen (NPU pcie_down)
+    b_reject("rNPU_pcie_down", "--npu_id=abc --gen=1", 1, '', "npu_id: non-numeric")
+    b_reject("rNPU_pcie_down", "--npu_id=2 --gen=abc", 1, '', "gen: non-numeric")
+    b_reject("rNPU_pcie_down", "--npu_id=2 --gen=5", 1, '', "gen: out of range (1-3)")
+    b_reject("rNPU_pcie_down", "", 3, 'missing required parameter', "npu_id: missing")
+    # npu_id (NPU chip_reset)
+    b_reject("rNPU_chip_reset", "--npu_id=abc", 1, '', "npu_id: non-numeric")
+    b_reject("rNPU_chip_reset", "--npu_id=99", 1, '', "npu_id: nonexistent NPU")
+    b_reject("rNPU_chip_reset", "", 3, 'missing required parameter', "npu_id: missing")
 
     # ================================================================
     # SEC: 安全 (命令注入 inject+clean+query + 权限边界 + 主机安全)

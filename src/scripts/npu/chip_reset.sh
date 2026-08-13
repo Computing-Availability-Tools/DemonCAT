@@ -1,29 +1,42 @@
 #!/bin/sh
 # rNPU_chip_reset: reset NPU chip via npu-smi (service disruption).
-# inject: npu-smi set -t reset -i <chip> -c 0
-# clean:  no-op (chip auto-recovers after reset; check health)
+# npu_id = NPU card ID (0-7). core = chip within card (0/1, default 0).
+#
+# WARNING: On multi-chip cards (e.g. 910C, 2 chips per card), resetting one
+# chip may cause the entire card to reset, affecting all chips on that card.
+# Use with caution in production environments.
+#
+# inject: npu-smi set -t reset -i <npu_id> -c <core>
+# clean:  no-op (chip auto-recovers after reset)
 # query:  npu-smi info (check Health column)
 . "$(dirname "$0")/_common.sh"
-chip=${DCAT_PARAM_CHIP:?missing required param: chip}
-npu_validate_chip "$chip"
-SIDECAR="/tmp/dcat-rNPU_chip_reset-$chip.bak"
+npu_id=${DCAT_PARAM_NPU_ID:-}
+if [ -n "$npu_id" ]; then npu_validate_chip "$npu_id" || { echo "npu_id validation failed" >&2; exit 1; }; fi
+core=${DCAT_PARAM_CORE:-0}
+SIDECAR="/tmp/dcat-rNPU_chip_reset-$npu_id-$core.bak"
 
 case "${DCAT_OP:-inject}" in
     inject)
-        printf 'y\n' | npu-smi set -t reset -i "$chip" -c 0 2>/dev/null \
+        : ${npu_id:?missing required param: npu_id}
+        printf 'y\n' | npu-smi set -t reset -i "$npu_id" -c "$core" 2>/dev/null \
             || { echo "chip reset failed (need root / npu-smi)" >&2; exit 1; }
         printf 'reset\n' > "$SIDECAR"
-        echo "reset NPU chip $chip via npu-smi"
+        echo "reset NPU card $npu_id chip $core via npu-smi"
         ;;
     clean)
         rm -f "$SIDECAR" 2>/dev/null
-        sleep 3
-        timeout 5 hccn_tool -i "$chip" -cfg recovery 2>/dev/null || true
-        echo "chip $chip config recovered"
+        echo "chip reset state cleared on card $npu_id chip $core"
         ;;
     query)
-        npu-smi info 2>/dev/null | grep -A2 "^| $chip "
-        if [ -f "$SIDECAR" ]; then exit 0; else exit 1; fi
+        if [ -f "$SIDECAR" ]; then
+            echo "FAULT ACTIVE: chip reset was issued on card $npu_id chip $core"
+            npu-smi info 2>/dev/null | grep -A2 "^| $npu_id " | head -3
+            exit 0
+        else
+            npu-smi info 2>/dev/null | grep -A2 "^| $npu_id " | head -3
+            echo "FAULT NOT ACTIVE"
+            exit 1
+        fi
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;
 esac

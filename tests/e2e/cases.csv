@@ -126,8 +126,8 @@ E2E-124,FUNC-rNPU_arp_del,3,npu,rNPU_arp,query,./build/dcat query,0,,,state_not_
 E2E-125,FUNC-rNPU_bw_limit,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip=2 --bw_limit=50000,0,"""status"":""ok""",hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+',contains:50000,,fault active after inject
 E2E-126,FUNC-rNPU_bw_limit,1,npu,rNPU_bw_limit,clean,./build/dcat clean rNPU_bw_limit --chip=2,0,,hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+',notcontains:50000,,"fault cleaned, system restored"
 E2E-127,FUNC-rNPU_bw_limit,2,npu,rNPU_bw_limit,query,./build/dcat query,0,,,state_not_contains:rNPU_bw_limit,,no ghost record after clean
-E2E-128,FUNC-rNPU_chip_reset,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --chip=2,0,"""status"":""ok""",ls /tmp/dcat-rNPU_chip_reset-2.bak 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-129,FUNC-rNPU_chip_reset,1,npu,rNPU_chip_reset,clean,./build/dcat clean rNPU_chip_reset --chip=2,0,,npu-smi info 2>/dev/null | grep -c 'OK',>=1,,"fault cleaned, system restored"
+E2E-128,FUNC-rNPU_chip_reset,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=2,0,"""status"":""ok""",ls /tmp/dcat-rNPU_chip_reset-2-0.bak 2>/dev/null | wc -l,>=1,,fault active after inject
+E2E-129,FUNC-rNPU_chip_reset,1,npu,rNPU_chip_reset,clean,./build/dcat clean rNPU_chip_reset --npu_id=2,0,,npu-smi info 2>/dev/null | grep -c 'OK',>=1,,"fault cleaned, system restored"
 E2E-130,FUNC-rNPU_chip_reset,2,npu,rNPU_chip_reset,query,./build/dcat query,0,,,state_not_contains:rNPU_chip_reset,,no ghost record after clean
 E2E-131,FUNC-rNPU_driver_unbind,0,npu,rNPU_driver_unbind,skip,echo SKIP: dangerous fault (requires cold boot to recover),0,,,,,skipped: dangerous fault
 E2E-132,FUNC-rNPU_dscp_tc_change,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip=2 --dscp=46 --tc=1,0,"""status"":""ok""",hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:1,,fault active after inject
@@ -166,8 +166,8 @@ E2E-164,FUNC-rNPU_mtu_mismatch,2,npu,rNPU_mtu_mismatch,query,./build/dcat query,
 E2E-165,FUNC-rNPU_netdetect_change,0,npu,rNPU_netdetect_change,inject,./build/dcat inject rNPU_netdetect_change --chip=2 --address=10.0.0.99,0,"""status"":""ok""",hccn_tool -i 2 -netdetect -g 2>/dev/null,contains:10.0.0.99,,fault active after inject
 E2E-166,FUNC-rNPU_netdetect_change,1,npu,rNPU_netdetect_change,clean,./build/dcat clean rNPU_netdetect_change --chip=2,0,,hccn_tool -i 2 -netdetect -g 2>/dev/null,notcontains:10.0.0.99,,"fault cleaned, system restored"
 E2E-167,FUNC-rNPU_netdetect_change,2,npu,rNPU_netdetect_change,query,./build/dcat query,0,,,state_not_contains:rNPU_netdetect_change,,no ghost record after clean
-E2E-168,FUNC-rNPU_pcie_down,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --chip=2 --gen=1,0,"""status"":""ok""",ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-169,FUNC-rNPU_pcie_down,1,npu,rNPU_pcie_down,clean,./build/dcat clean rNPU_pcie_down --chip=2,0,,ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
+E2E-168,FUNC-rNPU_pcie_down,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id=2 --gen=1,0,"""status"":""ok""",ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l,>=1,,fault active after inject
+E2E-169,FUNC-rNPU_pcie_down,1,npu,rNPU_pcie_down,clean,./build/dcat clean rNPU_pcie_down --npu_id=2,0,,ls /tmp/dcat-rNPU_pcie_down-2.bak 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
 E2E-170,FUNC-rNPU_pcie_down,2,npu,rNPU_pcie_down,query,./build/dcat query,0,,,state_not_contains:rNPU_pcie_down,,no ghost record after clean
 E2E-171,FUNC-rNPU_pcie_remove,0,npu,rNPU_pcie_remove,skip,echo SKIP: dangerous fault (requires cold boot to recover),0,,,,,skipped: dangerous fault
 E2E-172,FUNC-rNPU_roce_port_change,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip=2 --port=4792,0,"""status"":""ok""",hccn_tool -i 2 -udp -g 2>/dev/null,contains:4792,,fault active after inject
@@ -323,13 +323,13 @@ E2E-321,BOUND-84,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --
 E2E-322,BOUND-85,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load ,3,missing required parameter,,exitcode:3,,chip: missing
 E2E-323,BOUND-86,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
 E2E-324,BOUND-87,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-325,BOUND-88,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --chip=abc --gen=1,1,,,exitcode:1,,chip: non-numeric
-E2E-326,BOUND-89,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --chip=2 --gen=abc,1,,,exitcode:1,,gen: non-numeric
-E2E-327,BOUND-90,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --chip=2 --gen=5,1,,,exitcode:1,,gen: out of range (1-3)
-E2E-328,BOUND-91,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-329,BOUND-92,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-330,BOUND-93,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --chip=99,1,,,exitcode:1,,chip: nonexistent NPU
-E2E-331,BOUND-94,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset ,3,missing required parameter,,exitcode:3,,chip: missing
+E2E-325,BOUND-88,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id=abc --gen=1,1,,,exitcode:1,,npu_id: non-numeric
+E2E-326,BOUND-89,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id=2 --gen=abc,1,,,exitcode:1,,gen: non-numeric
+E2E-327,BOUND-90,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id=2 --gen=5,1,,,exitcode:1,,gen: out of range (1-3)
+E2E-328,BOUND-91,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down ,3,missing required parameter,,exitcode:3,,npu_id: missing
+E2E-329,BOUND-92,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=abc,1,,,exitcode:1,,npu_id: non-numeric
+E2E-330,BOUND-93,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=99,1,,,exitcode:1,,npu_id: nonexistent NPU
+E2E-331,BOUND-94,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset ,3,missing required parameter,,exitcode:3,,npu_id: missing
 E2E-332,SEC-I1,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
 E2E-333,SEC-I2,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
 E2E-334,SEC-I3,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned

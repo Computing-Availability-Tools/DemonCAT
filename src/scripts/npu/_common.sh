@@ -3,6 +3,8 @@
 # Ensure CANN OPP path is set for aclnn operators
 export ASCEND_OPP_PATH="${ASCEND_OPP_PATH:-/usr/local/Ascend/ascend-toolkit/latest/opp}"
 
+DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
+
 npu_check_env() {
     command -v hccn_tool >/dev/null 2>&1 || { echo "hccn_tool not found in PATH" >&2; exit 1; }
 }
@@ -14,7 +16,46 @@ npu_validate_chip() {
     return 0
 }
 
-# List all valid NPU device IDs (from /dev/davinci* or DCAT_NPU_CHIPS if set)
+# Generate /tmp/dcat-npu-dev-map if missing.
+# Format: <Phy-ID> <ACL-dev-id>
+# ACL dev ID = sequential index of sorted Phy-IDs from /dev/davinci*
+npu_gen_dev_map() {
+    [ -f "$DEV_MAP_FILE" ] && return 0
+    local acl_id=0 phy_id
+    for d in /dev/davinci[0-9]*; do
+        [ -e "$d" ] || continue
+        phy_id=$(basename "$d" | grep -oE '[0-9]+$')
+        echo "$phy_id $acl_id" >> "$DEV_MAP_FILE"
+        acl_id=$((acl_id + 1))
+    done
+    [ -f "$DEV_MAP_FILE" ] || return 1
+}
+
+# Lookup ACL device ID from Phy-ID (auto-generate map if missing)
+npu_acl_dev_id() {
+    [ ! -f "$DEV_MAP_FILE" ] && npu_gen_dev_map
+    awk -v phy="$1" '$1==phy{print $2; exit}' "$DEV_MAP_FILE" 2>/dev/null
+}
+
+# Get PCIe BDF from Phy-ID via lspci + /dev/davinci sorted mapping.
+# Both lists are sorted; matched by index.
+npu_phy_to_bdf() {
+    local phy_id="$1" pci_addrs card_ids idx=1 c p
+    # Get all NPU PCIe BDFs (sorted) — match Huawei processing accelerators
+    pci_addrs=$(lspci -D 2>/dev/null | grep -iE 'Processing accelerators.*19e5|Huawei.*Processing|Processing.*Huawei' | awk '{print $1}' | sort)
+    # Fallback: match by davinci driver binding
+    [ -z "$pci_addrs" ] && pci_addrs=$(ls -1 /sys/bus/pci/drivers/devdrv_device_driver/ 2>/dev/null | grep '^0000:' | sort)
+    # Get all Phy-IDs (sorted numerically)
+    card_ids=$(ls /dev/davinci[0-9] 2>/dev/null | sed 's|/dev/davinci||' | sort -n)
+    for p in $pci_addrs; do
+        c=$(echo "$card_ids" | sed -n "${idx}p")
+        if [ "$c" = "$phy_id" ]; then echo "$p"; return 0; fi
+        idx=$((idx + 1))
+    done
+    return 1
+}
+
+# List all valid NPU Phy-IDs (from /dev/davinci* or DCAT_NPU_CHIPS if set)
 # DCAT_NPU_CHIPS="0,1,2,3" 可指定允许使用的芯片范围
 npu_list_chips() {
     if [ -n "$DCAT_NPU_CHIPS" ]; then

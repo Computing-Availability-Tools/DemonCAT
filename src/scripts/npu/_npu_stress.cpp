@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
 
     } else if (strcmp(mode, "aivector") == 0) {
         /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage */
-        int64_t count = 16777216;  /* 16M elements = 32MB FP16 */
+        int64_t count = 134217728;  /* 128M elements = 256MB FP16 */
         size_t bytes = (size_t)count * 2;
         void *dA=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.89f);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.98f);
             }
         } else {
             while (1) {
@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.89f);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.98f);
             }
         }
         if (ws) aclrtFree(ws);

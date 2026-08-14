@@ -1769,9 +1769,9 @@ dcat clean rNPU_aic_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：每批次提交 100 次算子后同步等待 NPU 完成，测量实际计算耗时，再按 `sleep = compute × (1 - duty) / duty` 休眠。校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~89%，因 API 调用开销无法达到 100%）。
+**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：每批次提交 100 次算子后同步等待 NPU 完成，测量实际计算耗时，再按 `sleep = compute × (1 - duty) / duty` 休眠。校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~98%，因 API 调用开销无法达到 100%）。
 
-> **精度说明**：实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。`load_pct=100` 时 AICore 实际约 96%、AIVector 约 89%。
+> **精度说明**：实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。`load_pct=100` 时 AICore 实际约 96%、AIVector 约 98%。
 
 **危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。持续运行直到 clean。
 
@@ -1782,7 +1782,7 @@ dcat clean rNPU_aic_load --chip=2
 
 **UID**: `rNPU_aiv_load`
 
-**描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（16M 元素），持续施压 Vector 计算单元，拉高 AIVector 使用率。
+**描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（128M 元素 = 256MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。
 
 **实现原理**: 
 - **inject**: 运行 `build/_npu_stress aivector <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次 exp 算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
@@ -1803,7 +1803,7 @@ dcat clean rNPU_aiv_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_load`，自适应占空比 + 校准。AIVector 满载上限约 89%。
+**负载率原理**：同 `rNPU_aic_load`，自适应占空比 + 校准。AIVector 满载上限约 98%（256MB 缓冲，Exp 算子带宽受限，小缓冲无法饱和）。
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 

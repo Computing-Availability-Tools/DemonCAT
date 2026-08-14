@@ -55,6 +55,7 @@ case "${DCAT_OP:-inject}" in
         cpus=$(parse_cores "$cores" | tr '\n' ',' | sed 's/,$//')
 
         if [ "$ver" = 2 ]; then
+            [ -f /sys/fs/cgroup/cgroup.controllers ] || { echo "cgroup v2 not mounted (/sys/fs/cgroup/cgroup.controllers missing)" >&2; exit 1; }
             base="/sys/fs/cgroup/dcat_quota"
             mkdir -p "$base" 2>/dev/null || { echo "cannot mkdir $base (need root?)" >&2; exit 1; }
             echo "+cpu +cpuset" > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
@@ -71,7 +72,10 @@ case "${DCAT_OP:-inject}" in
             done
             printf '%s\n2\n%s\n%s\n' "$base" "$orig_max" "$cpus" > "$SIDECAR"
             echo "set cpu.max=$quota_us $period, cpuset.cpus=$cpus on $base (moved $moved PIDs)"
+            [ "$moved" -eq 0 ] && echo "WARNING: no PIDs found on cores [$cpus] — inject rCPU_overload first for the limit to take effect" >&2 || true
         else
+            [ -d /sys/fs/cgroup/cpu ] || { echo "cgroup v1 cpu controller not found (/sys/fs/cgroup/cpu/)" >&2; exit 1; }
+            [ -d /sys/fs/cgroup/cpuset ] || { echo "cgroup v1 cpuset controller not found (/sys/fs/cgroup/cpuset/)" >&2; exit 1; }
             base="/sys/fs/cgroup/cpu/dcat_quota"
             cbase="/sys/fs/cgroup/cpuset/dcat_quota"
             mkdir -p "$base" 2>/dev/null || { echo "cannot mkdir $base (need root?)" >&2; exit 1; }
@@ -92,6 +96,7 @@ case "${DCAT_OP:-inject}" in
             done
             printf '%s\n1\n%s\n%s\n' "$base" "$orig_q" "$cbase" > "$SIDECAR"
             echo "set cfs_quota_us=$quota_us on $base, cpuset=$cpus on $cbase (moved $moved PIDs)"
+            [ "$moved" -eq 0 ] && echo "WARNING: no PIDs found on cores [$cpus] — inject rCPU_overload first for the limit to take effect" >&2 || true
         fi
         ;;
 

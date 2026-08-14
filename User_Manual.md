@@ -246,9 +246,9 @@ dcat clean  rCPU_quota
 **描述**: 通过 sysfs 设置 `scaling_max_freq` 限制指定 CPU 核的最高频率（降频），模拟 CPU 性能降级。
 
 **实现原理**: 
-- **inject**: 对每个核，读取 `/sys/devices/system/cpu/cpu<N>/cpufreq/scaling_max_freq` 原值存入 sidecar，再写入 `freq_mhz * 1000`（kHz）作为新的上限。
-- **clean**: 从 sidecar 逐核恢复原 `scaling_max_freq`。
-- **query**: 打印每核当前 `scaling_max_freq` 与 `scaling_cur_freq`。
+- **inject**: 对每个核，读取原 `scaling_max_freq` 和 `scaling_min_freq` 存入 sidecar。若目标频率低于 `scaling_min_freq`（策略下限），先降低 `scaling_min_freq` 再设置 `scaling_max_freq`。写入后回读验证，不匹配则回滚所有已改核并退出。
+- **clean**: 先恢复 `scaling_max_freq`（抬上限），再恢复 `scaling_min_freq`（抬下限），避免 min > max 被内核拒绝。
+- **query**: 打印每核当前 `scaling_max_freq`。
 
 **使用示例**:
 ```bash
@@ -261,9 +261,11 @@ dcat clean  rCPU_freq
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
 | cores | inject 必填；query 可选 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 格式 |
-| freq_mhz | inject 必填 | 正整数 | 目标最高频率（MHz），需低于当前 max freq 才有效 |
+| freq_mhz | inject 必填 | 正整数 | 目标最高频率（**MHz**，非 kHz/GHz）。有效范围 = `cpuinfo_min_freq` ~ `cpuinfo_max_freq`，可用 `cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq` 查看（单位 kHz，除以 1000 即 MHz） |
 
 **危险等级**: 中 — 降低 CPU 频率影响该核上所有任务的计算性能。
+
+> **单位说明**: sysfs `scaling_max_freq` 以 kHz 为单位，`freq_mhz` 参数以 MHz 为单位（脚本内部 `× 1000` 转 kHz）。例如 `--freq_mhz=800` = 800 MHz = 0.8 GHz = 800000 kHz。
 
 **补充说明**: 需要 root 权限写 sysfs；依赖内核 `CONFIG_CPU_FREQ` 及 cpufreq 驱动。部分虚拟化/容器环境不暴露 cpufreq sysfs。频率值必须小于当前 `scaling_max_freq` 才有实际效果。clean 从 sidecar 恢复，无 sidecar 则跳过。
 

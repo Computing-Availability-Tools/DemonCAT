@@ -6,7 +6,7 @@ name: Nightly_Test
 
 on:
   schedule:
-    - cron: '0 03 * * *'   # 每日 03:00 UTC
+    - cron: '0 01 * * *'   # 每日 01:00 UTC
   workflow_dispatch:
 
 concurrency:

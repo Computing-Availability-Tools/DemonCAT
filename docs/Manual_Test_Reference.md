@@ -14,12 +14,16 @@
 | `rNPU_gw_change` | npu | 网关变更，若 clean 失败则 NPU 无法路由 | `hccn_tool -i <chip> -cfg recovery` |
 | `rNPU_mtu_mismatch` | npu | MTU 变更可能导致大包全部丢弃，NPU 业务静默中断 | `hccn_tool -i <chip> -mtu -s size 1500` 手动恢复 |
 | `rNPU_roce_port_change` | npu | RoCE UDP 端口变更导致 RoCE 流量全部中断 | `hccn_tool -i <chip> -udp -s port 4791` 手动恢复 |
+| `rNPU_pcie_down` | npu | PCIe 降速，若 clean 失败则 NPU 带宽持续受限 | `setpci` 恢复 LnkCtl2 或物理重启 |
+| `rNPU_driver_unbind` | npu | 驱动解绑后 NPU 完全不可用，clean 失败需重新加载驱动 | `echo <bdf> > /sys/bus/pci/drivers/devdrv_device_driver/bind` |
+| `rNPU_pcie_remove` | npu | PCIe 设备移除后 NPU 消失，warm reboot 可能不恢复 | 冷重启（物理关机再开机） |
+| `rNPU_chip_reset` | npu | 芯片复位，多芯片卡可能整卡重置 | `npu-smi info` 确认恢复，必要时物理重启 |
 | `rNET_down` | network | 若在管理网卡上执行，SSH 立即断连 | 带外管理（IPMI/串口）恢复 `ip link set <iface> up` |
 | `rNET_service_stop` | network | 若停止 sshd/networking 服务，完全失联 | 物理登录重启服务 |
 | `rNET_degrade` | network | 限速后带宽大幅降低，大流量场景下可能导致拥塞 | `tc qdisc del dev <iface> root` |
 
-> 其余 25 条故障均由自动化测试覆盖（`ctest` 24 项 + `smoke_root.sh` 10+ 项）。
-> NPU 硬件就绪时，16 条 rNPU_* 也可纳入 `smoke_root.sh` 自动化测试。
+> 其余 46 条故障均由自动化测试覆盖（`ctest` 27 项 + `smoke_root.sh` 10+ 项）。
+> NPU 硬件就绪时，10 条 rNPU_* 也可纳入 `smoke_root.sh` 自动化测试。
 
 ## 手动测试流程
 

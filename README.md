@@ -2,7 +2,7 @@
 
 > **DemonCAT** — Demon Computing Availability Tools，专注于计算故障注入工具。
 
-覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块，提供统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
+覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统模块，提供统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
 
 加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
@@ -36,7 +36,11 @@
 | | `systemctl` | `systemd` | `systemd` | ✅ |
 | | `python3` | `python3` | `python3` | — |
 | **进程** | `kill`, `perl` | `util-linux`, `perl` | `util-linux`, `perl` | 部分需要 |
-| **NPU** | `hccn_tool` | — (Atlas 驱动自带) | — | ✅ |
+| **内存** | `perl` / `python3` | `perl` / `python3` | `perl` / `python3` | — |
+| **文件系统** | `mkfs`, `mount` | `e2fsprogs`, `util-linux` | `e2fsprogs`, `util-linux` | ✅ |
+| **Docker** | `docker` | `docker.io` | `docker` | ✅ |
+| **NPU** | `hccn_tool`, `npu-smi`, `setpci` | — (Atlas 驱动自带), `pciutils` | — | ✅ |
+| **系统** | `sysctl`, `date` | `procps`, `coreutils` | `procps-ng`, `coreutils` | ✅ |
 
 > 无 NPU 硬件的环境可跳过 NPU 模块，不影响其他模块使用。
 

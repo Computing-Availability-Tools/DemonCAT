@@ -213,7 +213,7 @@ dcat clean rCPU_core_offline --cores=2,3
 **实现原理**: 
 - **inject**: 创建 cgroup，设 `cpuset.cpus=<cores>` 限定核 + `cpu.max=<quota_pct>%` 限额度。扫描 `/proc/[0-9]*/stat` field 39（last processor）找出目标核上的进程，移入 cgroup。PID 列表存入 sidecar。
 - **clean**: 将所有进程移回根 cgroup，恢复原值，删除 cgroup。
-- **query**: 读取当前 cgroup 的 quota、cpuset 和受限进程列表。
+- **query**: 显示受限核号、限额百分比和实际使用率（采样 /proc/stat 1 秒）。
 
 **使用示例**:
 ```bash

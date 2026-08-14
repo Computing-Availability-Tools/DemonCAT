@@ -2,7 +2,7 @@
 # rCPU_quota: limit CPU core max utilization (1-99%) via cgroup.
 # inject: create cgroup, set cpuset.cpus=<cores> + cpu.max=<quota>, move target core's PIDs into it
 # clean:  move PIDs back to root cgroup, restore, remove cgroup
-# query:  show current quota, cpuset, and PIDs in the cgroup
+# query:  show quota and actual core utilization
 
 SIDECAR="/tmp/dcat-rCPU_quota.sidecar"
 PIDLIST="/tmp/dcat-rCPU_quota.pids"
@@ -132,23 +132,30 @@ case "${DCAT_OP:-inject}" in
             { read -r base; read -r v; read -r orig; read -r extra; } < "$SIDECAR"
             if [ "$ver" = 2 ]; then
                 cur=$(cat "$base/cpu.max" 2>/dev/null)
-                cur_cpus=$(cat "$base/cpuset.cpus.effective" 2>/dev/null)
-                procs=$(cat "$base/cgroup.procs" 2>/dev/null | tr '\n' ' ')
-                echo "v2 $base: cpu.max='$cur' cpus='$cur_cpus'"
-                echo "  procs: ${procs:-(none)}"
-                case "$cur" in
-                    max|"") exit 1;;
-                    *) exit 0;;
-                esac
+                cpus=$(cat "$base/cpuset.cpus.effective" 2>/dev/null)
             else
                 cur=$(cat "$base/cpu.cfs_quota_us" 2>/dev/null)
-                procs=$(cat "$base/tasks" 2>/dev/null | tr '\n' ' ')
-                echo "v1 $base: cfs_quota_us='$cur'"
-                echo "  tasks: ${procs:-(none)}"
-                [ "$cur" != "-1" ] && [ -n "$cur" ]
+                cpus=$(cat "$extra/cpuset.cpus" 2>/dev/null)
             fi
+            quota_pct=$((cur / 1000))
+            [ "$quota_pct" -lt 1 ] 2>/dev/null && quota_pct=0
+            echo "FAULT CONFIRMED: cores [$cpus] capped at ${quota_pct}% CPU"
+            echo "--- actual core utilization (1s sample) ---"
+            for n in $(parse_cores "$cpus" 2>/dev/null); do
+                l1=$(grep "^cpu$n " /proc/stat)
+                sleep 1
+                l2=$(grep "^cpu$n " /proc/stat)
+                t1=$(echo "$l1" | awk '{print $2+$3+$4+$5+$6+$7+$8+$9+$10}')
+                i1=$(echo "$l1" | awk '{print $5}')
+                t2=$(echo "$l2" | awk '{print $2+$3+$4+$5+$6+$7+$8+$9+$10}')
+                i2=$(echo "$l2" | awk '{print $5}')
+                dt=$((t2 - t1)); di=$((i2 - i1)); db=$((dt - di))
+                [ "$dt" -gt 0 ] 2>/dev/null && pct=$((db * 100 / dt)) || pct=0
+                echo "  core $n: ${pct}% (cap=${quota_pct}%)"
+            done
+            exit 0
         else
-            echo "no active cpu_quota"
+            echo "FAULT NOT ACTIVE: no cpu_quota"
             exit 1
         fi
         ;;

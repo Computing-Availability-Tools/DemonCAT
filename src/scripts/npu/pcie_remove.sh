@@ -49,7 +49,22 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     query)
-        if [ -f "$SIDECAR" ]; then
+        if [ -z "$chip" ]; then
+            found=0
+            for f in /tmp/dcat-rNPU_pcie_remove-*.bak; do
+                [ -f "$f" ] || continue
+                found=1
+                addr=$(cat "$f")
+                c=$(basename "$f" | sed 's/.*-//;s/\.bak//')
+                echo "FAULT CONFIRMED: PCIe remove active on chip $c (pcie $addr)"
+                if [ -d "/sys/bus/pci/devices/$addr" ]; then
+                    echo "  device still present (unexpected)"
+                else
+                    echo "  device removed (expected)"
+                fi
+            done
+            [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE: no PCIe remove"; exit 1; }
+        elif [ -f "$SIDECAR" ]; then
             addr=$(cat "$SIDECAR")
             echo "FAULT CONFIRMED: PCIe remove active (pcie $addr)"
             if [ -d "/sys/bus/pci/devices/$addr" ]; then

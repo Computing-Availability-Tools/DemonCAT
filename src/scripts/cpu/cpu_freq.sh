@@ -85,7 +85,14 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     query)
-        spec=${DCAT_PARAM_CORES:-0}
+        spec=${DCAT_PARAM_CORES:-}
+        if [ -z "$spec" ]; then
+            if [ -s "$SIDECAR" ]; then
+                spec=$(awk '{printf "%s,", $1}' "$SIDECAR" | sed 's/,$//')
+            else
+                spec="0"
+            fi
+        fi
         echo "cpu[$spec] scaling_max_freq (kHz):"
         for n in $(parse_cores "$spec"); do
             d="/sys/devices/system/cpu/cpu$n/cpufreq"

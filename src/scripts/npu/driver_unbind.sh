@@ -45,7 +45,20 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     query)
-        if [ -f "$SIDECAR" ]; then
+        if [ -z "$chip" ]; then
+            found=0
+            for f in /tmp/dcat-rNPU_driver_unbind-*.bak; do
+                [ -f "$f" ] || continue
+                found=1
+                addr=$(cat "$f")
+                c=$(basename "$f" | sed 's/.*-//;s/\.bak//')
+                echo "FAULT CONFIRMED: driver unbind active on chip $c (pcie $addr)"
+                ls -l "/sys/bus/pci/drivers/devdrv_device_driver/$addr" 2>/dev/null \
+                    && echo "  still bound (unexpected)" \
+                    || echo "  unbound (expected)"
+            done
+            [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE: no driver unbind"; exit 1; }
+        elif [ -f "$SIDECAR" ]; then
             addr=$(cat "$SIDECAR")
             echo "FAULT CONFIRMED: driver unbind active (pcie $addr)"
             ls -l "/sys/bus/pci/drivers/devdrv_device_driver/$addr" 2>/dev/null \

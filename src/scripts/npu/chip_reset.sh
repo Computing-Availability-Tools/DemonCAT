@@ -28,7 +28,21 @@ case "${DCAT_OP:-inject}" in
         echo "chip reset state cleared on card $npu_id chip $core"
         ;;
     query)
-        if [ -f "$SIDECAR" ]; then
+        if [ -z "$npu_id" ]; then
+            found=0
+            for f in /tmp/dcat-rNPU_chip_reset-*.bak; do
+                [ -f "$f" ] || continue
+                found=1
+                base=$(basename "$f")
+                id_part=${base#dcat-rNPU_chip_reset-}
+                id_part=${id_part%.bak}
+                sid=${id_part%-*}
+                sc=${id_part##*-}
+                echo "FAULT ACTIVE: chip reset was issued on card $sid chip $sc"
+                npu-smi info 2>/dev/null | grep -A2 "^| $sid " | head -3
+            done
+            [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE"; exit 1; }
+        elif [ -f "$SIDECAR" ]; then
             echo "FAULT ACTIVE: chip reset was issued on card $npu_id chip $core"
             npu-smi info 2>/dev/null | grep -A2 "^| $npu_id " | head -3
             exit 0

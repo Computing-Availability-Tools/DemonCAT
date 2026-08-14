@@ -86,7 +86,12 @@ jobs:
       - name: Trigger full via label
         if: always() && steps.auth.outputs.authorized == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 必须用 PAT(GH_PAT),不能用 GITHUB_TOKEN:
+          # GITHUB_TOKEN 加标签由 github-actions[bot] 发起,GitHub 抑制其触发的 labeled 事件
+          # 不创建新 workflow run(防循环)→ pr_test 不会跑 Full。PAT(人工 token)加标签
+          # → labeled 事件由真实用户发起 → 触发 pr_test labeled → Full。
+          # 前置:源仓库 Settings → Secrets → Actions 添加 GH_PAT(PAT,需 public_repo 权限)。
+          GH_TOKEN: ${{ secrets.GH_PAT }}
           PR_NUM: ${{ steps.pr.outputs.pr_number }}
         run: |
           set -eu

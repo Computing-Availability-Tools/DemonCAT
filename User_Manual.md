@@ -1751,7 +1751,9 @@ dcat clean rNPU_pcie_down --npu_id=2
 **实现原理**: 
 - **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次矩阵乘法算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
-- **query**: `npu-smi info -t usages` 检查 AICore Usage Rate。
+- **query**: `npu-smi info -t usages` 检查 Cube 单元利用率。自适应：优先查 `Aicube` 列（910C/npu-smi 26+），无此列则查 `Aicore`（910B4/npu-smi 25，该列即 Cube）。
+
+> **Aicore vs Aicube 指标差异**：910B4（npu-smi 25.x）的 `Aicore Usage Rate` 即 Cube 单元；910C（npu-smi 26+）的 `Aicore` 是整个 AI Core 流水线的聚合占用率（跑 Vector 也会抬升到 ~80%），Cube 专用指标改名为 `Aicube`。query 自适应两个平台，无需手动区分。
 
 **使用示例**:
 ```bash

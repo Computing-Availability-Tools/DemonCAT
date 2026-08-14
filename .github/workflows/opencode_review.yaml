@@ -47,6 +47,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || format('refs/pull/{0}/head', github.event.issue.number) }}
           fetch-depth: 1
           persist-credentials: false
+          # fork PR 在 pull_request_target 下默认拒绝 checkout(actions/checkout pwn 护栏)。
+          # 本 workflow 用 opencode.json 只读锁缓解:bash/edit/write/patch/webfetch/websearch/task
+          # 全 deny,opencode 仅能 read/grep/glob/lsp,不执行 fork 代码、不改文件 → pwn 风险消除。
+          allow-unsafe-pr-checkout: true
 
       - name: Run opencode
         uses: anomalyco/opencode/github@latest

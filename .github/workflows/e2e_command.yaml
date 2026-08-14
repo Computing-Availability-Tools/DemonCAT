@@ -55,7 +55,7 @@ jobs:
           # PR author(大小写不敏感)或 OWNER/MEMBER/COLLABORATOR(triage+)可触发。
           # 用 webhook 自带 author_association,不调 gh api collaborators/permission:
           # 该 endpoint 需 admin 权限,issue_comment 的 GITHUB_TOKEN(无 admin)→ 404 → 误拒 maintainer。
-          if [ "$(printf '%s' "$ACTOR" | tr 'A-Z' 'a-z')" = "$(printf '%s' "$PR_AUTHOR" | tr 'A-Z' 'a-z')" ]; then
+          if [ "${ACTOR,,}" = "${PR_AUTHOR,,}" ]; then
             echo "authorized=true (PR author)" >> "$GITHUB_OUTPUT"
             exit 0
           fi

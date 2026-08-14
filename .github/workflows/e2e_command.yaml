@@ -1,16 +1,17 @@
 name: E2E Command
 
-# 评论 /e2e → 校验评论者权限（PR author 或 triage+）→ 切换 `ready` 标签(先移除再加)
-# → 触发 pr_test.yaml 的 labeled 事件 → 跑 Full 套件（含 fork PR，vllm 式）。
-# 仅用 GITHUB_TOKEN，无需 PAT。实现参考 vllm-ascend pr_e2e_command.yml（简化为加标签间接）。
+# 评论 /e2e → 校验评论者权限(PR author 或 triage+)→ 直接调 _e2e_test.yaml 可复用 workflow
+# 在 NPU runner 跑 Full 套件(ref = PR head sha)。
 #
-# 前置：源仓库需存在标签 `ready`（pr_test.yaml Full 门控即 ready/ready-for-test）。
-#   用 ready 而非 ready-for-test：ready 通常已存在,且 remove-then-add 强制产生新 labeled 事件
-#   （同标签重复 add 不触发新事件；先 remove 触发 unlabeled,再 add 触发 labeled）。
-# 关键：issue_comment workflow 只从【默认分支】读取——本文件必须在源仓库默认分支上才会被 /e2e 触发。
-#   若默认分支(如 main)没有本文件,改默认分支为 develop 或把本文件合并到默认分支。
-# 安全：issue_comment workflow 从默认分支读取（不会被 PR 改）；fork PR 的 pull_request 事件下
-#       GitHub 自动屏蔽源仓库 secrets，e2e-full 的 GITHUB_TOKEN 为只读（contents: read）。
+# 为何直接调而非加标签触发 pr_test:
+#   GITHUB_TOKEN 加标签会被 GitHub 抑制(GITHUB_TOKEN 触发的事件不创建新 workflow run)
+#   → pr_test labeled 不会跑;PAT 加标签虽不被抑制,但需 PAT secret(权限易出错,且 secret 维护负担)。
+#   直接 workflow_call _e2e_test 是同一 run 的一部分,不受抑制,GITHUB_TOKEN 即可,无需 PAT。
+#
+# fork PR 安全:_e2e_test 的 checkout 已加 allow-unsafe-pr-checkout(issue_comment 上下文 checkout
+#   fork PR head 触发 pwn 护栏);_e2e_test 的 GITHUB_TOKEN 为 contents: read(只读),
+#   fork 代码以 root 跑 NPU 是 vllm 式已接受风险。
+# 关键:issue_comment workflow 只从【默认分支】读——本文件须在源仓库默认分支上才被 /e2e 触发。
 
 on:
   issue_comment:
@@ -18,7 +19,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write   # 加标签 + 回写评论
+  pull-requests: write   # 回写评论(拒绝/触发告知)
   issues: read
 
 concurrency:
@@ -26,21 +27,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  e2e-command:
+  resolve:
     if: ${{ github.event.issue.pull_request != null && github.event.comment.user.type == 'User' && startsWith(github.event.comment.body, '/e2e') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      authorized: ${{ steps.auth.outputs.authorized }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      pr_number: ${{ steps.pr.outputs.pr_number }}
     steps:
-      - name: Resolve PR (number + author)
+      - name: Resolve PR (number + head sha + author)
         id: pr
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ github.event.issue.number }}
-          PR_AUTHOR: ${{ github.event.issue.user.login }}
         run: |
-          # PR 作者直接取自 issue_comment 事件 payload(issue.user 即 PR 创建者),
-          # 不用 gh api(曾因 API 调用失败导致 pr_author 空 → PR-作者检查失效 → 误拒 PR 作者)。
+          set -eu
+          PR_JSON=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          HEAD_SHA=$(echo "$PR_JSON" | jq -r '.head.sha')
+          PR_AUTHOR=$(echo "$PR_JSON" | jq -r '.user.login')
           {
             echo "pr_number=${PR_NUM}"
+            echo "head_sha=${HEAD_SHA}"
             echo "pr_author=${PR_AUTHOR}"
           } >> "$GITHUB_OUTPUT"
 
@@ -53,20 +61,14 @@ jobs:
         run: |
           set -eu
           # PR author(大小写不敏感)或 OWNER/MEMBER/COLLABORATOR(triage+)可触发。
-          # 用 webhook 自带 author_association,不调 gh api collaborators/permission:
-          # 该 endpoint 需 admin 权限,issue_comment 的 GITHUB_TOKEN(无 admin)→ 404 → 误拒 maintainer。
-          # 注意:authorized 输出必须为纯 "true"/"false"——后续 step 用 == 'true' / != 'true' 精确比较。
-          # 曾因 echo "authorized=true (PR author)" 使值变 "true (PR author)" → 比较恒失败 → 误拒 PR 作者。
-          # 原因记到独立 auth_reason 输出,不污染 authorized。
+          # 用 webhook 自带 author_association,不调 gh api collaborators/permission(需 admin,误拒 maintainer)。
           if [ "${ACTOR,,}" = "${PR_AUTHOR,,}" ]; then
             echo "authorized=true" >> "$GITHUB_OUTPUT"
-            echo "auth_reason=PR author" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           case "$ASSOC" in
             OWNER|MEMBER|COLLABORATOR)
               echo "authorized=true" >> "$GITHUB_OUTPUT"
-              echo "auth_reason=$ASSOC" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "authorized=false" >> "$GITHUB_OUTPUT"
@@ -80,23 +82,23 @@ jobs:
           PR_NUM: ${{ steps.pr.outputs.pr_number }}
         run: |
           gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 拒绝 — 仅 PR 作者或 triage+ 权限可触发。"
-          # 拒绝是成功处理(已发评论告知),不应让 step 失败变红 run;exit 0 而非 1。
           exit 0
 
-      - name: Trigger full via label
+      - name: Notify trigger
         if: always() && steps.auth.outputs.authorized == 'true'
         env:
-          # 必须用 PAT(GH_PAT),不能用 GITHUB_TOKEN:
-          # GITHUB_TOKEN 加标签由 github-actions[bot] 发起,GitHub 抑制其触发的 labeled 事件
-          # 不创建新 workflow run(防循环)→ pr_test 不会跑 Full。PAT(人工 token)加标签
-          # → labeled 事件由真实用户发起 → 触发 pr_test labeled → Full。
-          # 前置:源仓库 Settings → Secrets → Actions 添加 GH_PAT(PAT,需 public_repo 权限)。
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ steps.pr.outputs.pr_number }}
         run: |
-          set -eu
-          # 用 ready 标签触发 pr_test.yaml labeled → Full。先移除(若在)再加,强制新 labeled 事件:
-          # 同标签重复 add 不触发新事件;remove 触发 unlabeled,add 触发 labeled。
-          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --remove-label "ready" 2>/dev/null || true
-          gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "ready"
-          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 已触发：已(重新)加 \`ready\` 标签 → Full 套件即将在 pr_test.yaml 启动。"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 已触发：Full 套件即将在 NPU runner 启动(直接调 _e2e_test,ref=PR head,无需 PAT/标签)。"
+
+  e2e-full:
+    needs: resolve
+    if: always() && needs.resolve.outputs.authorized == 'true'
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: '["self-hosted", "npu-server", "ARM64"]'
+      flows: ""
+      exclude: ""
+      run-as-root: true
+      ref: ${{ needs.resolve.outputs.head_sha }}

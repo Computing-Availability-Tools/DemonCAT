@@ -38,6 +38,9 @@ jobs:
         with:
           fetch-depth: 1
           ref: ${{ inputs.ref }}
+          # issue_comment 调用方(e2e_command /e2e)checkout fork PR head 触发 pwn 护栏,opt-in;
+          # 对 pull_request/nightly 调用者是 no-op(非受信上下文不触发护栏)。
+          allow-unsafe-pr-checkout: true
         # NPU 自托管 runner 到 github.com:443 不稳定，仅 self-hosted 时启用 2 次重试（共 3 次尝试）
         continue-on-error: ${{ contains(inputs.runner, 'self-hosted') }}
       - name: Checkout (retry 1/2)
@@ -47,6 +50,7 @@ jobs:
         with:
           fetch-depth: 1
           ref: ${{ inputs.ref }}
+          allow-unsafe-pr-checkout: true
         continue-on-error: true
       - name: Checkout (retry 2/2)
         if: ${{ contains(inputs.runner, 'self-hosted') && steps.co2.outcome == 'failure' }}
@@ -54,6 +58,7 @@ jobs:
         with:
           fetch-depth: 1
           ref: ${{ inputs.ref }}
+          allow-unsafe-pr-checkout: true
 
       - name: Install build deps (only if missing)
         run: |

@@ -237,7 +237,12 @@ dcat clean  rCPU_quota
 
 **危险等级**: 中 — 限制目标核上所有进程的 CPU 调度配额，可能导致进程响应变慢。clean 后恢复。
 
-**补充说明**: 需要 root 权限写 cgroup。v1 需 `cpuset` 控制器层级存在（`/sys/fs/cgroup/cpuset/`）。clean 会将所有进程移回根 cgroup 并删除创建的 cgroup。
+> **依赖与前提**:
+> - **root 权限**：需写 `/sys/fs/cgroup/` 下的文件
+> - **cgroup v1**：需 `/sys/fs/cgroup/cpu/`（cpu 控制器）和 `/sys/fs/cgroup/cpuset/`（cpuset 控制器）层级存在。检查：`ls /sys/fs/cgroup/cpu/ /sys/fs/cgroup/cpuset/`。若缺失，需内核启用 `CONFIG_CGROUP_SCHED` + `CONFIG_CPUSETS` + `CONFIG_CFS_BANDWIDTH`，并挂载对应层级
+> - **cgroup v2**：需 `cgroup.controllers` 包含 `cpu` 和 `cpuset`。检查：`cat /sys/fs/cgroup/cgroup.controllers`。若缺失，需内核启用对应控制器
+> - **Docker**：容器需 `--privileged` 或挂载 `/sys/fs/cgroup`（本工具的 docker-compose 已配置 `privileged: true`）
+> - **注意**：inject 后新启动的进程不会自动进入 cgroup。正确顺序是先注入负载（overload 等），再注入 quota
 
 ---
 

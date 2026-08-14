@@ -197,8 +197,8 @@ OBS = {
         provision="none", precondition="none",
         v_cmd="ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
-    "rCPU_quota": dict(module="cpu", inject_args="--quota_pct=50 --pid=1", clean_args="",
-        provision="none", precondition="none",
+    "rCPU_quota": dict(module="cpu", inject_args="--cores=0 --quota_pct=50", clean_args="",
+        provision="none", precondition="root+cgroup",
         v_cmd="ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l", c_assert="==0"),
     "rCPU_freq": dict(module="cpu", inject_args="--cores=0 --freq_mhz=1000", clean_args="",
@@ -472,12 +472,13 @@ def gen():
 
     # ---- batch2 新增参数类型边界值 ----
     # quota_pct (1-99 range)
-    b_reject("rCPU_quota", "--quota_pct=0 --pid=1", 1, 'quota_pct must be', "quota_pct: 0 below range")
-    b_reject("rCPU_quota", "--quota_pct=100 --pid=1", 1, 'quota_pct must be', "quota_pct: 100 above range")
-    b_reject("rCPU_quota", "--quota_pct=-1 --pid=1", 1, 'quota_pct must be', "quota_pct: negative")
-    b_reject("rCPU_quota", "--quota_pct=abc --pid=1", 1, 'quota_pct must be', "quota_pct: non-numeric")
-    b_reject("rCPU_quota", "--quota_pct=50", 3, 'missing required parameter', "pid: missing")
-    b_reject("rCPU_quota", "", 3, 'missing required parameter', "quota_pct+pid: missing")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=0", 1, 'quota_pct must be', "quota_pct: 0 below range")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=100", 1, 'quota_pct must be', "quota_pct: 100 above range")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=-1", 1, 'quota_pct must be', "quota_pct: negative")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=abc", 1, 'quota_pct must be', "quota_pct: non-numeric")
+    b_reject("rCPU_quota", "--quota_pct=50", 3, 'missing required parameter', "cores: missing")
+    b_reject("rCPU_quota", "--cores=0", 3, 'missing required parameter', "quota_pct: missing")
+    b_reject("rCPU_quota", "", 3, 'missing required parameter', "cores+quota_pct: missing")
     # freq_mhz (positive integer)
     b_reject("rCPU_freq", "--cores=0 --freq_mhz=0", 1, '', "freq_mhz: 0 invalid")
     b_reject("rCPU_freq", "--cores=0 --freq_mhz=-1", 1, '', "freq_mhz: negative")

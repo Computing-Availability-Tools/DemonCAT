@@ -204,39 +204,38 @@ dcat clean rCPU_core_offline --cores=2,3
 
 ---
 
-### 1.3 rCPU_quota — CPU 限额（cgroup）
+### 1.3 rCPU_quota — CPU 核心限幅（cgroup）
 
 **UID**: `rCPU_quota`
 
-**描述**: 通过 cgroup CPU quota 将指定**进程**的 CPU 使用率限制在 `quota_pct`%（1–99%）。cgroup 限制的是进程而非核心——要限核心用 `rCPU_freq`（降频）或 `rCPU_overload`（烧满）。
+**描述**: 通过 cgroup 将指定 CPU 核心的最大使用率限制在 `quota_pct`%（1–99%）。创建 cgroup 设定 `cpuset.cpus`（限定核）+ `cpu.max`（限额度），并将该核上现有进程移入 cgroup。`top` 查看该核占用即被限制为目标值。
 
 **实现原理**: 
-- **inject**: 检测 cgroup 版本（v2 `cpu.max`，v1 `cpu.cfs_quota_us`）。创建 cgroup（默认 `/sys/fs/cgroup/dcat_quota`，可 `cg_path` 指定），设置 quota = `quota_pct × 100000 / 100`（period 固定 100000μs），然后将目标 PID 写入 `cgroup.procs`（v2）或 `tasks`（v1）移入 cgroup。原值存入 sidecar。
-- **clean**: 将所有进程移回根 cgroup，恢复原 quota 值，删除创建的 cgroup。
-- **query**: 读取当前 cgroup 的 CPU quota 和受限进程列表。
+- **inject**: 创建 cgroup，设 `cpuset.cpus=<cores>` 限定核 + `cpu.max=<quota_pct>%` 限额度。扫描 `/proc/[0-9]*/stat` field 39（last processor）找出目标核上的进程，移入 cgroup。PID 列表存入 sidecar。
+- **clean**: 将所有进程移回根 cgroup，恢复原值，删除 cgroup。
+- **query**: 读取当前 cgroup 的 quota、cpuset 和受限进程列表。
 
 **使用示例**:
 ```bash
-# 限制 PID 12345 到 30% CPU
-dcat inject rCPU_quota --quota_pct=30 --pid=12345
+# 限制核心 1 到 30% CPU 使用率
+dcat inject rCPU_quota --cores=1 --quota_pct=30
 dcat query  rCPU_quota
 dcat clean  rCPU_quota
 
-# 限制多个 PID 到 50% CPU
-dcat inject rCPU_quota --quota_pct=50 --pid=123,456,789
+# 限制核心 0,2,4 到 50% CPU
+dcat inject rCPU_quota --cores=0,2,4 --quota_pct=50
 dcat clean  rCPU_quota
 ```
 
-> **如何获取 PID**：`ps aux | grep <进程名>` 或 `pgrep <进程名>`。cgroup 限制的是进程总 CPU 带宽（跨所有核），不是单核使用率。
+> **典型场景**：先注入 `rCPU_overload --cores=1` 满载核心 1（100%），再注入 `rCPU_quota --cores=1 --quota_pct=30`，核心 1 占用从 100% 降至 30%（burn 进程被 cgroup 限流）。`top` / `mpstat` 可验证。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
-| quota_pct | inject 必填 | 整数 1–99 | CPU 限额百分比（跨所有核的总带宽） |
-| pid | inject 必填 | PID 列表 | 目标进程 PID，逗号分隔（如 `123,456`） |
-| cg_path | 可选 | 路径 | 目标 cgroup 路径；缺省则创建 `/sys/fs/cgroup/dcat_quota`（v2）或 `/sys/fs/cgroup/cpu/dcat_quota`（v1） |
+| cores | inject 必填 | 核号列表 | 支持 `"0,2,4"` 或 `"0-3"` 格式 |
+| quota_pct | inject 必填 | 整数 1–99 | CPU 核心最大使用率百分比 |
 
-**危险等级**: 中 — 影响目标进程的 CPU 调度配额，可能导致进程响应变慢。
+**危险等级**: 中 — 限制目标核上所有进程的 CPU 调度配额，可能导致进程响应变慢。clean 后恢复。
 
 **补充说明**: 需要 root 权限写 cgroup。v2 需父 cgroup 已启用 cpu 控制器（`+cpu`）。自定义 `cg_path` 指向已有 cgroup 时，clean 仅恢复原值不删除 cgroup。
 

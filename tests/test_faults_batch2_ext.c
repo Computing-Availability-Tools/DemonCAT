@@ -6,12 +6,12 @@ int main(void) {
     faults_setup();
 
     /* ---- cpu extensions ---- */
-    /* rCPU_quota (pid required, cg_path optional) */
+    /* rCPU_quota (cores + quota_pct) */
     {
-        params_t p = mkparams("quota_pct", "50", "pid", "1", "cg_path", "/sys/fs/cgroup/dcat_t", NULL,NULL, NULL,NULL, NULL,NULL);
+        params_t p = mkparams("cores", "0", "quota_pct", "50", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
         result_t *r = dispatch_route("rCPU_quota", "inject", &p);
         CK(r && r->code == 0); CMD_CONTAINS("cpu_quota.sh");
-        check_param_env("quota_pct", "50"); check_param_env("pid", "1"); check_param_env("cg_path", "/sys/fs/cgroup/dcat_t"); result_free(r);
+        check_param_env("cores", "0"); check_param_env("quota_pct", "50"); result_free(r);
         r = dispatch_route("rCPU_quota", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
     /* rCPU_freq (cores,freq_mhz) */

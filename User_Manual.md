@@ -237,7 +237,7 @@ dcat clean  rCPU_quota
 
 **危险等级**: 中 — 限制目标核上所有进程的 CPU 调度配额，可能导致进程响应变慢。clean 后恢复。
 
-**补充说明**: 需要 root 权限写 cgroup。v2 需父 cgroup 已启用 cpu 控制器（`+cpu`）。自定义 `cg_path` 指向已有 cgroup 时，clean 仅恢复原值不删除 cgroup。
+**补充说明**: 需要 root 权限写 cgroup。v1 需 `cpuset` 控制器层级存在（`/sys/fs/cgroup/cpuset/`）。clean 会将所有进程移回根 cgroup 并删除创建的 cgroup。
 
 ---
 

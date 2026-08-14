@@ -10,7 +10,7 @@
 | `rCPU_core_offline` | cores | — | CPU core offline via sysfs |
 | `rCPU_core_hang` | cores | — | CPU core hang (isolating core, migration stop) |
 | `rCPU_freq` | cores | freq_mhz | CPU frequency limit (cpufreq scaling) |
-| `rCPU_quota` | quota_pct | — | CPU cgroup quota limit |
+| `rCPU_quota` | cores,quota_pct | — | CPU core max utilization via cgroup |
 
 ## 存储模块（5 条）
 

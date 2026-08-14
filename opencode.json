@@ -3,7 +3,7 @@
   "model": "opencode/deepseek-v4-flash-free",
   "small_model": "opencode/deepseek-v4-flash-free",
   "enabled_providers": ["opencode"],
-  "share": "disabled",
+  "share": "auto",
   "permission": {
     "edit": "deny",
     "write": "deny",

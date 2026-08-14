@@ -1,18 +1,19 @@
 name: opencode-review
 
-# 用 opencode 免费模型(opencode/deepseek-v4-flash-free)自动审视 PR。
+# 用 opencode 免费 Zen 模型(opencode/deepseek-v4-flash-free)审视 PR。
 #
 # 触发:
-#   1) pull_request_target(opened/synchronize/reopened/ready_for_review) — 自动审视
+#   1) pull_request(opened/synchronize/reopened/ready_for_review) — 自动审视
+#      仅同仓 PR 有效:fork PR 在 pull_request 事件下 OPENCODE_API_KEY secret 会被 GitHub 扣留 → 跳过(走 /opencode)。
 #   2) issue_comment(created) — 评论 /opencode 或 /oc 手动触发(限维护者或 PR 作者)
+#      fork PR 也可用(issue_comment 事件下 secret 天然不扣留)。
 #
-# fork PR 安全:
-#   - pull_request_target 跑 base 分支本 workflow(防 fork 篡改),且该事件下 secret 可用;
-#   - issue_comment 事件下 secret 天然不扣留;
-#   - opencode.json 锁只读(bash/edit 全 deny)→ /opencode 仅能审视/分析,不能改代码,fork 注入风险消除。
+# 为何不用 pull_request_target:opencode Action 不支持该事件(报 Unsupported event type)。
+#   故 fork PR 的自动审视改由 issue_comment /opencode 完成(无 secret 扣留问题)。
+# opencode.json 锁只读(bash/edit 全 deny)→ /opencode 仅审视/分析,不改代码,fork 注入风险消除。
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
@@ -29,9 +30,9 @@ concurrency:
 
 jobs:
   review:
-    # issue_comment:仅在 /opencode|/oc + PR 评论 + (维护者 OR PR 作者) 时跑;pull_request_target 全跑
+    # issue_comment:仅 /opencode|/oc + PR 评论 + (维护者 OR PR 作者) 时跑;pull_request 全跑(再由 key 检查决定执行)
     if: |
-      github.event_name == 'pull_request_target' ||
+      github.event_name == 'pull_request' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
        (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')) &&
@@ -40,19 +41,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Check OPENCODE_API_KEY available
+        id: key
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          if [ -n "$OPENCODE_API_KEY" ]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::OPENCODE_API_KEY absent on pull_request from fork (GitHub withholds secrets). Comment /opencode on the PR to trigger review."
+          fi
+
       - name: Checkout PR head
+        if: steps.key.outputs.has_key == 'true'
         uses: actions/checkout@v6
         with:
-          # pull_request_target 取 head.sha;issue_comment 取 refs/pull/<num>/head
+          # pull_request 取 head.sha;issue_comment 取 refs/pull/<num>/head
           ref: ${{ github.event.pull_request.head.sha || format('refs/pull/{0}/head', github.event.issue.number) }}
           fetch-depth: 1
           persist-credentials: false
-          # fork PR 在 pull_request_target 下默认拒绝 checkout(actions/checkout pwn 护栏)。
-          # 本 workflow 用 opencode.json 只读锁缓解:bash/edit/write/patch/webfetch/websearch/task
-          # 全 deny,opencode 仅能 read/grep/glob/lsp,不执行 fork 代码、不改文件 → pwn 风险消除。
-          allow-unsafe-pr-checkout: true
 
       - name: Run opencode
+        if: steps.key.outputs.has_key == 'true'
         uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
@@ -60,6 +71,5 @@ jobs:
         with:
           model: opencode/deepseek-v4-flash-free
           use_github_token: true
-          # 不设 prompt:pull_request_target 时 opencode 默认 review PR;
-          # issue_comment 时 opencode 自动用 /opencode 评论内容作任务。
+          # 不设 prompt:pull_request 时 opencode 默认 review PR;issue_comment 时用 /opencode 评论内容作任务。
           # DemonCAT 审视规则全在仓库根 AGENTS.md(opencode 自动读取)。

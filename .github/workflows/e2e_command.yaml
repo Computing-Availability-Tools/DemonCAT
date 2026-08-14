@@ -47,20 +47,21 @@ jobs:
       - name: Check commenter authorization
         id: auth
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.event.comment.user.login }}
           PR_AUTHOR: ${{ steps.pr.outputs.pr_author }}
+          ASSOC: ${{ github.event.comment.author_association }}
         run: |
           set -eu
-          # PR author 可直接触发；否则须 triage+ 权限（照搬 vllm-ascend 鉴权逻辑）
-          if [ "$ACTOR" = "$PR_AUTHOR" ]; then
+          # PR author(大小写不敏感)或 OWNER/MEMBER/COLLABORATOR(triage+)可触发。
+          # 用 webhook 自带 author_association,不调 gh api collaborators/permission:
+          # 该 endpoint 需 admin 权限,issue_comment 的 GITHUB_TOKEN(无 admin)→ 404 → 误拒 maintainer。
+          if [ "$(printf '%s' "$ACTOR" | tr 'A-Z' 'a-z')" = "$(printf '%s' "$PR_AUTHOR" | tr 'A-Z' 'a-z')" ]; then
             echo "authorized=true (PR author)" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          ROLE=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq '.role_name' 2>/dev/null || echo "")
-          case "$ROLE" in
-            triage|write|maintain|admin)
-              echo "authorized=true ($ROLE)" >> "$GITHUB_OUTPUT"
+          case "$ASSOC" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "authorized=true ($ASSOC)" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "authorized=false" >> "$GITHUB_OUTPUT"

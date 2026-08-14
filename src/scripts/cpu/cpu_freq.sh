@@ -30,10 +30,20 @@ case "${DCAT_OP:-inject}" in
         : > "$SIDECAR"
         for n in $(parse_cores "$spec"); do
             d="/sys/devices/system/cpu/cpu$n/cpufreq"
-            [ -d "$d" ] || { echo "cpu$n has no cpufreq sysfs" >&2; exit 1; }
+            [ -d "$d" ] || { echo "cpu$n has no cpufreq sysfs" >&2; rm -f "$SIDECAR"; exit 1; }
             orig=$(cat "$d/scaling_max_freq" 2>/dev/null)
+            echo "$freq_khz" > "$d/scaling_max_freq" 2>/dev/null || { echo "set scaling_max_freq failed on cpu$n (need root?)" >&2; rm -f "$SIDECAR"; exit 1; }
+            actual=$(cat "$d/scaling_max_freq" 2>/dev/null)
+            if [ "$actual" != "$freq_khz" ]; then
+                echo "freq not applied on cpu$n: wanted=$freq_khz actual=$actual (out of range?)" >&2
+                echo "$orig" > "$d/scaling_max_freq" 2>/dev/null
+                while IFS=' ' read -r rn ro; do
+                    [ -n "$ro" ] && echo "$ro" > "/sys/devices/system/cpu/cpu$rn/cpufreq/scaling_max_freq" 2>/dev/null
+                done < "$SIDECAR"
+                rm -f "$SIDECAR"
+                exit 1
+            fi
             printf '%s %s\n' "$n" "$orig" >> "$SIDECAR"
-            echo "$freq_khz" > "$d/scaling_max_freq" 2>/dev/null || { echo "set scaling_max_freq failed on cpu$n (need root?)" >&2; exit 1; }
         done
         echo "set cpu[$spec] scaling_max_freq=${freq_khz}kHz (${freq}MHz)"
         ;;

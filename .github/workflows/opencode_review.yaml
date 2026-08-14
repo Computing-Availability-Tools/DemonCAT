@@ -34,11 +34,13 @@ jobs:
        github.event.issue.pull_request != null &&
        (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')) &&
        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
-        github.event.comment.user.login == github.event.issue.user.login)) ||
+        github.event.comment.user.login == github.event.issue.user.login ||
+        github.event.comment.user.login == 'github-actions[bot]')) ||
       (github.event_name == 'pull_request_review_comment' &&
        (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')) &&
        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
-        github.event.comment.user.login == github.event.pull_request.user.login))
+        github.event.comment.user.login == github.event.pull_request.user.login ||
+        github.event.comment.user.login == 'github-actions[bot]'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

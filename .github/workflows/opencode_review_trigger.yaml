@@ -1,0 +1,35 @@
+name: opencode-review-trigger
+
+# PR 自动触发 opencode review:opencode github action 的 assertContextEvent 白名单只支持
+# issue_comment / pull_request_review_comment,不支持 pull_request/pull_request_target。
+# 故本 workflow 在 PR opened/synchronize/reopened 时自动发一条 /opencode 评论(by github-actions[bot]),
+# 触发 opencode-review.yaml(issue_comment 事件)执行审视。
+#
+# 用 pull_request_target(非 pull_request):fork PR 也能评论(完整 GITHUB_TOKEN);
+# 不 checkout fork 代码 → 无 pwn 风险。
+# opencode-review 的 if 已放行 github-actions[bot](仅仓库自己的 GITHUB_TOKEN 可冒充,安全)。
+# 无回路:opencode 的 review 评论不含 /opencode,不会再次触发;本 workflow 只听 PR 事件不听评论。
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write   # 发评论
+
+concurrency:
+  group: opencode-review-trigger-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post /opencode comment to trigger review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body "/opencode 自动审视本 PR(由 opencode-review-trigger 在 opened/synchronize/reopened 触发)"

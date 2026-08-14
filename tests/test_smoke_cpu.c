@@ -15,13 +15,7 @@
 #include <glob.h>
 #include <sched.h>
 
-#define CK(cond)                                  \
-    do {                                          \
-        if (!(cond)) {                            \
-            fprintf(stderr, "FAIL: %s\n", #cond); \
-            return 1;                             \
-        }                                         \
-    } while (0)
+#define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
 
 /* 找到两个相邻、且当前进程 affinity 允许的核 (a, a+1)。
  * 共享容器里会用 taskset/cpuset 屏蔽某些核(例如此环境 0,2-639 不含核1),
@@ -31,10 +25,7 @@ static int find_adjacent_cores(int *a) {
     if (sched_getaffinity(0, sizeof set, &set) != 0) return -1;
     int max = (int)sysconf(_SC_NPROCESSORS_CONF) + 64;
     for (int i = 0; i < max; i++) {
-        if (CPU_ISSET(i, &set) && CPU_ISSET(i + 1, &set)) {
-            *a = i;
-            return 0;
-        }
+        if (CPU_ISSET(i, &set) && CPU_ISSET(i + 1, &set)) { *a = i; return 0; }
     }
     return -1;
 }
@@ -111,11 +102,8 @@ int main(void) {
 
     /* ---- rCPU_overload (perl) ---- */
     {
-        params_t p;
-        memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "cores");
-        strcpy(p.items[0].value, cores2);
-        p.count = 1;
+        params_t p; memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, cores2); p.count = 1;
 
         result_t *r = dispatch_route("rCPU_overload", "inject", &p);
         CK(r && r->code == 0);
@@ -133,72 +121,54 @@ int main(void) {
 
     /* ---- rCPU_overload re-inject: 默认拒绝 + --force 原子替换 ---- */
     {
-        params_t p;
-        memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "cores");
-        strcpy(p.items[0].value, cores2);
-        p.count = 1;
+        params_t p; memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "cores"); strcpy(p.items[0].value, cores2); p.count = 1;
 
         result_t *r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
-        CK(r && r->code == 0);
-        result_free(r);
+        CK(r && r->code == 0); result_free(r);
 
         CK(wait_burn_min(2, 5));
 
         /* 同规格重注入: 默认拒绝 (code 5), 旧进程仍在 */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
-        CK(r && r->code == 5);
-        result_free(r);
+        CK(r && r->code == 5); result_free(r);
         CK(wait_burn_min(2, 5));
 
         /* --force 原子替换: 旧清掉再注入, 不应翻倍 (<4) */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
-        CK(r && r->code == 0);
-        result_free(r);
+        CK(r && r->code == 0); result_free(r);
         CK(wait_burn_min(2, 5));
         CK(count_burn() < 4);
 
         r = dispatch_route_force("rCPU_overload", "clean", &p, 0);
-        CK(r && r->code == 0);
-        result_free(r);
+        CK(r && r->code == 0); result_free(r);
 
         CK(wait_burn_zero(5));
     }
 
     /* ---- rCPU_overload 重叠核集: 默认拒绝 + --force 替换 ---- */
     {
-        params_t p1;
-        memset(&p1, 0, sizeof p1);
-        strcpy(p1.items[0].key, "cores");
-        strcpy(p1.items[0].value, cores_range);
-        p1.count = 1;
-        params_t p2;
-        memset(&p2, 0, sizeof p2);
-        strcpy(p2.items[0].key, "cores");
-        strcpy(p2.items[0].value, core1);
-        p2.count = 1;
+        params_t p1; memset(&p1, 0, sizeof p1);
+        strcpy(p1.items[0].key, "cores"); strcpy(p1.items[0].value, cores_range); p1.count = 1;
+        params_t p2; memset(&p2, 0, sizeof p2);
+        strcpy(p2.items[0].key, "cores"); strcpy(p2.items[0].value, core1); p2.count = 1;
 
         result_t *r = dispatch_route_force("rCPU_overload", "inject", &p1, 0);
-        CK(r && r->code == 0);
-        result_free(r);
+        CK(r && r->code == 0); result_free(r);
 
         CK(wait_burn_min(2, 5));
 
         /* 重叠核 base (含于 base-(base+1)): 默认拒绝 */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 0);
-        CK(r && r->code == 5);
-        result_free(r);
+        CK(r && r->code == 5); result_free(r);
 
         /* --force 替换: base-(base+1) 清掉, 注入 base (perl 数从 2 降为 1) */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 1);
-        CK(r && r->code == 0);
-        result_free(r);
+        CK(r && r->code == 0); result_free(r);
         CK(wait_burn_min(1, 5));
         CK(count_burn() < 3);
 
-        r = dispatch_route_force("rCPU_overload", "clean", &p2, 0);
-        CK(r && r->code == 0);
-        result_free(r);
+        r = dispatch_route_force("rCPU_overload", "clean", &p2, 0); CK(r && r->code == 0); result_free(r);
 
         CK(wait_burn_zero(5));
     }

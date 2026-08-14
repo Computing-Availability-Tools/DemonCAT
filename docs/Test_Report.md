@@ -23,7 +23,7 @@
 ### 1.2 测试结果汇总
 
 | 指标 | 结果 |
-| ------ | ------ |
+|------|------|
 | CTest 测试总数 | **24** |
 | CTest 通过 | **24** |
 | CTest 失败 | **0** |
@@ -44,7 +44,7 @@
 ## 2. 测试环境
 
 | 项目 | 配置 |
-| ------ | ------ |
+|------|------|
 | 操作系统 | Linux (aarch64) |
 | CPU | 128 核 |
 | 编译器 | gcc (aarch64) |
@@ -63,12 +63,12 @@
 ## 3. 编译与静态检查
 
 | 检查项 | 命令 | 结果 |
-| -------- | ------ | :----: |
+|--------|------|:----:|
 | 构建 | `cmake -B build && cmake --build build` | ✅ |
 | 编译选项 | `-Wall -Wextra -Werror` | ✅ 零警告 |
 | 二进制 | `build/dcat` | ✅ |
 | 动态插件 | `plugins/libsample.so` | ✅ |
-| 脚本语法 | `sh -n` 全部 35 脚本 | ✅ |
+| 脚本语法 | `sh -n` 全部 34 脚本 | ✅ |
 
 ---
 
@@ -77,7 +77,7 @@
 ### 4.1 Tier 0: 核心单元测试 (14 个)
 
 | 测试 | 覆盖范围 | 结果 | 耗时 |
-| ------ | --- | :----: | :----: |
+|------|---|:----:|:----:|
 | test_types | params_t helpers | PASS | 0.00s |
 | test_output | result_ok/err/print + JSON | PASS | 0.00s |
 | test_config | INI 解析 + fault_count=33 | PASS | 0.00s |
@@ -96,13 +96,13 @@
 ### 4.2 插件集成测试
 
 | 测试 | 结果 | 耗时 |
-| ------ | :----: | :----: |
+|------|:----:|:----:|
 | test_plugin_integration | PASS | 0.01s |
 
 ### 4.3 Tier 1: Mock 表驱动故障测试 (33 条全覆盖)
 
 | 测试 | 覆盖故障数 | 模块 | 结果 | 耗时 |
-| ------ | :---: | --- | :----: | :----: |
+|------|:---:|---|:----:|:----:|
 | test_faults_cpu_storage | 3 | CPU(2) + 存储(1) | PASS | 0.01s |
 | test_faults_network | 11 | 网络(11) | PASS | 0.03s |
 | test_faults_process | 3 | 进程(3) | PASS | 0.01s |
@@ -111,13 +111,13 @@
 ### 4.4 Tier 2: 脚本语法检查
 
 | 测试 | 检查范围 | 结果 | 耗时 |
-| ------ | --- | :----: | :----: |
+|------|---|:----:|:----:|
 | test_syntax | 全部 34 个 .sh 脚本 (`sh -n`) | PASS | 0.06s |
 
 ### 4.5 Tier 3: 真实执行测试
 
 | 测试 | 故障 | 结果 | 耗时 |
-| ------ | --- | :----: | :----: |
+|------|---|:----:|:----:|
 | test_smoke_cpu | rCPU_overload (50%+100%) | PASS | 9.39s |
 | test_smoke_process | rPROC_hang + rPROC_zstate + rPROC_exit | PASS | 6.43s |
 | test_smoke_storage | rDISK_write_overload + rNET_port_occupy | PASS | 5.80s |
@@ -133,20 +133,20 @@
 ### 5.1 CPU 模块（2 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
-| ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
+|------|------|:------:|---------|:----:|:-----:|:----:|:----:|
 | rCPU_overload | cores=0-1,load_pct=50% | ✅ | perl × 2, core 0: 52.4%, core 1: 50.0% | ✅ confirmed:true | ✅ | perl=0 | **PASS** |
 | rCPU_core_offline | cores=1 | ✅ | /sys/.../cpu1/online=0 | ✅ OFFLINE | ✅ | online=1 | **PASS** |
 
 ### 5.2 存储模块（1 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
-| ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
+|------|------|:------:|---------|:----:|:-----:|:----:|:----:|
 | rDISK_write_overload | device=/tmp,workers=2,size_mb=500 | ✅ | dd × 2 | ✅ FAULT CONFIRMED | ✅ | dd=0 | **PASS** |
 
 ### 5.3 网络模块（11 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
-| ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
+|------|------|:------:|---------|:----:|:-----:|:----:|:----:|
 | rNET_delay | iface=docker0,delay_ms=100 | ✅ | tc: netem delay 100.0ms | ✅ confirmed:true | ✅ | noqueue | **PASS** |
 | rNET_loss | iface=docker0,loss_pct=5 | ✅ | tc: netem loss 5% | ✅ confirmed:true | ✅ | noqueue | **PASS** |
 | rNET_reorder | iface=docker0,reorder_pct=50 | ✅ | tc: netem reorder 50% | ✅ confirmed:true | ✅ | noqueue | **PASS** |
@@ -157,12 +157,12 @@
 | rNET_link_flap | iface=docker0,count=2 | ✅ | pidfile 存活 | ✅ confirmed:true | ✅ | UP | **PASS** |
 | rNET_bw_limit | iface=docker0,rate_kbps=1024 | ✅ | tc: tbf rate 1024Kbit | ✅ confirmed:true | ✅ | noqueue | **PASS** |
 | rNET_jitter | iface=docker0,delay_ms=50,jitter_ms=10 | ✅ | tc: netem delay 50.0ms 10.0ms | ✅ confirmed:true | ✅ | noqueue | **PASS** |
-| rNET_tcp_loss | iface=docker0,port=39998 | ✅ | iptables: dpt:39998 | ✅ confirmed:true | ✅ | 规则清除 | **PASS** |
+| rNET_tcp_loss | port=39998 | ✅ | iptables: dpt:39998 | ✅ confirmed:true | ✅ | 规则清除 | **PASS** |
 
 ### 5.4 进程模块（3 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
-| ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
+|------|------|:------:|---------|:----:|:-----:|:----:|:----:|
 | rPROC_exit | pid=测试进程 | ✅ kill -9 | 进程消失 | ✅ 拒绝(code 3) | ✅ 拒绝(code 3) | N/A | **PASS** |
 | rPROC_hang | pid=测试进程 | ✅ SIGSTOP | State=T | ✅ state=T, confirmed:true | ✅ SIGCONT | State=S | **PASS** |
 | rPROC_zstate | pid=测试进程 | ✅ kill→zombie | State=Z, `<defunct>` | ✅ state=Z, confirmed:true | ✅ kill 父 | reaped | **PASS** |
@@ -170,13 +170,11 @@
 ### 5.5 NPU 模块（16 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
-| ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
+|------|------|:------:|---------|:----:|:-----:|:----:|:----:|
 | rNPU_link_down | chip=2 | ✅ | link DOWN | — | ✅ cfg recovery | DOWN=基线 | **PASS**† |
-
 ---
 
 > **†** 基线 link 本已 DOWN（910B4 无对端设备），inject 为幂等 no-op。**910C 环境（link UP）已验证完整 down→up 循环通过**。
-
 | rNPU_ip_change | chip=2,address=10.20.10.100 | ✅ | IP=.100 | ✅ confirmed:true | ✅ | IP=.1 | **PASS**‡ |
 | rNPU_gw_change | chip=2,gateway=10.20.10.254 | ✅ | GW=.254 | — | ✅ | GW=.1 | **PASS** |
 | rNPU_netdetect_change | chip=2,address=10.20.10.254 | ✅ | netdetect=.254 | — | ✅ | 0.0.0.0 | **PASS** |
@@ -200,7 +198,7 @@
 ## 6. 误操作 / 边界场景测试（9 种）
 
 | 场景 | 命令 | 错误码 | 错误消息 | 结论 |
-| ------ | ------ | :------: | --------- | :----: |
+|------|------|:------:|---------|:----:|
 | 不存在的 UID | `dcat inject rFAKE_nonexist` | 4 | `uid 'rFAKE_nonexist' not found in catalog` | ✅ |
 | 缺少必填参数 | `dcat inject rCPU_overload` | 3 | `missing required parameter 'cores' for inject` | ✅ |
 | 多余未声明参数 | `dcat inject rCPU_overload --cores=0 --bogus=1` | 3 | `unknown parameter 'bogus'` | ✅ |
@@ -216,48 +214,40 @@
 ## 7. 发现并修复的 Bug（8 个）
 
 ### Bug 1: rNET_delay query 假阴性（正则不匹配小数）
-
 - **文件**: `src/scripts/network/net_delay.sh`
 - **现象**: `tc qdisc show` 输出 `delay 100.0ms`，query 正则 `[0-9]+` 遇到 `.` 停止匹配
 - **修复**: `[0-9]+` → `[0-9.]+`
 
 ### Bug 2: rNET_jitter query 假阴性（同上）
-
 - **文件**: `src/scripts/network/net_jitter.sh`
 - **修复**: 两处 `[0-9]+` → `[0-9.]+`
 
 ### Bug 3: rNPU_ip_change clean 不恢复（grep 子串匹配）
-
 - **文件**: `src/scripts/npu/ip_change.sh`
 - **现象**: `fault_present()` 用 `grep -Fq` 子串匹配，`10.20.10.1` 是 `10.20.10.100` 前缀 → 误判
 - **修复**: 改为精确 IP 值比较
 
 ### Bug 4: rPROC_hang pid=0 停掉进程组
-
 - **文件**: `src/scripts/process/proc_hang.sh`
 - **现象**: `kill -STOP 0` 发送 SIGSTOP 给整个进程组，导致测试框架自身挂死
 - **修复**: 加正整数校验，拒绝 pid ≤ 0
 
 ### Bug 5: rDISK_write_overload symlink 攻击
-
 - **文件**: `src/scripts/storage/disk_write_overload.sh`
 - **现象**: `--device=/tmp/dcat_symtest`（symlink → /etc）可写入 /etc，存在安全风险
 - **修复**: inject 加 `readlink -f` 检查，拒绝 symlink 路径
 
 ### Bug 6: rDISK_write_overload clean dd 孤儿进程
-
 - **文件**: `src/scripts/storage/disk_write_overload.sh`
 - **现象**: `while true` 子 shell 被 SIGKILL 后 dd 子进程变孤儿持续重生
 - **修复**: clean 改为先 SIGTERM + sleep 0.5 再 SIGKILL，sweep 加广匹配
 
 ### Bug 7: rNET_degrade ethtool 不可用
-
 - **文件**: `src/scripts/network/net_degrade.sh`
 - **现象**: 所有网卡（物理+虚拟）驱动不支持 `ethtool -s speed`，测试环境无法验证
 - **修复**: 从 ethtool 改为 `tc qdisc tbf rate`，dummy 网卡和真实网卡均可测
 
 ### Bug 8: rNPU_gw_change 无原网关时 sidecar 未保存
-
 - **文件**: `src/scripts/npu/gw_change.sh`
 - **现象**: 无原网关时 `orig` 为空，`[ -n "$orig" ] && sidecar_save` 不执行 → fault_present 恒 false
 - **修复**: 始终保存 `sidecar_save "$chip" "${orig:-none}"`
@@ -267,7 +257,7 @@
 ## 8. 已知限制（非 Bug）
 
 | 限制 | 故障 | 原因 | 影响范围 | 兜底恢复 |
-| ------ | ------ | ------ | --------- | --------- |
+|------|------|------|---------|---------|
 | rNPU_route_del setup 偶发 | rNPU_route_del | 前序 link_down 测试残留 link DOWN，setup_cmd 的 route_add 失败 | 910B4 无交换机环境 | `hccn_tool -link -s up` |
 
 > **NPU 兜底恢复**: 所有 NPU 故障可通过 `npu-smi set -t reset -i <id>` 复位芯片恢复原始状态。本次测试全程未需使用。
@@ -277,7 +267,7 @@
 ## 9. 测试文件清单
 
 | 文件 | 层级 | 职责 |
-| ------ | ------ | ------ |
+|------|------|------|
 | tests/test.h | 共享 | 测试框架宏 |
 | tests/test_faults_common.h | 共享 | mock 设置 + 断言宏 |
 | tests/test_*.c (14个) | Tier 0 | 核心单元测试 |
@@ -300,19 +290,19 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 
 ---
 
-## 9. 增量：clean --all + stateless clean（2026-07-30）
+## 11. 增量：clean --all + stateless clean（2026-07-30）
 
 > 在 v0.1 基础上新增 **stateless clean** 能力：`clean <uid>` 无参 / `clean --all` 不依赖 `state.json`，脚本自行 glob `/tmp` 工件清理；`state.json` 丢失/损坏时仍可清。
 
-### 9.1 新增能力
+### 11.1 新增能力
 
 | 入口 | 行为 |
-| --- | --- |
+|---|---|
 | `dcat clean <uid>`（无参） | stateless：脚本 glob `/tmp/dcat-<uid>-*` 工件（pidfile/sidecar/.bak）清理该 uid 全部注入，绕过 state。`clean_required` 在零参数时跳过校验。 |
 | `dcat clean --all` | 对全部支持 clean 的注册故障 fan-out 无参 clean（stateless），聚合每 uid 结果为 `{uid,status}` 数组。 |
 | `dcat clean <uid> --params`（带参） | 原行为：按参数匹配 state 记录逐条清理；**新增**：`state.json` 丢失/损坏（`state_is_lost()`）时回退用用户参数直接调脚本 clean。 |
 
-### 9.2 核心改动
+### 11.2 核心改动
 
 - `cli.c/h`：新增 `--all` 全局标志（仅 clean 生效）。
 - `dispatch.c/h`：`cnf_clean` 零参数走 stateless 脚本 clean，**脚本成功后 `reconcile_uid_state()` 把该 uid 全部活跃记录标 inactive（避免 query 残留幽灵）**；带参数且 state 丢失时回退脚本 clean；新增 `dispatch_clean_all()` 聚合 fan-out（同样 reconcile）。
@@ -320,21 +310,21 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 - `precheck.c`：`clean` 零参数时跳过 `clean_required` 校验（clean-all-for-uid 模式）。
 - `help.c` / `main.c`：`--help` 与全局用法补 `clean --all` / 无参 clean 说明；`--all` 与非 clean 组合报错（退出码 2）。
 
-### 9.3 脚本层 no-arg clean 全覆盖
+### 11.3 脚本层 no-arg clean 全覆盖
 
 全部 33 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
 
 | 模式 | 脚本 | 无参 clean 行为 |
-| --- | --- | --- |
+|---|---|---|
 | **glob /tmp 工件**（stateless 可枚举） | cpu_overload / cpu_core_offline / disk_write_overload / net_(delay\|loss\|reorder\|down\|degrade\|port_occupy\|service_stop\|link_flap\|bw_limit\|jitter\|tcp_loss) / proc_hang / proc_zstate / npu_(ip_change\|gw_change\|netdetect_change\|mtu_mismatch\|roce_port_change) | 枚举 `/tmp/dcat-<uid>-*` 工件逐个清理；无工件输出 "no active injection" 退出 0 |
 | **no-op**（无 /tmp 工件可枚举） | npu_(link_down\|bw_limit\|dscp_tc_change\|arp_del\|arp_poison\|route_add\|route_del\|iprule_add\|iprule_del\|iproute_add\|iproute_del) | 无参输出 "no active injection (chip required)" 退出 0；带参走原 fault_present 清理 |
 
 > 所有 NPU 脚本顶部 `chip=${DCAT_PARAM_CHIP:?...}` 改为 `:-`（非致命），`npu_validate_chip` 仅在有值时校验；inject-required 参数的 `:?` 强制移入 `inject)` 分支，保证 query/clean 无参不崩、inject 仍拒绝缺参。
 
-### 9.4 测试结果
+### 11.4 测试结果
 
 | 测试 | 覆盖 | 结果 |
-| --- | --- | :---: |
+|---|---|:---:|
 | test_dispatch（新增 6 例） | `clean <uid>` 无参→直接调脚本 clean（不传 DCAT_PARAM_*）；`clean --all` fan-out 次数 = 支持 clean 的故障数；state 丢失→带参 clean 回退脚本；**无参 clean / `clean --all` 成功后 reconcile state（记录标 inactive，query 无幽灵）**；**`clean --all` 某 uid 脚本 clean 失败时不得 reconcile 该 uid（仅成功才 reconcile，防反向幽灵）** | PASS |
 | test_state（新增 2 例） | `state_is_lost()` 在文件缺失/JSON 损坏时为真、内存空 | PASS |
 | test_syntax | 全部 34 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
@@ -346,7 +336,7 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 
 > CTest 当前共 **24** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
 
-### 9.5 已知限制
+### 11.5 已知限制
 
 - NPU 12 条「no-op」类故障（无 /tmp 工件、clean 需 chip+key 标识参数）在 `clean --all` 下仅报 "no active injection" 退出 0，**不实际清理**其活跃注入——这是 stateless 的固有局限（无法从 /tmp 工件还原标识参数）。此类故障的 stateless 清理需带参（`clean <uid> --chip=N [--key=...]`），或依赖完好的 state.json。
 - **部分损坏不回退**：`clean <uid> --params` 仅在 `state.json` **完全丢失/解析失败**（`state_is_lost()`）时回退脚本；若文件合法但记录被抹（运维手编辑/截断），带参 clean 报 "no active injection" 且**不触碰系统资源**（避免误清非 dcat 注入，如对未注入网卡 `tc qdisc del`）。此场景用无参 `clean <uid>` 或 `clean --all`（stateless glob）恢复。
@@ -360,26 +350,28 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 *测试执行人: Automated (CTest) + Manual*
 *总耗时: 13.85 秒 (v0.1 CTest) / 32.84 秒 (增量后 CTest 24 项) + 手动验证*
 
-## 10. E2E 测试（CSV 驱动，354 步骤 / 165 流程）
 
-> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，352 步骤 / 165 流程），结果见 `tests/e2e/results_*.csv`。
+
+## 12. E2E 测试（CSV 驱动，354 步骤 / 165 流程）
+
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，354 步骤 / 165 流程），结果见 `tests/e2e/results_*.csv`。
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 - NPU: Atlas 910B4 device 2 (RoCE link DOWN)
 
-### 10.1 结果汇总
+### 12.1 结果汇总
 
 | 指标 | 值 |
-| ------ | ------ |
+|------|------|
 | **PASS** | **162** |
 | **FAIL** | **3** |
 | **TOTAL** | **165** |
 | **通过率** | **98%** |
 
-### 10.2 分类统计
+### 12.2 分类统计
 
 | 分类 | 说明 | PASS | FAIL |
-| --- | --- | --- | --- |
+|---|---|---|---|
 | FUNC | 33 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 39 | 2 |
 | BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 46 | 0 |
 | SEC | 安全（命令注入+权限边界+主机安全+symlink） | 37 | 0 |
@@ -389,10 +381,10 @@ DemonCAT v0.1.0 全部 **24** 个 CTest 测试通过，零失败。E2E 354 步�
 | CONC | 并发竞争（同时 inject+clean / 双进程写 state） | 3 | 0 |
 | INTER | 故障交互（多故障叠加 / clean 一个不影响其他） | 3 | 0 |
 
-### 10.3 失败用例（3 个，全部 910B4 硬件/环境限制）
+### 12.3 失败用例（3 个，全部 910B4 硬件/环境限制）
 
 | ID | 故障 | 原因 |
-| --- | --- | --- |
+|---|---|---|
 | E2E-081 | rNPU_iprule_add clean | 910B4 `hccn_tool -ip_rule` 驱动限制，clean 后规则仍存在 |
 | E2E-088 | rNPU_link_down clean | 910B4 无交换机 link 始终 DOWN（910C 已验证通过） |
 | E2E-272 | STATE-7 rNPU_mtu_mismatch inject | 910B4 `hccn_tool -mtu` 注入回读校验失败（驱动限制） |

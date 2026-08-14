@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(demoncat C)
+project(demoncat C CXX)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Werror)
@@ -52,7 +52,8 @@ set(_dcat_entry_code "
 install(CODE "${_dcat_entry_code}")
 add_custom_target(uninstall
     COMMAND ${CMAKE_COMMAND} -E remove -f "${CMAKE_INSTALL_PREFIX}/bin/dcat"
-    COMMENT "Removing global dcat entry (${CMAKE_INSTALL_PREFIX}/bin/dcat)")
+    COMMENT "Removing global dcat entry (${CMAKE_INSTALL_PREFIX}/bin/dcat)"
+)
 # make clean 连带删除全局入口（入口存在时需 sudo）。
 # ADDITIONAL_CLEAN_FILES 需 CMake 3.15+；3.10-3.14 下静默不生效，请改用 `make uninstall`。
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
@@ -95,11 +96,13 @@ set_tests_properties(test_serve PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 dcat_test(test_plugin_manager     tests/test_plugin_manager.c)
 dcat_test(test_plugin_integration tests/test_plugin_integration.c)
 
-# ---- Tier 1: Mock 表驱动故障测试 (38 条全覆盖) ----
+# ---- Tier 1: Mock 表驱动故障测试 (v0.1 33 条 + 批次2 30 条全覆盖) ----
 dcat_test(test_faults_cpu_storage  tests/test_faults_cpu_storage.c)
 dcat_test(test_faults_network      tests/test_faults_network.c)
 dcat_test(test_faults_process     tests/test_faults_process.c)
 dcat_test(test_faults_npu         tests/test_faults_npu.c)
+dcat_test(test_faults_batch2_newmods tests/test_faults_batch2_newmods.c)
+dcat_test(test_faults_batch2_ext     tests/test_faults_batch2_ext.c)
 
 # ---- Tier 2: 脚本语法检查 (sh -n) ----
 add_test(NAME test_syntax COMMAND sh tests/check_syntax.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
@@ -125,4 +128,19 @@ set_target_properties(sample_plugin PROPERTIES
 # 集成测试依赖 .so 先构建
 if(TARGET sample_plugin AND TARGET test_plugin_integration)
     add_dependencies(test_plugin_integration sample_plugin)
+endif()
+
+# ---- NPU ACL 压力工具 (可选, 检测到 CANN 则编译) ----
+set(ASCEND_TOOLKIT "/usr/local/Ascend/ascend-toolkit/latest")
+if(EXISTS "${ASCEND_TOOLKIT}/aarch64-linux/include/acl/acl.h")
+    add_executable(_npu_stress src/scripts/npu/_npu_stress.cpp)
+    target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include")
+    target_link_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/lib64")
+    target_link_libraries(_npu_stress PRIVATE ascendcl opapi nnopbase)
+    set_target_properties(_npu_stress PROPERTIES
+        LINKER_LANGUAGE CXX
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
+    message(STATUS "NPU stress tool: enabled (ACL found)")
+else()
+    message(STATUS "NPU stress tool: disabled (ACL not found)")
 endif()

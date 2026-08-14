@@ -1,15 +1,14 @@
 name: opencode-review
 
 # opencode 审视 PR:评论 /opencode 或 /oc 触发(issue_comment / pull_request_review_comment)。
+# primer(opencode-review-trigger.yaml)在 PR open/sync 自动发 /opencode 评论(PAT)间接触发本 workflow。
 #
-# PR open/sync 自动审视由 opencode-review-trigger.yaml(primer)间接触发:
-# primer 在 pull_request_target 事件发 /opencode 评论(PAT)→ 触发本 workflow(issue_comment)。
-# 不直接用 pull_request 事件:fork PR 的 pull_request 会扣留 OPENCODE_API_KEY → opencode 失败;
-# 经 primer→issue_comment 绕开(secret 不扣留)。
-#
-# opencode github action 支持事件:issue_comment / pull_request_review_comment / pull_request /
-# issues / schedule / workflow_dispatch。仅不支持 pull_request_target。pull_request 虽支持,
-# 但 fork PR 上 secret 扣留,故改用 primer 间接触发(见上)。
+# 并发:同 PR 最多 3 个并发 review。
+#   - concurrency 按 comment.id 拆组 → 同 PR 多个 /opencode 不互相取消(允许并发,打开限制)。
+#   - gate job 用 check-run 数同 PR head SHA 上 in_progress 的 "opencode-review" check-run,
+#     >=3 则跳过(发 notice);<3 则 review job 创建 in_progress check-run 占位,review 完(always)
+#     补 complete 释放。check-run 按 head SHA 天然按 PR 隔离(issue_comment 的 gh run list 无法按 PR 过滤,
+#     故用 check-run)。race-prone(多 gate 同时数到 <3 可能都进),best-effort 上限。
 #
 # fork PR 安全:action 自带 checkoutForkBranch(用 OIDC 换取的 App token 配置 git remote+fetch),
 # 本 workflow 不做 fork checkout → 无 pwn 护栏问题。opencode.json 锁只读(bash/edit 全 deny)。
@@ -25,14 +24,14 @@ permissions:
   contents: read
   pull-requests: write
   issues: read
+  checks: write   # 创建/查询 check-run 做 3 并发上限
 
 concurrency:
-  group: opencode-review-${{ github.event.issue.number || github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: opencode-review-${{ github.event.comment.id }}
+  cancel-in-progress: false
 
 jobs:
-  review:
-    # 仅 PR 评论 + /opencode|/oc + (维护者 OR PR 作者) 时跑;issue 评论(issue 无 pull_request)不跑
+  gate:
     if: |
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
@@ -46,6 +45,54 @@ jobs:
         github.event.comment.user.login == github.event.pull_request.user.login ||
         github.event.comment.user.login == 'github-actions[bot]'))
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      check_run_id: ${{ steps.claim.outputs.check_run_id }}
+    steps:
+      - id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUM: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -eu
+          SHA=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json headRefOid --jq .headRefOid)
+          echo "head_sha=$SHA" >> "$GITHUB_OUTPUT"
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.pr.outputs.head_sha }}
+        run: |
+          set -eu
+          COUNT=$(gh api "repos/${{ github.repository }}/commits/${SHA}/check-runs?status=in_progress" --jq '[.check_runs[] | select(.name == "opencode-review")] | length')
+          echo "concurrent=$COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$COUNT" -ge 3 ]; then
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::opencode review 达 3 并发上限(已有 $COUNT 个 in_progress on ${{ steps.pr.outputs.head_sha }}),跳过本次。"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - id: claim
+        if: steps.check.outputs.proceed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const sha = '${{ steps.pr.outputs.head_sha }}';
+            const res = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'opencode-review',
+              head_sha: sha,
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+            });
+            core.setOutput('check_run_id', String(res.data.id));
+
+  review:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout repository
@@ -53,7 +100,6 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-
       - name: Run opencode
         uses: anomalyco/opencode/github@latest
         env:
@@ -64,3 +110,28 @@ jobs:
           use_github_token: true
           # 不设 prompt:opencode 用 /opencode 评论内容作任务。
           # DemonCAT 审视规则全在仓库根 AGENTS.md(opencode 自动读取)。
+
+  release:
+    needs: [gate, review]
+    if: always() && needs.gate.outputs.check_run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const id = Number('${{ needs.gate.outputs.check_run_id }}');
+            const result = '${{ needs.review.result }}';
+            const conclusion = result === 'success' ? 'success' : 'failure';
+            try {
+              await github.rest.checks.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                check_run_id: id,
+                status: 'completed',
+                conclusion: conclusion,
+                completed_at: new Date().toISOString(),
+              });
+            } catch (e) {
+              core.warning(`failed to complete check-run ${id}: ${e.message}`);
+            }

@@ -335,6 +335,49 @@ int test_reinject_force_partial_clean_failure(void) {
     return 0;
 }
 
+int test_reinject_find_overlap_cpu(void) {
+    setup();
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "0,1");
+    result_t *r1 = dispatch_route_force("rCPU_overload", "inject", &p, 0);
+    ASSERT_TRUE(r1 && r1->code == 0);
+    result_free(r1);
+    const fault_def_t *f = registry_find("rCPU_overload");
+    ASSERT_TRUE(f != NULL);
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(reinject_find_overlap(f, &p, ids, DCAT_MAX_RECORDS), 1);
+    params_t q;
+    params_init(&q);
+    params_set(&q, "cores", "2,3");
+    ASSERT_INT_EQ(reinject_find_overlap(f, &q, ids, DCAT_MAX_RECORDS), 0);
+    ASSERT_INT_EQ(reinject_find_overlap(NULL, &p, ids, DCAT_MAX_RECORDS), 0);
+    return 0;
+}
+
+int test_reinject_find_overlap_ops_generic(void) {
+    setup();
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "0,1");
+    result_t *r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
+    ASSERT_TRUE(r && r->code == 0);
+    result_free(r);
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(reinject_find_overlap_ops("rCPU_overload", "cores", &p, ids, DCAT_MAX_RECORDS), 1);
+    params_t q;
+    params_init(&q);
+    params_set(&q, "cores", "5,6");
+    ASSERT_INT_EQ(reinject_find_overlap_ops("rCPU_overload", "cores", &q, ids, DCAT_MAX_RECORDS), 0);
+    ASSERT_INT_EQ(reinject_find_overlap_ops("rCPU_overload", "", &p, ids, DCAT_MAX_RECORDS), 1);
+    params_t empty;
+    params_init(&empty);
+    ASSERT_INT_EQ(reinject_find_overlap_ops("rCPU_overload", "cores", &empty, ids, DCAT_MAX_RECORDS), 0);
+    ASSERT_INT_EQ(reinject_find_overlap_ops(NULL, "cores", &p, ids, DCAT_MAX_RECORDS), 0);
+    ASSERT_INT_EQ(reinject_find_overlap_ops("rCPU_overload", "cores", NULL, ids, DCAT_MAX_RECORDS), 0);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_cores_parse_list_range_mixed_single);
     RUN_TEST(test_cores_parse_invalid);
@@ -350,5 +393,7 @@ int main(void) {
     RUN_TEST(test_reinject_inject_only_exempt);
     RUN_TEST(test_dispatch_route_wrapper_default_reject);
     RUN_TEST(test_reinject_force_partial_clean_failure);
+    RUN_TEST(test_reinject_find_overlap_cpu);
+    RUN_TEST(test_reinject_find_overlap_ops_generic);
     return TEST_MAIN_RETURN();
 }

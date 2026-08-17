@@ -154,6 +154,70 @@ int test_state_load_corrupt_is_lost(void) {
     return 0;
 }
 
+static void visit_count(const injection_record_t *r, void *ctx) {
+    (void)r;
+    (*(int *)ctx)++;
+}
+
+int test_state_snapshot_by_uid(void) {
+    state_reset();
+    params_t p1;
+    params_init(&p1);
+    params_set(&p1, "iface", "eth0");
+    params_t p2;
+    params_init(&p2);
+    params_set(&p2, "iface", "eth1");
+    params_t p3;
+    params_init(&p3);
+    params_set(&p3, "pid", "1");
+    long long id1 = state_add("rNET_delay", &p1);
+    long long id2 = state_add("rNET_delay", &p2);
+    long long id3 = state_add("rNET_loss", &p3);
+    ASSERT_TRUE(id1 > 0 && id2 > 0 && id3 > 0);
+    state_mark_inactive(id2);
+    injection_record_t snap[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_snapshot_by_uid("rNET_delay", snap, DCAT_MAX_RECORDS), 1);
+    ASSERT_INT_EQ(snap[0].record_id, id1);
+    ASSERT_INT_EQ(snap[0].active, 1);
+    ASSERT_STREQ(snap[0].uid, "rNET_delay");
+    ASSERT_STREQ(params_find(&snap[0].params, "iface"), "eth0");
+    ASSERT_INT_EQ(state_snapshot_by_uid("rCPU_overload", snap, DCAT_MAX_RECORDS), 0);
+    ASSERT_INT_EQ(state_snapshot_by_uid("rNET_delay", snap, 0), 0);
+    return 0;
+}
+
+int test_state_for_each_active(void) {
+    state_reset();
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth0");
+    long long id1 = state_add("rNET_delay", &p);
+    long long id2 = state_add("rNET_loss", &p);
+    long long id3 = state_add("rCPU_overload", &p);
+    ASSERT_TRUE(id1 > 0 && id2 > 0 && id3 > 0);
+    state_mark_inactive(id2);
+    int cnt = 0;
+    state_for_each_active(visit_count, &cnt);
+    ASSERT_INT_EQ(cnt, 2);
+    return 0;
+}
+
+int test_state_for_each_all(void) {
+    state_reset();
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth0");
+    long long id1 = state_add("rNET_delay", &p);
+    long long id2 = state_add("rNET_loss", &p);
+    long long id3 = state_add("rCPU_overload", &p);
+    ASSERT_TRUE(id1 > 0 && id2 > 0 && id3 > 0);
+    state_mark_inactive(id2);
+    int cnt = 0;
+    state_for_each_all(visit_count, &cnt);
+    ASSERT_INT_EQ(cnt, 3);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -162,5 +226,8 @@ int main(void) {
     RUN_TEST(test_state_load_missing_is_lost);
     RUN_TEST(test_state_load_corrupt_is_lost);
     RUN_TEST(test_state_save_creates_missing_parent_dir);
+    RUN_TEST(test_state_snapshot_by_uid);
+    RUN_TEST(test_state_for_each_active);
+    RUN_TEST(test_state_for_each_all);
     return TEST_MAIN_RETURN();
 }

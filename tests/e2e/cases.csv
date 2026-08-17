@@ -1,6 +1,6 @@
 id,flow_id,step,module,fault_uid,phase,command,expected_exit_code,expected_json,verify_cmd,verify_assert,provision,precondition,expected_behavior
-E2E-001,FUNC-rCPU_core_hang,0,cpu,rCPU_core_hang,inject,./build/dcat inject rCPU_core_hang --cores=0,0,"""status"":""ok""",ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
-E2E-002,FUNC-rCPU_core_hang,1,cpu,rCPU_core_hang,clean,./build/dcat clean rCPU_core_hang ,0,,ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-001,FUNC-rCPU_core_hang,0,cpu,rCPU_core_hang,inject,./build/dcat inject rCPU_core_hang --cores=0,0,"""status"":""ok""",ls /tmp/dcat-rCPU_core_hang-c*.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-002,FUNC-rCPU_core_hang,1,cpu,rCPU_core_hang,clean,./build/dcat clean rCPU_core_hang ,0,,ls /tmp/dcat-rCPU_core_hang-c*.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
 E2E-003,FUNC-rCPU_core_hang,2,cpu,rCPU_core_hang,query,./build/dcat query,0,,,state_not_contains:rCPU_core_hang,,none,no ghost record after clean
 E2E-004,FUNC-rCPU_core_offline,0,cpu,rCPU_core_offline,inject,./build/dcat inject rCPU_core_offline --cores=1,0,"""status"":""ok""",cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA,eq:0,,root+sysfs_writable+allow_cpu_offline,fault active after inject
 E2E-005,FUNC-rCPU_core_offline,1,cpu,rCPU_core_offline,clean,./build/dcat clean rCPU_core_offline --cores=1,0,,cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA,eq:1,,root+sysfs_writable+allow_cpu_offline,"fault cleaned, system restored"

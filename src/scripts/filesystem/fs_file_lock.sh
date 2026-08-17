@@ -1,5 +1,9 @@
 #!/bin/sh
-# rFS_file_lock: lock a file — noread/nowrite/norw (chmod) or nodelete (chattr +i).
+# rFS_file_lock: lock a file — noread/nowrite/norw (chmod + chattr) or nodelete (chattr +i).
+# noread:  chmod a-r (root 仍可读, 无 chattr 等价物)
+# nowrite: chmod a-w + chattr +i (root 不可写)
+# norw:    chmod a-rw + chattr +i (root 不可写, 仍可读)
+# nodelete: chattr +i (root 不可删/改)
 # inject: apply mode; save original mode + immutable state in sidecar
 # clean:  restore original mode + remove immutable if we added it
 # query:  show current mode/attrs
@@ -20,8 +24,10 @@ case "${DCAT_OP:-inject}" in
         lsattr "$path" 2>/dev/null | grep -q 'i' && imm=1
         case "$mode" in
             noread)   chmod a-r "$path" 2>/dev/null || { echo "chmod a-r failed" >&2; exit 1; };;
-            nowrite)  chmod a-w "$path" 2>/dev/null || { echo "chmod a-w failed" >&2; exit 1; };;
-            norw)     chmod a-rw "$path" 2>/dev/null || { echo "chmod a-rw failed" >&2; exit 1; };;
+            nowrite)  chmod a-w "$path" 2>/dev/null || { echo "chmod a-w failed" >&2; exit 1; }
+                      chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod, chattr needed; need root? not ext fs?)" >&2; };;
+            norw)     chmod a-rw "$path" 2>/dev/null || { echo "chmod a-rw failed" >&2; exit 1; }
+                      chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod, chattr needed; need root? not ext fs?)" >&2; };;
             nodelete) chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (need root? not ext fs?)" >&2; exit 1; };;
         esac
         printf '%s\n%s\n%s\n' "$path" "$orig_mode" "$imm" > "$SIDECAR"

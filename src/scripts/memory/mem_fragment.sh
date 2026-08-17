@@ -8,8 +8,8 @@ PIDFILE="/tmp/dcat-rMEM_fragment.pid"
 
 case "${DCAT_OP:-inject}" in
     inject)
-        blocks=${DCAT_PARAM_BLOCKS:?missing required param: blocks}
-        block_kb=${DCAT_PARAM_BLOCK_KB:?missing required param: block_kb}
+        blocks=${DCAT_PARAM_BLOCKS:-200}
+        block_kb=${DCAT_PARAM_BLOCK_KB:-1024}
         case "$blocks" in *[!0-9]*|"") echo "blocks must be a positive integer" >&2; exit 1;; esac
         [ "$blocks" -lt 1 ] && { echo "blocks must be >= 1" >&2; exit 1; }
         case "$block_kb" in *[!0-9]*|"") echo "block_kb must be a positive integer" >&2; exit 1;; esac

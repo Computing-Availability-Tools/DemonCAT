@@ -9,7 +9,7 @@ SIDECAR_PFX="/tmp/dcat-rDISK_inode_exhaust"
 case "${DCAT_OP:-inject}" in
     inject)
         path=${DCAT_PARAM_PATH:?missing required param: path}
-        count=${DCAT_PARAM_COUNT:?missing required param: count}
+        count=${DCAT_PARAM_COUNT:-100000}
         case "$count" in *[!0-9]*|"") echo "count must be an integer" >&2; exit 1;; esac
         [ -d "$path" ] || { echo "$path is not a directory" >&2; exit 1; }
         safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')
@@ -61,9 +61,9 @@ case "${DCAT_OP:-inject}" in
             dir=$(cat "$SIDECAR" 2>/dev/null)
             if [ -n "$dir" ] && [ -d "$dir" ]; then
                 n=$(find "$dir" -type f 2>/dev/null | wc -l)
-                echo "inode dir $dir: $n files"
-                parent=$(dirname "$dir")
-                df -i "$parent" 2>/dev/null | tail -1
+                echo "inode_exhaust: $n files in $dir"
+                echo "filesystem inode usage:"
+                df -hi "$dir" 2>/dev/null | tail -1 | awk '{printf "  total=%s used=%s free=%s (%s)\n", $2, $3, $4, $5}'
                 exit 0
             else
                 echo "no active inode_exhaust"
@@ -76,7 +76,9 @@ case "${DCAT_OP:-inject}" in
                 dir=$(cat "$sc" 2>/dev/null)
                 if [ -n "$dir" ] && [ -d "$dir" ]; then
                     n=$(find "$dir" -type f 2>/dev/null | wc -l)
-                    echo "inode dir $dir: $n files"
+                    echo "inode_exhaust: $n files in $dir"
+                    echo "filesystem inode usage:"
+                    df -hi "$dir" 2>/dev/null | tail -1 | awk '{printf "  total=%s used=%s free=%s (%s)\n", $2, $3, $4, $5}'
                     active=1
                 fi
             done

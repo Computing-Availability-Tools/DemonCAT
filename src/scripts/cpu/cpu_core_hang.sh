@@ -86,29 +86,34 @@ case "${DCAT_OP:-inject}" in
         ;;
     query)
         spec="${DCAT_PARAM_CORES:-}"
-        found=0
+        active_cores=""
         n=0
         if [ -n "$spec" ]; then
             for c in $(parse_cores "$spec"); do
                 pf="$(pidfile_for "$c")"
                 [ -f "$pf" ] || continue
                 for pid in $(cat "$pf" 2>/dev/null); do
-                    kill -0 "$pid" 2>/dev/null && n=$((n + 1))
+                    if kill -0 "$pid" 2>/dev/null; then
+                        n=$((n + 1))
+                        active_cores="$active_cores $c"
+                    fi
                 done
-                found=1
             done
         else
             for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
                 [ -f "$pf" ] || continue
+                c=$(echo "$pf" | sed 's/.*-c\([0-9]*\)\.pid/\1/')
                 for pid in $(cat "$pf" 2>/dev/null); do
-                    kill -0 "$pid" 2>/dev/null && n=$((n + 1))
+                    if kill -0 "$pid" 2>/dev/null; then
+                        n=$((n + 1))
+                        active_cores="$active_cores $c"
+                    fi
                 done
-                found=1
             done
         fi
-        if [ "$found" = 1 ]; then
-            echo "core_hang: $n RT procs alive"
-            [ "$n" -gt 0 ] && exit 0 || exit 1
+        if [ -n "$active_cores" ]; then
+            echo "core_hang: $n RT procs alive on cores:[$active_cores]"
+            exit 0
         else
             echo "no active core_hang"; exit 1
         fi

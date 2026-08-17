@@ -103,9 +103,11 @@ case "${DCAT_OP:-inject}" in
             safe=$(echo "$DCAT_PARAM_PATH" | tr -c 'a-zA-Z0-9' '_')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             path="$DCAT_PARAM_PATH"
-            stat -c '%A %a %n' "$path" 2>/dev/null
-            lsattr "$path" 2>/dev/null
-            mount | grep -q "on $path " && echo "bind-mounted: yes"
+            mode=$(stat -c '%a' "$path" 2>/dev/null)
+            attrs=""
+            lsattr "$path" 2>/dev/null | grep -q 'i' && attrs="$attrs immutable"
+            mount | grep -q "on $path " && attrs="$attrs bind-mounted(ro)"
+            echo "file_lock: $path mode=$mode$([ -n "$attrs" ] && echo " [$attrs"])"
             [ -f "$SIDECAR" ] && exit 0 || exit 1
         else
             active=0
@@ -113,10 +115,11 @@ case "${DCAT_OP:-inject}" in
                 [ -f "$sc" ] || continue
                 { read -r path; } < "$sc"
                 [ -n "$path" ] || continue
-                echo "file_lock: $path"
-                stat -c '%A %a %n' "$path" 2>/dev/null
-                lsattr "$path" 2>/dev/null
-                mount | grep -q "on $path " && echo "bind-mounted: yes"
+                mode=$(stat -c '%a' "$path" 2>/dev/null)
+                attrs=""
+                lsattr "$path" 2>/dev/null | grep -q 'i' && attrs="$attrs immutable"
+                mount | grep -q "on $path " && attrs="$attrs bind-mounted(ro)"
+                echo "file_lock: $path mode=$mode$([ -n "$attrs" ] && echo " [$attrs"])"
                 active=1
             done
             [ "$active" = 1 ] && exit 0 || exit 1

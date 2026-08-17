@@ -9,7 +9,7 @@ PIDFILE_PFX="/tmp/dcat-rNET_conn_exhaust"
 case "${DCAT_OP:-inject}" in
     inject)
         target=${DCAT_PARAM_TARGET:?missing required param: target}
-        count=${DCAT_PARAM_COUNT:?missing required param: count}
+        count=${DCAT_PARAM_COUNT:-1000}
         case "$count" in *[!0-9]*|"") echo "count must be an integer" >&2; exit 1;; esac
         host=${target%%:*}
         port=${target##*:}

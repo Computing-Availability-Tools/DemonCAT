@@ -53,7 +53,8 @@ time.sleep(1e9)
             pid=$(cat "$PIDFILE")
             cpu=$(ps -o %cpu= -p "$pid" 2>/dev/null | tr -d ' ')
             nproc=$(ps -o nlwp= -p "$pid" 2>/dev/null | tr -d ' ')
-            echo "loop driver pid=$pid cpu=$cpu threads=$nproc"
+            workers=$((nproc > 1 ? nproc - 1 : nproc))
+            echo "loop driver pid=$pid cpu=$cpu workers=$workers"
             exit 0
         else
             echo "no active loop driver"

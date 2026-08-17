@@ -9,7 +9,7 @@
 
 ### 1.1 软件定位
 
-DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU）的**故障注入工具**。其核心价值不是实现每一种故障原语，而是提供**统一命令面、状态跟踪**，把具体故障以**外部脚本 + 声明式配置**的方式接入。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
+DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统）的**故障注入工具**。其核心价值不是实现每一种故障原语，而是提供**统一命令面、状态跟踪**，把具体故障以**外部脚本 + 声明式配置**的方式接入。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
 ### 1.2 技术栈
 
@@ -105,7 +105,7 @@ dcat list
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `module` | 是 | 模块归类：`cpu` / `memory` / `storage` / `network` / `process` / `npu` |
+| `module` | 是 | 模块归类：`cpu` / `memory` / `storage` / `network` / `process` / `npu` / `docker` / `filesystem` / `system` |
 | `desc` | 否 | 一句话描述 |
 | `script` | 是 | 外部脚本路径（绝对或相对；相对路径基于项目根目录自动解析为绝对），须可执行 |
 | `supported_ops` | 是 | 支持的操作子集，逗号分隔：`inject` 或 `inject,clean,query` |
@@ -158,6 +158,35 @@ dcat list
 | `rNPU_mtu_mismatch` | npu | inject,clean,query | chip,size | — |
 | `rNPU_dscp_tc_change` | npu | inject,clean,query | chip,dscp,tc | — |
 | `rNPU_roce_port_change` | npu | inject,clean,query | chip,port | — |
+| `rCPU_quota` | cpu | inject,clean,query | cores,quota_pct | — |
+| `rCPU_freq` | cpu | inject,clean,query | cores,freq_mhz | — |
+| `rCPU_core_hang` | cpu | inject,clean,query | cores | — |
+| `rDISK_part_full` | storage | inject,clean,query | path | size |
+| `rDISK_inode_exhaust` | storage | inject,clean,query | path | count |
+| `rDISK_io_delay` | storage | inject,clean,query | device,delay_ms | — |
+| `rDISK_io_error` | storage | inject,clean,query | device | — |
+| `rNET_corrupt` | network | inject,clean,query | iface,corrupt_pct | — |
+| `rNET_conn_exhaust` | network | inject,clean,query | target | count |
+| `rPROC_fork_bomb` | process | inject,clean,query | count | — |
+| `rPROC_loop` | process | inject,clean,query | threads | — |
+| `rPROC_fd_exhaust` | process | inject,clean,query | count | — |
+| `rMEM_leak` | memory | inject,clean,query | size_mb | — |
+| `rMEM_oom` | memory | inject,clean,query | rate_mb | — |
+| `rMEM_fragment` | memory | inject,clean,query | blocks | block_kb |
+| `rMEM_swap_overload` | memory | inject,clean,query | size_mb | — |
+| `rFS_file_lock` | filesystem | inject,clean,query | path,mode | — |
+| `rFS_iowait_high` | filesystem | inject,clean,query | path | workers |
+| `rDOCKER_kill` | docker | inject,clean,query | container | — |
+| `rDOCKER_mem_overload` | docker | inject,clean,query | container,size | — |
+| `rNPU_pcie_down` | npu | inject,clean,query | npu_id | gen |
+| `rNPU_aic_load` | npu | inject,clean,query | chip | load_pct |
+| `rNPU_aiv_load` | npu | inject,clean,query | chip | load_pct |
+| `rNPU_hbm_load` | npu | inject,clean,query | chip,size | — |
+| `rNPU_chip_reset` | npu | inject,clean,query | npu_id | core |
+| `rNPU_driver_unbind` | npu | inject,query | chip | — |
+| `rNPU_pcie_remove` | npu | inject,query | chip | — |
+| `rSYS_panic` | system | inject | — | — |
+| `rSYS_poweroff` | system | inject | mode | — |
 
 ### 3.4 扩展约定
 
@@ -404,6 +433,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 批次 | 范围 | 状态 |
 |---|---|---|
 | **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 16）+ 测试 | ✅ 已完成 |
+| **v0.2** | 扩展至 58 条故障（9 模块：cpu 5 / storage 5 / network 13 / process 6 / memory 4 / filesystem 2 / docker 2 / npu 19 / system 2）+ 27 ctest / 59 scripts / 507 e2e steps / 254 flows | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
@@ -425,7 +455,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 单元测试 | cli 解析、registry 查找、预检全路径、state 记录 | CTest + mock_executor | test_cli / test_registry / test_precheck / test_state |
 | 执行器 mock | executor_run/run_raw 的 mock 钩子 | CTest | test_executor_mock |
 | 输出格式 | result_t 构建/打印/释放 | CTest | test_output |
-| 表驱动故障 | 33 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
+| 表驱动故障 | 58 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
 | 真实脚本测试 | 2 个示例故障用 mock（不断言真 CPU / 真 tc） | CTest | 同上 |
 | 端到端冒烟 | 真实 dcat 二进制：inject→query→clean→query→无残留 | 手工冒烟 | — |
 
@@ -443,7 +473,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 错误隔离 | 单个故障 inject/clean 失败不影响 dcat 主流程与其他故障 |
 | 资源占用 | 静态二进制；核心路径零动态分配 |
 | 跨平台 | Linux（glibc/musl）；WSL 兼容；不要求 Windows |
-| 可测 | mock_executor + 表驱动；无硬件可测全部 33 故障的下发命令串 |
+| 可测 | mock_executor + 表驱动；无硬件可测全部 58 故障的下发命令串 |
 | 状态持久化 | state 变更后写 `~/.demoncat/state.json`（cJSON 序列化），启动加载恢复 record_id 计数与未清理记录 |
 
 ---

@@ -76,7 +76,7 @@ dcat inject rCPU_overload --help
 
 > **提示**：本文档所有命令均以 `dcat` 形式书写。若未执行上方安装（或无 sudo 权限），请将 `dcat` 替换为 `./build/dcat`。
 
-E2E 测试（CSV 驱动，8 类分类，354 步骤 / 165 流程）详见 [tests/e2e/README.md](tests/e2e/README.md) 与 [docs/DESIGN.md](docs/DESIGN.md)。
+E2E 测试（CSV 驱动，8 类分类，507 步骤 / 254 流程）详见 [tests/e2e/README.md](tests/e2e/README.md) 与 [docs/DESIGN.md](docs/DESIGN.md)。
 
 ## 命令格式
 

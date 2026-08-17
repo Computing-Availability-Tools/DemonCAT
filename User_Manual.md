@@ -90,8 +90,8 @@
   - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
   - [8.13 rNPU_pcie_down](#813-rnpu_pcie_down) — NPU PCIe 降速
   - [8.14 rNPU_aic_load](#814-rnpu_aic_load) — AICore 负载
-  - [8.15 rNPU_aiv_load](#815-rnpu_`aiv_load) — AIVector 负载
-  - [8.16 rNPU_hbm_load](#816-rnpu_`hbm_load) — HBM 负载
+  - [8.15 rNPU_aiv_load](#815-rnpu_aiv_load) — AIVector 负载
+  - [8.16 rNPU_hbm_load](#816-rnpu_hbm_load) — HBM 负载
   - [8.17 rNPU_chip_reset](#817-rnpu_chip_reset) — 芯片复位
   - [8.18 rNPU_driver_unbind](#818-rnpu_driver_unbind) — 驱动解绑
   - [8.19 rNPU_pcie_remove](#819-rnpu_pcie_remove) — PCIe 拔卡

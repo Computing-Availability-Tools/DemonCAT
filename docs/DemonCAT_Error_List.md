@@ -1,6 +1,6 @@
 # DemonCAT 故障目录
 
-当前共 58 条故障，覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统八个模块。
+当前共 58 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统九个模块。
 
 ## CPU 模块（5 条）
 
@@ -85,7 +85,7 @@
 | `rNPU_arp` | chip,action,dev,ip | mac | ARP manipulation (action=add poison / action=del delete) |
 | `rNPU_route` | chip,action,address,netmask | gateway | RoCE route manipulation (action=add / action=del) |
 | `rNPU_iprule` | chip,action,dir,ip | table | ip rule manipulation (action=add / action=del) |
-| `rNPU_iproute` | chip,action,ip,ip_mask | via,dev,table | ip route manipulation (action=add / action=del) |
+| `rNPU_iproute` | chip,action,ip,ip_mask,table | via,dev | ip route manipulation (action=add / action=del) |
 | `rNPU_bw_limit` | chip,bw_limit | — | RoCE bandwidth shaping limit |
 | `rNPU_mtu_mismatch` | chip,size | — | RoCE MTU mismatch |
 | `rNPU_dscp_tc_change` | chip,dscp,tc | — | DSCP-to-TC mapping change |

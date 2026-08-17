@@ -1,6 +1,6 @@
 # DemonCAT 设计文档 (DESIGN)
 
-> 对应 [SPEC.md](SPEC.md)。描述分层架构、数据结构、模块职责、按模块分组的故障详设、关键流程、脚本契约、注入器设计实现、目录结构、构建、测试设计与命令行场景。
+> 对应 [SPEC.md](../SPEC.md)。描述分层架构、数据结构、模块职责、按模块分组的故障详设、关键流程、脚本契约、注入器设计实现、目录结构、构建、测试设计与命令行场景。
 
 ## 目录
 
@@ -448,8 +448,8 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 
 | clean 策略 | 适用 UID | 机制 |
 | --- | --- | --- |
-| 反向操作 | arp_poison, route_add, iprule_add, iproute_add | del 加的 / add 删的 |
-| sidecar 回放 | ip_change, gw_change, netdetect_change, arp_del, route_del, iprule_del, iproute_del, mtu, dscp_tc, roce_port | inject 前 -g 存原值；clean 回放 |
+| 反向操作 | arp, route, iprule, iproute | action=del 反向操作（add 加的 / del 删的） |
+| sidecar 回放 | ip_change, gw_change, netdetect_change, mtu, dscp_tc, roce_port | inject 前 -g 存原值；clean 回放 |
 | 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
 | -cfg recovery | link_down | hccn_tool 内置恢复 |
 
@@ -820,7 +820,7 @@ if (strcmp(op, "inject") == 0) {
 
 ### 8.10 deferred 与约束
 
-- 插件 / legacy injector 路径未接入 reinject（CNF 路径已覆盖 33 故障）。
+- 插件 / legacy injector 路径未接入 reinject（CNF 路径已覆盖 58 故障）。
 - `clean_required` 为空且写 state 的故障（本期无此 fault）：保守判 overlap（任意活动 = 冲突）。
 - 真原子性：两步脚本（先 clean 后 inject）存在窗口，未做事务回滚。
 
@@ -872,10 +872,13 @@ DemonCAT/
 │   │   └── sample/
 │   │       └── sample_plugin.c # 示例插件 rSAMPLE_test
 │   ├── scripts/
-│   │   ├── cpu/               # CPU 模块（2 条）
+│   │   ├── cpu/               # CPU 模块（5 条）
 │   │   │   ├── cpu_overload.sh
-│   │   │   └── cpu_core_offline.sh
-│   │   ├── network/           # 网络模块（11 条）
+│   │   │   ├── cpu_core_offline.sh
+│   │   │   ├── cpu_core_hang.sh
+│   │   │   ├── cpu_freq.sh
+│   │   │   └── cpu_quota.sh
+│   │   ├── network/           # 网络模块（13 条）
 │   │   │   ├── net_delay.sh
 │   │   │   ├── net_loss.sh
 │   │   │   ├── net_reorder.sh
@@ -887,30 +890,48 @@ DemonCAT/
 │   │   │   ├── net_bw_limit.sh
 │   │   │   ├── net_jitter.sh
 │   │   │   └── net_tcp_loss.sh
-│   │   ├── process/           # 进程模块（3 条）
+│   │   ├── process/           # 进程模块（6 条）
 │   │   │   ├── proc_exit.sh
 │   │   │   ├── proc_hang.sh
 │   │   │   └── proc_zstate.sh
-│   │   ├── storage/           # 存储模块（1 条）
+│   │   ├── storage/           # 存储模块（5 条）
 │   │   │   └── disk_write_overload.sh
-│   │   └── npu/               # NPU 模块（16 条）+ _common.sh
+│   │   └── npu/               # NPU 模块（19 条）+ _common.sh
 │   │       ├── _common.sh
 │   │       ├── link_down.sh
 │   │       ├── ip_change.sh
 │   │       ├── gw_change.sh
 │   │       ├── netdetect_change.sh
-│   │       ├── arp_poison.sh
-│   │       ├── arp_del.sh
-│   │       ├── route_add.sh
-│   │       ├── route_del.sh
-│   │       ├── iprule_add.sh
-│   │       ├── iprule_del.sh
-│   │       ├── iproute_add.sh
-│   │       ├── iproute_del.sh
+│   │       ├── arp.sh            # ARP（action=add/del）
+│   │       ├── route.sh          # 路由（action=add/del）
+│   │       ├── iprule.sh         # 策略路由（action=add/del）
+│   │       ├── iproute.sh       # IP 路由（action=add/del）
 │   │       ├── bw_limit.sh
 │   │       ├── mtu_mismatch.sh
 │   │       ├── dscp_tc_change.sh
-│   │       └── roce_port_change.sh
+│   │       ├── roce_port_change.sh
+│   │       ├── pcie_down.sh      # PCIe 降速
+│   │       ├── aic_load.sh       # AICore 负载
+│   │       ├── aiv_load.sh       # AIVector 负载
+│   │       ├── hbm_load.sh       # HBM 内存负载
+│   │       ├── chip_reset.sh     # 芯片复位
+│   │       ├── driver_unbind.sh  # 驱动解绑
+│   │       ├── pcie_remove.sh    # PCIe 设备移除
+│   │       └── _npu_stress.cpp   # ACL 算子压力工具（aicore/aivector/hbm）
+│   │   ├── memory/            # 内存模块（4 条）
+│   │   │   ├── mem_leak.sh
+│   │   │   ├── mem_oom.sh
+│   │   │   ├── mem_swap_overload.sh
+│   │   │   └── mem_fragment.sh
+│   │   ├── filesystem/        # 文件系统模块（2 条）
+│   │   │   ├── fs_file_lock.sh
+│   │   │   └── fs_iowait_high.sh
+│   │   ├── docker/            # Docker 模块（2 条）
+│   │   │   ├── docker_kill.sh
+│   │   │   └── docker_mem_overload.sh
+│   │   └── system/            # 系统模块（2 条）
+│   │       ├── sys_panic.sh
+│   │       └── sys_poweroff.sh
 │   └── web/                   # Web 控制台静态前端（dcat serve 内置）
 │       ├── index.html
 │       ├── app.js
@@ -939,7 +960,7 @@ DemonCAT/
     ├── test_faults_cpu_storage.c # Tier 1: 2 条 CPU + 1 条存储
     ├── test_faults_network.c      # Tier 1: 11 条网络
     ├── test_faults_process.c      # Tier 1: 3 条进程
-    ├── test_faults_npu.c          # Tier 1: 16 条 NPU
+    ├── test_faults_npu.c          # Tier 1: 19 条 NPU
     ├── check_syntax.sh            # Tier 2: sh -n 语法检查
     ├── test_smoke_cpu.c          # Tier 3: CPU 真实执行
     ├── test_smoke_process.c      # Tier 3: 进程真实执行
@@ -948,7 +969,7 @@ DemonCAT/
     ├── smoke_root.sh             # root 级自动化测试
     └── e2e/                      # E2E 测试框架
         ├── README.md
-        ├── cases.csv             # 354 步骤 / 165 流程
+        ├── cases.csv             # 507 步骤 / 254 流程
         ├── gen_cases.py          # 用例生成
         └── run_e2e.py            # 执行框架
 ```
@@ -997,7 +1018,7 @@ DemonCAT/
 | rPROC_zstate | ✓ | ✓ | ✓ | 脚本 spawn 僵尸父进程 + pidfile | 可选 |
 | rCPU_core_offline | ✓ | ✓ | ✓ | 命令串含 `echo 0 > .../online` | 可选（需 root） |
 | rDISK_write_overload | ✓ | ✓ | ✓ | 脚本 spawn dd/fio + pidfile；clean 读 pidfile kill | 可选 |
-| 全部 16 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
+| 全部 19 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
 | 注入器（builtin_injectors[]） | — | — | — | 本期为空，无覆盖；启用后用 `inj->op` 返回值断言 | — |
 
 ### 11.4 真实环境冒烟
@@ -1107,6 +1128,6 @@ dcat serve --port 8080 --allow-write
 - **决策11（统一同步阻塞执行）**：本期不区分 background/sync 模式，不实现 `executor_spawn`、`executor_kill`、`injection_record_t.bg_pid`。所有故障 inject/clean/query 均同步阻塞执行：cnf 故障用 `executor_run` / `executor_run_raw`，注入器故障直接调函数指针。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取清理。
 - **决策12（注入器接口设计完成，实现留位）**：`injector_t` 接口（uid + 4 函数指针）、`builtin_injectors[]` 注册表、`injector_find` 查找、dispatch 回退路由均已设计（§7）。本期 `builtin_injectors[]` 为空数组，所有故障走 cnf+脚本路径；待出现脚本无法实现的需求（精确定时/二进制协议/进程内状态）时启用。
 - **决策13（参数匹配与 clean）**：`injection_record_t` 存储 inject 时的 `params`，clean 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本，逐条执行；某条失败时停止，剩余不清理。**clean 和 query（带 uid）各自有独立的 `clean_required` / `query_required`：precheck 按 op 校验对应 required 列表齐全，缺参数被拒绝（退出码 3）；该 op 无 required 参数时允许空参数。** 不再有"至少一个参数"硬编码检查——是否需要参数完全由各 op 的 `*_required` 列表决定（precheck 自然处理）。query（不带 uid）查全部活跃记录不受此限制。所有命令（inject / clean / query）均拒绝未在对应 op 的 `*_required` / `*_optional` 中声明的参数（退出码 3），不做透传。
-- **决策14（Reinject 默认拒绝 + --force 原子替换）**：对同一资源的重复注入默认拒绝（退出码 5），需 `--force` 才原子替换（逐条 clean 旧记录后重新 inject）。资源键 = `clean_required` 各参数值（`cores` 走集合交集，其余走精确串等，多参键取各参精确 AND）；inject-only 故障无 state 天然免检。CNF 路径覆盖 33 故障；插件 / legacy injector 路径 deferred。CPU `cores` 加法并集语义改为默认拒绝（有意 breaking）。详见 §8。
+- **决策14（Reinject 默认拒绝 + --force 原子替换）**：对同一资源的重复注入默认拒绝（退出码 5），需 `--force` 才原子替换（逐条 clean 旧记录后重新 inject）。资源键 = `clean_required` 各参数值（`cores` 走集合交集，其余走精确串等，多参键取各参精确 AND）；inject-only 故障无 state 天然免检。CNF 路径覆盖 58 故障；插件 / legacy injector 路径 deferred。CPU `cores` 加法并集语义改为默认拒绝（有意 breaking）。详见 §8。
 - **决策15（动态插件层）**：dispatch 第三层 `dlopen` 加载 `.so` 插件（`dcat_plugin_t` 接口 + ABI 版本门控 + per-op 参数声明 + 生命周期钩子）。三层优先级：cnf > 编译注入器 > 动态插件。默认插件目录 `<root>/plugins`，`--plugins <dir>` 覆盖。详见 [Dynamic_Plugin_Implement.md](Dynamic_Plugin_Implement.md) + §3.13。
 - **决策16（Web 控制平面 serve）**：`dcat serve` 内置 HTTP 控制平面 + 静态前端，把故障目录/活跃注入/历史记录搬到浏览器。默认只读（`--allow-write` 开写），`realpath()` 路径穿越防护 + `%2e` 编码检测。详见 §3.12 + SPEC §12。

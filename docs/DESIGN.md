@@ -1121,7 +1121,7 @@ dcat serve --port 8080 --allow-write
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
 - **决策5（必/选参数区分）**：按 op 分 required/optional 字段（`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`）；precheck 按 op 取对应 `*_required` 校验，`*_optional` 缺省走脚本默认（§2 + §3.5 + SPEC §3.3）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1 起步（核心框架 + 58 条故障），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1.0 起步（核心框架 + 33 条故障），batch2 扩展至 58 条（9 模块），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。

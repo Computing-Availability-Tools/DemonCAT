@@ -46,7 +46,7 @@ CPU 5 / 存储 5 / 网络 13 / 进程 6 / 内存 4 / 文件系统 2 / Docker 2 /
 #### Web 控制台（dcat serve）
 
 - HTTP 长驻服务，浏览器远程查看 active/history/catalog + 注入/清理故障
-- 默认只读（`--allow-write` 开启写操作），绑定 `127.0.0.1`（SSH 隧道访问）
+- 默认只读（`--allow-write` 开启写操作），绑定 `0.0.0.0`（建议用 `--bind 127.0.0.1` 限制为本地访问）
 - 支持 `--port` / `--bind` / `--webroot` 参数
 - 安全加固：`realpath()` 路径穿越防护 + `%2e` URL 编码检测 + `--port` CLI 校验
 

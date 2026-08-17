@@ -988,7 +988,7 @@ dcat clean rPROC_loop
 **使用示例**:
 ```bash
 # 耗尽到 RLIMIT_NOFILE 上限
-dcat inject rPROC_fd_exhaust
+dcat inject rPROC_fd_exhaust --count=1000
 dcat query rPROC_fd_exhaust
 dcat clean rPROC_fd_exhaust
 
@@ -2008,7 +2008,7 @@ dcat inject rSYS_poweroff --mode=1
 ### 10.2 命令
 
 ```bash
-# 只读模式（默认），绑定 127.0.0.1
+# 只读模式（默认），绑定 0.0.0.0（建议 --bind 127.0.0.1 限制本地）
 dcat serve --port 8080
 
 # 可写模式，绑定所有网卡

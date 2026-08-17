@@ -9,7 +9,7 @@
 | `rCPU_overload` | cores | load_pct | CPU overload (multi-core burn, pure user-space) |
 | `rCPU_core_offline` | cores | — | CPU core offline via sysfs |
 | `rCPU_core_hang` | cores | — | CPU core hang (isolating core, migration stop) |
-| `rCPU_freq` | cores | freq_mhz | CPU frequency limit (cpufreq scaling) |
+| `rCPU_freq` | cores,freq_mhz | — | CPU frequency limit (cpufreq scaling) |
 | `rCPU_quota` | cores,quota_pct | — | CPU core max utilization via cgroup |
 
 ## 存储模块（5 条）
@@ -19,7 +19,7 @@
 | `rDISK_write_overload` | device | workers,size_mb | Disk write IO overload (dd writers) |
 | `rDISK_part_full` | path | size | Partition fill (dd file creation) |
 | `rDISK_inode_exhaust` | path | count | Inode exhaustion (small file creation) |
-| `rDISK_io_delay` | device | delay_ms | Disk IO delay (device-mapper delay) |
+| `rDISK_io_delay` | device,delay_ms | — | Disk IO delay (device-mapper delay) |
 | `rDISK_io_error` | device | — | Disk IO error (device-mapper error) |
 
 ## 网络模块（13 条）
@@ -103,4 +103,4 @@
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
 | `rSYS_panic` | — | — | 系统崩溃 (kernel panic, 导致系统宕机) |
-| `rSYS_poweroff` | — | — | 系统关机 (直接断电关机) |
+| `rSYS_poweroff` | mode | — | 系统关机 (直接断电关机) |

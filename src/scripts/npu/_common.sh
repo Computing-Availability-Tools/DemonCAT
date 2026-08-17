@@ -81,13 +81,16 @@ npu_list_chips() {
             case "$c" in
                 *-*)
                     start=${c%%-*}; end=${c##*-}
+                    case "$start" in *[!0-9]*|"") continue;; esac
+                    case "$end"   in *[!0-9]*|"") continue;; esac
                     n=$start; while [ "$n" -le "$end" ]; do
-                        hccn_tool -i $n -link -g 2>/dev/null | grep -q 'link' && echo "$n"
+                        hccn_tool -i "$n" -link -g 2>/dev/null | grep -q 'link' && echo "$n"
                         n=$((n + 1))
                     done
                     ;;
                 *)
-                    hccn_tool -i $c -link -g 2>/dev/null | grep -q 'link' && echo "$c"
+                    case "$c" in *[!0-9]*|"") continue;; esac
+                    hccn_tool -i "$c" -link -g 2>/dev/null | grep -q 'link' && echo "$c"
                     ;;
             esac
         done

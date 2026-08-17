@@ -457,7 +457,7 @@ static result_t *dispatch_query_all(void) {
             if (jparams) {
                 cJSON *jp;
                 cJSON_ArrayForEach(jp, jparams) {
-                    if (jp->string && jp->valuestring)
+                    if (jp->string && jp->valuestring && plen < (int)sizeof(pstr) - 1)
                         plen += snprintf(pstr + plen, sizeof(pstr) - plen, "%s=%s ", jp->string, jp->valuestring);
                 }
             }

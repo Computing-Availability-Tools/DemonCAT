@@ -59,7 +59,9 @@ jobs:
           echo "head_sha=$SHA" >> "$GITHUB_OUTPUT"
       - id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT(非 GITHUB_TOKEN):fork PR 的 issue_comment 下 GITHUB_TOKEN 无 checks:write,
+          # gh api 读 check-run 虽只需 read,但统一用 PAT 避免权限不一致 + PAT 创建的 check-run 要能读到。
+          GH_TOKEN: ${{ secrets.GH_PAT }}
           SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           set -eu
@@ -77,6 +79,9 @@ jobs:
         if: steps.check.outputs.proceed == 'true'
         uses: actions/github-script@v7
         with:
+          # PAT(非默认 GITHUB_TOKEN):fork PR issue_comment 下 GITHUB_TOKEN 无 checks:write → checks.create 403。
+          # PAT(public_repo)有 checks:write,能创建 check-run 占位。
+          github-token: ${{ secrets.GH_PAT }}
           script: |
             const sha = '${{ steps.pr.outputs.head_sha }}';
             const res = await github.rest.checks.create({
@@ -119,6 +124,7 @@ jobs:
     steps:
       - uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_PAT }}
           script: |
             const id = Number('${{ needs.gate.outputs.check_run_id }}');
             const result = '${{ needs.review.result }}';

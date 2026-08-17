@@ -1,14 +1,18 @@
 #!/bin/sh
-# rFS_file_lock: lock a file — noread/nowrite/norw (chmod + chattr) or nodelete (chattr +i).
-# noread:  chmod a-r (root 仍可读, 无 chattr 等价物)
-# nowrite: chmod a-w + chattr +i (root 不可写)
-# norw:    chmod a-rw + chattr +i (root 不可写, 仍可读)
-# nodelete: chattr +i (root 不可删/改)
-# inject: apply mode; save original mode + immutable state in sidecar
-# clean:  restore original mode + remove immutable if we added it
+# rFS_file_lock: lock a file for ALL users including root.
+# noread:   mount --bind /dev/null (reads return empty for all users incl root)
+# nowrite:  chmod a-w + chattr +i (writes fail for all users incl root)
+# norw:     chattr +i + mount --bind -o ro <empty_file> (reads empty, writes fail EROFS)
+# nodelete: chattr +i (delete/rename fail for all users incl root)
+# Note: /dev/null is a device file — writes to it always "succeed" (discarded),
+# so for norw we use a regular 0-byte file with -o ro to make writes fail.
+# Directories: fall back to chmod + chattr (mount only works on files)
+# inject: apply mode; save original state in sidecar
+# clean:  umount (if mounted) + remove chattr + restore chmod
 # query:  show current mode/attrs
 
 SIDECAR="/tmp/dcat-rFS_file_lock.sidecar"
+EMPTY_RO="/tmp/dcat-empty-ro"
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -22,26 +26,48 @@ case "${DCAT_OP:-inject}" in
         orig_mode=$(stat -c %a "$path" 2>/dev/null)
         imm=0
         lsattr "$path" 2>/dev/null | grep -q 'i' && imm=1
+        is_file=0
+        [ -f "$path" ] && is_file=1
+        mounted=0
+
         case "$mode" in
-            noread)   chmod a-r "$path" 2>/dev/null || { echo "chmod a-r failed" >&2; exit 1; };;
-            nowrite)  chmod a-w "$path" 2>/dev/null || { echo "chmod a-w failed" >&2; exit 1; }
-                      chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod, chattr needed; need root? not ext fs?)" >&2; };;
-            norw)     chmod a-rw "$path" 2>/dev/null || { echo "chmod a-rw failed" >&2; exit 1; }
-                      chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod, chattr needed; need root? not ext fs?)" >&2; };;
-            nodelete) chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (need root? not ext fs?)" >&2; exit 1; };;
+            noread)
+                chmod a-r "$path" 2>/dev/null || { echo "chmod a-r failed" >&2; exit 1; }
+                if [ "$is_file" = 1 ]; then
+                    mount --bind /dev/null "$path" 2>/dev/null && mounted=1
+                fi
+                ;;
+            nowrite)
+                chmod a-w "$path" 2>/dev/null || { echo "chmod a-w failed" >&2; exit 1; }
+                chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod; chattr needs root + ext/xfs fs)" >&2; }
+                ;;
+            norw)
+                chmod a-rw "$path" 2>/dev/null || { echo "chmod a-rw failed" >&2; exit 1; }
+                chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod; chattr needs root + ext/xfs fs)" >&2; }
+                if [ "$is_file" = 1 ]; then
+                    : > "$EMPTY_RO" 2>/dev/null
+                    mount --bind -o ro "$EMPTY_RO" "$path" 2>/dev/null && mounted=1
+                fi
+                ;;
+            nodelete)
+                chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (need root? not ext/xfs fs?)" >&2; exit 1; }
+                ;;
         esac
-        printf '%s\n%s\n%s\n' "$path" "$orig_mode" "$imm" > "$SIDECAR"
-        echo "locked $path mode=$mode (was mode=$orig_mode imm=$imm)"
+        printf '%s\n%s\n%s\n%s\n' "$path" "$orig_mode" "$imm" "$mounted" > "$SIDECAR"
+        echo "locked $path mode=$mode (was mode=$orig_mode imm=$imm mounted=$mounted)"
         ;;
     clean)
         [ -f "$SIDECAR" ] || { echo "no active file_lock" >&2; exit 1; }
-        { read -r path; read -r orig_mode; read -r imm; } < "$SIDECAR"
+        { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$SIDECAR"
+        if [ "$mounted" = 1 ]; then
+            umount "$path" 2>/dev/null || true
+        fi
         if [ "$imm" = 0 ]; then
             chattr -i "$path" 2>/dev/null || true
         fi
         [ -n "$orig_mode" ] && chmod "$orig_mode" "$path" 2>/dev/null || true
         rm -f "$SIDECAR"
-        echo "cleaned file_lock (restored $path mode=$orig_mode imm=$imm)"
+        echo "cleaned file_lock (restored $path mode=$orig_mode imm=$imm mounted=$mounted)"
         ;;
     query)
         path="${DCAT_PARAM_PATH:-}"
@@ -49,6 +75,7 @@ case "${DCAT_OP:-inject}" in
         if [ -z "$path" ]; then echo "no path" >&2; exit 1; fi
         stat -c '%A %a %n' "$path" 2>/dev/null
         lsattr "$path" 2>/dev/null
+        mount | grep -q "on $path " && echo "bind-mounted: yes"
         [ -f "$SIDECAR" ] && exit 0 || exit 1
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;

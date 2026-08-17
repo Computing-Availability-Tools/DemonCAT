@@ -1,12 +1,11 @@
 #!/bin/sh
 # rDOCKER_mem_overload: allocate <size> RAM inside a container via docker exec.
 # size 支持单位: 512 (=512MB), 512M, 2G, 1G, 256K
-# inject: docker exec <container> <python3/perl holder> &; pidfile stores host docker-exec PID
-# clean:  kill host docker-exec PID + kill container-side holder process
-# query:  check docker-exec PID alive + docker stats
+# inject: docker exec <container> <python3/perl holder> &; per-container pidfile
+# clean:  kill host docker-exec PID + kill container-side holder (glob all if no --container)
+# query:  check all active docker-exec PIDs + docker stats
 
-PIDFILE="/tmp/dcat-rDOCKER_mem_overload.pid"
-SIDECAR="/tmp/dcat-rDOCKER_mem_overload.sidecar"
+PIDFILE_PFX="/tmp/dcat-rDOCKER_mem_overload"
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -14,6 +13,10 @@ case "${DCAT_OP:-inject}" in
         size=${DCAT_PARAM_SIZE:?missing required param: size}
         command -v docker >/dev/null 2>&1 || { echo "docker not installed" >&2; exit 1; }
         docker inspect "$ctr" >/dev/null 2>&1 || { echo "container $ctr not found" >&2; exit 1; }
+
+        safe=$(echo "$ctr" | tr '/:' '__')
+        PIDFILE="${PIDFILE_PFX}-${safe}.pid"
+        SIDECAR="${PIDFILE_PFX}-${safe}.sidecar"
 
         if docker exec "$ctr" sh -c 'command -v python3' >/dev/null 2>&1; then
             docker exec "$ctr" python3 -c '
@@ -44,25 +47,48 @@ select(undef, undef, undef, undef);
         echo "docker mem_overload started in $ctr (size=${size}, host exec pid=$pid)"
         ;;
     clean)
-        if [ -f "$PIDFILE" ]; then
+        ctr="${DCAT_PARAM_CONTAINER:-}"
+        if [ -n "$ctr" ]; then
+            safe=$(echo "$ctr" | tr '/:' '__')
+            PIDFILE="${PIDFILE_PFX}-${safe}.pid"
+            SIDECAR="${PIDFILE_PFX}-${safe}.sidecar"
+            if [ ! -f "$PIDFILE" ]; then
+                echo "no active docker_mem_overload for $ctr" >&2; exit 1
+            fi
             pid=$(cat "$PIDFILE")
             kill -9 "$pid" 2>/dev/null || true
-            ctr=$(cat "$SIDECAR" 2>/dev/null)
-            if [ -n "$ctr" ]; then
-                docker exec "$ctr" sh -c 'me=$$; for d in /proc/[0-9]*; do pid=${d##*/}; [ "$pid" = "$me" ] && continue; tr "\0" " " < "$d/cmdline" 2>/dev/null | grep -q "select.undef\|time.sleep" && kill -9 "$pid" 2>/dev/null; done' 2>/dev/null || true
-            fi
+            docker exec "$ctr" sh -c 'me=$$; for d in /proc/[0-9]*; do pid=${d##*/}; [ "$pid" = "$me" ] && continue; tr "\0" " " < "$d/cmdline" 2>/dev/null | grep -q "select.undef\|time.sleep" && kill -9 "$pid" 2>/dev/null; done' 2>/dev/null || true
             rm -f "$PIDFILE" "$SIDECAR"
             echo "cleaned docker_mem_overload (host exec pid=$pid, container=$ctr)"
         else
-            echo "no active docker_mem_overload" >&2; exit 1
+            found=0
+            for pf in ${PIDFILE_PFX}-*.pid; do
+                [ -f "$pf" ] || continue
+                pid=$(cat "$pf")
+                c=$(cat "${pf%.pid}.sidecar" 2>/dev/null)
+                kill -9 "$pid" 2>/dev/null || true
+                [ -n "$c" ] && docker exec "$c" sh -c 'me=$$; for d in /proc/[0-9]*; do pid=${d##*/}; [ "$pid" = "$me" ] && continue; tr "\0" " " < "$d/cmdline" 2>/dev/null | grep -q "select.undef\|time.sleep" && kill -9 "$pid" 2>/dev/null; done' 2>/dev/null || true
+                rm -f "$pf" "${pf%.pid}.sidecar"
+                found=1
+            done
+            [ "$found" = 1 ] && echo "cleaned all docker_mem_overload" || { echo "no active docker_mem_overload" >&2; exit 1; }
         fi
         ;;
     query)
-        if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-            pid=$(cat "$PIDFILE")
-            echo "docker_mem_overload host exec pid=$pid"
-            ctr=${DCAT_PARAM_CONTAINER:-$(cat "$SIDECAR" 2>/dev/null)}
-            [ -n "$ctr" ] && docker stats --no-stream --format "{{.MemUsage}}" "$ctr" 2>/dev/null
+        found=0
+        for pf in ${PIDFILE_PFX}-*.pid; do
+            [ -f "$pf" ] || continue
+            pid=$(cat "$pf")
+            if kill -0 "$pid" 2>/dev/null; then
+                c=$(cat "${pf%.pid}.sidecar" 2>/dev/null)
+                echo "docker_mem_overload host exec pid=$pid container=$c"
+                [ -n "$c" ] && docker stats --no-stream --format "{{.MemUsage}}" "$c" 2>/dev/null
+                found=1
+            else
+                rm -f "$pf" "${pf%.pid}.sidecar"
+            fi
+        done
+        if [ "$found" = 1 ]; then
             exit 0
         else
             echo "no active docker_mem_overload"

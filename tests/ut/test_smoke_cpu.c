@@ -1,4 +1,4 @@
-/* tests/test_smoke_cpu.c — Tier 3: real execution tests for CPU faults */
+/* tests/ut/test_smoke_cpu.c — Tier 3: real execution tests for CPU faults */
 #define _GNU_SOURCE
 #include "core/config.h"
 #include "core/registry.h"

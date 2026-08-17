@@ -1,4 +1,4 @@
-/* tests/test_smoke_storage.c — Tier 3: real execution tests for storage + port_occupy */
+/* tests/ut/test_smoke_storage.c — Tier 3: real execution tests for storage + port_occupy */
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"

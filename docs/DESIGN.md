@@ -853,22 +853,19 @@ CAT/
 │   ├── user_manual.md          # 用户手册
 │   └── manual_test_guide.md    # 高危故障手动测试指南
 └── tests/
-    ├── test_output.c
-    ├── test_registry.c
-    ├── test_executor_mock.c
-    ├── test_precheck.c
-    ├── test_state.c
-    ├── test_cli.c
-    ├── test_faults_common.h     # 通用 mock + 断言宏
-    ├── test_faults_cpu_storage.c  # 3 条 CPU + 1 条存储
-    ├── test_faults_network.c      # 11 条网络
-    ├── test_faults_process.c      # 3 条进程
-    ├── test_faults_npu.c          # 19 条 NPU
+    ├── ut/                        # ctest 单元 + 冒烟测试 (C 实现)
+    │   ├── test.h                 # 测试框架宏
+    │   ├── test_faults_common.h   # 通用 mock + 断言宏
+    │   ├── test_*.c               # Tier 0 核心单元测试
+    │   ├── test_faults_*.c        # Tier 1 mock 表驱动 (CPU/存储/网络/进程/NPU)
+    │   ├── test_smoke_cpu.c       # CPU 真实执行 (2 条)
+    │   ├── test_smoke_process.c   # 进程真实执行 (3 条)
+    │   ├── test_smoke_storage.c   # 存储+端口真实执行 (2 条)
+    │   ├── test_smoke_state_lost.c # state.json 丢失后 stateless clean
+    │   └── smoke_root.sh          # root 级自动化测试
     ├── check_syntax.sh            # sh -n 全脚本语法检查
-    ├── smoke_root.sh             # root 级自动化测试
-    ├── test_smoke_cpu.c          # CPU 真实执行 (2 条)
-    ├── test_smoke_process.c      # 进程真实执行 (3 条)
-    └── test_smoke_storage.c      # 存储+端口真实执行 (2 条)
+    ├── ctest_summary.py           # CI 单测摘要解析
+    └── e2e/                       # E2E (CSV 驱动, run_e2e.py + cases.csv)
 ```
 
 > `src/injectors/` 目录含 `injector.h`（接口定义，§7.2）与 `injectors.c`（注册表 + 查找，§7.4）。本期 `builtin_injectors[]` 为空数组。

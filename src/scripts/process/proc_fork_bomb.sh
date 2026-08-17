@@ -39,7 +39,10 @@ case "${DCAT_OP:-inject}" in
         if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
             pid=$(cat "$PIDFILE")
             n=$(pgrep -P "$pid" 2>/dev/null | wc -l)
-            echo "fork_bomb supervisor pid=$pid children=$n"
+            maxu=$(awk '/processes/{print $4}' /proc/self/limits 2>/dev/null)
+            cur=$(ps -u "$(id -un)" --no-headers 2>/dev/null | wc -l)
+            pidmax=$(cat /proc/sys/kernel/pid_max 2>/dev/null)
+            echo "fork_bomb supervisor pid=$pid children=$n / per-user proc limit=$maxu (currently $cur) / system pid_max=$pidmax"
             exit 0
         else
             echo "no active fork_bomb"

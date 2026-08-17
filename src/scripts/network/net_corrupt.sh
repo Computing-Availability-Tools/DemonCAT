@@ -50,8 +50,14 @@ case "${DCAT_OP:-inject}" in
             iface=$(cat "$SIDECAR" 2>/dev/null)
             [ -n "$iface" ] || { echo "no active net_corrupt"; exit 1; }
             out=$(tc -o qdisc show dev "$iface" 2>/dev/null)
-            echo "$out"
-            echo "$out" | grep -q "netem" && echo "$out" | grep -q "corrupt" && exit 0 || exit 1
+            if echo "$out" | grep -q "netem" && echo "$out" | grep -q "corrupt"; then
+                pct=$(echo "$out" | grep -oE 'corrupt [0-9]+%' | grep -oE '[0-9]+' | head -1)
+                echo "net_corrupt: ${pct:-?}% of packets being corrupted on $iface (netem qdisc)"
+                exit 0
+            else
+                echo "no active net_corrupt on $iface"
+                exit 1
+            fi
         else
             active=0
             for f in "${SIDECAR_PFX}-"*.sidecar; do
@@ -60,11 +66,12 @@ case "${DCAT_OP:-inject}" in
                 [ -n "$iface" ] || continue
                 out=$(tc -o qdisc show dev "$iface" 2>/dev/null)
                 if echo "$out" | grep -q "netem" && echo "$out" | grep -q "corrupt"; then
-                    echo "$iface: $out"
+                    pct=$(echo "$out" | grep -oE 'corrupt [0-9]+%' | grep -oE '[0-9]+' | head -1)
+                    echo "$iface: ${pct:-?}% packets corrupted"
                     active=1
                 fi
             done
-            [ "$active" -eq 1 ] && exit 0 || exit 1
+            [ "$active" -eq 1 ] && exit 0 || { echo "no active net_corrupt"; exit 1; }
         fi
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;

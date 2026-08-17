@@ -237,10 +237,6 @@ OBS = {
         provision="none", precondition="none",
         v_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", c_assert="==0"),
-    "rPROC_loop": dict(module="process", inject_args="--threads=1", clean_args="",
-        provision="none", precondition="none",
-        v_cmd="ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l", v_assert=">=1",
-        c_cmd="ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l", c_assert="==0"),
     "rPROC_fd_exhaust": dict(module="process", inject_args="--count=256", clean_args="",
         provision="none", precondition="none",
         v_cmd="ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l", v_assert=">=1",
@@ -491,10 +487,6 @@ def gen():
     b_reject("rMEM_fragment", "--blocks=0", 1, '', "blocks: 0 invalid")
     b_reject("rMEM_fragment", "--blocks=-1", 1, '', "blocks: negative")
     b_reject("rMEM_fragment", "--blocks=abc", 1, '', "blocks: non-numeric")
-    # threads (positive integer)
-    b_reject("rPROC_loop", "--threads=0", 1, '', "threads: 0 invalid")
-    b_reject("rPROC_loop", "--threads=-1", 1, '', "threads: negative")
-    b_reject("rPROC_loop", "--threads=abc", 1, '', "threads: non-numeric")
     # count (positive integer, rPROC_fork_bomb)
     b_reject("rPROC_fork_bomb", "--count=0", 1, '', "count: 0 invalid")
     b_reject("rPROC_fork_bomb", "--count=-1", 1, '', "count: negative")

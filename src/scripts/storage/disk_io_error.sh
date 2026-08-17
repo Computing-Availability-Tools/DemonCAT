@@ -18,8 +18,9 @@ case "${DCAT_OP:-inject}" in
         dmsetup info "$dm" >/dev/null 2>&1 && { echo "$dm already exists" >&2; exit 1; }
         size=$(blockdev --getsize "$dev" 2>/dev/null) || { echo "blockdev --getsize failed" >&2; exit 1; }
         echo "0 $size error" | dmsetup create "$dm" 2>/dev/null || { echo "dmsetup create failed (need root?)" >&2; exit 1; }
+        dmsetup mknodes "$dm" 2>/dev/null || true
         printf '%s\n' "$dm" > "$SIDECAR"
-        echo "created dm-error $dm over $dev (all IO returns EIO)"
+        echo "created dm-error $dm over $dev (all IO returns EIO, dev node /dev/mapper/$dm)"
         ;;
 
     clean)

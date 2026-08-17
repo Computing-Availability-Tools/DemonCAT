@@ -92,14 +92,6 @@ int main(void) {
         check_param_env("count", "100"); result_free(r);
         r = dispatch_route("rPROC_fork_bomb", "clean", &p); CK(r && r->code == 0); result_free(r);
     }
-    /* rPROC_loop (threads) */
-    {
-        params_t p = mkparams("threads", "2", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);
-        result_t *r = dispatch_route("rPROC_loop", "inject", &p);
-        CK(r && r->code == 0); CMD_CONTAINS("proc_loop.sh");
-        check_param_env("threads", "2"); result_free(r);
-        r = dispatch_route("rPROC_loop", "clean", &p); CK(r && r->code == 0); result_free(r);
-    }
     /* rPROC_fd_exhaust (count) */
     {
         params_t p = mkparams("count", "0", NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL);

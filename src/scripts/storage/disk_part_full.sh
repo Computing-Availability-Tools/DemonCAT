@@ -27,6 +27,7 @@ case "${DCAT_OP:-inject}" in
         safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         f="$path/dcat.fillfile.$$"
+        printf '%s\n' "$f" > "$SIDECAR"
         if [ -n "$size" ]; then
             falloc_size=$size
             case "$size" in *[0-9]) falloc_size="${size}M";; esac
@@ -40,7 +41,6 @@ case "${DCAT_OP:-inject}" in
             # 无 size: 持续填充直至 ENOSPC
             dd if=/dev/zero of="$f" bs=1M 2>/dev/null || true
         fi
-        printf '%s\n' "$f" > "$SIDECAR"
         echo "fill file created: $f (size=${size:-fill-to-full})"
         ;;
     clean)

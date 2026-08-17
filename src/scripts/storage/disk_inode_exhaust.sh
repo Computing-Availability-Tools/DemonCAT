@@ -16,12 +16,12 @@ case "${DCAT_OP:-inject}" in
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         dir="$path/dcat.inodes.$$"
         mkdir -p "$dir" || { echo "mkdir $dir failed" >&2; exit 1; }
+        printf '%s\n' "$dir" > "$SIDECAR"
         i=0; ok=0
         while [ "$count" -eq 0 ] || [ "$i" -lt "$count" ]; do
             if ( : > "$dir/f$i" ) 2>/dev/null; then ok=$((ok + 1)); else break; fi
             i=$((i + 1))
         done
-        printf '%s\n' "$dir" > "$SIDECAR"
         echo "created $ok files in $dir (requested ${count:-fill-to-ENOSPC})"
         ;;
 

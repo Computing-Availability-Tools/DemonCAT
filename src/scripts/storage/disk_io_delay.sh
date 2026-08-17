@@ -20,8 +20,9 @@ case "${DCAT_OP:-inject}" in
         dmsetup info "$dm" >/dev/null 2>&1 && { echo "$dm already exists" >&2; exit 1; }
         size=$(blockdev --getsize "$dev" 2>/dev/null) || { echo "blockdev --getsize failed" >&2; exit 1; }
         echo "0 $size delay $dev 0 $delay" | dmsetup create "$dm" 2>/dev/null || { echo "dmsetup create failed (need root? dm-delay module?)" >&2; exit 1; }
+        dmsetup mknodes "$dm" 2>/dev/null || true
         printf '%s\n' "$dm" > "$SIDECAR"
-        echo "created dm-delay $dm over $dev (delay=${delay}ms)"
+        echo "created dm-delay $dm over $dev (delay=${delay}ms, dev node /dev/mapper/$dm)"
         ;;
 
     clean)

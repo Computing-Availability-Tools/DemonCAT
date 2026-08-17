@@ -48,7 +48,8 @@ time.sleep(1e9)
         if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
             pid=$(cat "$PIDFILE")
             n=$(ls -1 /proc/$pid/fd 2>/dev/null | wc -l)
-            echo "fd_exhaust driver pid=$pid open_fds=$n"
+            lim=$(awk '/open files/{print "soft="$4" hard="$5}' /proc/$pid/limits 2>/dev/null)
+            echo "fd_exhaust driver pid=$pid open_fds=$n / RLIMIT_NOFILE: $lim"
             exit 0
         else
             echo "no active fd_exhaust"

@@ -10,3 +10,8 @@ tests/e2e/report.md
 tests/e2e/e2e_run.log
 tests/e2e/failures_*.log
 build/ctest_run.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

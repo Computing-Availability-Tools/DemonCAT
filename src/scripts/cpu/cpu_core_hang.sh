@@ -1,11 +1,9 @@
 #!/bin/sh
 # rCPU_core_hang: pin an RT-priority busy loop to each core, starving normal scheduling.
-# inject: chrt -f 1 + taskset -c <core> busy loop per core; write pidfile
-# clean:  kill RT loops
+# inject: chrt -f 1 + taskset -c <core> busy loop per core; write per-core pidfile
+# clean:  kill RT loops (glob all per-core pidfiles)
 # query:  count alive RT loops
 # Distinct from rCPU_overload (pure burn, non-RT) and rCPU_core_offline (sysfs down).
-
-PIDFILE="/tmp/dcat-rCPU_core_hang.pid"
 
 parse_cores() {
     echo "$1" | tr ',' '\n' | while IFS= read -r r; do
@@ -19,6 +17,8 @@ parse_cores() {
         esac
     done
 }
+
+pidfile_for() { echo "/tmp/dcat-rCPU_core_hang-c$1.pid"; }
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -42,9 +42,9 @@ case "${DCAT_OP:-inject}" in
             else
                 taskset -c "$n" yes >/dev/null 2>&1 &
             fi
+            echo "$!" > "$(pidfile_for "$n")"
             pids="$pids $!"
         done
-        echo "$pids" > "$PIDFILE"
         sleep 1
         alive=0
         for pid in $pids; do
@@ -54,24 +54,34 @@ case "${DCAT_OP:-inject}" in
         if [ "$alive" -lt "$total" ]; then
             echo "ERROR: only $alive/$total loops alive" >&2
             for pid in $pids; do kill "$pid" 2>/dev/null; done
-            rm -f "$PIDFILE"
+            for n in $(parse_cores "$spec"); do rm -f "$(pidfile_for "$n")"; done
             exit 1
         fi
         echo "hung cores [$spec] ($alive/$total alive, pids:$pids)"
         ;;
     clean)
-        if [ -f "$PIDFILE" ]; then
-            for pid in $(cat "$PIDFILE"); do kill "$pid" 2>/dev/null; done
-            rm -f "$PIDFILE"
-            echo "cleaned core_hang"
-        else
-            echo "no active core_hang" >&2; exit 1
-        fi
+        found=0
+        for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
+            [ -f "$pf" ] || continue
+            for pid in $(cat "$pf" 2>/dev/null); do
+                kill "$pid" 2>/dev/null
+            done
+            rm -f "$pf"
+            found=1
+        done
+        [ "$found" = 1 ] && echo "cleaned core_hang" || { echo "no active core_hang" >&2; exit 1; }
         ;;
     query)
-        if [ -f "$PIDFILE" ]; then
-            n=0
-            for pid in $(cat "$PIDFILE"); do kill -0 "$pid" 2>/dev/null && n=$((n + 1)); done
+        found=0
+        n=0
+        for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
+            [ -f "$pf" ] || continue
+            for pid in $(cat "$pf" 2>/dev/null); do
+                kill -0 "$pid" 2>/dev/null && n=$((n + 1))
+            done
+            found=1
+        done
+        if [ "$found" = 1 ]; then
             echo "core_hang: $n RT procs alive"
             [ "$n" -gt 0 ] && exit 0 || exit 1
         else

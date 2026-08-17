@@ -43,7 +43,8 @@ case "${DCAT_OP:-inject}" in
             [ "$cleaned" = 1 ] && echo "restored ip (all chips)" || echo "restored ip (no active injection)"
         elif fault_present; then
             _sc=$(SIDECAR_FN)
-            . "$_sc"
+            address=$(grep '^address=' "$_sc" 2>/dev/null | cut -d= -f2)
+            netmask=$(grep '^netmask=' "$_sc" 2>/dev/null | cut -d= -f2)
             : ${address:=0.0.0.0}; : ${netmask:=255.255.255.0}
             $HCCN -ip -s address "$address" netmask "$netmask" || { echo "ip restore failed" >&2; exit 1; }
             rm -f "$_sc"

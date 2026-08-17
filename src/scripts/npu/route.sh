@@ -36,6 +36,7 @@ case "${DCAT_OP:-inject}" in
                 ;;
             del)
                 orig_gw=$($HCCN -route -g 2>/dev/null | awk -v a="$addr" '$1==a {print $2}')
+                [ "$orig_gw" = "*" ] && orig_gw=""
                 printf '%s\n' "${orig_gw:-}" > "$SIDECAR"
                 $HCCN -route -d address "$addr" netmask "$mask" || { echo "route del failed" >&2; exit 1; }
                 fault_present || { echo "rNPU_route 注入回读校验失败:动作未生效" >&2; exit 1; }

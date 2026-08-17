@@ -54,7 +54,8 @@ case "${DCAT_OP:-inject}" in
         if [ -z "$chip" ]; then
             echo "no active injection (chip required for ip_route clean)"
         elif is_del_action; then
-            . "$SIDECAR" 2>/dev/null
+            via=$(grep '^via=' "$SIDECAR" 2>/dev/null | cut -d= -f2)
+            dev=$(grep '^dev=' "$SIDECAR" 2>/dev/null | cut -d= -f2)
             : ${via:=0.0.0.0}; : ${dev:=eth0}
             $HCCN -ip_route -a ip "$ip" ip_mask "$mask" via "$via" dev "$dev" table "$table" || { echo "ip_route re-add failed" >&2; exit 1; }
             rm -f "$SIDECAR"

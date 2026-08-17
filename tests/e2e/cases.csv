@@ -1,508 +1,508 @@
-id,flow_id,step,module,fault_uid,phase,command,expected_exit_code,expected_json,verify_cmd,verify_assert,provision,expected_behavior
-E2E-001,FUNC-rCPU_core_hang,0,cpu,rCPU_core_hang,inject,./build/dcat inject rCPU_core_hang --cores=0,0,"""status"":""ok""",ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-002,FUNC-rCPU_core_hang,1,cpu,rCPU_core_hang,clean,./build/dcat clean rCPU_core_hang ,0,,ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-003,FUNC-rCPU_core_hang,2,cpu,rCPU_core_hang,query,./build/dcat query,0,,,state_not_contains:rCPU_core_hang,,no ghost record after clean
-E2E-004,FUNC-rCPU_core_offline,0,cpu,rCPU_core_offline,inject,./build/dcat inject rCPU_core_offline --cores=1,0,"""status"":""ok""",cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA,eq:0,,fault active after inject
-E2E-005,FUNC-rCPU_core_offline,1,cpu,rCPU_core_offline,clean,./build/dcat clean rCPU_core_offline --cores=1,0,,cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA,eq:1,,"fault cleaned, system restored"
-E2E-006,FUNC-rCPU_core_offline,2,cpu,rCPU_core_offline,query,./build/dcat query,0,,,state_not_contains:rCPU_core_offline,,no ghost record after clean
-E2E-007,FUNC-rCPU_freq,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=1000,0,"""status"":""ok""",cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null,eq:1000000,,fault active after inject
-E2E-008,FUNC-rCPU_freq,1,cpu,rCPU_freq,clean,./build/dcat clean rCPU_freq ,0,,cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null,ne:1000000,,"fault cleaned, system restored"
-E2E-009,FUNC-rCPU_freq,2,cpu,rCPU_freq,query,./build/dcat query,0,,,state_not_contains:rCPU_freq,,no ghost record after clean
-E2E-010,FUNC-rCPU_overload,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=100,0,"""status"":""ok""",pgrep -x perl | wc -l,>=1,,fault active after inject
-E2E-011,FUNC-rCPU_overload,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,"fault cleaned, system restored"
-E2E-012,FUNC-rCPU_overload,2,cpu,rCPU_overload,query,./build/dcat query,0,,,state_not_contains:rCPU_overload,,no ghost record after clean
-E2E-013,FUNC-rCPU_quota,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=50,0,"""status"":""ok""",ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-014,FUNC-rCPU_quota,1,cpu,rCPU_quota,clean,./build/dcat clean rCPU_quota ,0,,ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-015,FUNC-rCPU_quota,2,cpu,rCPU_quota,query,./build/dcat query,0,,,state_not_contains:rCPU_quota,,no ghost record after clean
-E2E-016,FUNC-rDISK_inode_exhaust,0,storage,rDISK_inode_exhaust,inject,./build/dcat inject rDISK_inode_exhaust --path=/tmp --count=500,0,"""status"":""ok""",ls /tmp/dcat-rDISK_inode_exhaust.sidecar 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-017,FUNC-rDISK_inode_exhaust,1,storage,rDISK_inode_exhaust,clean,./build/dcat clean rDISK_inode_exhaust ,0,,ls /tmp/dcat-rDISK_inode_exhaust.sidecar 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-018,FUNC-rDISK_inode_exhaust,2,storage,rDISK_inode_exhaust,query,./build/dcat query,0,,,state_not_contains:rDISK_inode_exhaust,,no ghost record after clean
-E2E-019,FUNC-rDISK_io_delay,0,storage,rDISK_io_delay,setup,,0,,,,loop_device,provision loop_device
-E2E-020,FUNC-rDISK_io_delay,1,storage,rDISK_io_delay,inject,./build/dcat inject rDISK_io_delay --device={loop_dev} --delay_ms=10,0,"""status"":""ok""",ls /tmp/dcat-rDISK_io_delay.sidecar 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-021,FUNC-rDISK_io_delay,2,storage,rDISK_io_delay,clean,./build/dcat clean rDISK_io_delay ,0,,ls /tmp/dcat-rDISK_io_delay.sidecar 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-022,FUNC-rDISK_io_delay,3,storage,rDISK_io_delay,query,./build/dcat query,0,,,state_not_contains:rDISK_io_delay,,no ghost record after clean
-E2E-023,FUNC-rDISK_io_error,0,storage,rDISK_io_error,setup,,0,,,,loop_device,provision loop_device
-E2E-024,FUNC-rDISK_io_error,1,storage,rDISK_io_error,inject,./build/dcat inject rDISK_io_error --device={loop_dev},0,"""status"":""ok""",ls /tmp/dcat-rDISK_io_error.sidecar 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-025,FUNC-rDISK_io_error,2,storage,rDISK_io_error,clean,./build/dcat clean rDISK_io_error ,0,,ls /tmp/dcat-rDISK_io_error.sidecar 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-026,FUNC-rDISK_io_error,3,storage,rDISK_io_error,query,./build/dcat query,0,,,state_not_contains:rDISK_io_error,,no ghost record after clean
-E2E-027,FUNC-rDISK_part_full,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp --size=50M,0,"""status"":""ok""",ls /tmp/dcat-rDISK_part_full.sidecar 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-028,FUNC-rDISK_part_full,1,storage,rDISK_part_full,clean,./build/dcat clean rDISK_part_full ,0,,ls /tmp/dcat-rDISK_part_full.sidecar 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-029,FUNC-rDISK_part_full,2,storage,rDISK_part_full,query,./build/dcat query,0,,,state_not_contains:rDISK_part_full,,no ghost record after clean
-E2E-030,FUNC-rDISK_write_overload,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/dev/shm --workers=2 --size_mb=10,0,"""status"":""ok""",ls /dev/shm/dcat.stress.* 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-031,FUNC-rDISK_write_overload,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/dev/shm,0,,ls /dev/shm/dcat.stress.* 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-032,FUNC-rDISK_write_overload,2,storage,rDISK_write_overload,query,./build/dcat query,0,,,state_not_contains:rDISK_write_overload,,no ghost record after clean
-E2E-033,FUNC-rDOCKER_kill,0,docker,rDOCKER_kill,setup,,0,,,,docker_container,provision docker_container
-E2E-034,FUNC-rDOCKER_kill,1,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill --container={ctr},0,"""status"":""ok""",docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null,eq:exited,,fault active after inject
-E2E-035,FUNC-rDOCKER_kill,2,docker,rDOCKER_kill,clean,./build/dcat clean rDOCKER_kill ,0,,docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null,ne:exited,,"fault cleaned, system restored"
-E2E-036,FUNC-rDOCKER_kill,3,docker,rDOCKER_kill,query,./build/dcat query,0,,,state_not_contains:rDOCKER_kill,,no ghost record after clean
-E2E-037,FUNC-rDOCKER_mem_overload,0,docker,rDOCKER_mem_overload,setup,,0,,,,docker_container,provision docker_container
-E2E-038,FUNC-rDOCKER_mem_overload,1,docker,rDOCKER_mem_overload,inject,./build/dcat inject rDOCKER_mem_overload --container={ctr} --size=128M,0,"""status"":""ok""",ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-039,FUNC-rDOCKER_mem_overload,2,docker,rDOCKER_mem_overload,clean,./build/dcat clean rDOCKER_mem_overload ,0,,ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-040,FUNC-rDOCKER_mem_overload,3,docker,rDOCKER_mem_overload,query,./build/dcat query,0,,,state_not_contains:rDOCKER_mem_overload,,no ghost record after clean
-E2E-041,FUNC-rFS_file_lock,0,filesystem,rFS_file_lock,setup,echo test > /tmp/dcat_fslock_test,0,,,,none,provision none
-E2E-042,FUNC-rFS_file_lock,1,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp/dcat_fslock_test --mode=nowrite,0,"""status"":""ok""",stat -c %a /tmp/dcat_fslock_test 2>/dev/null,eq:444,,fault active after inject
-E2E-043,FUNC-rFS_file_lock,2,filesystem,rFS_file_lock,clean,./build/dcat clean rFS_file_lock ,0,,stat -c %a /tmp/dcat_fslock_test 2>/dev/null,ne:444,,"fault cleaned, system restored"
-E2E-044,FUNC-rFS_file_lock,3,filesystem,rFS_file_lock,query,./build/dcat query,0,,,state_not_contains:rFS_file_lock,,no ghost record after clean
-E2E-045,FUNC-rFS_iowait_high,0,filesystem,rFS_iowait_high,inject,./build/dcat inject rFS_iowait_high --path=/tmp --workers=1,0,"""status"":""ok""",ls /tmp/dcat-rFS_iowait_high.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-046,FUNC-rFS_iowait_high,1,filesystem,rFS_iowait_high,clean,./build/dcat clean rFS_iowait_high ,0,,ls /tmp/dcat-rFS_iowait_high.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-047,FUNC-rFS_iowait_high,2,filesystem,rFS_iowait_high,query,./build/dcat query,0,,,state_not_contains:rFS_iowait_high,,no ghost record after clean
-E2E-048,FUNC-rMEM_fragment,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=20,0,"""status"":""ok""",ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-049,FUNC-rMEM_fragment,1,memory,rMEM_fragment,clean,./build/dcat clean rMEM_fragment ,0,,ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-050,FUNC-rMEM_fragment,2,memory,rMEM_fragment,query,./build/dcat query,0,,,state_not_contains:rMEM_fragment,,no ghost record after clean
-E2E-051,FUNC-rMEM_leak,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-052,FUNC-rMEM_leak,1,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak ,0,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-053,FUNC-rMEM_leak,2,memory,rMEM_leak,query,./build/dcat query,0,,,state_not_contains:rMEM_leak,,no ghost record after clean
-E2E-054,FUNC-rMEM_oom,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=256,0,"""status"":""ok""",ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-055,FUNC-rMEM_oom,1,memory,rMEM_oom,clean,./build/dcat clean rMEM_oom ,0,,ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-056,FUNC-rMEM_oom,2,memory,rMEM_oom,query,./build/dcat query,0,,,state_not_contains:rMEM_oom,,no ghost record after clean
-E2E-057,FUNC-rMEM_swap_overload,0,memory,rMEM_swap_overload,inject,./build/dcat inject rMEM_swap_overload --size_mb=128,0,"""status"":""ok""",ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-058,FUNC-rMEM_swap_overload,1,memory,rMEM_swap_overload,clean,./build/dcat clean rMEM_swap_overload ,0,,ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-059,FUNC-rMEM_swap_overload,2,memory,rMEM_swap_overload,query,./build/dcat query,0,,,state_not_contains:rMEM_swap_overload,,no ghost record after clean
-E2E-060,FUNC-rNET_bw_limit,0,network,rNET_bw_limit,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-061,FUNC-rNET_bw_limit,1,network,rNET_bw_limit,inject,./build/dcat inject rNET_bw_limit --iface={iface} --rate_kbps=1000,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,>=1,,fault active after inject
-E2E-062,FUNC-rNET_bw_limit,2,network,rNET_bw_limit,clean,./build/dcat clean rNET_bw_limit --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,==0,,"fault cleaned, system restored"
-E2E-063,FUNC-rNET_bw_limit,3,network,rNET_bw_limit,query,./build/dcat query,0,,,state_not_contains:rNET_bw_limit,,no ghost record after clean
-E2E-064,FUNC-rNET_conn_exhaust,0,network,rNET_conn_exhaust,setup,,0,,,,free_port,provision free_port
-E2E-065,FUNC-rNET_conn_exhaust,1,network,rNET_conn_exhaust,inject,./build/dcat inject rNET_conn_exhaust --target=127.0.0.1:{port} --count=20,0,"""status"":""ok""",ls /tmp/dcat-rNET_conn_exhaust.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-066,FUNC-rNET_conn_exhaust,2,network,rNET_conn_exhaust,clean,./build/dcat clean rNET_conn_exhaust ,0,,ls /tmp/dcat-rNET_conn_exhaust.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-067,FUNC-rNET_conn_exhaust,3,network,rNET_conn_exhaust,query,./build/dcat query,0,,,state_not_contains:rNET_conn_exhaust,,no ghost record after clean
-E2E-068,FUNC-rNET_corrupt,0,network,rNET_corrupt,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-069,FUNC-rNET_corrupt,1,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface={iface} --corrupt_pct=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,fault active after inject
-E2E-070,FUNC-rNET_corrupt,2,network,rNET_corrupt,clean,./build/dcat clean rNET_corrupt ,0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,"fault cleaned, system restored"
-E2E-071,FUNC-rNET_corrupt,3,network,rNET_corrupt,query,./build/dcat query,0,,,state_not_contains:rNET_corrupt,,no ghost record after clean
-E2E-072,FUNC-rNET_degrade,0,network,rNET_degrade,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-073,FUNC-rNET_degrade,1,network,rNET_degrade,inject,./build/dcat inject rNET_degrade --iface={iface} --speed_mbps=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,>=1,,fault active after inject
-E2E-074,FUNC-rNET_degrade,2,network,rNET_degrade,clean,./build/dcat clean rNET_degrade --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,==0,,"fault cleaned, system restored"
-E2E-075,FUNC-rNET_degrade,3,network,rNET_degrade,query,./build/dcat query,0,,,state_not_contains:rNET_degrade,,no ghost record after clean
-E2E-076,FUNC-rNET_delay,0,network,rNET_delay,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-077,FUNC-rNET_delay,1,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface={iface} --delay_ms=100,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,fault active after inject
-E2E-078,FUNC-rNET_delay,2,network,rNET_delay,clean,./build/dcat clean rNET_delay --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,"fault cleaned, system restored"
-E2E-079,FUNC-rNET_delay,3,network,rNET_delay,query,./build/dcat query,0,,,state_not_contains:rNET_delay,,no ghost record after clean
-E2E-080,FUNC-rNET_down,0,network,rNET_down,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-081,FUNC-rNET_down,1,network,rNET_down,inject,./build/dcat inject rNET_down --iface={iface},0,"""status"":""ok""",ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',eq:DOWN,,fault active after inject
-E2E-082,FUNC-rNET_down,2,network,rNET_down,clean,./build/dcat clean rNET_down --iface={iface},0,,ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',ne:DOWN,,"fault cleaned, system restored"
-E2E-083,FUNC-rNET_down,3,network,rNET_down,query,./build/dcat query,0,,,state_not_contains:rNET_down,,no ghost record after clean
-E2E-084,FUNC-rNET_jitter,0,network,rNET_jitter,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-085,FUNC-rNET_jitter,1,network,rNET_jitter,inject,./build/dcat inject rNET_jitter --iface={iface} --delay_ms=50 --jitter_ms=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,fault active after inject
-E2E-086,FUNC-rNET_jitter,2,network,rNET_jitter,clean,./build/dcat clean rNET_jitter --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,"fault cleaned, system restored"
-E2E-087,FUNC-rNET_jitter,3,network,rNET_jitter,query,./build/dcat query,0,,,state_not_contains:rNET_jitter,,no ghost record after clean
-E2E-088,FUNC-rNET_link_flap,0,network,rNET_link_flap,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-089,FUNC-rNET_link_flap,1,network,rNET_link_flap,inject,./build/dcat inject rNET_link_flap --iface={iface} --cycle_sec=1 --count=2,0,"""status"":""ok""",ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',nonempty,,fault active after inject
-E2E-090,FUNC-rNET_link_flap,2,network,rNET_link_flap,clean,./build/dcat clean rNET_link_flap --iface={iface},0,,ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',ne:DOWN,,"fault cleaned, system restored"
-E2E-091,FUNC-rNET_link_flap,3,network,rNET_link_flap,query,./build/dcat query,0,,,state_not_contains:rNET_link_flap,,no ghost record after clean
-E2E-092,FUNC-rNET_loss,0,network,rNET_loss,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-093,FUNC-rNET_loss,1,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface={iface} --loss_pct=5,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,fault active after inject
-E2E-094,FUNC-rNET_loss,2,network,rNET_loss,clean,./build/dcat clean rNET_loss --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,"fault cleaned, system restored"
-E2E-095,FUNC-rNET_loss,3,network,rNET_loss,query,./build/dcat query,0,,,state_not_contains:rNET_loss,,no ghost record after clean
-E2E-096,FUNC-rNET_port_occupy,0,network,rNET_port_occupy,setup,,0,,,,free_port,provision free_port
-E2E-097,FUNC-rNET_port_occupy,1,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",ss -tlnp 2>/dev/null | grep -c ':{port}',>=1,,fault active after inject
-E2E-098,FUNC-rNET_port_occupy,2,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port={port},0,,ss -tlnp 2>/dev/null | grep -c ':{port}',==0,,"fault cleaned, system restored"
-E2E-099,FUNC-rNET_port_occupy,3,network,rNET_port_occupy,query,./build/dcat query,0,,,state_not_contains:rNET_port_occupy,,no ghost record after clean
-E2E-100,FUNC-rNET_reorder,0,network,rNET_reorder,setup,,0,,,,dummy_iface,provision dummy_iface
-E2E-101,FUNC-rNET_reorder,1,network,rNET_reorder,inject,./build/dcat inject rNET_reorder --iface={iface} --reorder_pct=30,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,fault active after inject
-E2E-102,FUNC-rNET_reorder,2,network,rNET_reorder,clean,./build/dcat clean rNET_reorder --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,"fault cleaned, system restored"
-E2E-103,FUNC-rNET_reorder,3,network,rNET_reorder,query,./build/dcat query,0,,,state_not_contains:rNET_reorder,,no ghost record after clean
-E2E-104,FUNC-rNET_service_stop,0,network,rNET_service_stop,setup,,0,,,,noncritical_svc,provision noncritical_svc
-E2E-105,FUNC-rNET_service_stop,1,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service={svc},0,"""status"":""ok""",systemctl is-active {svc} 2>/dev/null,eq:inactive,,fault active after inject
-E2E-106,FUNC-rNET_service_stop,2,network,rNET_service_stop,clean,./build/dcat clean rNET_service_stop --service={svc},0,,systemctl is-active {svc} 2>/dev/null,ne:inactive,,"fault cleaned, system restored"
-E2E-107,FUNC-rNET_service_stop,3,network,rNET_service_stop,query,./build/dcat query,0,,,state_not_contains:rNET_service_stop,,no ghost record after clean
-E2E-108,FUNC-rNET_tcp_loss,0,network,rNET_tcp_loss,setup,,0,,,,free_port,provision free_port
-E2E-109,FUNC-rNET_tcp_loss,1,network,rNET_tcp_loss,inject,./build/dcat inject rNET_tcp_loss --port={port},0,"""status"":""ok""",iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:{port}',>=1,,fault active after inject
-E2E-110,FUNC-rNET_tcp_loss,2,network,rNET_tcp_loss,clean,./build/dcat clean rNET_tcp_loss --port={port},0,,iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:{port}',==0,,"fault cleaned, system restored"
-E2E-111,FUNC-rNET_tcp_loss,3,network,rNET_tcp_loss,query,./build/dcat query,0,,,state_not_contains:rNET_tcp_loss,,no ghost record after clean
-E2E-112,FUNC-rNPU_aic_load,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load --chip={e2e_chip} --load_pct=100,0,"""status"":""ok""",./build/dcat query rNPU_aic_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',>=1,,fault active after inject
-E2E-113,FUNC-rNPU_aic_load,1,npu,rNPU_aic_load,clean,./build/dcat clean rNPU_aic_load --chip={e2e_chip},0,,./build/dcat query rNPU_aic_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',==0,,"fault cleaned, system restored"
-E2E-114,FUNC-rNPU_aic_load,2,npu,rNPU_aic_load,query,./build/dcat query,0,,,state_not_contains:rNPU_aic_load,,no ghost record after clean
-E2E-115,FUNC-rNPU_aiv_load,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --chip={e2e_chip} --load_pct=100,0,"""status"":""ok""",./build/dcat query rNPU_aiv_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',>=1,,fault active after inject
-E2E-116,FUNC-rNPU_aiv_load,1,npu,rNPU_aiv_load,clean,./build/dcat clean rNPU_aiv_load --chip={e2e_chip},0,,./build/dcat query rNPU_aiv_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',==0,,"fault cleaned, system restored"
-E2E-117,FUNC-rNPU_aiv_load,2,npu,rNPU_aiv_load,query,./build/dcat query,0,,,state_not_contains:rNPU_aiv_load,,no ghost record after clean
-E2E-118,FUNC-rNPU_arp,0,npu,rNPU_arp,inject,./build/dcat inject rNPU_arp --action=add --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,contains:00:11:22:33:44:55,,fault active after inject
-E2E-119,FUNC-rNPU_arp,1,npu,rNPU_arp,clean,./build/dcat clean rNPU_arp --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200,0,,hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,notcontains:00:11:22:33:44:55,,"fault cleaned, system restored"
-E2E-120,FUNC-rNPU_arp,2,npu,rNPU_arp,query,./build/dcat query,0,,,state_not_contains:rNPU_arp,,no ghost record after clean
-E2E-121,FUNC-rNPU_arp_del,0,npu,rNPU_arp,setup,hccn_tool -i {e2e_chip} -arp -a dev eth0 ip 10.30.12.200 mac 00:11:22:33:44:55 2>/dev/null,0,,,,none,provision none
-E2E-122,FUNC-rNPU_arp_del,1,npu,rNPU_arp,inject,./build/dcat inject rNPU_arp --action=del --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,notcontains:10.30.12.200,,fault active after inject
-E2E-123,FUNC-rNPU_arp_del,2,npu,rNPU_arp,clean,./build/dcat clean rNPU_arp --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200,0,,hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,contains:10.30.12.200,,"fault cleaned, system restored"
-E2E-124,FUNC-rNPU_arp_del,3,npu,rNPU_arp,query,./build/dcat query,0,,,state_not_contains:rNPU_arp,,no ghost record after clean
-E2E-125,FUNC-rNPU_bw_limit,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=50000,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+',contains:50000,,fault active after inject
-E2E-126,FUNC-rNPU_bw_limit,1,npu,rNPU_bw_limit,clean,./build/dcat clean rNPU_bw_limit --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+',notcontains:50000,,"fault cleaned, system restored"
-E2E-127,FUNC-rNPU_bw_limit,2,npu,rNPU_bw_limit,query,./build/dcat query,0,,,state_not_contains:rNPU_bw_limit,,no ghost record after clean
-E2E-128,FUNC-rNPU_chip_reset,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id={e2e_npu_id},0,"""status"":""ok""",ls /tmp/dcat-rNPU_chip_reset-{e2e_npu_id}-0.bak 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-129,FUNC-rNPU_chip_reset,1,npu,rNPU_chip_reset,clean,./build/dcat clean rNPU_chip_reset --npu_id={e2e_npu_id},0,,npu-smi info 2>/dev/null | grep -c 'OK',>=1,,"fault cleaned, system restored"
-E2E-130,FUNC-rNPU_chip_reset,2,npu,rNPU_chip_reset,query,./build/dcat query,0,,,state_not_contains:rNPU_chip_reset,,no ghost record after clean
-E2E-131,FUNC-rNPU_driver_unbind,0,npu,rNPU_driver_unbind,skip,echo SKIP: dangerous fault (requires cold boot to recover),0,,,,,skipped: dangerous fault
-E2E-132,FUNC-rNPU_dscp_tc_change,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip={e2e_chip} --dscp=46 --tc=1,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:1,,fault active after inject
-E2E-133,FUNC-rNPU_dscp_tc_change,1,npu,rNPU_dscp_tc_change,clean,./build/dcat clean rNPU_dscp_tc_change --chip={e2e_chip} --dscp=46,0,,hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:0,,"fault cleaned, system restored"
-E2E-134,FUNC-rNPU_dscp_tc_change,2,npu,rNPU_dscp_tc_change,query,./build/dcat query,0,,,state_not_contains:rNPU_dscp_tc_change,,no ghost record after clean
-E2E-135,FUNC-rNPU_gw_change,0,npu,rNPU_gw_change,setup,hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i {e2e_chip} -gateway -s gateway 10.20.10.254 2>/dev/null,0,,,,none,provision none
-E2E-136,FUNC-rNPU_gw_change,1,npu,rNPU_gw_change,inject,./build/dcat inject rNPU_gw_change --chip={e2e_chip} --gateway=10.20.10.1,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null,contains:10.20.10.1,,fault active after inject
-E2E-137,FUNC-rNPU_gw_change,2,npu,rNPU_gw_change,clean,./build/dcat clean rNPU_gw_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null,notcontains:10.20.10.1,,"fault cleaned, system restored"
-E2E-138,FUNC-rNPU_gw_change,3,npu,rNPU_gw_change,query,./build/dcat query,0,,,state_not_contains:rNPU_gw_change,,no ghost record after clean
-E2E-139,FUNC-rNPU_hbm_load,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip={e2e_chip} --size=2G,0,"""status"":""ok""",./build/dcat query rNPU_hbm_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',>=1,,fault active after inject
-E2E-140,FUNC-rNPU_hbm_load,1,npu,rNPU_hbm_load,clean,./build/dcat clean rNPU_hbm_load --chip={e2e_chip},0,,./build/dcat query rNPU_hbm_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',==0,,"fault cleaned, system restored"
-E2E-141,FUNC-rNPU_hbm_load,2,npu,rNPU_hbm_load,query,./build/dcat query,0,,,state_not_contains:rNPU_hbm_load,,no ghost record after clean
-E2E-142,FUNC-rNPU_ip_change,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=10.0.0.99 --netmask=255.255.255.0,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip -g 2>/dev/null,contains:10.0.0.99,,fault active after inject
-E2E-143,FUNC-rNPU_ip_change,1,npu,rNPU_ip_change,clean,./build/dcat clean rNPU_ip_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -ip -g 2>/dev/null,notcontains:10.0.0.99,,"fault cleaned, system restored"
-E2E-144,FUNC-rNPU_ip_change,2,npu,rNPU_ip_change,query,./build/dcat query,0,,,state_not_contains:rNPU_ip_change,,no ghost record after clean
-E2E-145,FUNC-rNPU_iproute,0,npu,rNPU_iproute,inject,./build/dcat inject rNPU_iproute --action=add --chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,contains:10.30.50.0,,fault active after inject
-E2E-146,FUNC-rNPU_iproute,1,npu,rNPU_iproute,clean,./build/dcat clean rNPU_iproute --chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --table=100,0,,hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,notcontains:10.30.50.0,,"fault cleaned, system restored"
-E2E-147,FUNC-rNPU_iproute,2,npu,rNPU_iproute,query,./build/dcat query,0,,,state_not_contains:rNPU_iproute,,no ghost record after clean
-E2E-148,FUNC-rNPU_iproute_del,0,npu,rNPU_iproute,setup,hccn_tool -i {e2e_chip} -ip_route -a ip 10.30.51.0 ip_mask 24 via 10.20.10.1 dev eth0 table 100,0,,,,none,provision none
-E2E-149,FUNC-rNPU_iproute_del,1,npu,rNPU_iproute,inject,./build/dcat inject rNPU_iproute --action=del --chip={e2e_chip} --ip=10.30.51.0 --ip_mask=24 --table=100,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,notcontains:10.30.51.0,,fault active after inject
-E2E-150,FUNC-rNPU_iproute_del,2,npu,rNPU_iproute,clean,./build/dcat clean rNPU_iproute --chip={e2e_chip} --ip=10.30.51.0 --ip_mask=24 --table=100,0,,hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,contains:10.30.51.0,,"fault cleaned, system restored"
-E2E-151,FUNC-rNPU_iproute_del,3,npu,rNPU_iproute,query,./build/dcat query,0,,,state_not_contains:rNPU_iproute,,no ghost record after clean
-E2E-152,FUNC-rNPU_iprule,0,npu,rNPU_iprule,inject,./build/dcat inject rNPU_iprule --action=add --chip={e2e_chip} --dir=from --ip=10.20.10.50 --table=150,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,contains:10.20.10.50,,fault active after inject
-E2E-153,FUNC-rNPU_iprule,1,npu,rNPU_iprule,clean,./build/dcat clean rNPU_iprule --chip={e2e_chip} --dir=from --ip=10.20.10.50,0,,hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,notcontains:10.20.10.50,,"fault cleaned, system restored"
-E2E-154,FUNC-rNPU_iprule,2,npu,rNPU_iprule,query,./build/dcat query,0,,,state_not_contains:rNPU_iprule,,no ghost record after clean
-E2E-155,FUNC-rNPU_iprule_del,0,npu,rNPU_iprule,setup,hccn_tool -i {e2e_chip} -ip_rule -d dir from ip 10.20.10.51 2>/dev/null; hccn_tool -i {e2e_chip} -ip_rule -a dir from ip 10.20.10.51 table 150,0,,,,none,provision none
-E2E-156,FUNC-rNPU_iprule_del,1,npu,rNPU_iprule,inject,./build/dcat inject rNPU_iprule --action=del --chip={e2e_chip} --dir=from --ip=10.20.10.51,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,notcontains:10.20.10.51,,fault active after inject
-E2E-157,FUNC-rNPU_iprule_del,2,npu,rNPU_iprule,clean,./build/dcat clean rNPU_iprule --chip={e2e_chip} --dir=from --ip=10.20.10.51,0,,hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,contains:10.20.10.51,,"fault cleaned, system restored"
-E2E-158,FUNC-rNPU_iprule_del,3,npu,rNPU_iprule,query,./build/dcat query,0,,,state_not_contains:rNPU_iprule,,no ghost record after clean
-E2E-159,FUNC-rNPU_link_down,0,npu,rNPU_link_down,inject,./build/dcat inject rNPU_link_down --chip={e2e_chip},0,"""status"":""ok""",hccn_tool -i {e2e_chip} -link -g 2>/dev/null,contains:DOWN,,fault active after inject
-E2E-160,FUNC-rNPU_link_down,1,npu,rNPU_link_down,clean,./build/dcat clean rNPU_link_down --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -link -g 2>/dev/null,notcontains:DOWN,,"fault cleaned, system restored"
-E2E-161,FUNC-rNPU_link_down,2,npu,rNPU_link_down,query,./build/dcat query,0,,,state_not_contains:rNPU_link_down,,no ghost record after clean
-E2E-162,FUNC-rNPU_mtu_mismatch,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+',contains:1280,,fault active after inject
-E2E-163,FUNC-rNPU_mtu_mismatch,1,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+',notcontains:1280,,"fault cleaned, system restored"
-E2E-164,FUNC-rNPU_mtu_mismatch,2,npu,rNPU_mtu_mismatch,query,./build/dcat query,0,,,state_not_contains:rNPU_mtu_mismatch,,no ghost record after clean
-E2E-165,FUNC-rNPU_netdetect_change,0,npu,rNPU_netdetect_change,inject,./build/dcat inject rNPU_netdetect_change --chip={e2e_chip} --address=10.0.0.99,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null,contains:10.0.0.99,,fault active after inject
-E2E-166,FUNC-rNPU_netdetect_change,1,npu,rNPU_netdetect_change,clean,./build/dcat clean rNPU_netdetect_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null,notcontains:10.0.0.99,,"fault cleaned, system restored"
-E2E-167,FUNC-rNPU_netdetect_change,2,npu,rNPU_netdetect_change,query,./build/dcat query,0,,,state_not_contains:rNPU_netdetect_change,,no ghost record after clean
-E2E-168,FUNC-rNPU_pcie_down,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id={e2e_npu_id} --gen=1,0,"""status"":""ok""",ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-169,FUNC-rNPU_pcie_down,1,npu,rNPU_pcie_down,clean,./build/dcat clean rNPU_pcie_down --npu_id={e2e_npu_id},0,,ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-170,FUNC-rNPU_pcie_down,2,npu,rNPU_pcie_down,query,./build/dcat query,0,,,state_not_contains:rNPU_pcie_down,,no ghost record after clean
-E2E-171,FUNC-rNPU_pcie_remove,0,npu,rNPU_pcie_remove,skip,echo SKIP: dangerous fault (requires cold boot to recover),0,,,,,skipped: dangerous fault
-E2E-172,FUNC-rNPU_roce_port_change,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=4792,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -udp -g 2>/dev/null,contains:4792,,fault active after inject
-E2E-173,FUNC-rNPU_roce_port_change,1,npu,rNPU_roce_port_change,clean,./build/dcat clean rNPU_roce_port_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -udp -g 2>/dev/null,contains:4791,,"fault cleaned, system restored"
-E2E-174,FUNC-rNPU_roce_port_change,2,npu,rNPU_roce_port_change,query,./build/dcat query,0,,,state_not_contains:rNPU_roce_port_change,,no ghost record after clean
-E2E-175,FUNC-rNPU_route,0,npu,rNPU_route,setup,hccn_tool -i {e2e_chip} -link -s up 2>/dev/null,0,,,,none,provision none
-E2E-176,FUNC-rNPU_route,1,npu,rNPU_route,inject,./build/dcat inject rNPU_route --action=add --chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.20.10.1,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -route -g 2>/dev/null,contains:10.30.40.0,,fault active after inject
-E2E-177,FUNC-rNPU_route,2,npu,rNPU_route,clean,./build/dcat clean rNPU_route --chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0,0,,hccn_tool -i {e2e_chip} -route -g 2>/dev/null,notcontains:10.30.40.0,,"fault cleaned, system restored"
-E2E-178,FUNC-rNPU_route,3,npu,rNPU_route,query,./build/dcat query,0,,,state_not_contains:rNPU_route,,no ghost record after clean
-E2E-179,FUNC-rNPU_route_del,0,npu,rNPU_route,setup,hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -route -a address 10.30.41.0 netmask 255.255.255.0 gateway 10.20.10.1,0,,,,none,provision none
-E2E-180,FUNC-rNPU_route_del,1,npu,rNPU_route,inject,./build/dcat inject rNPU_route --action=del --chip={e2e_chip} --address=10.30.41.0 --netmask=255.255.255.0,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -route -g 2>/dev/null,notcontains:10.30.41.0,,fault active after inject
-E2E-181,FUNC-rNPU_route_del,2,npu,rNPU_route,clean,./build/dcat clean rNPU_route --chip={e2e_chip} --address=10.30.41.0 --netmask=255.255.255.0,0,,hccn_tool -i {e2e_chip} -route -g 2>/dev/null,contains:10.30.41.0,,"fault cleaned, system restored"
-E2E-182,FUNC-rNPU_route_del,3,npu,rNPU_route,query,./build/dcat query,0,,,state_not_contains:rNPU_route,,no ghost record after clean
-E2E-183,FUNC-rPROC_exit,0,process,rPROC_exit,setup,,0,,,,sleep_pid,provision sleep_pid
-E2E-184,FUNC-rPROC_exit,1,process,rPROC_exit,inject,./build/dcat inject rPROC_exit --pid={pid},0,"""status"":""ok""",awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null || echo NONE,eq:Z,,fault active after inject
-E2E-185,FUNC-rPROC_exit,2,process,rPROC_exit,clean_rejected,./build/dcat clean rPROC_exit --pid={pid},3,,,exitcode:3,,inject-only: clean rejected
-E2E-186,FUNC-rPROC_fd_exhaust,0,process,rPROC_fd_exhaust,inject,./build/dcat inject rPROC_fd_exhaust --count=256,0,"""status"":""ok""",ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-187,FUNC-rPROC_fd_exhaust,1,process,rPROC_fd_exhaust,clean,./build/dcat clean rPROC_fd_exhaust ,0,,ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-188,FUNC-rPROC_fd_exhaust,2,process,rPROC_fd_exhaust,query,./build/dcat query,0,,,state_not_contains:rPROC_fd_exhaust,,no ghost record after clean
-E2E-189,FUNC-rPROC_fork_bomb,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=20,0,"""status"":""ok""",ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-190,FUNC-rPROC_fork_bomb,1,process,rPROC_fork_bomb,clean,./build/dcat clean rPROC_fork_bomb ,0,,ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-191,FUNC-rPROC_fork_bomb,2,process,rPROC_fork_bomb,query,./build/dcat query,0,,,state_not_contains:rPROC_fork_bomb,,no ghost record after clean
-E2E-192,FUNC-rPROC_hang,0,process,rPROC_hang,setup,,0,,,,sleep_pid,provision sleep_pid
-E2E-193,FUNC-rPROC_hang,1,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null,eq:T,,fault active after inject
-E2E-194,FUNC-rPROC_hang,2,process,rPROC_hang,clean,./build/dcat clean rPROC_hang --pid={pid},0,,awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null,ne:T,,"fault cleaned, system restored"
-E2E-195,FUNC-rPROC_hang,3,process,rPROC_hang,query,./build/dcat query,0,,,state_not_contains:rPROC_hang,,no ghost record after clean
-E2E-196,FUNC-rPROC_loop,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=1,0,"""status"":""ok""",ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l,>=1,,fault active after inject
-E2E-197,FUNC-rPROC_loop,1,process,rPROC_loop,clean,./build/dcat clean rPROC_loop ,0,,ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-198,FUNC-rPROC_loop,2,process,rPROC_loop,query,./build/dcat query,0,,,state_not_contains:rPROC_loop,,no ghost record after clean
-E2E-199,FUNC-rPROC_zstate,0,process,rPROC_zstate,setup,,0,,,,sleep_pid,provision sleep_pid
-E2E-200,FUNC-rPROC_zstate,1,process,rPROC_zstate,inject,./build/dcat inject rPROC_zstate --pid={pid},0,"""status"":""ok""",awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null,eq:Z,,fault active after inject
-E2E-201,FUNC-rPROC_zstate,2,process,rPROC_zstate,clean,./build/dcat clean rPROC_zstate --pid={pid},0,,ls /proc/{pid} 2>/dev/null | wc -l,==0,,"fault cleaned, system restored"
-E2E-202,FUNC-rPROC_zstate,3,process,rPROC_zstate,query,./build/dcat query,0,,,state_not_contains:rPROC_zstate,,no ghost record after clean
-E2E-203,FUNC-Q1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-204,FUNC-Q1,1,cpu,rCPU_overload,query_active,./build/dcat query rCPU_overload --cores=0,0,,,"out_contains:""confirmed"":true",,query<uid> confirmed:true
-E2E-205,FUNC-Q1,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
-E2E-206,FUNC-Q1,3,cpu,rCPU_overload,query_gone,./build/dcat query rCPU_overload --cores=0,0,,,"out_contains:""confirmed"":false",,query<uid> confirmed:false
-E2E-207,FUNC-Q2,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,inject
-E2E-208,FUNC-Q2,1,network,rNET_port_occupy,query_active,./build/dcat query rNET_port_occupy --port={port},0,,,"out_contains:""confirmed"":true",,query<uid> confirmed:true
-E2E-209,FUNC-Q2,2,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port={port},0,,,,,cleanup
-E2E-210,FUNC-Q2,3,network,rNET_port_occupy,query_gone,./build/dcat query rNET_port_occupy --port={port},0,,,"out_contains:""confirmed"":false",,query<uid> confirmed:false
-E2E-211,FUNC-Q3,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",,,sleep_pid,inject
-E2E-212,FUNC-Q3,1,process,rPROC_hang,query_active,./build/dcat query rPROC_hang --pid={pid},0,,,"out_contains:""confirmed"":true",,query<uid> confirmed:true
-E2E-213,FUNC-Q3,2,process,rPROC_hang,clean,./build/dcat clean rPROC_hang --pid={pid},0,,,,,cleanup
-E2E-214,FUNC-Q3,3,process,rPROC_hang,query_gone,./build/dcat query rPROC_hang --pid={pid},0,,,"out_contains:""confirmed"":false",,query<uid> confirmed:false
-E2E-215,FUNC-Q4,0,process,rPROC_zstate,inject,./build/dcat inject rPROC_zstate --pid={pid},0,"""status"":""ok""",,,sleep_pid,inject
-E2E-216,FUNC-Q4,1,process,rPROC_zstate,query_active,./build/dcat query rPROC_zstate --pid={pid},0,,,"out_contains:""confirmed"":true",,query<uid> confirmed:true
-E2E-217,FUNC-Q4,2,process,rPROC_zstate,clean,./build/dcat clean rPROC_zstate --pid={pid},0,,,,,cleanup
-E2E-218,FUNC-Q4,3,process,rPROC_zstate,query_gone,./build/dcat query rPROC_zstate --pid={pid},0,,,"out_contains:""confirmed"":false",,query<uid> confirmed:false
-E2E-219,FUNC-Q5,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",,,,inject
-E2E-220,FUNC-Q5,1,npu,rNPU_mtu_mismatch,query_active,./build/dcat query rNPU_mtu_mismatch --chip={e2e_chip},0,,,"out_contains:""confirmed"":true",,query<uid> confirmed:true
-E2E-221,FUNC-Q5,2,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,,,,,cleanup
-E2E-222,FUNC-Q5,3,npu,rNPU_mtu_mismatch,query_gone,./build/dcat query rNPU_mtu_mismatch --chip={e2e_chip},0,,,"out_contains:""confirmed"":false",,query<uid> confirmed:false
-E2E-223,FUNC-Q6,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=50000,0,"""status"":""ok""",,,,inject
-E2E-224,FUNC-Q6,1,npu,rNPU_bw_limit,query_active,./build/dcat query rNPU_bw_limit --chip={e2e_chip},0,,,"out_contains:""confirmed"":true",,query<uid> confirmed:true
-E2E-225,FUNC-Q6,2,npu,rNPU_bw_limit,clean,./build/dcat clean rNPU_bw_limit --chip={e2e_chip} --bw_limit=50000,0,,,,,cleanup
-E2E-226,FUNC-Q6,3,npu,rNPU_bw_limit,query_gone,./build/dcat query rNPU_bw_limit --chip={e2e_chip},0,,,"out_contains:""confirmed"":false",,query<uid> confirmed:false
-E2E-227,FUNC-Q7,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-228,FUNC-Q7,1,cpu,rCPU_overload,query_noparam,./build/dcat query rCPU_overload,0,,,"out_contains:""confirmed"":true",,query<uid> no-params confirmed:true
-E2E-229,FUNC-Q7,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
-E2E-230,FUNC-Q7,3,cpu,rCPU_overload,query_gone,./build/dcat query rCPU_overload,0,,,"out_contains:""confirmed"":false",,query<uid> no-params confirmed:false
-E2E-231,FUNC-PLG,0,plugin,rSAMPLE_test,inject,./build/dcat inject rSAMPLE_test,0,"""status"":""ok""",,,,plugin inject
-E2E-232,FUNC-PLG,1,plugin,rSAMPLE_test,query_active,./build/dcat query rSAMPLE_test,0,,,out_contains:sample confirmed,,plugin query confirmed
-E2E-233,FUNC-PLG,2,plugin,rSAMPLE_test,clean,./build/dcat clean rSAMPLE_test,0,,,,,plugin clean
-E2E-234,FUNC-PLG,3,plugin,rSAMPLE_test,query_empty,./build/dcat query,0,,,state_not_contains:rSAMPLE_test,,plugin state empty
-E2E-235,BOUND-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0/1,1,invalid cores spec,,exitcode:1,,cores: invalid separator /
-E2E-236,BOUND-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=abc,1,invalid cores spec,,exitcode:1,,cores: non-numeric
-E2E-237,BOUND-3,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=,3,missing required parameter,,exitcode:3,,cores: empty = missing
-E2E-238,BOUND-4,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload ,3,missing required parameter,,exitcode:3,,cores: missing
-E2E-239,BOUND-5,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0-999,0,"""status"":""ok""",,,,cores: 0-999 no range cap (GAP)
-E2E-240,BOUND-5,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0-999,0,,,,,cleanup
-E2E-241,BOUND-6,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=3-1,0,"""status"":""ok""",,,,cores: 3-1 lo>hi (GAP)
-E2E-242,BOUND-6,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=3-1,0,,,,,cleanup
-E2E-243,BOUND-7,0,cpu,rCPU_overload,inject,"./build/dcat inject rCPU_overload --cores=0,1,",0,"""status"":""ok""",,,,cores: trailing comma (GAP)
-E2E-244,BOUND-7,1,cpu,rCPU_overload,clean,"./build/dcat clean rCPU_overload --cores=0,1,",0,,,,,cleanup
-E2E-245,BOUND-8,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=0,1,load_pct must be,,exitcode:1,,load_pct: 0 below range
-E2E-246,BOUND-9,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=500,1,load_pct must be,,exitcode:1,,load_pct: 500 above range
-E2E-247,BOUND-10,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=-1,1,load_pct must be,,exitcode:1,,load_pct: -1 negative
-E2E-248,BOUND-11,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=abc,1,load_pct must be,,exitcode:1,,load_pct: non-numeric
-E2E-249,BOUND-12,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=abc,1,port must be numeric,,exitcode:1,,port: non-numeric rejected
-E2E-250,BOUND-13,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=65536,1,port must be 1-65535,,exitcode:1,,port: 65536 above range
-E2E-251,BOUND-14,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=0,1,port must be 1-65535,,exitcode:1,,port: 0 below range
-E2E-252,BOUND-15,0,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface=dcat-e2e0 --loss_pct=-1,1,loss_pct must be,,exitcode:1,,loss_pct: -1 negative
-E2E-253,BOUND-16,0,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface=dcat-e2e0 --loss_pct=101,1,loss_pct must be,,exitcode:1,,loss_pct: 101 above 100
-E2E-254,BOUND-17,0,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface=dcat-e2e0 --loss_pct=abc,1,loss_pct must be,,exitcode:1,,loss_pct: non-numeric
-E2E-255,BOUND-18,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface=dcat-e2e0 --delay_ms=-1,1,,,exitcode:1,,delay_ms: -1 negative
-E2E-256,BOUND-19,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface=dcat-e2e0 --delay_ms=abc,1,,,exitcode:1,,delay_ms: non-numeric
-E2E-257,BOUND-20,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip=12 --bw_limit=10000,1,,,exitcode:1,,chip: 12 不存在的 NPU 设备(hccn_tool 拒绝)
-E2E-258,BOUND-21,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip=a --bw_limit=10000,1,,,exitcode:1,,chip: 非数字被拒绝
-E2E-259,BOUND-22,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --bw_limit=10000,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-260,BOUND-23,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=0,1,,,exitcode:1,,pid: 0 invalid
-E2E-261,BOUND-24,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=-1,1,,,exitcode:1,,pid: -1 negative
-E2E-262,BOUND-25,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=abc,1,,,exitcode:1,,pid: non-numeric
-E2E-263,BOUND-26,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=99999999,1,,,exitcode:1,,pid: nonexistent
-E2E-264,BOUND-27,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=0,1,,,exitcode:1,,workers: 0 invalid
-E2E-265,BOUND-28,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=-1,1,,,exitcode:1,,workers: -1 negative
-E2E-266,BOUND-29,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=abc,1,,,exitcode:1,,workers: non-numeric
-E2E-267,BOUND-30,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --size_mb=0,1,,,exitcode:1,,size_mb: 0 invalid
-E2E-268,BOUND-31,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --size_mb=-1,1,,,exitcode:1,,size_mb: -1 negative
-E2E-269,BOUND-32,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/nonexistent_dir_xyz,1,,,exitcode:1,,device: nonexistent path
-E2E-270,BOUND-33,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface= --delay_ms=100,3,missing required parameter,,exitcode:3,,iface: empty
-E2E-271,BOUND-34,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=,3,missing required parameter,,exitcode:3,,service: empty
-E2E-272,BOUND-35,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=invalid --netmask=255.255.255.0,1,,,exitcode:1,,address: invalid format
-E2E-273,BOUND-36,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=0,1,,,exitcode:1,,bw_limit: 0 invalid
-E2E-274,BOUND-37,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=-1,1,,,exitcode:1,,bw_limit: negative
-E2E-275,BOUND-38,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=abc,1,,,exitcode:1,,bw_limit: non-numeric
-E2E-276,BOUND-39,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=0,1,,,exitcode:1,,size: 0 invalid
-E2E-277,BOUND-40,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=-1,1,,,exitcode:1,,size: negative
-E2E-278,BOUND-41,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=abc,1,,,exitcode:1,,size: non-numeric
-E2E-279,BOUND-42,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=0,1,,,exitcode:1,,port: 0 invalid
-E2E-280,BOUND-43,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=-1,1,,,exitcode:1,,port: negative
-E2E-281,BOUND-44,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=abc,1,,,exitcode:1,,port: non-numeric
-E2E-282,BOUND-45,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip={e2e_chip} --dscp=64 --tc=1,1,,,exitcode:1,,dscp: 64 above range
-E2E-283,BOUND-46,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip={e2e_chip} --dscp=-1 --tc=1,1,,,exitcode:1,,dscp: negative
-E2E-284,BOUND-47,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=0,1,quota_pct must be,,exitcode:1,,quota_pct: 0 below range
-E2E-285,BOUND-48,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=100,1,quota_pct must be,,exitcode:1,,quota_pct: 100 above range
-E2E-286,BOUND-49,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=-1,1,quota_pct must be,,exitcode:1,,quota_pct: negative
-E2E-287,BOUND-50,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=abc,1,quota_pct must be,,exitcode:1,,quota_pct: non-numeric
-E2E-288,BOUND-51,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --quota_pct=50,3,missing required parameter,,exitcode:3,,cores: missing
-E2E-289,BOUND-52,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0,3,missing required parameter,,exitcode:3,,quota_pct: missing
-E2E-290,BOUND-53,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota ,3,missing required parameter,,exitcode:3,,cores+quota_pct: missing
-E2E-291,BOUND-54,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=0,1,,,exitcode:1,,freq_mhz: 0 invalid
-E2E-292,BOUND-55,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=-1,1,,,exitcode:1,,freq_mhz: negative
-E2E-293,BOUND-56,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=abc,1,,,exitcode:1,,freq_mhz: non-numeric
-E2E-294,BOUND-57,0,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface=dcat-e2e0 --corrupt_pct=-1,1,,,exitcode:1,,corrupt_pct: negative
-E2E-295,BOUND-58,0,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface=dcat-e2e0 --corrupt_pct=101,1,,,exitcode:1,,corrupt_pct: 101 above 100
-E2E-296,BOUND-59,0,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface=dcat-e2e0 --corrupt_pct=abc,1,,,exitcode:1,,corrupt_pct: non-numeric
-E2E-297,BOUND-60,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=0,1,,,exitcode:1,,blocks: 0 invalid
-E2E-298,BOUND-61,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=-1,1,,,exitcode:1,,blocks: negative
-E2E-299,BOUND-62,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=abc,1,,,exitcode:1,,blocks: non-numeric
-E2E-300,BOUND-63,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=0,1,,,exitcode:1,,threads: 0 invalid
-E2E-301,BOUND-64,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=-1,1,,,exitcode:1,,threads: negative
-E2E-302,BOUND-65,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=abc,1,,,exitcode:1,,threads: non-numeric
-E2E-303,BOUND-66,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=0,1,,,exitcode:1,,count: 0 invalid
-E2E-304,BOUND-67,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=-1,1,,,exitcode:1,,count: negative
-E2E-305,BOUND-68,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=abc,1,,,exitcode:1,,count: non-numeric
-E2E-306,BOUND-69,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=0,1,,,exitcode:1,,rate_mb: 0 invalid
-E2E-307,BOUND-70,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=-1,1,,,exitcode:1,,rate_mb: negative
-E2E-308,BOUND-71,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=abc,1,,,exitcode:1,,rate_mb: non-numeric
-E2E-309,BOUND-72,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=0,1,,,exitcode:1,,size_mb: 0 invalid
-E2E-310,BOUND-73,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=-1,1,,,exitcode:1,,size_mb: negative
-E2E-311,BOUND-74,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=abc,1,,,exitcode:1,,size_mb: non-numeric
-E2E-312,BOUND-75,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp --mode=invalid,1,mode must be one of,,exitcode:1,,mode: invalid enum
-E2E-313,BOUND-76,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp,3,missing required parameter,,exitcode:3,,mode: missing
-E2E-314,BOUND-77,0,network,rNET_conn_exhaust,inject,./build/dcat inject rNET_conn_exhaust --target=,3,missing required parameter,,exitcode:3,,target: empty
-E2E-315,BOUND-78,0,network,rNET_conn_exhaust,inject,./build/dcat inject rNET_conn_exhaust --target=noport,1,,,exitcode:1,,target: no port separator
-E2E-316,BOUND-79,0,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill --container=,3,missing required parameter,,exitcode:3,,container: empty
-E2E-317,BOUND-80,0,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill --container=nonexistent_ctr_xyz,1,,,exitcode:1,,container: not found
-E2E-318,BOUND-81,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/nonexistent_dir_xyz,1,,,exitcode:1,,path: not a directory
-E2E-319,BOUND-82,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=,3,missing required parameter,,exitcode:3,,path: empty
-E2E-320,BOUND-83,0,storage,rDISK_io_error,inject,./build/dcat inject rDISK_io_error --device=/tmp/not_a_block_dev,1,,,exitcode:1,,device: not a block device
-E2E-321,BOUND-84,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-322,BOUND-85,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-323,BOUND-86,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-324,BOUND-87,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-325,BOUND-88,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=abc,1,,,exitcode:1,,chip: non-numeric
-E2E-326,BOUND-89,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load ,3,missing required parameter,,exitcode:3,,chip: missing
-E2E-327,BOUND-90,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id=abc --gen=1,1,,,exitcode:1,,npu_id: non-numeric
-E2E-328,BOUND-91,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id={e2e_npu_id} --gen=abc,1,,,exitcode:1,,gen: non-numeric
-E2E-329,BOUND-92,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id={e2e_npu_id} --gen=5,1,,,exitcode:1,,gen: out of range (1-3)
-E2E-330,BOUND-93,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down ,3,missing required parameter,,exitcode:3,,npu_id: missing
-E2E-331,BOUND-94,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=abc,1,,,exitcode:1,,npu_id: non-numeric
-E2E-332,BOUND-95,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=99,1,,,exitcode:1,,npu_id: nonexistent NPU
-E2E-333,BOUND-96,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset ,3,missing required parameter,,exitcode:3,,npu_id: missing
-E2E-334,SEC-I1,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-335,SEC-I2,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-336,SEC-I3,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-337,SEC-I4,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-338,SEC-I5,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-339,SEC-I6,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-340,SEC-I7,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-341,SEC-I8,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-342,SEC-I9,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-343,SEC-I10,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-344,SEC-I11,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-345,SEC-I12,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-346,SEC-I13,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=cron;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-347,SEC-I14,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=cron$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-348,SEC-I15,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=cron|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-349,SEC-I16,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip};touch /tmp/dcat_pwned --bw_limit=10000,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-350,SEC-I17,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip}$(touch /tmp/dcat_pwned) --bw_limit=10000,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-351,SEC-I18,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip}|touch /tmp/dcat_pwned --bw_limit=10000,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-352,SEC-I19,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=1.1.1.1;touch /tmp/dcat_pwned --netmask=255.255.255.0,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-353,SEC-I20,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=1.1.1.1$(touch /tmp/dcat_pwned) --netmask=255.255.255.0,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-354,SEC-I21,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=1.1.1.1|touch /tmp/dcat_pwned --netmask=255.255.255.0,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-355,SEC-I22,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp;touch /tmp/dcat_pwned --mode=nowrite,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-356,SEC-I23,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp$(touch /tmp/dcat_pwned) --mode=nowrite,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-357,SEC-I24,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp|touch /tmp/dcat_pwned --mode=nowrite,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-358,SEC-I25,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp;touch /tmp/dcat_pwned --size=10M,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-359,SEC-I26,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp$(touch /tmp/dcat_pwned) --size=10M,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-360,SEC-I27,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp|touch /tmp/dcat_pwned --size=10M,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-361,SEC-I28,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: ;touch /tmp/dcat_pwned
-E2E-362,SEC-I29,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: $(touch /tmp/dcat_pwned)
-E2E-363,SEC-I30,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,inject payload not executed: |touch /tmp/dcat_pwned
-E2E-364,SEC-C1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0;touch /tmp/dcat_pwned,*,,,,,inject with payload
-E2E-365,SEC-C1,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: ;touch /tmp/dcat_pwned
-E2E-366,SEC-C2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0$(touch /tmp/dcat_pwned),*,,,,,inject with payload
-E2E-367,SEC-C2,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: $(touch /tmp/dcat_pwned)
-E2E-368,SEC-C3,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0|touch /tmp/dcat_pwned,*,,,,,inject with payload
-E2E-369,SEC-C3,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: |touch /tmp/dcat_pwned
-E2E-370,SEC-C4,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999;touch /tmp/dcat_pwned,*,,,,,inject with payload
-E2E-371,SEC-C4,1,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port=19999;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: ;touch /tmp/dcat_pwned
-E2E-372,SEC-C5,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999$(touch /tmp/dcat_pwned),*,,,,,inject with payload
-E2E-373,SEC-C5,1,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port=19999$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: $(touch /tmp/dcat_pwned)
-E2E-374,SEC-C6,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999|touch /tmp/dcat_pwned,*,,,,,inject with payload
-E2E-375,SEC-C6,1,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port=19999|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: |touch /tmp/dcat_pwned
-E2E-376,SEC-C7,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp;touch /tmp/dcat_pwned,*,,,,,inject with payload
-E2E-377,SEC-C7,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: ;touch /tmp/dcat_pwned
-E2E-378,SEC-C8,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp$(touch /tmp/dcat_pwned),*,,,,,inject with payload
-E2E-379,SEC-C8,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: $(touch /tmp/dcat_pwned)
-E2E-380,SEC-C9,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp|touch /tmp/dcat_pwned,*,,,,,inject with payload
-E2E-381,SEC-C9,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,clean payload not executed: |touch /tmp/dcat_pwned
-E2E-382,SEC-P1,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface=dcat-e2e0 --delay_ms=100,nonzero,,tc qdisc show dev dcat-e2e0 2>/dev/null | grep -c netem,==0,,non-root: no qdisc
-E2E-383,SEC-P1,1,network,rNET_delay,query_noghost,./build/dcat query,0,,,state_not_contains:rNET_delay,,no ghost on perm fail
-E2E-384,SEC-P2,0,network,rNET_tcp_loss,inject,./build/dcat inject rNET_tcp_loss --port=19998,nonzero,,iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:19998',==0,,non-root: no iptables
-E2E-385,SEC-P2,1,network,rNET_tcp_loss,query_noghost,./build/dcat query,0,,,state_not_contains:rNET_tcp_loss,,no ghost on perm fail
-E2E-386,SEC-H1,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=eth0-mgmt-test,nonzero,,,,,no mgmt-iface guard
-E2E-387,SEC-H2,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=sshd-test,nonzero,,,,,no sshd guard
-E2E-388,SEC-H3,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=2 --size_mb=200,0,"""status"":""ok""",ls /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null | wc -l,==0,,write containment: /tmp only
-E2E-389,SEC-H3,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp,0,,,,,cleanup
-E2E-390,SEC-H4,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --bogus=1,3,unknown parameter,,exitcode:3,,undeclared param rejected
-E2E-391,SEC-S1,0,storage,rDISK_write_overload,inject,ln -sf /etc /tmp/dcat_symtest 2>/dev/null; ./build/dcat inject rDISK_write_overload --device=/tmp/dcat_symtest --workers=1 --size_mb=1,*,,ls /etc/dcat.stress.* 2>/dev/null | wc -l,==0,,symlink: no write to /etc
-E2E-392,SEC-S1,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp/dcat_symtest; rm -f /tmp/dcat_symtest,0,,,,,cleanup symlink
-E2E-393,STATE-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-394,STATE-1,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,first clean ok
-E2E-395,STATE-1,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload --cores=0,1,,,,,second clean: no active
-E2E-396,STATE-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-397,STATE-2,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload,0,,pgrep -x perl | wc -l,==0,,no-arg clean ok
-E2E-398,STATE-2,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload,0,,,,,no-arg clean idempotent
-E2E-399,STATE-2,3,cpu,rCPU_overload,query_empty,./build/dcat query,0,,,state_not_contains:rCPU_overload,,no ghost
-E2E-400,STATE-3,0,cpu,rCPU_overload,inject1,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject1
-E2E-401,STATE-3,1,cpu,rCPU_overload,force_replace,./build/dcat inject rCPU_overload --cores=0 --force,0,"""status"":""ok""",pgrep -x perl | wc -l,<=2,,--force replace
-E2E-402,STATE-3,2,cpu,rCPU_overload,query_one,./build/dcat query,0,,,state_contains:rCPU_overload,,one record
-E2E-403,STATE-3,3,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
-E2E-404,STATE-4,0,cpu,rCPU_overload,inject1,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject1
-E2E-405,STATE-4,1,cpu,rCPU_overload,reject,./build/dcat inject rCPU_overload --cores=0,5,,pgrep -x perl | wc -l,>=1,,reinject rejected code5
-E2E-406,STATE-4,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
-E2E-407,STATE-5,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-408,STATE-5,1,cpu,rCPU_overload,query1,./build/dcat query,0,,,state_contains:rCPU_overload,,query sees it
-E2E-409,STATE-5,2,cpu,rCPU_overload,query2,./build/dcat query,0,,,state_contains:rCPU_overload,,query idempotent
-E2E-410,STATE-5,3,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,cleanup
-E2E-411,STATE-6,0,cpu,rCPU_overload,inject_a,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject cores=0
-E2E-412,STATE-6,1,cpu,rCPU_overload,inject_b,./build/dcat inject rCPU_overload --cores=2,0,"""status"":""ok""",,,,inject cores=2 (different resource)
-E2E-413,STATE-6,2,cpu,rCPU_overload,query_two,./build/dcat query,0,,,out_contains:rCPU_overload,,two records
-E2E-414,STATE-6,3,cpu,rCPU_overload,clean_a,./build/dcat clean rCPU_overload --cores=0,0,,,,,clean cores=0
-E2E-415,STATE-6,4,cpu,rCPU_overload,clean_b,./build/dcat clean rCPU_overload --cores=2,0,,,,,clean cores=2
-E2E-416,STATE-7,0,npu,rNPU_mtu_mismatch,setup,hccn_tool -i {e2e_chip} -mtu -s size 1500 2>/dev/null,0,,,,,reset MTU baseline 1500
-E2E-417,STATE-7,1,npu,rNPU_mtu_mismatch,inject1,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",,,,inject1 NPU
-E2E-418,STATE-7,2,npu,rNPU_mtu_mismatch,reject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,5,,,exitcode:5,,NPU reinject rejected code5
-E2E-419,STATE-7,3,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip},0,,,,,cleanup NPU
-E2E-420,STATE-8,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,inject
-E2E-421,STATE-8,1,memory,rMEM_leak,clean1,./build/dcat clean rMEM_leak,0,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,==0,,first clean ok
-E2E-422,STATE-8,2,memory,rMEM_leak,clean2,./build/dcat clean rMEM_leak,1,,,,,second clean: no active
-E2E-423,STATE-9,0,memory,rMEM_leak,inject1,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,inject1
-E2E-424,STATE-9,1,memory,rMEM_leak,reject,./build/dcat inject rMEM_leak --size_mb=32,5,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,reinject rejected code5
-E2E-425,STATE-9,2,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak,0,,,,,cleanup
-E2E-426,STATE-10,0,memory,rMEM_leak,inject1,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,inject1
-E2E-427,STATE-10,1,memory,rMEM_leak,force_replace,./build/dcat inject rMEM_leak --size_mb=32 --force,0,"""status"":""ok""",ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,--force replace
-E2E-428,STATE-10,2,memory,rMEM_leak,query_one,./build/dcat query,0,,,state_contains:rMEM_leak,,one record
-E2E-429,STATE-10,3,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak,0,,,,,cleanup
-E2E-430,RES-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject fault1
-E2E-431,RES-1,1,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",,,sleep_pid,inject fault2
-E2E-432,RES-1,2,mixed,all,lose_state,rm -f $E2E_HOME/.demoncat/state.json,0,,,,,simulate state deletion
-E2E-433,RES-1,3,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,one-click recovery
-E2E-434,RES-1,4,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,no ghost
-E2E-435,RES-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-436,RES-2,1,mixed,all,corrupt_state,echo '{bad json}}}' > $E2E_HOME/.demoncat/state.json,0,,,,,corrupt state.json
-E2E-437,RES-2,2,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,recover despite corrupt
-E2E-438,RES-2,3,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,no ghost
-E2E-439,RES-3,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-440,RES-3,1,mixed,all,orphan,rm -f $E2E_HOME/.demoncat/state.json,0,,,,,orphan artifact
-E2E-441,RES-3,2,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,recover orphan
-E2E-442,RES-4,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-443,RES-4,1,mixed,all,drop_artifact,rm -f /tmp/dcat-rCPU_overload-c0.pid; pkill -x perl 2>/dev/null; true,0,,,,,drop artifact (ghost)
-E2E-444,RES-4,2,mixed,all,clean_all,./build/dcat clean --all,0,,,,,reconcile ghost
-E2E-445,RES-4,3,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,ghost reconciled
-E2E-446,RES-5,0,mixed,all,clean_all_1,./build/dcat clean --all,0,,,,,first clean --all
-E2E-447,RES-5,1,mixed,all,clean_all_2,./build/dcat clean --all,0,,,,,second clean --all (idempotent)
-E2E-448,RES-6,0,chaos,state_full,fill_table,for p in $(seq 19000 19032); do ./build/dcat inject rNET_port_occupy --port=$p; done,1,,,out_contains:state table full,,33rd inject fails: state full
-E2E-449,RES-6,1,chaos,state_full,query_records,./build/dcat query,0,,,out_contains:rNET_port_occupy,,32 records
-E2E-450,RES-6,2,chaos,state_full,clean_all,./build/dcat clean --all,0,,,,,clean --all clears all
-E2E-451,RES-6,3,chaos,state_full,query_empty,./build/dcat query,0,,,state_empty,,empty after clean
-E2E-452,RES-7,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject CPU fault
-E2E-453,RES-7,1,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",,,,inject NPU fault
-E2E-454,RES-7,2,mixed,all,lose_state,rm -f $E2E_HOME/.demoncat/state.json,0,,,,,simulate state deletion
-E2E-455,RES-7,3,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,one-click recovery (CPU+NPU)
-E2E-456,RES-7,4,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,no ghost
-E2E-457,CLI-1,0,cli,cli,negative,./build/dcat,2,subcommand,,exitcode:2,,no args → help + exit2
-E2E-458,CLI-2,0,cli,cli,negative,./build/dcat injec rCPU_overload --cores=0,2,missing subcommand before,,exitcode:2,,unknown subcommand
-E2E-459,CLI-3,0,cli,cli,negative,./build/dcat inject rCPU_overload --cores=0 --force=1,2,--force does not take a value,,exitcode:2,,--force=x parse error
-E2E-460,CLI-4,0,cli,cli,negative,./build/dcat inject --all rCPU_overload --cores=0,2,unexpected positional argument,,exitcode:2,,--all with non-clean
-E2E-461,CLI-5,0,cli,cli,negative,./build/dcat clean,2,uid required,,exitcode:2,,clean no uid
-E2E-462,CLI-6,0,cli,cli,negative,./build/dcat inject rCPU_overload --cores,2,missing '=value',,exitcode:2,,--key no =value
-E2E-463,CLI-7,0,cli,cli,negative,./build/dcat inject rCPU_overload cores=0,2,missing the '--' prefix,,exitcode:2,,key=value no --
-E2E-464,CLI-8,0,cli,cli,negative,./build/dcat inject rCPU_overload --=val,3,unknown parameter,,exitcode:3,,--=val empty name
-E2E-465,CLI-9,0,cli,cli,negative,./build/dcat query rCPU_overload --bogus=1,3,unknown parameter,,exitcode:3,,query unknown param
-E2E-466,CLI-10,0,cli,cli,negative,./build/dcat inject rPROC_exit,3,missing required parameter,,exitcode:3,,inject-only missing required
-E2E-467,CLI-11,0,cli,cli,negative,./build/dcat inject nope --cores=0,4,not found,,exitcode:4,,unknown uid code4
-E2E-468,CLI-12,0,cli,cli,negative,./build/dcat inject rCPU_overload,3,missing required parameter,,exitcode:3,,missing required code3
-E2E-469,CLI-H1,0,help,help,help,./build/dcat --help,0,subcommand,,exitcode:0,,global help
-E2E-470,CLI-H2,0,help,help,help,./build/dcat inject --help,0,inject <uid>,,exitcode:0,,inject subhelp
-E2E-471,CLI-H3,0,help,help,help,./build/dcat clean --help,0,clean,,exitcode:0,,clean subhelp
-E2E-472,CLI-H4,0,help,help,help,./build/dcat query --help,0,query,,exitcode:0,,query subhelp
-E2E-473,CLI-H5,0,help,help,help,./build/dcat list --help,0,list,,exitcode:0,,list subhelp
-E2E-474,CLI-C1,0,config,config,custom,./build/dcat --config config/demoncat.conf list,0,rCPU_overload,,exitcode:0,,--config custom path
-E2E-475,CLI-C2,0,config,config,nonexistent,./build/dcat --config /nonexistent/dcat.conf list,1,config load failed,,exitcode:1,,--config nonexistent
-E2E-476,CLI-L1,0,all,all,list,./build/dcat list,0,rCPU_overload,,,,list returns catalog
-E2E-477,CLI-SERVE,0,serve,serve,help,./build/dcat serve --help,0,serve,,,,serve subhelp
-E2E-478,CLI-SERVE,1,serve,serve,badport,./build/dcat serve --port=abc,2,--port,,exitcode:2,,serve bad port parse
-E2E-479,CLI-SERVE,2,serve,serve,start,./build/dcat serve --port 18080 --webroot . >/tmp/dcat_serve_e2e.log 2>&1 & sleep 1; curl -s http://127.0.0.1:18080/api/health,0,"""status"":""ok""",,"out_contains:""status"":""ok""",,serve start + health
-E2E-480,CLI-SERVE,3,serve,serve,readonly,"curl -s -X POST http://127.0.0.1:18080/api/inject -d '{{""uid"":""rCPU_overload""}}'",0,write disabled,,out_contains:write disabled,,read-only POST inject rejected
-E2E-481,CLI-SERVE,4,serve,serve,catalog,curl -s http://127.0.0.1:18080/api/catalog,0,rCPU_overload,,out_contains:rCPU_overload,,serve catalog endpoint
-E2E-482,CLI-SERVE,5,serve,serve,trav_lit,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/../../etc/passwd,0,,,out_contains:404,,serve traversal .. rejected (realpath 兜底)
-E2E-483,CLI-SERVE,6,serve,serve,trav_enc,curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18080/%2e%2e/%2e%2e/etc/passwd',0,,,out_contains:403,,serve URL-encoded traversal rejected
-E2E-484,CLI-SERVE,7,serve,serve,cleanup,pkill -x dcat 2>/dev/null; sleep 0.5; true,0,,,,,kill serve
-E2E-485,CONC-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-486,CONC-1,1,cpu,rCPU_overload,concurrent_clean_inject,./build/dcat clean rCPU_overload --cores=0 & sleep 0.05; ./build/dcat inject rCPU_overload --cores=0 --force,*,,,,,concurrent clean+inject: no crash
-E2E-487,CONC-1,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,cleanup
-E2E-488,CONC-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject
-E2E-489,CONC-2,1,cpu,rCPU_overload,concurrent_cleanall_inject,./build/dcat clean --all & sleep 0.05; ./build/dcat inject rCPU_overload --cores=0,*,,,,,concurrent clean --all + inject: no crash
-E2E-490,CONC-2,2,mixed,all,clean,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,cleanup
-E2E-491,CONC-3,0,cpu,rCPU_overload,dual_inject,./build/dcat inject rCPU_overload --cores=0 & ./build/dcat inject rCPU_overload --cores=2 & wait,*,,,,,dual inject: no state corruption
-E2E-492,CONC-3,1,cpu,rCPU_overload,query_consistent,./build/dcat query,0,,,state_contains:rCPU_overload,,state consistent
-E2E-493,CONC-3,2,mixed,all,clean,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,cleanup
-E2E-494,INTER-1,0,cpu,rCPU_overload,inject_cpu,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject CPU
-E2E-495,INTER-1,1,network,rNET_port_occupy,inject_port,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,inject port
-E2E-496,INTER-1,2,cpu,rCPU_overload,clean_cpu,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,clean CPU
-E2E-497,INTER-1,3,network,rNET_port_occupy,verify_port_still,./build/dcat query,0,,,state_contains:rNET_port_occupy,,port still active after CPU clean
-E2E-498,INTER-1,4,network,rNET_port_occupy,clean_port,./build/dcat clean rNET_port_occupy --port={port},0,,,,,cleanup port
-E2E-499,INTER-2,0,cpu,rCPU_overload,inject_cpu,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject CPU
-E2E-500,INTER-2,1,network,rNET_port_occupy,inject_port,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,inject port
-E2E-501,INTER-2,2,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,clean --all
-E2E-502,INTER-2,3,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,all cleared
-E2E-503,INTER-3,0,cpu,rCPU_overload,inject_a,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,inject cores=0
-E2E-504,INTER-3,1,cpu,rCPU_overload,inject_b,./build/dcat inject rCPU_overload --cores=2,0,"""status"":""ok""",pgrep -x perl | wc -l,>=2,,inject cores=2
-E2E-505,INTER-3,2,cpu,rCPU_overload,clean_a,./build/dcat clean rCPU_overload --cores=0,0,,,,,clean cores=0
-E2E-506,INTER-3,3,cpu,rCPU_overload,verify_b_still,./build/dcat query,0,,,state_contains:rCPU_overload,,cores=2 still active
-E2E-507,INTER-3,4,cpu,rCPU_overload,clean_b,./build/dcat clean rCPU_overload --cores=2,0,,pgrep -x perl | wc -l,==0,,clean cores=2
+id,flow_id,step,module,fault_uid,phase,command,expected_exit_code,expected_json,verify_cmd,verify_assert,provision,precondition,expected_behavior
+E2E-001,FUNC-rCPU_core_hang,0,cpu,rCPU_core_hang,inject,./build/dcat inject rCPU_core_hang --cores=0,0,"""status"":""ok""",ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-002,FUNC-rCPU_core_hang,1,cpu,rCPU_core_hang,clean,./build/dcat clean rCPU_core_hang ,0,,ls /tmp/dcat-rCPU_core_hang.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-003,FUNC-rCPU_core_hang,2,cpu,rCPU_core_hang,query,./build/dcat query,0,,,state_not_contains:rCPU_core_hang,,none,no ghost record after clean
+E2E-004,FUNC-rCPU_core_offline,0,cpu,rCPU_core_offline,inject,./build/dcat inject rCPU_core_offline --cores=1,0,"""status"":""ok""",cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA,eq:0,,root+sysfs_writable+allow_cpu_offline,fault active after inject
+E2E-005,FUNC-rCPU_core_offline,1,cpu,rCPU_core_offline,clean,./build/dcat clean rCPU_core_offline --cores=1,0,,cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA,eq:1,,root+sysfs_writable+allow_cpu_offline,"fault cleaned, system restored"
+E2E-006,FUNC-rCPU_core_offline,2,cpu,rCPU_core_offline,query,./build/dcat query,0,,,state_not_contains:rCPU_core_offline,,root+sysfs_writable+allow_cpu_offline,no ghost record after clean
+E2E-007,FUNC-rCPU_freq,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=1000,0,"""status"":""ok""",cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null,eq:1000000,,root+cpufreq,fault active after inject
+E2E-008,FUNC-rCPU_freq,1,cpu,rCPU_freq,clean,./build/dcat clean rCPU_freq ,0,,cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null,ne:1000000,,root+cpufreq,"fault cleaned, system restored"
+E2E-009,FUNC-rCPU_freq,2,cpu,rCPU_freq,query,./build/dcat query,0,,,state_not_contains:rCPU_freq,,root+cpufreq,no ghost record after clean
+E2E-010,FUNC-rCPU_overload,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=100,0,"""status"":""ok""",pgrep -x perl | wc -l,>=1,,none,fault active after inject
+E2E-011,FUNC-rCPU_overload,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-012,FUNC-rCPU_overload,2,cpu,rCPU_overload,query,./build/dcat query,0,,,state_not_contains:rCPU_overload,,none,no ghost record after clean
+E2E-013,FUNC-rCPU_quota,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=50,0,"""status"":""ok""",ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l,>=1,,root+cgroup,fault active after inject
+E2E-014,FUNC-rCPU_quota,1,cpu,rCPU_quota,clean,./build/dcat clean rCPU_quota ,0,,ls /tmp/dcat-rCPU_quota.sidecar 2>/dev/null | wc -l,==0,,root+cgroup,"fault cleaned, system restored"
+E2E-015,FUNC-rCPU_quota,2,cpu,rCPU_quota,query,./build/dcat query,0,,,state_not_contains:rCPU_quota,,root+cgroup,no ghost record after clean
+E2E-016,FUNC-rDISK_inode_exhaust,0,storage,rDISK_inode_exhaust,inject,./build/dcat inject rDISK_inode_exhaust --path=/tmp --count=500,0,"""status"":""ok""",ls /tmp/dcat-rDISK_inode_exhaust.sidecar 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-017,FUNC-rDISK_inode_exhaust,1,storage,rDISK_inode_exhaust,clean,./build/dcat clean rDISK_inode_exhaust ,0,,ls /tmp/dcat-rDISK_inode_exhaust.sidecar 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-018,FUNC-rDISK_inode_exhaust,2,storage,rDISK_inode_exhaust,query,./build/dcat query,0,,,state_not_contains:rDISK_inode_exhaust,,none,no ghost record after clean
+E2E-019,FUNC-rDISK_io_delay,0,storage,rDISK_io_delay,setup,,0,,,,loop_device,root+dm_delay,provision loop_device
+E2E-020,FUNC-rDISK_io_delay,1,storage,rDISK_io_delay,inject,./build/dcat inject rDISK_io_delay --device={loop_dev} --delay_ms=10,0,"""status"":""ok""",ls /tmp/dcat-rDISK_io_delay.sidecar 2>/dev/null | wc -l,>=1,,root+dm_delay,fault active after inject
+E2E-021,FUNC-rDISK_io_delay,2,storage,rDISK_io_delay,clean,./build/dcat clean rDISK_io_delay ,0,,ls /tmp/dcat-rDISK_io_delay.sidecar 2>/dev/null | wc -l,==0,,root+dm_delay,"fault cleaned, system restored"
+E2E-022,FUNC-rDISK_io_delay,3,storage,rDISK_io_delay,query,./build/dcat query,0,,,state_not_contains:rDISK_io_delay,,root+dm_delay,no ghost record after clean
+E2E-023,FUNC-rDISK_io_error,0,storage,rDISK_io_error,setup,,0,,,,loop_device,root+dm_error,provision loop_device
+E2E-024,FUNC-rDISK_io_error,1,storage,rDISK_io_error,inject,./build/dcat inject rDISK_io_error --device={loop_dev},0,"""status"":""ok""",ls /tmp/dcat-rDISK_io_error.sidecar 2>/dev/null | wc -l,>=1,,root+dm_error,fault active after inject
+E2E-025,FUNC-rDISK_io_error,2,storage,rDISK_io_error,clean,./build/dcat clean rDISK_io_error ,0,,ls /tmp/dcat-rDISK_io_error.sidecar 2>/dev/null | wc -l,==0,,root+dm_error,"fault cleaned, system restored"
+E2E-026,FUNC-rDISK_io_error,3,storage,rDISK_io_error,query,./build/dcat query,0,,,state_not_contains:rDISK_io_error,,root+dm_error,no ghost record after clean
+E2E-027,FUNC-rDISK_part_full,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp --size=50M,0,"""status"":""ok""",ls /tmp/dcat-rDISK_part_full.sidecar 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-028,FUNC-rDISK_part_full,1,storage,rDISK_part_full,clean,./build/dcat clean rDISK_part_full ,0,,ls /tmp/dcat-rDISK_part_full.sidecar 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-029,FUNC-rDISK_part_full,2,storage,rDISK_part_full,query,./build/dcat query,0,,,state_not_contains:rDISK_part_full,,none,no ghost record after clean
+E2E-030,FUNC-rDISK_write_overload,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/dev/shm --workers=2 --size_mb=10,0,"""status"":""ok""",ls /dev/shm/dcat.stress.* 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-031,FUNC-rDISK_write_overload,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/dev/shm,0,,ls /dev/shm/dcat.stress.* 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-032,FUNC-rDISK_write_overload,2,storage,rDISK_write_overload,query,./build/dcat query,0,,,state_not_contains:rDISK_write_overload,,none,no ghost record after clean
+E2E-033,FUNC-rDOCKER_kill,0,docker,rDOCKER_kill,setup,,0,,,,docker_container,docker,provision docker_container
+E2E-034,FUNC-rDOCKER_kill,1,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill --container={ctr},0,"""status"":""ok""",docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null,eq:exited,,docker,fault active after inject
+E2E-035,FUNC-rDOCKER_kill,2,docker,rDOCKER_kill,clean,./build/dcat clean rDOCKER_kill ,0,,docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null,ne:exited,,docker,"fault cleaned, system restored"
+E2E-036,FUNC-rDOCKER_kill,3,docker,rDOCKER_kill,query,./build/dcat query,0,,,state_not_contains:rDOCKER_kill,,docker,no ghost record after clean
+E2E-037,FUNC-rDOCKER_mem_overload,0,docker,rDOCKER_mem_overload,setup,,0,,,,docker_container,docker+python3,provision docker_container
+E2E-038,FUNC-rDOCKER_mem_overload,1,docker,rDOCKER_mem_overload,inject,./build/dcat inject rDOCKER_mem_overload --container={ctr} --size=128M,0,"""status"":""ok""",ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l,>=1,,docker+python3,fault active after inject
+E2E-039,FUNC-rDOCKER_mem_overload,2,docker,rDOCKER_mem_overload,clean,./build/dcat clean rDOCKER_mem_overload ,0,,ls /tmp/dcat-rDOCKER_mem_overload.pid 2>/dev/null | wc -l,==0,,docker+python3,"fault cleaned, system restored"
+E2E-040,FUNC-rDOCKER_mem_overload,3,docker,rDOCKER_mem_overload,query,./build/dcat query,0,,,state_not_contains:rDOCKER_mem_overload,,docker+python3,no ghost record after clean
+E2E-041,FUNC-rFS_file_lock,0,filesystem,rFS_file_lock,setup,echo test > /tmp/dcat_fslock_test,0,,,,none,none,provision none
+E2E-042,FUNC-rFS_file_lock,1,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp/dcat_fslock_test --mode=nowrite,0,"""status"":""ok""",stat -c %a /tmp/dcat_fslock_test 2>/dev/null,eq:444,,none,fault active after inject
+E2E-043,FUNC-rFS_file_lock,2,filesystem,rFS_file_lock,clean,./build/dcat clean rFS_file_lock ,0,,stat -c %a /tmp/dcat_fslock_test 2>/dev/null,ne:444,,none,"fault cleaned, system restored"
+E2E-044,FUNC-rFS_file_lock,3,filesystem,rFS_file_lock,query,./build/dcat query,0,,,state_not_contains:rFS_file_lock,,none,no ghost record after clean
+E2E-045,FUNC-rFS_iowait_high,0,filesystem,rFS_iowait_high,inject,./build/dcat inject rFS_iowait_high --path=/tmp --workers=1,0,"""status"":""ok""",ls /tmp/dcat-rFS_iowait_high.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-046,FUNC-rFS_iowait_high,1,filesystem,rFS_iowait_high,clean,./build/dcat clean rFS_iowait_high ,0,,ls /tmp/dcat-rFS_iowait_high.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-047,FUNC-rFS_iowait_high,2,filesystem,rFS_iowait_high,query,./build/dcat query,0,,,state_not_contains:rFS_iowait_high,,none,no ghost record after clean
+E2E-048,FUNC-rMEM_fragment,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=20,0,"""status"":""ok""",ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-049,FUNC-rMEM_fragment,1,memory,rMEM_fragment,clean,./build/dcat clean rMEM_fragment ,0,,ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-050,FUNC-rMEM_fragment,2,memory,rMEM_fragment,query,./build/dcat query,0,,,state_not_contains:rMEM_fragment,,none,no ghost record after clean
+E2E-051,FUNC-rMEM_leak,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-052,FUNC-rMEM_leak,1,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak ,0,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-053,FUNC-rMEM_leak,2,memory,rMEM_leak,query,./build/dcat query,0,,,state_not_contains:rMEM_leak,,none,no ghost record after clean
+E2E-054,FUNC-rMEM_oom,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=256,0,"""status"":""ok""",ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-055,FUNC-rMEM_oom,1,memory,rMEM_oom,clean,./build/dcat clean rMEM_oom ,0,,ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-056,FUNC-rMEM_oom,2,memory,rMEM_oom,query,./build/dcat query,0,,,state_not_contains:rMEM_oom,,none,no ghost record after clean
+E2E-057,FUNC-rMEM_swap_overload,0,memory,rMEM_swap_overload,inject,./build/dcat inject rMEM_swap_overload --size_mb=128,0,"""status"":""ok""",ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-058,FUNC-rMEM_swap_overload,1,memory,rMEM_swap_overload,clean,./build/dcat clean rMEM_swap_overload ,0,,ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-059,FUNC-rMEM_swap_overload,2,memory,rMEM_swap_overload,query,./build/dcat query,0,,,state_not_contains:rMEM_swap_overload,,none,no ghost record after clean
+E2E-060,FUNC-rNET_bw_limit,0,network,rNET_bw_limit,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-061,FUNC-rNET_bw_limit,1,network,rNET_bw_limit,inject,./build/dcat inject rNET_bw_limit --iface={iface} --rate_kbps=1000,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-062,FUNC-rNET_bw_limit,2,network,rNET_bw_limit,clean,./build/dcat clean rNET_bw_limit --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-063,FUNC-rNET_bw_limit,3,network,rNET_bw_limit,query,./build/dcat query,0,,,state_not_contains:rNET_bw_limit,,root+tc+dummy_iface,no ghost record after clean
+E2E-064,FUNC-rNET_conn_exhaust,0,network,rNET_conn_exhaust,setup,,0,,,,free_port,none,provision free_port
+E2E-065,FUNC-rNET_conn_exhaust,1,network,rNET_conn_exhaust,inject,./build/dcat inject rNET_conn_exhaust --target=127.0.0.1:{port} --count=20,0,"""status"":""ok""",ls /tmp/dcat-rNET_conn_exhaust.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-066,FUNC-rNET_conn_exhaust,2,network,rNET_conn_exhaust,clean,./build/dcat clean rNET_conn_exhaust ,0,,ls /tmp/dcat-rNET_conn_exhaust.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-067,FUNC-rNET_conn_exhaust,3,network,rNET_conn_exhaust,query,./build/dcat query,0,,,state_not_contains:rNET_conn_exhaust,,none,no ghost record after clean
+E2E-068,FUNC-rNET_corrupt,0,network,rNET_corrupt,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-069,FUNC-rNET_corrupt,1,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface={iface} --corrupt_pct=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-070,FUNC-rNET_corrupt,2,network,rNET_corrupt,clean,./build/dcat clean rNET_corrupt ,0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-071,FUNC-rNET_corrupt,3,network,rNET_corrupt,query,./build/dcat query,0,,,state_not_contains:rNET_corrupt,,root+tc+dummy_iface,no ghost record after clean
+E2E-072,FUNC-rNET_degrade,0,network,rNET_degrade,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-073,FUNC-rNET_degrade,1,network,rNET_degrade,inject,./build/dcat inject rNET_degrade --iface={iface} --speed_mbps=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-074,FUNC-rNET_degrade,2,network,rNET_degrade,clean,./build/dcat clean rNET_degrade --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c tbf,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-075,FUNC-rNET_degrade,3,network,rNET_degrade,query,./build/dcat query,0,,,state_not_contains:rNET_degrade,,root+tc+dummy_iface,no ghost record after clean
+E2E-076,FUNC-rNET_delay,0,network,rNET_delay,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-077,FUNC-rNET_delay,1,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface={iface} --delay_ms=100,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-078,FUNC-rNET_delay,2,network,rNET_delay,clean,./build/dcat clean rNET_delay --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-079,FUNC-rNET_delay,3,network,rNET_delay,query,./build/dcat query,0,,,state_not_contains:rNET_delay,,root+tc+dummy_iface,no ghost record after clean
+E2E-080,FUNC-rNET_down,0,network,rNET_down,setup,,0,,,,dummy_iface,root+ip+dummy_iface,provision dummy_iface
+E2E-081,FUNC-rNET_down,1,network,rNET_down,inject,./build/dcat inject rNET_down --iface={iface},0,"""status"":""ok""",ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',eq:DOWN,,root+ip+dummy_iface,fault active after inject
+E2E-082,FUNC-rNET_down,2,network,rNET_down,clean,./build/dcat clean rNET_down --iface={iface},0,,ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',ne:DOWN,,root+ip+dummy_iface,"fault cleaned, system restored"
+E2E-083,FUNC-rNET_down,3,network,rNET_down,query,./build/dcat query,0,,,state_not_contains:rNET_down,,root+ip+dummy_iface,no ghost record after clean
+E2E-084,FUNC-rNET_jitter,0,network,rNET_jitter,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-085,FUNC-rNET_jitter,1,network,rNET_jitter,inject,./build/dcat inject rNET_jitter --iface={iface} --delay_ms=50 --jitter_ms=10,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-086,FUNC-rNET_jitter,2,network,rNET_jitter,clean,./build/dcat clean rNET_jitter --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-087,FUNC-rNET_jitter,3,network,rNET_jitter,query,./build/dcat query,0,,,state_not_contains:rNET_jitter,,root+tc+dummy_iface,no ghost record after clean
+E2E-088,FUNC-rNET_link_flap,0,network,rNET_link_flap,setup,,0,,,,dummy_iface,root+ip+dummy_iface,provision dummy_iface
+E2E-089,FUNC-rNET_link_flap,1,network,rNET_link_flap,inject,./build/dcat inject rNET_link_flap --iface={iface} --cycle_sec=1 --count=2,0,"""status"":""ok""",ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',nonempty,,root+ip+dummy_iface,fault active after inject
+E2E-090,FUNC-rNET_link_flap,2,network,rNET_link_flap,clean,./build/dcat clean rNET_link_flap --iface={iface},0,,ip -o link show dev {iface} 2>/dev/null | grep -o 'state [A-Z]*' | awk '{print $2}',ne:DOWN,,root+ip+dummy_iface,"fault cleaned, system restored"
+E2E-091,FUNC-rNET_link_flap,3,network,rNET_link_flap,query,./build/dcat query,0,,,state_not_contains:rNET_link_flap,,root+ip+dummy_iface,no ghost record after clean
+E2E-092,FUNC-rNET_loss,0,network,rNET_loss,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-093,FUNC-rNET_loss,1,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface={iface} --loss_pct=5,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-094,FUNC-rNET_loss,2,network,rNET_loss,clean,./build/dcat clean rNET_loss --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-095,FUNC-rNET_loss,3,network,rNET_loss,query,./build/dcat query,0,,,state_not_contains:rNET_loss,,root+tc+dummy_iface,no ghost record after clean
+E2E-096,FUNC-rNET_port_occupy,0,network,rNET_port_occupy,setup,,0,,,,free_port,none,provision free_port
+E2E-097,FUNC-rNET_port_occupy,1,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",ss -tlnp 2>/dev/null | grep -c ':{port}',>=1,,none,fault active after inject
+E2E-098,FUNC-rNET_port_occupy,2,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port={port},0,,ss -tlnp 2>/dev/null | grep -c ':{port}',==0,,none,"fault cleaned, system restored"
+E2E-099,FUNC-rNET_port_occupy,3,network,rNET_port_occupy,query,./build/dcat query,0,,,state_not_contains:rNET_port_occupy,,none,no ghost record after clean
+E2E-100,FUNC-rNET_reorder,0,network,rNET_reorder,setup,,0,,,,dummy_iface,root+tc+dummy_iface,provision dummy_iface
+E2E-101,FUNC-rNET_reorder,1,network,rNET_reorder,inject,./build/dcat inject rNET_reorder --iface={iface} --reorder_pct=30,0,"""status"":""ok""",tc qdisc show dev {iface} 2>/dev/null | grep -c netem,>=1,,root+tc+dummy_iface,fault active after inject
+E2E-102,FUNC-rNET_reorder,2,network,rNET_reorder,clean,./build/dcat clean rNET_reorder --iface={iface},0,,tc qdisc show dev {iface} 2>/dev/null | grep -c netem,==0,,root+tc+dummy_iface,"fault cleaned, system restored"
+E2E-103,FUNC-rNET_reorder,3,network,rNET_reorder,query,./build/dcat query,0,,,state_not_contains:rNET_reorder,,root+tc+dummy_iface,no ghost record after clean
+E2E-104,FUNC-rNET_service_stop,0,network,rNET_service_stop,setup,,0,,,,noncritical_svc,root+systemctl+noncritical_svc,provision noncritical_svc
+E2E-105,FUNC-rNET_service_stop,1,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service={svc},0,"""status"":""ok""",systemctl is-active {svc} 2>/dev/null,eq:inactive,,root+systemctl+noncritical_svc,fault active after inject
+E2E-106,FUNC-rNET_service_stop,2,network,rNET_service_stop,clean,./build/dcat clean rNET_service_stop --service={svc},0,,systemctl is-active {svc} 2>/dev/null,ne:inactive,,root+systemctl+noncritical_svc,"fault cleaned, system restored"
+E2E-107,FUNC-rNET_service_stop,3,network,rNET_service_stop,query,./build/dcat query,0,,,state_not_contains:rNET_service_stop,,root+systemctl+noncritical_svc,no ghost record after clean
+E2E-108,FUNC-rNET_tcp_loss,0,network,rNET_tcp_loss,setup,,0,,,,free_port,root+iptables,provision free_port
+E2E-109,FUNC-rNET_tcp_loss,1,network,rNET_tcp_loss,inject,./build/dcat inject rNET_tcp_loss --port={port},0,"""status"":""ok""",iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:{port}',>=1,,root+iptables,fault active after inject
+E2E-110,FUNC-rNET_tcp_loss,2,network,rNET_tcp_loss,clean,./build/dcat clean rNET_tcp_loss --port={port},0,,iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:{port}',==0,,root+iptables,"fault cleaned, system restored"
+E2E-111,FUNC-rNET_tcp_loss,3,network,rNET_tcp_loss,query,./build/dcat query,0,,,state_not_contains:rNET_tcp_loss,,root+iptables,no ghost record after clean
+E2E-112,FUNC-rNPU_aic_load,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load --chip={e2e_chip} --load_pct=100,0,"""status"":""ok""",./build/dcat query rNPU_aic_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',>=1,,hccn_tool,fault active after inject
+E2E-113,FUNC-rNPU_aic_load,1,npu,rNPU_aic_load,clean,./build/dcat clean rNPU_aic_load --chip={e2e_chip},0,,./build/dcat query rNPU_aic_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',==0,,hccn_tool,"fault cleaned, system restored"
+E2E-114,FUNC-rNPU_aic_load,2,npu,rNPU_aic_load,query,./build/dcat query,0,,,state_not_contains:rNPU_aic_load,,hccn_tool,no ghost record after clean
+E2E-115,FUNC-rNPU_aiv_load,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --chip={e2e_chip} --load_pct=100,0,"""status"":""ok""",./build/dcat query rNPU_aiv_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',>=1,,hccn_tool,fault active after inject
+E2E-116,FUNC-rNPU_aiv_load,1,npu,rNPU_aiv_load,clean,./build/dcat clean rNPU_aiv_load --chip={e2e_chip},0,,./build/dcat query rNPU_aiv_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',==0,,hccn_tool,"fault cleaned, system restored"
+E2E-117,FUNC-rNPU_aiv_load,2,npu,rNPU_aiv_load,query,./build/dcat query,0,,,state_not_contains:rNPU_aiv_load,,hccn_tool,no ghost record after clean
+E2E-118,FUNC-rNPU_arp,0,npu,rNPU_arp,inject,./build/dcat inject rNPU_arp --action=add --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,contains:00:11:22:33:44:55,,hccn_tool,fault active after inject
+E2E-119,FUNC-rNPU_arp,1,npu,rNPU_arp,clean,./build/dcat clean rNPU_arp --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200,0,,hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,notcontains:00:11:22:33:44:55,,hccn_tool,"fault cleaned, system restored"
+E2E-120,FUNC-rNPU_arp,2,npu,rNPU_arp,query,./build/dcat query,0,,,state_not_contains:rNPU_arp,,hccn_tool,no ghost record after clean
+E2E-121,FUNC-rNPU_arp_del,0,npu,rNPU_arp,setup,hccn_tool -i {e2e_chip} -arp -a dev eth0 ip 10.30.12.200 mac 00:11:22:33:44:55 2>/dev/null,0,,,,none,hccn_tool,provision none
+E2E-122,FUNC-rNPU_arp_del,1,npu,rNPU_arp,inject,./build/dcat inject rNPU_arp --action=del --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,notcontains:10.30.12.200,,hccn_tool,fault active after inject
+E2E-123,FUNC-rNPU_arp_del,2,npu,rNPU_arp,clean,./build/dcat clean rNPU_arp --chip={e2e_chip} --dev=eth0 --ip=10.30.12.200,0,,hccn_tool -i {e2e_chip} -arp -g 2>/dev/null,contains:10.30.12.200,,hccn_tool,"fault cleaned, system restored"
+E2E-124,FUNC-rNPU_arp_del,3,npu,rNPU_arp,query,./build/dcat query,0,,,state_not_contains:rNPU_arp,,hccn_tool,no ghost record after clean
+E2E-125,FUNC-rNPU_bw_limit,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=50000,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+',contains:50000,,hccn_tool,fault active after inject
+E2E-126,FUNC-rNPU_bw_limit,1,npu,rNPU_bw_limit,clean,./build/dcat clean rNPU_bw_limit --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+',notcontains:50000,,hccn_tool,"fault cleaned, system restored"
+E2E-127,FUNC-rNPU_bw_limit,2,npu,rNPU_bw_limit,query,./build/dcat query,0,,,state_not_contains:rNPU_bw_limit,,hccn_tool,no ghost record after clean
+E2E-128,FUNC-rNPU_chip_reset,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id={e2e_npu_id},0,"""status"":""ok""",ls /tmp/dcat-rNPU_chip_reset-{e2e_npu_id}-0.bak 2>/dev/null | wc -l,>=1,,npu-smi,fault active after inject
+E2E-129,FUNC-rNPU_chip_reset,1,npu,rNPU_chip_reset,clean,./build/dcat clean rNPU_chip_reset --npu_id={e2e_npu_id},0,,npu-smi info 2>/dev/null | grep -c 'OK',>=1,,npu-smi,"fault cleaned, system restored"
+E2E-130,FUNC-rNPU_chip_reset,2,npu,rNPU_chip_reset,query,./build/dcat query,0,,,state_not_contains:rNPU_chip_reset,,npu-smi,no ghost record after clean
+E2E-131,FUNC-rNPU_driver_unbind,0,npu,rNPU_driver_unbind,skip,echo SKIP: dangerous fault (requires cold boot to recover),0,,,,,none,skipped: dangerous fault
+E2E-132,FUNC-rNPU_dscp_tc_change,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip={e2e_chip} --dscp=46 --tc=1,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:1,,hccn_tool,fault active after inject
+E2E-133,FUNC-rNPU_dscp_tc_change,1,npu,rNPU_dscp_tc_change,clean,./build/dcat clean rNPU_dscp_tc_change --chip={e2e_chip} --dscp=46,0,,hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}',eq:0,,hccn_tool,"fault cleaned, system restored"
+E2E-134,FUNC-rNPU_dscp_tc_change,2,npu,rNPU_dscp_tc_change,query,./build/dcat query,0,,,state_not_contains:rNPU_dscp_tc_change,,hccn_tool,no ghost record after clean
+E2E-135,FUNC-rNPU_gw_change,0,npu,rNPU_gw_change,setup,hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i {e2e_chip} -gateway -s gateway 10.20.10.254 2>/dev/null,0,,,,none,hccn_tool,provision none
+E2E-136,FUNC-rNPU_gw_change,1,npu,rNPU_gw_change,inject,./build/dcat inject rNPU_gw_change --chip={e2e_chip} --gateway=10.20.10.1,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null,contains:10.20.10.1,,hccn_tool,fault active after inject
+E2E-137,FUNC-rNPU_gw_change,2,npu,rNPU_gw_change,clean,./build/dcat clean rNPU_gw_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null,notcontains:10.20.10.1,,hccn_tool,"fault cleaned, system restored"
+E2E-138,FUNC-rNPU_gw_change,3,npu,rNPU_gw_change,query,./build/dcat query,0,,,state_not_contains:rNPU_gw_change,,hccn_tool,no ghost record after clean
+E2E-139,FUNC-rNPU_hbm_load,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip={e2e_chip} --size=2G,0,"""status"":""ok""",./build/dcat query rNPU_hbm_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',>=1,,hccn_tool,fault active after inject
+E2E-140,FUNC-rNPU_hbm_load,1,npu,rNPU_hbm_load,clean,./build/dcat clean rNPU_hbm_load --chip={e2e_chip},0,,./build/dcat query rNPU_hbm_load --chip={e2e_chip} 2>/dev/null | grep -c 'CONFIRMED',==0,,hccn_tool,"fault cleaned, system restored"
+E2E-141,FUNC-rNPU_hbm_load,2,npu,rNPU_hbm_load,query,./build/dcat query,0,,,state_not_contains:rNPU_hbm_load,,hccn_tool,no ghost record after clean
+E2E-142,FUNC-rNPU_ip_change,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=10.0.0.99 --netmask=255.255.255.0,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip -g 2>/dev/null,contains:10.0.0.99,,hccn_tool,fault active after inject
+E2E-143,FUNC-rNPU_ip_change,1,npu,rNPU_ip_change,clean,./build/dcat clean rNPU_ip_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -ip -g 2>/dev/null,notcontains:10.0.0.99,,hccn_tool,"fault cleaned, system restored"
+E2E-144,FUNC-rNPU_ip_change,2,npu,rNPU_ip_change,query,./build/dcat query,0,,,state_not_contains:rNPU_ip_change,,hccn_tool,no ghost record after clean
+E2E-145,FUNC-rNPU_iproute,0,npu,rNPU_iproute,inject,./build/dcat inject rNPU_iproute --action=add --chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,contains:10.30.50.0,,hccn_tool,fault active after inject
+E2E-146,FUNC-rNPU_iproute,1,npu,rNPU_iproute,clean,./build/dcat clean rNPU_iproute --chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --table=100,0,,hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,notcontains:10.30.50.0,,hccn_tool,"fault cleaned, system restored"
+E2E-147,FUNC-rNPU_iproute,2,npu,rNPU_iproute,query,./build/dcat query,0,,,state_not_contains:rNPU_iproute,,hccn_tool,no ghost record after clean
+E2E-148,FUNC-rNPU_iproute_del,0,npu,rNPU_iproute,setup,hccn_tool -i {e2e_chip} -ip_route -a ip 10.30.51.0 ip_mask 24 via 10.20.10.1 dev eth0 table 100,0,,,,none,hccn_tool,provision none
+E2E-149,FUNC-rNPU_iproute_del,1,npu,rNPU_iproute,inject,./build/dcat inject rNPU_iproute --action=del --chip={e2e_chip} --ip=10.30.51.0 --ip_mask=24 --table=100,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,notcontains:10.30.51.0,,hccn_tool,fault active after inject
+E2E-150,FUNC-rNPU_iproute_del,2,npu,rNPU_iproute,clean,./build/dcat clean rNPU_iproute --chip={e2e_chip} --ip=10.30.51.0 --ip_mask=24 --table=100,0,,hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null,contains:10.30.51.0,,hccn_tool,"fault cleaned, system restored"
+E2E-151,FUNC-rNPU_iproute_del,3,npu,rNPU_iproute,query,./build/dcat query,0,,,state_not_contains:rNPU_iproute,,hccn_tool,no ghost record after clean
+E2E-152,FUNC-rNPU_iprule,0,npu,rNPU_iprule,inject,./build/dcat inject rNPU_iprule --action=add --chip={e2e_chip} --dir=from --ip=10.20.10.50 --table=150,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,contains:10.20.10.50,,hccn_tool,fault active after inject
+E2E-153,FUNC-rNPU_iprule,1,npu,rNPU_iprule,clean,./build/dcat clean rNPU_iprule --chip={e2e_chip} --dir=from --ip=10.20.10.50,0,,hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,notcontains:10.20.10.50,,hccn_tool,"fault cleaned, system restored"
+E2E-154,FUNC-rNPU_iprule,2,npu,rNPU_iprule,query,./build/dcat query,0,,,state_not_contains:rNPU_iprule,,hccn_tool,no ghost record after clean
+E2E-155,FUNC-rNPU_iprule_del,0,npu,rNPU_iprule,setup,hccn_tool -i {e2e_chip} -ip_rule -d dir from ip 10.20.10.51 2>/dev/null; hccn_tool -i {e2e_chip} -ip_rule -a dir from ip 10.20.10.51 table 150,0,,,,none,hccn_tool,provision none
+E2E-156,FUNC-rNPU_iprule_del,1,npu,rNPU_iprule,inject,./build/dcat inject rNPU_iprule --action=del --chip={e2e_chip} --dir=from --ip=10.20.10.51,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,notcontains:10.20.10.51,,hccn_tool,fault active after inject
+E2E-157,FUNC-rNPU_iprule_del,2,npu,rNPU_iprule,clean,./build/dcat clean rNPU_iprule --chip={e2e_chip} --dir=from --ip=10.20.10.51,0,,hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null,contains:10.20.10.51,,hccn_tool,"fault cleaned, system restored"
+E2E-158,FUNC-rNPU_iprule_del,3,npu,rNPU_iprule,query,./build/dcat query,0,,,state_not_contains:rNPU_iprule,,hccn_tool,no ghost record after clean
+E2E-159,FUNC-rNPU_link_down,0,npu,rNPU_link_down,inject,./build/dcat inject rNPU_link_down --chip={e2e_chip},0,"""status"":""ok""",hccn_tool -i {e2e_chip} -link -g 2>/dev/null,contains:DOWN,,hccn_tool,fault active after inject
+E2E-160,FUNC-rNPU_link_down,1,npu,rNPU_link_down,clean,./build/dcat clean rNPU_link_down --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -link -g 2>/dev/null,notcontains:DOWN,,hccn_tool,"fault cleaned, system restored"
+E2E-161,FUNC-rNPU_link_down,2,npu,rNPU_link_down,query,./build/dcat query,0,,,state_not_contains:rNPU_link_down,,hccn_tool,no ghost record after clean
+E2E-162,FUNC-rNPU_mtu_mismatch,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+',contains:1280,,hccn_tool,fault active after inject
+E2E-163,FUNC-rNPU_mtu_mismatch,1,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+',notcontains:1280,,hccn_tool,"fault cleaned, system restored"
+E2E-164,FUNC-rNPU_mtu_mismatch,2,npu,rNPU_mtu_mismatch,query,./build/dcat query,0,,,state_not_contains:rNPU_mtu_mismatch,,hccn_tool,no ghost record after clean
+E2E-165,FUNC-rNPU_netdetect_change,0,npu,rNPU_netdetect_change,inject,./build/dcat inject rNPU_netdetect_change --chip={e2e_chip} --address=10.0.0.99,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null,contains:10.0.0.99,,hccn_tool,fault active after inject
+E2E-166,FUNC-rNPU_netdetect_change,1,npu,rNPU_netdetect_change,clean,./build/dcat clean rNPU_netdetect_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null,notcontains:10.0.0.99,,hccn_tool,"fault cleaned, system restored"
+E2E-167,FUNC-rNPU_netdetect_change,2,npu,rNPU_netdetect_change,query,./build/dcat query,0,,,state_not_contains:rNPU_netdetect_change,,hccn_tool,no ghost record after clean
+E2E-168,FUNC-rNPU_pcie_down,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id={e2e_npu_id} --gen=1,0,"""status"":""ok""",ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l,>=1,,hccn_tool,fault active after inject
+E2E-169,FUNC-rNPU_pcie_down,1,npu,rNPU_pcie_down,clean,./build/dcat clean rNPU_pcie_down --npu_id={e2e_npu_id},0,,ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l,==0,,hccn_tool,"fault cleaned, system restored"
+E2E-170,FUNC-rNPU_pcie_down,2,npu,rNPU_pcie_down,query,./build/dcat query,0,,,state_not_contains:rNPU_pcie_down,,hccn_tool,no ghost record after clean
+E2E-171,FUNC-rNPU_pcie_remove,0,npu,rNPU_pcie_remove,skip,echo SKIP: dangerous fault (requires cold boot to recover),0,,,,,none,skipped: dangerous fault
+E2E-172,FUNC-rNPU_roce_port_change,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=4792,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -udp -g 2>/dev/null,contains:4792,,hccn_tool,fault active after inject
+E2E-173,FUNC-rNPU_roce_port_change,1,npu,rNPU_roce_port_change,clean,./build/dcat clean rNPU_roce_port_change --chip={e2e_chip},0,,hccn_tool -i {e2e_chip} -udp -g 2>/dev/null,contains:4791,,hccn_tool,"fault cleaned, system restored"
+E2E-174,FUNC-rNPU_roce_port_change,2,npu,rNPU_roce_port_change,query,./build/dcat query,0,,,state_not_contains:rNPU_roce_port_change,,hccn_tool,no ghost record after clean
+E2E-175,FUNC-rNPU_route,0,npu,rNPU_route,setup,hccn_tool -i {e2e_chip} -link -s up 2>/dev/null,0,,,,none,hccn_tool,provision none
+E2E-176,FUNC-rNPU_route,1,npu,rNPU_route,inject,./build/dcat inject rNPU_route --action=add --chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.20.10.1,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -route -g 2>/dev/null,contains:10.30.40.0,,hccn_tool,fault active after inject
+E2E-177,FUNC-rNPU_route,2,npu,rNPU_route,clean,./build/dcat clean rNPU_route --chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0,0,,hccn_tool -i {e2e_chip} -route -g 2>/dev/null,notcontains:10.30.40.0,,hccn_tool,"fault cleaned, system restored"
+E2E-178,FUNC-rNPU_route,3,npu,rNPU_route,query,./build/dcat query,0,,,state_not_contains:rNPU_route,,hccn_tool,no ghost record after clean
+E2E-179,FUNC-rNPU_route_del,0,npu,rNPU_route,setup,hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -route -a address 10.30.41.0 netmask 255.255.255.0 gateway 10.20.10.1,0,,,,none,hccn_tool,provision none
+E2E-180,FUNC-rNPU_route_del,1,npu,rNPU_route,inject,./build/dcat inject rNPU_route --action=del --chip={e2e_chip} --address=10.30.41.0 --netmask=255.255.255.0,0,"""status"":""ok""",hccn_tool -i {e2e_chip} -route -g 2>/dev/null,notcontains:10.30.41.0,,hccn_tool,fault active after inject
+E2E-181,FUNC-rNPU_route_del,2,npu,rNPU_route,clean,./build/dcat clean rNPU_route --chip={e2e_chip} --address=10.30.41.0 --netmask=255.255.255.0,0,,hccn_tool -i {e2e_chip} -route -g 2>/dev/null,contains:10.30.41.0,,hccn_tool,"fault cleaned, system restored"
+E2E-182,FUNC-rNPU_route_del,3,npu,rNPU_route,query,./build/dcat query,0,,,state_not_contains:rNPU_route,,hccn_tool,no ghost record after clean
+E2E-183,FUNC-rPROC_exit,0,process,rPROC_exit,setup,,0,,,,sleep_pid,none,provision sleep_pid
+E2E-184,FUNC-rPROC_exit,1,process,rPROC_exit,inject,./build/dcat inject rPROC_exit --pid={pid},0,"""status"":""ok""",awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null || echo NONE,eq:Z,,none,fault active after inject
+E2E-185,FUNC-rPROC_exit,2,process,rPROC_exit,clean_rejected,./build/dcat clean rPROC_exit --pid={pid},3,,,exitcode:3,,none,inject-only: clean rejected
+E2E-186,FUNC-rPROC_fd_exhaust,0,process,rPROC_fd_exhaust,inject,./build/dcat inject rPROC_fd_exhaust --count=256,0,"""status"":""ok""",ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-187,FUNC-rPROC_fd_exhaust,1,process,rPROC_fd_exhaust,clean,./build/dcat clean rPROC_fd_exhaust ,0,,ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-188,FUNC-rPROC_fd_exhaust,2,process,rPROC_fd_exhaust,query,./build/dcat query,0,,,state_not_contains:rPROC_fd_exhaust,,none,no ghost record after clean
+E2E-189,FUNC-rPROC_fork_bomb,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=20,0,"""status"":""ok""",ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-190,FUNC-rPROC_fork_bomb,1,process,rPROC_fork_bomb,clean,./build/dcat clean rPROC_fork_bomb ,0,,ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-191,FUNC-rPROC_fork_bomb,2,process,rPROC_fork_bomb,query,./build/dcat query,0,,,state_not_contains:rPROC_fork_bomb,,none,no ghost record after clean
+E2E-192,FUNC-rPROC_hang,0,process,rPROC_hang,setup,,0,,,,sleep_pid,none,provision sleep_pid
+E2E-193,FUNC-rPROC_hang,1,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null,eq:T,,none,fault active after inject
+E2E-194,FUNC-rPROC_hang,2,process,rPROC_hang,clean,./build/dcat clean rPROC_hang --pid={pid},0,,awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null,ne:T,,none,"fault cleaned, system restored"
+E2E-195,FUNC-rPROC_hang,3,process,rPROC_hang,query,./build/dcat query,0,,,state_not_contains:rPROC_hang,,none,no ghost record after clean
+E2E-196,FUNC-rPROC_loop,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=1,0,"""status"":""ok""",ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l,>=1,,none,fault active after inject
+E2E-197,FUNC-rPROC_loop,1,process,rPROC_loop,clean,./build/dcat clean rPROC_loop ,0,,ls /tmp/dcat-rPROC_loop.pid 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-198,FUNC-rPROC_loop,2,process,rPROC_loop,query,./build/dcat query,0,,,state_not_contains:rPROC_loop,,none,no ghost record after clean
+E2E-199,FUNC-rPROC_zstate,0,process,rPROC_zstate,setup,,0,,,,sleep_pid,none,provision sleep_pid
+E2E-200,FUNC-rPROC_zstate,1,process,rPROC_zstate,inject,./build/dcat inject rPROC_zstate --pid={pid},0,"""status"":""ok""",awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null,eq:Z,,none,fault active after inject
+E2E-201,FUNC-rPROC_zstate,2,process,rPROC_zstate,clean,./build/dcat clean rPROC_zstate --pid={pid},0,,ls /proc/{pid} 2>/dev/null | wc -l,==0,,none,"fault cleaned, system restored"
+E2E-202,FUNC-rPROC_zstate,3,process,rPROC_zstate,query,./build/dcat query,0,,,state_not_contains:rPROC_zstate,,none,no ghost record after clean
+E2E-203,FUNC-Q1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-204,FUNC-Q1,1,cpu,rCPU_overload,query_active,./build/dcat query rCPU_overload --cores=0,0,,,"out_contains:""confirmed"":true",,none,query<uid> confirmed:true
+E2E-205,FUNC-Q1,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,cleanup
+E2E-206,FUNC-Q1,3,cpu,rCPU_overload,query_gone,./build/dcat query rCPU_overload --cores=0,0,,,"out_contains:""confirmed"":false",,none,query<uid> confirmed:false
+E2E-207,FUNC-Q2,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,none,inject
+E2E-208,FUNC-Q2,1,network,rNET_port_occupy,query_active,./build/dcat query rNET_port_occupy --port={port},0,,,"out_contains:""confirmed"":true",,none,query<uid> confirmed:true
+E2E-209,FUNC-Q2,2,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port={port},0,,,,,none,cleanup
+E2E-210,FUNC-Q2,3,network,rNET_port_occupy,query_gone,./build/dcat query rNET_port_occupy --port={port},0,,,"out_contains:""confirmed"":false",,none,query<uid> confirmed:false
+E2E-211,FUNC-Q3,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",,,sleep_pid,none,inject
+E2E-212,FUNC-Q3,1,process,rPROC_hang,query_active,./build/dcat query rPROC_hang --pid={pid},0,,,"out_contains:""confirmed"":true",,none,query<uid> confirmed:true
+E2E-213,FUNC-Q3,2,process,rPROC_hang,clean,./build/dcat clean rPROC_hang --pid={pid},0,,,,,none,cleanup
+E2E-214,FUNC-Q3,3,process,rPROC_hang,query_gone,./build/dcat query rPROC_hang --pid={pid},0,,,"out_contains:""confirmed"":false",,none,query<uid> confirmed:false
+E2E-215,FUNC-Q4,0,process,rPROC_zstate,inject,./build/dcat inject rPROC_zstate --pid={pid},0,"""status"":""ok""",,,sleep_pid,none,inject
+E2E-216,FUNC-Q4,1,process,rPROC_zstate,query_active,./build/dcat query rPROC_zstate --pid={pid},0,,,"out_contains:""confirmed"":true",,none,query<uid> confirmed:true
+E2E-217,FUNC-Q4,2,process,rPROC_zstate,clean,./build/dcat clean rPROC_zstate --pid={pid},0,,,,,none,cleanup
+E2E-218,FUNC-Q4,3,process,rPROC_zstate,query_gone,./build/dcat query rPROC_zstate --pid={pid},0,,,"out_contains:""confirmed"":false",,none,query<uid> confirmed:false
+E2E-219,FUNC-Q5,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",,,,none,inject
+E2E-220,FUNC-Q5,1,npu,rNPU_mtu_mismatch,query_active,./build/dcat query rNPU_mtu_mismatch --chip={e2e_chip},0,,,"out_contains:""confirmed"":true",,none,query<uid> confirmed:true
+E2E-221,FUNC-Q5,2,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,,,,,none,cleanup
+E2E-222,FUNC-Q5,3,npu,rNPU_mtu_mismatch,query_gone,./build/dcat query rNPU_mtu_mismatch --chip={e2e_chip},0,,,"out_contains:""confirmed"":false",,none,query<uid> confirmed:false
+E2E-223,FUNC-Q6,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=50000,0,"""status"":""ok""",,,,none,inject
+E2E-224,FUNC-Q6,1,npu,rNPU_bw_limit,query_active,./build/dcat query rNPU_bw_limit --chip={e2e_chip},0,,,"out_contains:""confirmed"":true",,none,query<uid> confirmed:true
+E2E-225,FUNC-Q6,2,npu,rNPU_bw_limit,clean,./build/dcat clean rNPU_bw_limit --chip={e2e_chip} --bw_limit=50000,0,,,,,none,cleanup
+E2E-226,FUNC-Q6,3,npu,rNPU_bw_limit,query_gone,./build/dcat query rNPU_bw_limit --chip={e2e_chip},0,,,"out_contains:""confirmed"":false",,none,query<uid> confirmed:false
+E2E-227,FUNC-Q7,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-228,FUNC-Q7,1,cpu,rCPU_overload,query_noparam,./build/dcat query rCPU_overload,0,,,"out_contains:""confirmed"":true",,none,query<uid> no-params confirmed:true
+E2E-229,FUNC-Q7,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,cleanup
+E2E-230,FUNC-Q7,3,cpu,rCPU_overload,query_gone,./build/dcat query rCPU_overload,0,,,"out_contains:""confirmed"":false",,none,query<uid> no-params confirmed:false
+E2E-231,FUNC-PLG,0,plugin,rSAMPLE_test,inject,./build/dcat inject rSAMPLE_test,0,"""status"":""ok""",,,,none,plugin inject
+E2E-232,FUNC-PLG,1,plugin,rSAMPLE_test,query_active,./build/dcat query rSAMPLE_test,0,,,out_contains:sample confirmed,,none,plugin query confirmed
+E2E-233,FUNC-PLG,2,plugin,rSAMPLE_test,clean,./build/dcat clean rSAMPLE_test,0,,,,,none,plugin clean
+E2E-234,FUNC-PLG,3,plugin,rSAMPLE_test,query_empty,./build/dcat query,0,,,state_not_contains:rSAMPLE_test,,none,plugin state empty
+E2E-235,BOUND-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0/1,1,invalid cores spec,,exitcode:1,,none,cores: invalid separator /
+E2E-236,BOUND-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=abc,1,invalid cores spec,,exitcode:1,,none,cores: non-numeric
+E2E-237,BOUND-3,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=,3,missing required parameter,,exitcode:3,,none,cores: empty = missing
+E2E-238,BOUND-4,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload ,3,missing required parameter,,exitcode:3,,none,cores: missing
+E2E-239,BOUND-5,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0-999,0,"""status"":""ok""",,,,none,cores: 0-999 no range cap (GAP)
+E2E-240,BOUND-5,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0-999,0,,,,,none,cleanup
+E2E-241,BOUND-6,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=3-1,0,"""status"":""ok""",,,,none,cores: 3-1 lo>hi (GAP)
+E2E-242,BOUND-6,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=3-1,0,,,,,none,cleanup
+E2E-243,BOUND-7,0,cpu,rCPU_overload,inject,"./build/dcat inject rCPU_overload --cores=0,1,",0,"""status"":""ok""",,,,none,cores: trailing comma (GAP)
+E2E-244,BOUND-7,1,cpu,rCPU_overload,clean,"./build/dcat clean rCPU_overload --cores=0,1,",0,,,,,none,cleanup
+E2E-245,BOUND-8,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=0,1,load_pct must be,,exitcode:1,,none,load_pct: 0 below range
+E2E-246,BOUND-9,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=500,1,load_pct must be,,exitcode:1,,none,load_pct: 500 above range
+E2E-247,BOUND-10,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=-1,1,load_pct must be,,exitcode:1,,none,load_pct: -1 negative
+E2E-248,BOUND-11,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --load_pct=abc,1,load_pct must be,,exitcode:1,,none,load_pct: non-numeric
+E2E-249,BOUND-12,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=abc,1,port must be numeric,,exitcode:1,,none,port: non-numeric rejected
+E2E-250,BOUND-13,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=65536,1,port must be 1-65535,,exitcode:1,,none,port: 65536 above range
+E2E-251,BOUND-14,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=0,1,port must be 1-65535,,exitcode:1,,none,port: 0 below range
+E2E-252,BOUND-15,0,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface=dcat-e2e0 --loss_pct=-1,1,loss_pct must be,,exitcode:1,,none,loss_pct: -1 negative
+E2E-253,BOUND-16,0,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface=dcat-e2e0 --loss_pct=101,1,loss_pct must be,,exitcode:1,,none,loss_pct: 101 above 100
+E2E-254,BOUND-17,0,network,rNET_loss,inject,./build/dcat inject rNET_loss --iface=dcat-e2e0 --loss_pct=abc,1,loss_pct must be,,exitcode:1,,none,loss_pct: non-numeric
+E2E-255,BOUND-18,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface=dcat-e2e0 --delay_ms=-1,1,,,exitcode:1,,none,delay_ms: -1 negative
+E2E-256,BOUND-19,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface=dcat-e2e0 --delay_ms=abc,1,,,exitcode:1,,none,delay_ms: non-numeric
+E2E-257,BOUND-20,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip=12 --bw_limit=10000,1,,,exitcode:1,,none,chip: 12 不存在的 NPU 设备(hccn_tool 拒绝)
+E2E-258,BOUND-21,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip=a --bw_limit=10000,1,,,exitcode:1,,none,chip: 非数字被拒绝
+E2E-259,BOUND-22,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --bw_limit=10000,3,missing required parameter,,exitcode:3,,none,chip: missing
+E2E-260,BOUND-23,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=0,1,,,exitcode:1,,none,pid: 0 invalid
+E2E-261,BOUND-24,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=-1,1,,,exitcode:1,,none,pid: -1 negative
+E2E-262,BOUND-25,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=abc,1,,,exitcode:1,,none,pid: non-numeric
+E2E-263,BOUND-26,0,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid=99999999,1,,,exitcode:1,,none,pid: nonexistent
+E2E-264,BOUND-27,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=0,1,,,exitcode:1,,none,workers: 0 invalid
+E2E-265,BOUND-28,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=-1,1,,,exitcode:1,,none,workers: -1 negative
+E2E-266,BOUND-29,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=abc,1,,,exitcode:1,,none,workers: non-numeric
+E2E-267,BOUND-30,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --size_mb=0,1,,,exitcode:1,,none,size_mb: 0 invalid
+E2E-268,BOUND-31,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --size_mb=-1,1,,,exitcode:1,,none,size_mb: -1 negative
+E2E-269,BOUND-32,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/nonexistent_dir_xyz,1,,,exitcode:1,,none,device: nonexistent path
+E2E-270,BOUND-33,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface= --delay_ms=100,3,missing required parameter,,exitcode:3,,none,iface: empty
+E2E-271,BOUND-34,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=,3,missing required parameter,,exitcode:3,,none,service: empty
+E2E-272,BOUND-35,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=invalid --netmask=255.255.255.0,1,,,exitcode:1,,none,address: invalid format
+E2E-273,BOUND-36,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=0,1,,,exitcode:1,,none,bw_limit: 0 invalid
+E2E-274,BOUND-37,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=-1,1,,,exitcode:1,,none,bw_limit: negative
+E2E-275,BOUND-38,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip} --bw_limit=abc,1,,,exitcode:1,,none,bw_limit: non-numeric
+E2E-276,BOUND-39,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=0,1,,,exitcode:1,,none,size: 0 invalid
+E2E-277,BOUND-40,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=-1,1,,,exitcode:1,,none,size: negative
+E2E-278,BOUND-41,0,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=abc,1,,,exitcode:1,,none,size: non-numeric
+E2E-279,BOUND-42,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=0,1,,,exitcode:1,,none,port: 0 invalid
+E2E-280,BOUND-43,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=-1,1,,,exitcode:1,,none,port: negative
+E2E-281,BOUND-44,0,npu,rNPU_roce_port_change,inject,./build/dcat inject rNPU_roce_port_change --chip={e2e_chip} --port=abc,1,,,exitcode:1,,none,port: non-numeric
+E2E-282,BOUND-45,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip={e2e_chip} --dscp=64 --tc=1,1,,,exitcode:1,,none,dscp: 64 above range
+E2E-283,BOUND-46,0,npu,rNPU_dscp_tc_change,inject,./build/dcat inject rNPU_dscp_tc_change --chip={e2e_chip} --dscp=-1 --tc=1,1,,,exitcode:1,,none,dscp: negative
+E2E-284,BOUND-47,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=0,1,quota_pct must be,,exitcode:1,,none,quota_pct: 0 below range
+E2E-285,BOUND-48,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=100,1,quota_pct must be,,exitcode:1,,none,quota_pct: 100 above range
+E2E-286,BOUND-49,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=-1,1,quota_pct must be,,exitcode:1,,none,quota_pct: negative
+E2E-287,BOUND-50,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0 --quota_pct=abc,1,quota_pct must be,,exitcode:1,,none,quota_pct: non-numeric
+E2E-288,BOUND-51,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --quota_pct=50,3,missing required parameter,,exitcode:3,,none,cores: missing
+E2E-289,BOUND-52,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota --cores=0,3,missing required parameter,,exitcode:3,,none,quota_pct: missing
+E2E-290,BOUND-53,0,cpu,rCPU_quota,inject,./build/dcat inject rCPU_quota ,3,missing required parameter,,exitcode:3,,none,cores+quota_pct: missing
+E2E-291,BOUND-54,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=0,1,,,exitcode:1,,none,freq_mhz: 0 invalid
+E2E-292,BOUND-55,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=-1,1,,,exitcode:1,,none,freq_mhz: negative
+E2E-293,BOUND-56,0,cpu,rCPU_freq,inject,./build/dcat inject rCPU_freq --cores=0 --freq_mhz=abc,1,,,exitcode:1,,none,freq_mhz: non-numeric
+E2E-294,BOUND-57,0,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface=dcat-e2e0 --corrupt_pct=-1,1,,,exitcode:1,,none,corrupt_pct: negative
+E2E-295,BOUND-58,0,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface=dcat-e2e0 --corrupt_pct=101,1,,,exitcode:1,,none,corrupt_pct: 101 above 100
+E2E-296,BOUND-59,0,network,rNET_corrupt,inject,./build/dcat inject rNET_corrupt --iface=dcat-e2e0 --corrupt_pct=abc,1,,,exitcode:1,,none,corrupt_pct: non-numeric
+E2E-297,BOUND-60,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=0,1,,,exitcode:1,,none,blocks: 0 invalid
+E2E-298,BOUND-61,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=-1,1,,,exitcode:1,,none,blocks: negative
+E2E-299,BOUND-62,0,memory,rMEM_fragment,inject,./build/dcat inject rMEM_fragment --blocks=abc,1,,,exitcode:1,,none,blocks: non-numeric
+E2E-300,BOUND-63,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=0,1,,,exitcode:1,,none,threads: 0 invalid
+E2E-301,BOUND-64,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=-1,1,,,exitcode:1,,none,threads: negative
+E2E-302,BOUND-65,0,process,rPROC_loop,inject,./build/dcat inject rPROC_loop --threads=abc,1,,,exitcode:1,,none,threads: non-numeric
+E2E-303,BOUND-66,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=0,1,,,exitcode:1,,none,count: 0 invalid
+E2E-304,BOUND-67,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=-1,1,,,exitcode:1,,none,count: negative
+E2E-305,BOUND-68,0,process,rPROC_fork_bomb,inject,./build/dcat inject rPROC_fork_bomb --count=abc,1,,,exitcode:1,,none,count: non-numeric
+E2E-306,BOUND-69,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=0,1,,,exitcode:1,,none,rate_mb: 0 invalid
+E2E-307,BOUND-70,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=-1,1,,,exitcode:1,,none,rate_mb: negative
+E2E-308,BOUND-71,0,memory,rMEM_oom,inject,./build/dcat inject rMEM_oom --rate_mb=abc,1,,,exitcode:1,,none,rate_mb: non-numeric
+E2E-309,BOUND-72,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=0,1,,,exitcode:1,,none,size_mb: 0 invalid
+E2E-310,BOUND-73,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=-1,1,,,exitcode:1,,none,size_mb: negative
+E2E-311,BOUND-74,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=abc,1,,,exitcode:1,,none,size_mb: non-numeric
+E2E-312,BOUND-75,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp --mode=invalid,1,mode must be one of,,exitcode:1,,none,mode: invalid enum
+E2E-313,BOUND-76,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp,3,missing required parameter,,exitcode:3,,none,mode: missing
+E2E-314,BOUND-77,0,network,rNET_conn_exhaust,inject,./build/dcat inject rNET_conn_exhaust --target=,3,missing required parameter,,exitcode:3,,none,target: empty
+E2E-315,BOUND-78,0,network,rNET_conn_exhaust,inject,./build/dcat inject rNET_conn_exhaust --target=noport,1,,,exitcode:1,,none,target: no port separator
+E2E-316,BOUND-79,0,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill --container=,3,missing required parameter,,exitcode:3,,none,container: empty
+E2E-317,BOUND-80,0,docker,rDOCKER_kill,inject,./build/dcat inject rDOCKER_kill --container=nonexistent_ctr_xyz,1,,,exitcode:1,,none,container: not found
+E2E-318,BOUND-81,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/nonexistent_dir_xyz,1,,,exitcode:1,,none,path: not a directory
+E2E-319,BOUND-82,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=,3,missing required parameter,,exitcode:3,,none,path: empty
+E2E-320,BOUND-83,0,storage,rDISK_io_error,inject,./build/dcat inject rDISK_io_error --device=/tmp/not_a_block_dev,1,,,exitcode:1,,none,device: not a block device
+E2E-321,BOUND-84,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load --chip=abc,1,,,exitcode:1,,none,chip: non-numeric
+E2E-322,BOUND-85,0,npu,rNPU_aic_load,inject,./build/dcat inject rNPU_aic_load ,3,missing required parameter,,exitcode:3,,none,chip: missing
+E2E-323,BOUND-86,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load --chip=abc,1,,,exitcode:1,,none,chip: non-numeric
+E2E-324,BOUND-87,0,npu,rNPU_aiv_load,inject,./build/dcat inject rNPU_aiv_load ,3,missing required parameter,,exitcode:3,,none,chip: missing
+E2E-325,BOUND-88,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load --chip=abc,1,,,exitcode:1,,none,chip: non-numeric
+E2E-326,BOUND-89,0,npu,rNPU_hbm_load,inject,./build/dcat inject rNPU_hbm_load ,3,missing required parameter,,exitcode:3,,none,chip: missing
+E2E-327,BOUND-90,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id=abc --gen=1,1,,,exitcode:1,,none,npu_id: non-numeric
+E2E-328,BOUND-91,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id={e2e_npu_id} --gen=abc,1,,,exitcode:1,,none,gen: non-numeric
+E2E-329,BOUND-92,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down --npu_id={e2e_npu_id} --gen=5,1,,,exitcode:1,,none,gen: out of range (1-3)
+E2E-330,BOUND-93,0,npu,rNPU_pcie_down,inject,./build/dcat inject rNPU_pcie_down ,3,missing required parameter,,exitcode:3,,none,npu_id: missing
+E2E-331,BOUND-94,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=abc,1,,,exitcode:1,,none,npu_id: non-numeric
+E2E-332,BOUND-95,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset --npu_id=99,1,,,exitcode:1,,none,npu_id: nonexistent NPU
+E2E-333,BOUND-96,0,npu,rNPU_chip_reset,inject,./build/dcat inject rNPU_chip_reset ,3,missing required parameter,,exitcode:3,,none,npu_id: missing
+E2E-334,SEC-I1,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-335,SEC-I2,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-336,SEC-I3,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=dcat-e2e0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-337,SEC-I4,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-338,SEC-I5,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-339,SEC-I6,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-340,SEC-I7,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-341,SEC-I8,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-342,SEC-I9,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-343,SEC-I10,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-344,SEC-I11,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-345,SEC-I12,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-346,SEC-I13,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=cron;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-347,SEC-I14,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=cron$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-348,SEC-I15,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=cron|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-349,SEC-I16,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip};touch /tmp/dcat_pwned --bw_limit=10000,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-350,SEC-I17,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip}$(touch /tmp/dcat_pwned) --bw_limit=10000,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-351,SEC-I18,0,npu,rNPU_bw_limit,inject,./build/dcat inject rNPU_bw_limit --chip={e2e_chip}|touch /tmp/dcat_pwned --bw_limit=10000,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-352,SEC-I19,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=1.1.1.1;touch /tmp/dcat_pwned --netmask=255.255.255.0,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-353,SEC-I20,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=1.1.1.1$(touch /tmp/dcat_pwned) --netmask=255.255.255.0,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-354,SEC-I21,0,npu,rNPU_ip_change,inject,./build/dcat inject rNPU_ip_change --chip={e2e_chip} --address=1.1.1.1|touch /tmp/dcat_pwned --netmask=255.255.255.0,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-355,SEC-I22,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp;touch /tmp/dcat_pwned --mode=nowrite,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-356,SEC-I23,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp$(touch /tmp/dcat_pwned) --mode=nowrite,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-357,SEC-I24,0,filesystem,rFS_file_lock,inject,./build/dcat inject rFS_file_lock --path=/tmp|touch /tmp/dcat_pwned --mode=nowrite,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-358,SEC-I25,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp;touch /tmp/dcat_pwned --size=10M,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-359,SEC-I26,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp$(touch /tmp/dcat_pwned) --size=10M,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-360,SEC-I27,0,storage,rDISK_part_full,inject,./build/dcat inject rDISK_part_full --path=/tmp|touch /tmp/dcat_pwned --size=10M,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-361,SEC-I28,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: ;touch /tmp/dcat_pwned
+E2E-362,SEC-I29,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: $(touch /tmp/dcat_pwned)
+E2E-363,SEC-I30,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,inject payload not executed: |touch /tmp/dcat_pwned
+E2E-364,SEC-C1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0;touch /tmp/dcat_pwned,*,,,,,none,inject with payload
+E2E-365,SEC-C1,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: ;touch /tmp/dcat_pwned
+E2E-366,SEC-C2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0$(touch /tmp/dcat_pwned),*,,,,,none,inject with payload
+E2E-367,SEC-C2,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: $(touch /tmp/dcat_pwned)
+E2E-368,SEC-C3,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0|touch /tmp/dcat_pwned,*,,,,,none,inject with payload
+E2E-369,SEC-C3,1,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: |touch /tmp/dcat_pwned
+E2E-370,SEC-C4,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999;touch /tmp/dcat_pwned,*,,,,,none,inject with payload
+E2E-371,SEC-C4,1,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port=19999;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: ;touch /tmp/dcat_pwned
+E2E-372,SEC-C5,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999$(touch /tmp/dcat_pwned),*,,,,,none,inject with payload
+E2E-373,SEC-C5,1,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port=19999$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: $(touch /tmp/dcat_pwned)
+E2E-374,SEC-C6,0,network,rNET_port_occupy,inject,./build/dcat inject rNET_port_occupy --port=19999|touch /tmp/dcat_pwned,*,,,,,none,inject with payload
+E2E-375,SEC-C6,1,network,rNET_port_occupy,clean,./build/dcat clean rNET_port_occupy --port=19999|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: |touch /tmp/dcat_pwned
+E2E-376,SEC-C7,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp;touch /tmp/dcat_pwned,*,,,,,none,inject with payload
+E2E-377,SEC-C7,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp;touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: ;touch /tmp/dcat_pwned
+E2E-378,SEC-C8,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp$(touch /tmp/dcat_pwned),*,,,,,none,inject with payload
+E2E-379,SEC-C8,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp$(touch /tmp/dcat_pwned),*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: $(touch /tmp/dcat_pwned)
+E2E-380,SEC-C9,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp|touch /tmp/dcat_pwned,*,,,,,none,inject with payload
+E2E-381,SEC-C9,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp|touch /tmp/dcat_pwned,*,,test -e /tmp/dcat_pwned && echo FOUND || echo CLEAN,eq:CLEAN,,none,clean payload not executed: |touch /tmp/dcat_pwned
+E2E-382,SEC-P1,0,network,rNET_delay,inject,./build/dcat inject rNET_delay --iface=dcat-e2e0 --delay_ms=100,nonzero,,tc qdisc show dev dcat-e2e0 2>/dev/null | grep -c netem,==0,,non_root,non-root: no qdisc
+E2E-383,SEC-P1,1,network,rNET_delay,query_noghost,./build/dcat query,0,,,state_not_contains:rNET_delay,,none,no ghost on perm fail
+E2E-384,SEC-P2,0,network,rNET_tcp_loss,inject,./build/dcat inject rNET_tcp_loss --port=19998,nonzero,,iptables -L INPUT -n 2>/dev/null | grep -c 'dpt:19998',==0,,non_root,non-root: no iptables
+E2E-385,SEC-P2,1,network,rNET_tcp_loss,query_noghost,./build/dcat query,0,,,state_not_contains:rNET_tcp_loss,,none,no ghost on perm fail
+E2E-386,SEC-H1,0,network,rNET_down,inject,./build/dcat inject rNET_down --iface=eth0-mgmt-test,nonzero,,,,,none,no mgmt-iface guard
+E2E-387,SEC-H2,0,network,rNET_service_stop,inject,./build/dcat inject rNET_service_stop --service=sshd-test,nonzero,,,,,none,no sshd guard
+E2E-388,SEC-H3,0,storage,rDISK_write_overload,inject,./build/dcat inject rDISK_write_overload --device=/tmp --workers=2 --size_mb=200,0,"""status"":""ok""",ls /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null | wc -l,==0,,none,write containment: /tmp only
+E2E-389,SEC-H3,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp,0,,,,,none,cleanup
+E2E-390,SEC-H4,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0 --bogus=1,3,unknown parameter,,exitcode:3,,none,undeclared param rejected
+E2E-391,SEC-S1,0,storage,rDISK_write_overload,inject,ln -sf /etc /tmp/dcat_symtest 2>/dev/null; ./build/dcat inject rDISK_write_overload --device=/tmp/dcat_symtest --workers=1 --size_mb=1,*,,ls /etc/dcat.stress.* 2>/dev/null | wc -l,==0,,none,symlink: no write to /etc
+E2E-392,SEC-S1,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp/dcat_symtest; rm -f /tmp/dcat_symtest,0,,,,,none,cleanup symlink
+E2E-393,STATE-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-394,STATE-1,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,none,first clean ok
+E2E-395,STATE-1,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload --cores=0,1,,,,,none,second clean: no active
+E2E-396,STATE-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-397,STATE-2,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload,0,,pgrep -x perl | wc -l,==0,,none,no-arg clean ok
+E2E-398,STATE-2,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload,0,,,,,none,no-arg clean idempotent
+E2E-399,STATE-2,3,cpu,rCPU_overload,query_empty,./build/dcat query,0,,,state_not_contains:rCPU_overload,,none,no ghost
+E2E-400,STATE-3,0,cpu,rCPU_overload,inject1,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject1
+E2E-401,STATE-3,1,cpu,rCPU_overload,force_replace,./build/dcat inject rCPU_overload --cores=0 --force,0,"""status"":""ok""",pgrep -x perl | wc -l,<=2,,none,--force replace
+E2E-402,STATE-3,2,cpu,rCPU_overload,query_one,./build/dcat query,0,,,state_contains:rCPU_overload,,none,one record
+E2E-403,STATE-3,3,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,cleanup
+E2E-404,STATE-4,0,cpu,rCPU_overload,inject1,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject1
+E2E-405,STATE-4,1,cpu,rCPU_overload,reject,./build/dcat inject rCPU_overload --cores=0,5,,pgrep -x perl | wc -l,>=1,,none,reinject rejected code5
+E2E-406,STATE-4,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,cleanup
+E2E-407,STATE-5,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-408,STATE-5,1,cpu,rCPU_overload,query1,./build/dcat query,0,,,state_contains:rCPU_overload,,none,query sees it
+E2E-409,STATE-5,2,cpu,rCPU_overload,query2,./build/dcat query,0,,,state_contains:rCPU_overload,,none,query idempotent
+E2E-410,STATE-5,3,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,cleanup
+E2E-411,STATE-6,0,cpu,rCPU_overload,inject_a,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject cores=0
+E2E-412,STATE-6,1,cpu,rCPU_overload,inject_b,./build/dcat inject rCPU_overload --cores=2,0,"""status"":""ok""",,,,none,inject cores=2 (different resource)
+E2E-413,STATE-6,2,cpu,rCPU_overload,query_two,./build/dcat query,0,,,out_contains:rCPU_overload,,none,two records
+E2E-414,STATE-6,3,cpu,rCPU_overload,clean_a,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,clean cores=0
+E2E-415,STATE-6,4,cpu,rCPU_overload,clean_b,./build/dcat clean rCPU_overload --cores=2,0,,,,,none,clean cores=2
+E2E-416,STATE-7,0,npu,rNPU_mtu_mismatch,setup,hccn_tool -i {e2e_chip} -mtu -s size 1500 2>/dev/null,0,,,,,none,reset MTU baseline 1500
+E2E-417,STATE-7,1,npu,rNPU_mtu_mismatch,inject1,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",,,,none,inject1 NPU
+E2E-418,STATE-7,2,npu,rNPU_mtu_mismatch,reject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,5,,,exitcode:5,,none,NPU reinject rejected code5
+E2E-419,STATE-7,3,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip},0,,,,,none,cleanup NPU
+E2E-420,STATE-8,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,none,inject
+E2E-421,STATE-8,1,memory,rMEM_leak,clean1,./build/dcat clean rMEM_leak,0,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,==0,,none,first clean ok
+E2E-422,STATE-8,2,memory,rMEM_leak,clean2,./build/dcat clean rMEM_leak,1,,,,,none,second clean: no active
+E2E-423,STATE-9,0,memory,rMEM_leak,inject1,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,none,inject1
+E2E-424,STATE-9,1,memory,rMEM_leak,reject,./build/dcat inject rMEM_leak --size_mb=32,5,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,none,reinject rejected code5
+E2E-425,STATE-9,2,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak,0,,,,,none,cleanup
+E2E-426,STATE-10,0,memory,rMEM_leak,inject1,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,none,inject1
+E2E-427,STATE-10,1,memory,rMEM_leak,force_replace,./build/dcat inject rMEM_leak --size_mb=32 --force,0,"""status"":""ok""",ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,none,--force replace
+E2E-428,STATE-10,2,memory,rMEM_leak,query_one,./build/dcat query,0,,,state_contains:rMEM_leak,,none,one record
+E2E-429,STATE-10,3,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak,0,,,,,none,cleanup
+E2E-430,RES-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject fault1
+E2E-431,RES-1,1,process,rPROC_hang,inject,./build/dcat inject rPROC_hang --pid={pid},0,"""status"":""ok""",,,sleep_pid,none,inject fault2
+E2E-432,RES-1,2,mixed,all,lose_state,rm -f $E2E_HOME/.demoncat/state.json,0,,,,,none,simulate state deletion
+E2E-433,RES-1,3,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,one-click recovery
+E2E-434,RES-1,4,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,none,no ghost
+E2E-435,RES-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-436,RES-2,1,mixed,all,corrupt_state,echo '{bad json}}}' > $E2E_HOME/.demoncat/state.json,0,,,,,none,corrupt state.json
+E2E-437,RES-2,2,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,recover despite corrupt
+E2E-438,RES-2,3,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,none,no ghost
+E2E-439,RES-3,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-440,RES-3,1,mixed,all,orphan,rm -f $E2E_HOME/.demoncat/state.json,0,,,,,none,orphan artifact
+E2E-441,RES-3,2,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,recover orphan
+E2E-442,RES-4,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-443,RES-4,1,mixed,all,drop_artifact,rm -f /tmp/dcat-rCPU_overload-c0.pid; pkill -x perl 2>/dev/null; true,0,,,,,none,drop artifact (ghost)
+E2E-444,RES-4,2,mixed,all,clean_all,./build/dcat clean --all,0,,,,,none,reconcile ghost
+E2E-445,RES-4,3,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,none,ghost reconciled
+E2E-446,RES-5,0,mixed,all,clean_all_1,./build/dcat clean --all,0,,,,,none,first clean --all
+E2E-447,RES-5,1,mixed,all,clean_all_2,./build/dcat clean --all,0,,,,,none,second clean --all (idempotent)
+E2E-448,RES-6,0,chaos,state_full,fill_table,for p in $(seq 19000 19032); do ./build/dcat inject rNET_port_occupy --port=$p; done,1,,,out_contains:state table full,,none,33rd inject fails: state full
+E2E-449,RES-6,1,chaos,state_full,query_records,./build/dcat query,0,,,out_contains:rNET_port_occupy,,none,32 records
+E2E-450,RES-6,2,chaos,state_full,clean_all,./build/dcat clean --all,0,,,,,none,clean --all clears all
+E2E-451,RES-6,3,chaos,state_full,query_empty,./build/dcat query,0,,,state_empty,,none,empty after clean
+E2E-452,RES-7,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject CPU fault
+E2E-453,RES-7,1,npu,rNPU_mtu_mismatch,inject,./build/dcat inject rNPU_mtu_mismatch --chip={e2e_chip} --size=1280,0,"""status"":""ok""",,,,none,inject NPU fault
+E2E-454,RES-7,2,mixed,all,lose_state,rm -f $E2E_HOME/.demoncat/state.json,0,,,,,none,simulate state deletion
+E2E-455,RES-7,3,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,one-click recovery (CPU+NPU)
+E2E-456,RES-7,4,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,none,no ghost
+E2E-457,CLI-1,0,cli,cli,negative,./build/dcat,2,subcommand,,exitcode:2,,none,no args → help + exit2
+E2E-458,CLI-2,0,cli,cli,negative,./build/dcat injec rCPU_overload --cores=0,2,missing subcommand before,,exitcode:2,,none,unknown subcommand
+E2E-459,CLI-3,0,cli,cli,negative,./build/dcat inject rCPU_overload --cores=0 --force=1,2,--force does not take a value,,exitcode:2,,none,--force=x parse error
+E2E-460,CLI-4,0,cli,cli,negative,./build/dcat inject --all rCPU_overload --cores=0,2,unexpected positional argument,,exitcode:2,,none,--all with non-clean
+E2E-461,CLI-5,0,cli,cli,negative,./build/dcat clean,2,uid required,,exitcode:2,,none,clean no uid
+E2E-462,CLI-6,0,cli,cli,negative,./build/dcat inject rCPU_overload --cores,2,missing '=value',,exitcode:2,,none,--key no =value
+E2E-463,CLI-7,0,cli,cli,negative,./build/dcat inject rCPU_overload cores=0,2,missing the '--' prefix,,exitcode:2,,none,key=value no --
+E2E-464,CLI-8,0,cli,cli,negative,./build/dcat inject rCPU_overload --=val,3,unknown parameter,,exitcode:3,,none,--=val empty name
+E2E-465,CLI-9,0,cli,cli,negative,./build/dcat query rCPU_overload --bogus=1,3,unknown parameter,,exitcode:3,,none,query unknown param
+E2E-466,CLI-10,0,cli,cli,negative,./build/dcat inject rPROC_exit,3,missing required parameter,,exitcode:3,,none,inject-only missing required
+E2E-467,CLI-11,0,cli,cli,negative,./build/dcat inject nope --cores=0,4,not found,,exitcode:4,,none,unknown uid code4
+E2E-468,CLI-12,0,cli,cli,negative,./build/dcat inject rCPU_overload,3,missing required parameter,,exitcode:3,,none,missing required code3
+E2E-469,CLI-H1,0,help,help,help,./build/dcat --help,0,subcommand,,exitcode:0,,none,global help
+E2E-470,CLI-H2,0,help,help,help,./build/dcat inject --help,0,inject <uid>,,exitcode:0,,none,inject subhelp
+E2E-471,CLI-H3,0,help,help,help,./build/dcat clean --help,0,clean,,exitcode:0,,none,clean subhelp
+E2E-472,CLI-H4,0,help,help,help,./build/dcat query --help,0,query,,exitcode:0,,none,query subhelp
+E2E-473,CLI-H5,0,help,help,help,./build/dcat list --help,0,list,,exitcode:0,,none,list subhelp
+E2E-474,CLI-C1,0,config,config,custom,./build/dcat --config config/demoncat.conf list,0,rCPU_overload,,exitcode:0,,none,--config custom path
+E2E-475,CLI-C2,0,config,config,nonexistent,./build/dcat --config /nonexistent/dcat.conf list,1,config load failed,,exitcode:1,,none,--config nonexistent
+E2E-476,CLI-L1,0,all,all,list,./build/dcat list,0,rCPU_overload,,,,none,list returns catalog
+E2E-477,CLI-SERVE,0,serve,serve,help,./build/dcat serve --help,0,serve,,,,none,serve subhelp
+E2E-478,CLI-SERVE,1,serve,serve,badport,./build/dcat serve --port=abc,2,--port,,exitcode:2,,none,serve bad port parse
+E2E-479,CLI-SERVE,2,serve,serve,start,./build/dcat serve --port 18080 --webroot . >/tmp/dcat_serve_e2e.log 2>&1 & sleep 1; curl -s http://127.0.0.1:18080/api/health,0,"""status"":""ok""",,"out_contains:""status"":""ok""",,none,serve start + health
+E2E-480,CLI-SERVE,3,serve,serve,readonly,"curl -s -X POST http://127.0.0.1:18080/api/inject -d '{{""uid"":""rCPU_overload""}}'",0,write disabled,,out_contains:write disabled,,none,read-only POST inject rejected
+E2E-481,CLI-SERVE,4,serve,serve,catalog,curl -s http://127.0.0.1:18080/api/catalog,0,rCPU_overload,,out_contains:rCPU_overload,,none,serve catalog endpoint
+E2E-482,CLI-SERVE,5,serve,serve,trav_lit,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/../../etc/passwd,0,,,out_contains:404,,none,serve traversal .. rejected (realpath 兜底)
+E2E-483,CLI-SERVE,6,serve,serve,trav_enc,curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18080/%2e%2e/%2e%2e/etc/passwd',0,,,out_contains:403,,none,serve URL-encoded traversal rejected
+E2E-484,CLI-SERVE,7,serve,serve,cleanup,pkill -x dcat 2>/dev/null; sleep 0.5; true,0,,,,,none,kill serve
+E2E-485,CONC-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-486,CONC-1,1,cpu,rCPU_overload,concurrent_clean_inject,./build/dcat clean rCPU_overload --cores=0 & sleep 0.05; ./build/dcat inject rCPU_overload --cores=0 --force,*,,,,,none,concurrent clean+inject: no crash
+E2E-487,CONC-1,2,cpu,rCPU_overload,clean,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,none,cleanup
+E2E-488,CONC-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
+E2E-489,CONC-2,1,cpu,rCPU_overload,concurrent_cleanall_inject,./build/dcat clean --all & sleep 0.05; ./build/dcat inject rCPU_overload --cores=0,*,,,,,none,concurrent clean --all + inject: no crash
+E2E-490,CONC-2,2,mixed,all,clean,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,cleanup
+E2E-491,CONC-3,0,cpu,rCPU_overload,dual_inject,./build/dcat inject rCPU_overload --cores=0 & ./build/dcat inject rCPU_overload --cores=2 & wait,*,,,,,none,dual inject: no state corruption
+E2E-492,CONC-3,1,cpu,rCPU_overload,query_consistent,./build/dcat query,0,,,state_contains:rCPU_overload,,none,state consistent
+E2E-493,CONC-3,2,mixed,all,clean,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,cleanup
+E2E-494,INTER-1,0,cpu,rCPU_overload,inject_cpu,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject CPU
+E2E-495,INTER-1,1,network,rNET_port_occupy,inject_port,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,none,inject port
+E2E-496,INTER-1,2,cpu,rCPU_overload,clean_cpu,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,none,clean CPU
+E2E-497,INTER-1,3,network,rNET_port_occupy,verify_port_still,./build/dcat query,0,,,state_contains:rNET_port_occupy,,none,port still active after CPU clean
+E2E-498,INTER-1,4,network,rNET_port_occupy,clean_port,./build/dcat clean rNET_port_occupy --port={port},0,,,,,none,cleanup port
+E2E-499,INTER-2,0,cpu,rCPU_overload,inject_cpu,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject CPU
+E2E-500,INTER-2,1,network,rNET_port_occupy,inject_port,./build/dcat inject rNET_port_occupy --port={port},0,"""status"":""ok""",,,free_port,none,inject port
+E2E-501,INTER-2,2,mixed,all,clean_all,./build/dcat clean --all,0,,pgrep -x perl | wc -l,==0,,none,clean --all
+E2E-502,INTER-2,3,mixed,all,query_empty,./build/dcat query,0,,,state_empty,,none,all cleared
+E2E-503,INTER-3,0,cpu,rCPU_overload,inject_a,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject cores=0
+E2E-504,INTER-3,1,cpu,rCPU_overload,inject_b,./build/dcat inject rCPU_overload --cores=2,0,"""status"":""ok""",pgrep -x perl | wc -l,>=2,,none,inject cores=2
+E2E-505,INTER-3,2,cpu,rCPU_overload,clean_a,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,clean cores=0
+E2E-506,INTER-3,3,cpu,rCPU_overload,verify_b_still,./build/dcat query,0,,,state_contains:rCPU_overload,,none,cores=2 still active
+E2E-507,INTER-3,4,cpu,rCPU_overload,clean_b,./build/dcat clean rCPU_overload --cores=2,0,,pgrep -x perl | wc -l,==0,,none,clean cores=2

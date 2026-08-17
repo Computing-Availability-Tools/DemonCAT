@@ -110,7 +110,7 @@ jobs:
 
       - name: Upload E2E results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           # arch 标签避免 matrix(x86/arm 两腿)同名冲突；
           # 仅上传本次运行相关产物：report.md(含逐用例测试目的) + results_*.csv(含 expected_behavior 列) + 日志

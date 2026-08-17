@@ -4,7 +4,7 @@
 # clean:  kill holder
 # query:  check holder alive + ss summary
 
-PIDFILE="/tmp/dcat-rNET_conn_exhaust.pid"
+PIDFILE_PFX="/tmp/dcat-rNET_conn_exhaust"
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -17,6 +17,8 @@ case "${DCAT_OP:-inject}" in
         [ "$host" = "$port" ] && { echo "target must be host:port (missing : separator)" >&2; exit 1; }
         case "$port" in *[!0-9]*|"") echo "target port must be numeric" >&2; exit 1;; esac
 
+        safe=$(echo "$target" | tr -c 'a-zA-Z0-9' '_')
+        PIDFILE="${PIDFILE_PFX}-${safe}.pid"
         if command -v python3 >/dev/null 2>&1; then
             python3 -c '
 import sys, socket, time
@@ -40,25 +42,59 @@ time.sleep(1e9)
         echo "conn_exhaust driver started (pid $pid, target=$target count=$count)"
         ;;
     clean)
-        if [ -f "$PIDFILE" ]; then
-            pid=$(cat "$PIDFILE")
-            kill "$pid" 2>/dev/null
-            rm -f "$PIDFILE"
-            echo "cleaned conn_exhaust (pid $pid)"
+        if [ -n "${DCAT_PARAM_TARGET:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_TARGET" | tr -c 'a-zA-Z0-9' '_')
+            PIDFILE="${PIDFILE_PFX}-${safe}.pid"
+            if [ -f "$PIDFILE" ]; then
+                pid=$(cat "$PIDFILE")
+                kill "$pid" 2>/dev/null
+                rm -f "$PIDFILE"
+                echo "cleaned conn_exhaust (pid $pid)"
+            else
+                echo "no active conn_exhaust" >&2; exit 1
+            fi
         else
-            echo "no active conn_exhaust" >&2; exit 1
+            found=0
+            for f in "${PIDFILE_PFX}-"*.pid; do
+                [ -f "$f" ] || continue
+                found=1
+                pid=$(cat "$f" 2>/dev/null)
+                kill "$pid" 2>/dev/null
+                rm -f "$f"
+            done
+            if [ "$found" -eq 1 ]; then
+                echo "cleaned all conn_exhaust"
+            else
+                echo "no active conn_exhaust" >&2; exit 1
+            fi
         fi
         ;;
     query)
-        if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-            pid=$(cat "$PIDFILE")
-            fds=$(ls -1 /proc/$pid/fd 2>/dev/null | wc -l)
-            echo "conn_exhaust driver pid=$pid (fds~$fds)"
-            ss -s 2>/dev/null | head -5
-            exit 0
+        if [ -n "${DCAT_PARAM_TARGET:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_TARGET" | tr -c 'a-zA-Z0-9' '_')
+            PIDFILE="${PIDFILE_PFX}-${safe}.pid"
+            if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+                pid=$(cat "$PIDFILE")
+                fds=$(ls -1 /proc/$pid/fd 2>/dev/null | wc -l)
+                echo "conn_exhaust driver pid=$pid (fds~$fds)"
+                ss -s 2>/dev/null | head -5
+                exit 0
+            else
+                echo "no active conn_exhaust"
+                exit 1
+            fi
         else
-            echo "no active conn_exhaust"
-            exit 1
+            active=0
+            for f in "${PIDFILE_PFX}-"*.pid; do
+                [ -f "$f" ] || continue
+                pid=$(cat "$f" 2>/dev/null)
+                kill -0 "$pid" 2>/dev/null || continue
+                active=1
+                fds=$(ls -1 /proc/$pid/fd 2>/dev/null | wc -l)
+                echo "conn_exhaust driver pid=$pid (fds~$fds)"
+            done
+            ss -s 2>/dev/null | head -5
+            [ "$active" -eq 1 ] && exit 0 || exit 1
         fi
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;

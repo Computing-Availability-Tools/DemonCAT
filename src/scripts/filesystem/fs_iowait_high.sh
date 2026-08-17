@@ -5,7 +5,7 @@
 # query:  check workers alive + mpstat
 # <path> 应为 mount 输出第 3 列的挂载点目录，iowait 计入该文件系统。
 
-PIDFILE="/tmp/dcat-rFS_iowait_high.pid"
+PIDFILE_PFX="/tmp/dcat-rFS_iowait_high"
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -13,6 +13,8 @@ case "${DCAT_OP:-inject}" in
         workers=${DCAT_PARAM_WORKERS:-4}
         case "$workers" in *[!0-9]*|"") echo "workers must be an integer" >&2; exit 1;; esac
         [ -d "$path" ] || { echo "$path is not a directory (should be a mount point)" >&2; exit 1; }
+        safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')
+        PIDFILE="${PIDFILE_PFX}-${safe}.pid"
         target="$path/dcat.iowait.$$"
         mkdir -p "$target" || { echo "cannot mkdir $target" >&2; exit 1; }
         pids=""
@@ -32,25 +34,69 @@ case "${DCAT_OP:-inject}" in
         echo "iowait_high driver started ($workers workers, target=$target)"
         ;;
     clean)
-        [ -f "$PIDFILE" ] || { echo "no active iowait_high" >&2; exit 1; }
-        { read -r pids; read -r target; } < "$PIDFILE"
-        for pid in $pids; do kill "$pid" 2>/dev/null; done
-        rm -rf "$target"
-        rm -f "$PIDFILE"
-        echo "cleaned iowait_high (removed $target)"
+        if [ -n "${DCAT_PARAM_PATH:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_PATH" | tr -c 'a-zA-Z0-9' '_')
+            PIDFILE="${PIDFILE_PFX}-${safe}.pid"
+            if [ -f "$PIDFILE" ]; then
+                { read -r pids; read -r target; } < "$PIDFILE"
+                for pid in $pids; do kill "$pid" 2>/dev/null; done
+                rm -rf "$target"
+                rm -f "$PIDFILE"
+                echo "cleaned iowait_high (removed $target)"
+            else
+                echo "no active iowait_high" >&2; exit 1
+            fi
+        else
+            cleaned=0
+            for pf in ${PIDFILE_PFX}-*.pid; do
+                [ -f "$pf" ] || continue
+                { read -r pids; read -r target; } < "$pf"
+                for pid in $pids; do kill "$pid" 2>/dev/null; done
+                rm -rf "$target"
+                rm -f "$pf"
+                cleaned=1
+            done
+            if [ "$cleaned" = 1 ]; then
+                echo "cleaned all iowait_high"
+            else
+                echo "no active iowait_high" >&2; exit 1
+            fi
+        fi
         ;;
     query)
-        [ -f "$PIDFILE" ] || { echo "no active iowait_high"; exit 1; }
-        { read -r pids; } < "$PIDFILE"
-        alive=0
-        for pid in $pids; do kill -0 "$pid" 2>/dev/null && alive=$((alive + 1)); done
-        echo "iowait_high workers alive=$alive"
-        if command -v mpstat >/dev/null 2>&1; then
-            mpstat 1 1 2>/dev/null | tail -3
+        if [ -n "${DCAT_PARAM_PATH:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_PATH" | tr -c 'a-zA-Z0-9' '_')
+            PIDFILE="${PIDFILE_PFX}-${safe}.pid"
+            [ -f "$PIDFILE" ] || { echo "no active iowait_high"; exit 1; }
+            { read -r pids; } < "$PIDFILE"
+            alive=0
+            for pid in $pids; do kill -0 "$pid" 2>/dev/null && alive=$((alive + 1)); done
+            echo "iowait_high workers alive=$alive"
+            if command -v mpstat >/dev/null 2>&1; then
+                mpstat 1 1 2>/dev/null | tail -3
+            else
+                top -bn1 2>/dev/null | head -5
+            fi
+            [ "$alive" -gt 0 ] && exit 0 || exit 1
         else
-            top -bn1 2>/dev/null | head -5
+            alive=0
+            for pf in ${PIDFILE_PFX}-*.pid; do
+                [ -f "$pf" ] || continue
+                { read -r pids; } < "$pf"
+                for pid in $pids; do kill -0 "$pid" 2>/dev/null && alive=$((alive + 1)); done
+            done
+            echo "iowait_high workers alive=$alive"
+            if [ "$alive" -gt 0 ]; then
+                if command -v mpstat >/dev/null 2>&1; then
+                    mpstat 1 1 2>/dev/null | tail -3
+                else
+                    top -bn1 2>/dev/null | head -5
+                fi
+                exit 0
+            else
+                echo "no active iowait_high"; exit 1
+            fi
         fi
-        [ "$alive" -gt 0 ] && exit 0 || exit 1
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;
 esac

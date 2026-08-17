@@ -11,7 +11,7 @@
 # clean:  umount (if mounted) + remove chattr + restore chmod
 # query:  show current mode/attrs
 
-SIDECAR="/tmp/dcat-rFS_file_lock.sidecar"
+SIDECAR_PFX="/tmp/dcat-rFS_file_lock"
 EMPTY_RO="/tmp/dcat-empty-ro"
 
 case "${DCAT_OP:-inject}" in
@@ -19,6 +19,8 @@ case "${DCAT_OP:-inject}" in
         path=${DCAT_PARAM_PATH:?missing required param: path}
         mode=${DCAT_PARAM_MODE:?missing required param: mode}
         [ -e "$path" ] || { echo "$path does not exist" >&2; exit 1; }
+        safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')
+        SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         case "$mode" in
             noread|nowrite|norw|nodelete) ;;
             *) echo "mode must be one of: noread nowrite norw nodelete" >&2; exit 1;;
@@ -57,26 +59,68 @@ case "${DCAT_OP:-inject}" in
         echo "locked $path mode=$mode (was mode=$orig_mode imm=$imm mounted=$mounted)"
         ;;
     clean)
-        [ -f "$SIDECAR" ] || { echo "no active file_lock" >&2; exit 1; }
-        { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$SIDECAR"
-        if [ "$mounted" = 1 ]; then
-            umount "$path" 2>/dev/null || true
+        if [ -n "${DCAT_PARAM_PATH:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_PATH" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            if [ -f "$SIDECAR" ]; then
+                { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$SIDECAR"
+                if [ "$mounted" = 1 ]; then
+                    umount "$path" 2>/dev/null || true
+                fi
+                if [ "$imm" = 0 ]; then
+                    chattr -i "$path" 2>/dev/null || true
+                fi
+                [ -n "$orig_mode" ] && chmod "$orig_mode" "$path" 2>/dev/null || true
+                rm -f "$SIDECAR"
+                echo "cleaned file_lock (restored $path mode=$orig_mode imm=$imm mounted=$mounted)"
+            else
+                echo "no active file_lock" >&2; exit 1
+            fi
+        else
+            cleaned=0
+            for sc in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$sc" ] || continue
+                { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$sc"
+                if [ "$mounted" = 1 ]; then
+                    umount "$path" 2>/dev/null || true
+                fi
+                if [ "$imm" = 0 ]; then
+                    chattr -i "$path" 2>/dev/null || true
+                fi
+                [ -n "$orig_mode" ] && chmod "$orig_mode" "$path" 2>/dev/null || true
+                rm -f "$sc"
+                cleaned=1
+            done
+            if [ "$cleaned" = 1 ]; then
+                echo "cleaned all file_lock"
+            else
+                echo "no active file_lock" >&2; exit 1
+            fi
         fi
-        if [ "$imm" = 0 ]; then
-            chattr -i "$path" 2>/dev/null || true
-        fi
-        [ -n "$orig_mode" ] && chmod "$orig_mode" "$path" 2>/dev/null || true
-        rm -f "$SIDECAR"
-        echo "cleaned file_lock (restored $path mode=$orig_mode imm=$imm mounted=$mounted)"
         ;;
     query)
-        path="${DCAT_PARAM_PATH:-}"
-        if [ -z "$path" ] && [ -f "$SIDECAR" ]; then read -r path < "$SIDECAR"; fi
-        if [ -z "$path" ]; then echo "no path" >&2; exit 1; fi
-        stat -c '%A %a %n' "$path" 2>/dev/null
-        lsattr "$path" 2>/dev/null
-        mount | grep -q "on $path " && echo "bind-mounted: yes"
-        [ -f "$SIDECAR" ] && exit 0 || exit 1
+        if [ -n "${DCAT_PARAM_PATH:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_PATH" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            path="$DCAT_PARAM_PATH"
+            stat -c '%A %a %n' "$path" 2>/dev/null
+            lsattr "$path" 2>/dev/null
+            mount | grep -q "on $path " && echo "bind-mounted: yes"
+            [ -f "$SIDECAR" ] && exit 0 || exit 1
+        else
+            active=0
+            for sc in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$sc" ] || continue
+                { read -r path; } < "$sc"
+                [ -n "$path" ] || continue
+                echo "file_lock: $path"
+                stat -c '%A %a %n' "$path" 2>/dev/null
+                lsattr "$path" 2>/dev/null
+                mount | grep -q "on $path " && echo "bind-mounted: yes"
+                active=1
+            done
+            [ "$active" = 1 ] && exit 0 || exit 1
+        fi
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;
 esac

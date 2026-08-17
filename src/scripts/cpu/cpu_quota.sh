@@ -4,7 +4,7 @@
 # clean:  move PIDs back to root cgroup, restore, remove cgroup
 # query:  show quota and actual core utilization
 
-SIDECAR="/tmp/dcat-rCPU_quota.sidecar"
+SIDECAR_PFX="/tmp/dcat-rCPU_quota"
 PIDLIST="/tmp/dcat-rCPU_quota.pids"
 
 detect_cg_version() {
@@ -49,6 +49,8 @@ case "${DCAT_OP:-inject}" in
         if [ "$quota" -lt 1 ] || [ "$quota" -gt 99 ]; then
             echo "quota_pct must be 1-99, got: $quota" >&2; exit 1
         fi
+        safe=$(echo "$cores" | tr -c 'a-zA-Z0-9' '_')
+        SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         ver=$(detect_cg_version)
         period=100000
         quota_us=$(( quota * period / 100 ))
@@ -101,38 +103,67 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     clean)
-        [ -f "$SIDECAR" ] || { echo "no active cpu_quota" >&2; exit 1; }
-        { read -r base; read -r ver; read -r orig; read -r extra; } < "$SIDECAR"
-        if [ "$ver" = 2 ]; then
-            if [ -f "$base/cgroup.procs" ]; then
-                while read -r p; do
-                    [ -n "$p" ] && echo "$p" > /sys/fs/cgroup/cgroup.procs 2>/dev/null
-                done < "$base/cgroup.procs"
+        clean_quota_file() {
+            [ -f "$1" ] || return 1
+            { read -r base; read -r ver; read -r orig; read -r extra; } < "$1"
+            if [ "$ver" = 2 ]; then
+                if [ -f "$base/cgroup.procs" ]; then
+                    while read -r p; do
+                        [ -n "$p" ] && echo "$p" > /sys/fs/cgroup/cgroup.procs 2>/dev/null
+                    done < "$base/cgroup.procs"
+                fi
+                echo "${orig:-max}" > "$base/cpu.max" 2>/dev/null || true
+                rmdir "$base" 2>/dev/null || true
+            else
+                cbase="$extra"
+                if [ -f "$base/tasks" ]; then
+                    while read -r p; do
+                        [ -n "$p" ] && echo "$p" > /sys/fs/cgroup/cpu/tasks 2>/dev/null
+                    done < "$base/tasks"
+                fi
+                if [ -f "$cbase/tasks" ]; then
+                    while read -r p; do
+                        [ -n "$p" ] && echo "$p" > /sys/fs/cgroup/cpuset/tasks 2>/dev/null
+                    done < "$cbase/tasks"
+                fi
+                echo "${orig:--1}" > "$base/cpu.cfs_quota_us" 2>/dev/null || true
+                rmdir "$base" 2>/dev/null || true
+                rmdir "$cbase" 2>/dev/null || true
             fi
-            echo "${orig:-max}" > "$base/cpu.max" 2>/dev/null || true
-            rmdir "$base" 2>/dev/null || true
+            rm -f "$1" "$PIDLIST"
+        }
+        if [ -n "${DCAT_PARAM_CORES:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            clean_quota_file "$SIDECAR" || { echo "no active cpu_quota" >&2; exit 1; }
+            echo "cleaned cpu_quota (restored, moved PIDs back to root)"
         else
-            cbase="$extra"
-            if [ -f "$base/tasks" ]; then
-                while read -r p; do
-                    [ -n "$p" ] && echo "$p" > /sys/fs/cgroup/cpu/tasks 2>/dev/null
-                done < "$base/tasks"
+            found=0
+            for f in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$f" ] || continue
+                clean_quota_file "$f" && found=1
+            done
+            if [ "$found" -eq 0 ]; then
+                echo "no active cpu_quota" >&2
+                exit 1
             fi
-            if [ -f "$cbase/tasks" ]; then
-                while read -r p; do
-                    [ -n "$p" ] && echo "$p" > /sys/fs/cgroup/cpuset/tasks 2>/dev/null
-                done < "$cbase/tasks"
-            fi
-            echo "${orig:--1}" > "$base/cpu.cfs_quota_us" 2>/dev/null || true
-            rmdir "$base" 2>/dev/null || true
-            rmdir "$cbase" 2>/dev/null || true
+            echo "cleaned all cpu_quota"
         fi
-        rm -f "$SIDECAR" "$PIDLIST"
-        echo "cleaned cpu_quota (restored, moved PIDs back to root)"
         ;;
 
     query)
         ver=$(detect_cg_version)
+        if [ -n "${DCAT_PARAM_CORES:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+        else
+            SIDECAR=""
+            for f in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$f" ] || continue
+                SIDECAR="$f"
+                break
+            done
+        fi
         if [ -f "$SIDECAR" ]; then
             { read -r base; read -r v; read -r orig; read -r extra; } < "$SIDECAR"
             if [ "$ver" = 2 ]; then

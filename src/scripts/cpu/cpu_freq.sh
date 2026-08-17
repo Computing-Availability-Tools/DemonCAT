@@ -5,7 +5,7 @@
 # clean:  restore original scaling_min_freq and scaling_max_freq per core
 # query:  show current scaling_max_freq
 
-SIDECAR="/tmp/dcat-rCPU_freq.sidecar"
+SIDECAR_PFX="/tmp/dcat-rCPU_freq"
 
 parse_cores() {
     echo "$1" | tr ',' '\n' | while IFS= read -r r; do
@@ -38,6 +38,8 @@ case "${DCAT_OP:-inject}" in
             *[!0-9]*|"") echo "freq_mhz must be a positive integer, got: '$freq'" >&2; exit 1;;
         esac
         freq_khz=$((freq * 1000))
+        safe=$(echo "$spec" | tr -c 'a-zA-Z0-9' '_')
+        SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         : > "$SIDECAR"
         for n in $(parse_cores "$spec"); do
             d="/sys/devices/system/cpu/cpu$n/cpufreq"
@@ -72,26 +74,53 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     clean)
-        [ -s "$SIDECAR" ] || { echo "no active cpu_freq" >&2; exit 1; }
-        while read -r n orig_max orig_min; do
-            [ -z "$n" ] && continue
-            d="/sys/devices/system/cpu/cpu$n/cpufreq"
-            # Restore max FIRST (raise ceiling), then min (raise floor)
-            [ -n "$orig_max" ] && echo "$orig_max" > "$d/scaling_max_freq" 2>/dev/null || true
-            [ -n "$orig_min" ] && echo "$orig_min" > "$d/scaling_min_freq" 2>/dev/null || true
-        done < "$SIDECAR"
-        rm -f "$SIDECAR"
-        echo "cleaned cpu_freq (restored scaling_min/max_freq)"
+        clean_freq_file() {
+            [ -s "$1" ] || return 1
+            while read -r n orig_max orig_min; do
+                [ -z "$n" ] && continue
+                d="/sys/devices/system/cpu/cpu$n/cpufreq"
+                # Restore max FIRST (raise ceiling), then min (raise floor)
+                [ -n "$orig_max" ] && echo "$orig_max" > "$d/scaling_max_freq" 2>/dev/null || true
+                [ -n "$orig_min" ] && echo "$orig_min" > "$d/scaling_min_freq" 2>/dev/null || true
+            done < "$1"
+            rm -f "$1"
+        }
+        if [ -n "${DCAT_PARAM_CORES:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            clean_freq_file "$SIDECAR" || { echo "no active cpu_freq" >&2; exit 1; }
+            echo "cleaned cpu_freq (restored scaling_min/max_freq)"
+        else
+            found=0
+            for f in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$f" ] || continue
+                clean_freq_file "$f" && found=1
+            done
+            if [ "$found" -eq 0 ]; then
+                echo "no active cpu_freq" >&2
+                exit 1
+            fi
+            echo "cleaned all cpu_freq"
+        fi
         ;;
 
     query)
         spec=${DCAT_PARAM_CORES:-}
-        if [ -z "$spec" ]; then
-            if [ -s "$SIDECAR" ]; then
-                spec=$(awk '{printf "%s,", $1}' "$SIDECAR" | sed 's/,$//')
-            else
-                spec="0"
-            fi
+        active=0
+        if [ -n "$spec" ]; then
+            safe=$(echo "$spec" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            [ -s "$SIDECAR" ] && active=1
+        else
+            spec=""
+            for f in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$f" ] || continue
+                [ -s "$f" ] || continue
+                active=1
+                cores_in_file=$(awk '{printf "%s,", $1}' "$f" | sed 's/,$//')
+                [ -n "$cores_in_file" ] && spec="${spec:+$spec,}$cores_in_file"
+            done
+            [ -z "$spec" ] && spec="0"
         fi
         echo "cpu[$spec] scaling_max_freq (kHz):"
         for n in $(parse_cores "$spec"); do
@@ -101,7 +130,7 @@ case "${DCAT_OP:-inject}" in
                 echo "  cpu$n max=$cur"
             fi
         done
-        [ -s "$SIDECAR" ] && exit 0 || exit 1
+        [ "$active" -eq 1 ] && exit 0 || exit 1
         ;;
 
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;

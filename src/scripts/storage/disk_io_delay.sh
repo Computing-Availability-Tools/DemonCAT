@@ -5,7 +5,7 @@
 # query:  dmsetup info/table
 # NOTE: applying to a mounted/in-use device is dangerous; test on spare devices.
 
-SIDECAR="/tmp/dcat-rDISK_io_delay.sidecar"
+SIDECAR_PFX="/tmp/dcat-rDISK_io_delay"
 
 case "${DCAT_OP:-inject}" in
     inject)
@@ -13,6 +13,8 @@ case "${DCAT_OP:-inject}" in
         delay=${DCAT_PARAM_DELAY_MS:?missing required param: delay_ms}
         case "$delay" in *[!0-9]*|"") echo "delay_ms must be an integer" >&2; exit 1;; esac
         [ -b "$dev" ] || { echo "$dev is not a block device" >&2; exit 1; }
+        safe=$(echo "$dev" | tr -c 'a-zA-Z0-9' '_')
+        SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         devname=$(basename "$dev")
         dm="dcat-delay-${devname}"
         dmsetup info "$dm" >/dev/null 2>&1 && { echo "$dm already exists" >&2; exit 1; }
@@ -23,22 +25,64 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     clean)
-        [ -f "$SIDECAR" ] || { echo "no active io_delay" >&2; exit 1; }
-        dm=$(cat "$SIDECAR")
-        dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null || true
-        rm -f "$SIDECAR"
-        echo "cleaned io_delay (removed $dm)"
+        if [ -n "${DCAT_PARAM_DEVICE:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_DEVICE" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            if [ -f "$SIDECAR" ]; then
+                dm=$(cat "$SIDECAR")
+                dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null || true
+                rm -f "$SIDECAR"
+                echo "cleaned io_delay (removed $dm)"
+            else
+                echo "no active io_delay" >&2; exit 1
+            fi
+        else
+            cleaned=0
+            for sc in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$sc" ] || continue
+                dm=$(cat "$sc")
+                dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null || true
+                rm -f "$sc"
+                cleaned=1
+            done
+            if [ "$cleaned" = 1 ]; then
+                echo "cleaned all io_delay"
+            else
+                echo "no active io_delay" >&2; exit 1
+            fi
+        fi
         ;;
 
     query)
-        dm=$(cat "$SIDECAR" 2>/dev/null)
-        if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
-            echo "dm-delay active: $dm"
-            dmsetup table "$dm" 2>/dev/null
-            exit 0
+        if [ -n "${DCAT_PARAM_DEVICE:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_DEVICE" | tr -c 'a-zA-Z0-9' '_')
+            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+            dm=$(cat "$SIDECAR" 2>/dev/null)
+            if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
+                echo "dm-delay active: $dm"
+                dmsetup table "$dm" 2>/dev/null
+                exit 0
+            else
+                echo "no active io_delay"
+                exit 1
+            fi
         else
-            echo "no active io_delay"
-            exit 1
+            active=0
+            for sc in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$sc" ] || continue
+                dm=$(cat "$sc" 2>/dev/null)
+                if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
+                    echo "dm-delay active: $dm"
+                    dmsetup table "$dm" 2>/dev/null
+                    active=1
+                fi
+            done
+            if [ "$active" = 1 ]; then
+                exit 0
+            else
+                echo "no active io_delay"
+                exit 1
+            fi
         fi
         ;;
 

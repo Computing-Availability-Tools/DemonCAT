@@ -60,27 +60,52 @@ case "${DCAT_OP:-inject}" in
         echo "hung cores [$spec] ($alive/$total alive, pids:$pids)"
         ;;
     clean)
+        spec="${DCAT_PARAM_CORES:-}"
         found=0
-        for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
-            [ -f "$pf" ] || continue
-            for pid in $(cat "$pf" 2>/dev/null); do
-                kill "$pid" 2>/dev/null
+        if [ -n "$spec" ]; then
+            for n in $(parse_cores "$spec"); do
+                pf="$(pidfile_for "$n")"
+                [ -f "$pf" ] || continue
+                for pid in $(cat "$pf" 2>/dev/null); do
+                    kill "$pid" 2>/dev/null
+                done
+                rm -f "$pf"
+                found=1
             done
-            rm -f "$pf"
-            found=1
-        done
+        else
+            for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
+                [ -f "$pf" ] || continue
+                for pid in $(cat "$pf" 2>/dev/null); do
+                    kill "$pid" 2>/dev/null
+                done
+                rm -f "$pf"
+                found=1
+            done
+        fi
         [ "$found" = 1 ] && echo "cleaned core_hang" || { echo "no active core_hang" >&2; exit 1; }
         ;;
     query)
+        spec="${DCAT_PARAM_CORES:-}"
         found=0
         n=0
-        for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
-            [ -f "$pf" ] || continue
-            for pid in $(cat "$pf" 2>/dev/null); do
-                kill -0 "$pid" 2>/dev/null && n=$((n + 1))
+        if [ -n "$spec" ]; then
+            for c in $(parse_cores "$spec"); do
+                pf="$(pidfile_for "$c")"
+                [ -f "$pf" ] || continue
+                for pid in $(cat "$pf" 2>/dev/null); do
+                    kill -0 "$pid" 2>/dev/null && n=$((n + 1))
+                done
+                found=1
             done
-            found=1
-        done
+        else
+            for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
+                [ -f "$pf" ] || continue
+                for pid in $(cat "$pf" 2>/dev/null); do
+                    kill -0 "$pid" 2>/dev/null && n=$((n + 1))
+                done
+                found=1
+            done
+        fi
         if [ "$found" = 1 ]; then
             echo "core_hang: $n RT procs alive"
             [ "$n" -gt 0 ] && exit 0 || exit 1

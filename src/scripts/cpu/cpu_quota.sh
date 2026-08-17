@@ -5,7 +5,6 @@
 # query:  show quota and actual core utilization
 
 SIDECAR_PFX="/tmp/dcat-rCPU_quota"
-PIDLIST="/tmp/dcat-rCPU_quota.pids"
 
 detect_cg_version() {
     [ -f /sys/fs/cgroup/cgroup.controllers ] && echo 2 || echo 1
@@ -51,6 +50,7 @@ case "${DCAT_OP:-inject}" in
         fi
         safe=$(echo "$cores" | tr -c 'a-zA-Z0-9' '_')
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
+        PIDLIST="${SIDECAR_PFX}-${safe}.pids"
         ver=$(detect_cg_version)
         period=100000
         quota_us=$(( quota * period / 100 ))
@@ -58,7 +58,7 @@ case "${DCAT_OP:-inject}" in
 
         if [ "$ver" = 2 ]; then
             [ -f /sys/fs/cgroup/cgroup.controllers ] || { echo "cgroup v2 not mounted (/sys/fs/cgroup/cgroup.controllers missing)" >&2; exit 1; }
-            base="/sys/fs/cgroup/dcat_quota"
+            base="/sys/fs/cgroup/dcat_quota_${safe}"
             mkdir -p "$base" 2>/dev/null || { echo "cannot mkdir $base (need root?)" >&2; exit 1; }
             echo "+cpu +cpuset" > /sys/fs/cgroup/cgroup.subtree_control 2>/dev/null || true
             echo "$cpus" > "$base/cpuset.cpus" 2>/dev/null || true
@@ -77,8 +77,8 @@ case "${DCAT_OP:-inject}" in
         else
             [ -d /sys/fs/cgroup/cpu ] || { echo "cgroup v1 cpu controller not found (/sys/fs/cgroup/cpu/)" >&2; exit 1; }
             [ -d /sys/fs/cgroup/cpuset ] || { echo "cgroup v1 cpuset controller not found (/sys/fs/cgroup/cpuset/)" >&2; exit 1; }
-            base="/sys/fs/cgroup/cpu/dcat_quota"
-            cbase="/sys/fs/cgroup/cpuset/dcat_quota"
+            base="/sys/fs/cgroup/cpu/dcat_quota_${safe}"
+            cbase="/sys/fs/cgroup/cpuset/dcat_quota_${safe}"
             mkdir -p "$base" 2>/dev/null || { echo "cannot mkdir $base (need root?)" >&2; exit 1; }
             mkdir -p "$cbase" 2>/dev/null || true
             orig_q=$(cat "$base/cpu.cfs_quota_us" 2>/dev/null)
@@ -128,7 +128,7 @@ case "${DCAT_OP:-inject}" in
                 rmdir "$base" 2>/dev/null || true
                 rmdir "$cbase" 2>/dev/null || true
             fi
-            rm -f "$1" "$PIDLIST"
+            rm -f "$1" "${1%.sidecar}.pids"
         }
         if [ -n "${DCAT_PARAM_CORES:-}" ]; then
             safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
@@ -151,19 +151,9 @@ case "${DCAT_OP:-inject}" in
 
     query)
         ver=$(detect_cg_version)
-        if [ -n "${DCAT_PARAM_CORES:-}" ]; then
-            safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
-            SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
-        else
-            SIDECAR=""
-            for f in ${SIDECAR_PFX}-*.sidecar; do
-                [ -f "$f" ] || continue
-                SIDECAR="$f"
-                break
-            done
-        fi
-        if [ -f "$SIDECAR" ]; then
-            { read -r base; read -r v; read -r orig; read -r extra; } < "$SIDECAR"
+        query_one() {
+            [ -f "$1" ] || return 1
+            { read -r base; read -r v; read -r orig; read -r extra; } < "$1"
             if [ "$ver" = 2 ]; then
                 cur=$(cat "$base/cpu.max" 2>/dev/null)
                 cpus=$(cat "$base/cpuset.cpus.effective" 2>/dev/null)
@@ -187,10 +177,18 @@ case "${DCAT_OP:-inject}" in
                 [ "$dt" -gt 0 ] 2>/dev/null && pct=$((db * 100 / dt)) || pct=0
                 echo "  core $n: ${pct}% (cap=${quota_pct}%)"
             done
-            exit 0
+            return 0
+        }
+        if [ -n "${DCAT_PARAM_CORES:-}" ]; then
+            safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
+            query_one "${SIDECAR_PFX}-${safe}.sidecar" && exit 0 || { echo "FAULT NOT ACTIVE: no cpu_quota" >&2; exit 1; }
         else
-            echo "FAULT NOT ACTIVE: no cpu_quota"
-            exit 1
+            found=0
+            for f in ${SIDECAR_PFX}-*.sidecar; do
+                [ -f "$f" ] || continue
+                query_one "$f" && found=1
+            done
+            [ "$found" -eq 1 ] && exit 0 || { echo "no active cpu_quota"; exit 1; }
         fi
         ;;
 

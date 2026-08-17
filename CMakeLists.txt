@@ -105,10 +105,10 @@ dcat_test(test_faults_npu         tests/ut/test_faults_npu.c)
 add_test(NAME test_syntax COMMAND sh tests/check_syntax.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # ---- Tier 3: 真实执行测试 (无需 root) ----
-dcat_test(test_smoke_cpu      tests/test_smoke_cpu.c)
-dcat_test(test_smoke_process  tests/test_smoke_process.c)
-dcat_test(test_smoke_storage  tests/test_smoke_storage.c)
-dcat_test(test_smoke_state_lost tests/test_smoke_state_lost.c)
+dcat_test(test_smoke_cpu      tests/ut/test_smoke_cpu.c)
+dcat_test(test_smoke_process  tests/ut/test_smoke_process.c)
+dcat_test(test_smoke_storage  tests/ut/test_smoke_storage.c)
+dcat_test(test_smoke_state_lost tests/ut/test_smoke_state_lost.c)
 
 # ---- 示例动态插件 (编译到 plugins/libsample.so) ----
 add_library(sample_plugin MODULE

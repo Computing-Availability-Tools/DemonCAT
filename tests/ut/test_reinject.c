@@ -1,4 +1,4 @@
-/* tests/test_reinject.c — TDD: 默认拒绝 + --force 原子替换 */
+/* tests/ut/test_reinject.c — TDD: 默认拒绝 + --force 原子替换 */
 #include "test.h"
 #include "reinject.h"
 #include "dispatch.h"

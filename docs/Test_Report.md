@@ -278,10 +278,10 @@
 
 | 文件 | 层级 | 职责 |
 | ------ | ------ | ------ |
-| tests/test.h | 共享 | 测试框架宏 |
-| tests/test_faults_common.h | 共享 | mock 设置 + 断言宏 |
-| tests/test_*.c (14个) | Tier 0 | 核心单元测试 |
-| tests/test_faults_*.c (4个) | Tier 1 | 33 条 mock 表驱动 |
+| tests/ut/test.h | 共享 | 测试框架宏 |
+| tests/ut/test_faults_common.h | 共享 | mock 设置 + 断言宏 |
+| tests/ut/test_*.c (14个) | Tier 0 | 核心单元测试 |
+| tests/ut/test_faults_*.c (4个) | Tier 1 | 33 条 mock 表驱动 |
 | tests/check_syntax.sh | Tier 2 | 脚本语法检查 |
 | tests/test_smoke_*.c (4个) | Tier 3 | 真实执行测试 |
 | tests/smoke_root.sh | root | root 级自动化测试 |

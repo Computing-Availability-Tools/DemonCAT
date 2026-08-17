@@ -674,7 +674,7 @@ dispatch_route(uid, op, params):
 
 ## 8. Reinject 默认拒绝与原子替换（--force）
 
-> 对同一资源的重复注入从"隐式并集/覆盖"改为"默认拒绝 + `--force` 原子替换"。TDD 完成，由 `tests/test_reinject.c` 覆盖（见 Test_Report.md / §11）。
+> 对同一资源的重复注入从"隐式并集/覆盖"改为"默认拒绝 + `--force` 原子替换"。TDD 完成，由 `tests/ut/test_reinject.c` 覆盖（见 Test_Report.md / §11）。
 
 ### 8.1 目标与动机
 
@@ -757,7 +757,7 @@ if (strcmp(op, "inject") == 0) {
 - 网络 / 进程 / 存储：本就同资源不可并存（tc qdisc / ipset / 单 pid），只是把隐式打架显式化为 reject，基本非 breaking。
 - 迁移：重注入改加 `--force`；不同资源（不重叠核 / 不同 iface）仍并发 OK。
 
-### 8.9 测试计划（TDD，`tests/test_reinject.c`，先全红）
+### 8.9 测试计划（TDD，`tests/ut/test_reinject.c`，先全红）
 
 1. `cores_parse`：`"0,1"`→{0,1}；`"0-3"`→{0,1,2,3}；`"0,1,4-6"`→{0,1,4,5,6}；`"0"`→{0}；非法→-1。
 2. `cores_intersect`：{0,1}∩{0,2}={0}；{0,1}∩{2,3}=∅；{0,1}∩{0-8}={0,1}。
@@ -886,7 +886,7 @@ CAT/
 ## 11. 测试设计
 
 > 开发遵循 TDD：先写测试用例（定义期望命令串 + 环境变量 + 退出码 + JSON 输出），再实现功能代码使测试通过。测试用例是行为的权威定义（见 SPEC §9.1）。
-> Reinject 默认拒绝与 --force 的测试设计见 §8.9（`tests/test_reinject.c`）。
+> Reinject 默认拒绝与 --force 的测试设计见 §8.9（`tests/ut/test_reinject.c`）。
 
 ### 11.1 mock_executor
 

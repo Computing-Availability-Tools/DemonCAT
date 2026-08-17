@@ -217,8 +217,8 @@ const dcat_plugin_t *dcat_plugin_get(void) {
 
 | 测试 | 文件 | 覆盖 |
 | --- | --- | --- |
-| `test_plugin_manager` | `tests/test_plugin_manager.c` | `plugin_find("nope")==NULL`、`plugin_count()==0`；`plugin_load_dir("/tmp/dcat-no-plugins-here-xyz")==0` |
-| `test_plugin_integration` | `tests/test_plugin_integration.c` | `plugin_load_dir("plugins")>=1`；`plugin_find("rSAMPLE_test")!=NULL`；`dispatch_route inject` 返回 ok + 含 `record_id` + `state_list_active()==1`；`dispatch_route clean` 返回 ok + `state_list_active()==0` |
+| `test_plugin_manager` | `tests/ut/test_plugin_manager.c` | `plugin_find("nope")==NULL`、`plugin_count()==0`；`plugin_load_dir("/tmp/dcat-no-plugins-here-xyz")==0` |
+| `test_plugin_integration` | `tests/ut/test_plugin_integration.c` | `plugin_load_dir("plugins")>=1`；`plugin_find("rSAMPLE_test")!=NULL`；`dispatch_route inject` 返回 ok + 含 `record_id` + `state_list_active()==1`；`dispatch_route clean` 返回 ok + `state_list_active()==0` |
 | 全 ctest 24 项 | — | precheck 重构保持行为（per-op 字段对齐 fault_def）；cnf/injector/plugin 三级优先级不变 |
 
 CMake 注册（`CMakeLists.txt:45-47`）：

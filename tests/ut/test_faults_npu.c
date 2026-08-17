@@ -1,4 +1,4 @@
-/* tests/test_faults_npu.c — Tier 1: mock table-driven tests for NPU (16) */
+/* tests/ut/test_faults_npu.c — Tier 1: mock table-driven tests for NPU (16) */
 #include "test_faults_common.h"
 
 int main(void) {

@@ -95,6 +95,45 @@ int test_unknown_uid(void) {
     return 0;
 }
 
+int test_help_print_global(void) {
+    FILE *saved = stdout;
+    FILE *tmp = tmpfile();
+    if (!tmp) return 1;
+    stdout = tmp;
+    help_print_global();
+    fflush(stdout);
+    rewind(stdout);
+    char buf[1024];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, stdout);
+    buf[n] = '\0';
+    stdout = saved;
+    fclose(tmp);
+    ASSERT_TRUE(n > 0);
+    ASSERT_STR_CONTAINS(buf, "usage:");
+    ASSERT_STR_CONTAINS(buf, "inject");
+    return 0;
+}
+
+int test_help_print_subcommand(void) {
+    setup();
+    FILE *saved = stdout;
+    FILE *tmp = tmpfile();
+    if (!tmp) return 1;
+    stdout = tmp;
+    help_print_subcommand("inject", NULL);
+    fflush(stdout);
+    rewind(stdout);
+    char buf[2048];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, stdout);
+    buf[n] = '\0';
+    stdout = saved;
+    fclose(tmp);
+    ASSERT_TRUE(n > 0);
+    ASSERT_STR_CONTAINS(buf, "dcat inject");
+    ASSERT_STR_CONTAINS(buf, "rNET_loss");
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_global_help);
     RUN_TEST(test_inject_help_lists_faults);
@@ -104,5 +143,7 @@ int main(void) {
     RUN_TEST(test_query_help);
     RUN_TEST(test_list_help);
     RUN_TEST(test_unknown_uid);
+    RUN_TEST(test_help_print_global);
+    RUN_TEST(test_help_print_subcommand);
     return TEST_MAIN_RETURN();
 }

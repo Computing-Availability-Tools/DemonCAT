@@ -1,4 +1,4 @@
-/* test_serve.c — 通过 #include "serve.c" 直接测其 static 纯函数(无 socket)
+/* tests/ut/test_serve.c — 通过 #include "serve.c" 直接测其 static 纯函数(无 socket)
  *
  * 覆盖分支:status_text / content_type_for / find_content_length /
  *   is_known_api_path / parse_params_object / cmp_record_desc /
@@ -13,7 +13,7 @@
  * 故置于此处,先于 #include "test.h"。serve.c 内的同名 #define 是同值重定义,合法。 */
 #define _GNU_SOURCE
 #include "test.h"
-#include "../src/core/serve.c" /* 引入 static 函数与全部依赖 */
+#include "../../src/core/serve.c" /* 引入 static 函数与全部依赖 */
 #include <cJSON.h>
 
 /* ---- status_text:每个 code + default 分支 ---- */

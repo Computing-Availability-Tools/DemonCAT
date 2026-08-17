@@ -1,4 +1,4 @@
-/* tests/test_faults_process.c — Tier 1: mock table-driven tests for process (3) */
+/* tests/ut/test_faults_process.c — Tier 1: mock table-driven tests for process (3) */
 #include "test_faults_common.h"
 
 int main(void) {

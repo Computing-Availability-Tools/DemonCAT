@@ -103,9 +103,10 @@ case "${DCAT_OP:-inject}" in
             safe=$(echo "$DCAT_PARAM_PATH" | tr -c 'a-zA-Z0-9' '_')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             path="$DCAT_PARAM_PATH"
-            stat -c '%A %a %n' "$path" 2>/dev/null
-            lsattr "$path" 2>/dev/null
-            mount | grep -q "on $path " && echo "bind-mounted: yes"
+            mode_oct=$(stat -c %a "$path" 2>/dev/null)
+            imm=$(lsattr "$path" 2>/dev/null | grep -q 'i' && echo yes || echo no)
+            mnt=$(mount 2>/dev/null | grep -q "on $path " && echo yes || echo no)
+            echo "file_lock: $path mode=$mode_oct immutable=$imm bind-mounted=$mnt"
             [ -f "$SIDECAR" ] && exit 0 || exit 1
         else
             active=0
@@ -113,10 +114,10 @@ case "${DCAT_OP:-inject}" in
                 [ -f "$sc" ] || continue
                 { read -r path; } < "$sc"
                 [ -n "$path" ] || continue
-                echo "file_lock: $path"
-                stat -c '%A %a %n' "$path" 2>/dev/null
-                lsattr "$path" 2>/dev/null
-                mount | grep -q "on $path " && echo "bind-mounted: yes"
+                mode_oct=$(stat -c %a "$path" 2>/dev/null)
+                imm=$(lsattr "$path" 2>/dev/null | grep -q 'i' && echo yes || echo no)
+                mnt=$(mount 2>/dev/null | grep -q "on $path " && echo yes || echo no)
+                echo "file_lock: $path mode=$mode_oct immutable=$imm bind-mounted=$mnt"
                 active=1
             done
             [ "$active" = 1 ] && exit 0 || exit 1

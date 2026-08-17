@@ -9,7 +9,7 @@ PIDFILE_PFX="/tmp/dcat-rNET_conn_exhaust"
 case "${DCAT_OP:-inject}" in
     inject)
         target=${DCAT_PARAM_TARGET:?missing required param: target}
-        count=${DCAT_PARAM_COUNT:?missing required param: count}
+        count=${DCAT_PARAM_COUNT:-0}
         case "$count" in *[!0-9]*|"") echo "count must be an integer" >&2; exit 1;; esac
         host=${target%%:*}
         port=${target##*:}
@@ -24,16 +24,15 @@ case "${DCAT_OP:-inject}" in
 import sys, socket, time
 host, port, n = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 socks = []
-for _ in range(n):
+while n == 0 or len(socks) < n:
     try:
-        s = socket.create_connection((host, port), timeout=3)
-        socks.append(s)
+        socks.append(socket.create_connection((host, port), timeout=3))
     except OSError:
         break
 time.sleep(1e9)
 ' "$host" "$port" "$count" >/dev/null 2>&1 &
         elif command -v perl >/dev/null 2>&1; then
-            perl -e 'use IO::Socket::INET; my ($h,$p,$n)=@ARGV; my @s; for(1..$n){ my $c=IO::Socket::INET->new(PeerAddr=>"$h:$p",Timeout=>3) or last; push @s,$c } select(undef,undef,undef,undef)' "$host" "$port" "$count" >/dev/null 2>&1 &
+            perl -e 'use IO::Socket::INET; my ($h,$p,$n)=@ARGV; my @s; while($n==0 || scalar(@s)<$n){ my $c=IO::Socket::INET->new(PeerAddr=>"$h:$p",Timeout=>3) or last; push @s,$c } select(undef,undef,undef,undef)' "$host" "$port" "$count" >/dev/null 2>&1 &
         else
             echo "neither python3 nor perl available" >&2; exit 1
         fi

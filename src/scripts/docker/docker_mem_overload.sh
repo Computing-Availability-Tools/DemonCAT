@@ -38,7 +38,7 @@ time.sleep(1e9)
 my $s = shift;
 my ($n, $u) = $s =~ /^\s*(\d+)\s*([KMG]?)\s*$/i ? ($1, uc($2 || "M")) : die "bad size";
 my %m = ("K", 1024, "M", 1024**2, "G", 1024**3);
-open(my $fh, ">", "'" $MARKER "'") or die;
+open(my $fh, ">", "'"$MARKER"'") or die;
 print $fh $$;
 close $fh;
 my $b = "x" x ($n * $m{$u});

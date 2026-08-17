@@ -36,12 +36,12 @@ case "${DCAT_OP:-inject}" in
                 mb=$(size_to_mb "$size") || { echo "invalid size: $size" >&2; exit 1; }
                 dd if=/dev/zero of="$f" bs=1M count="$mb" 2>/dev/null
             fi
-            echo "fill file created: $f (size=$size)"
         else
-            fallocate -l 1T "$f" 2>/dev/null || dd if=/dev/zero of="$f" bs=1M 2>/dev/null || true
-            echo "fill file created: $f (size=fill-to-ENOSPC)"
+            # 无 size: 持续填充直至 ENOSPC
+            dd if=/dev/zero of="$f" bs=1M 2>/dev/null || true
         fi
         printf '%s\n' "$f" > "$SIDECAR"
+        echo "fill file created: $f (size=${size:-fill-to-full})"
         ;;
     clean)
         if [ -n "${DCAT_PARAM_PATH:-}" ]; then

@@ -86,34 +86,38 @@ case "${DCAT_OP:-inject}" in
         ;;
     query)
         spec="${DCAT_PARAM_CORES:-}"
-        active_cores=""
+        found=0
         n=0
+        cores_alive=""
         if [ -n "$spec" ]; then
             for c in $(parse_cores "$spec"); do
                 pf="$(pidfile_for "$c")"
                 [ -f "$pf" ] || continue
+                alive=0
                 for pid in $(cat "$pf" 2>/dev/null); do
-                    if kill -0 "$pid" 2>/dev/null; then
-                        n=$((n + 1))
-                        active_cores="$active_cores $c"
-                    fi
+                    kill -0 "$pid" 2>/dev/null && { n=$((n + 1)); alive=1; }
                 done
+                [ "$alive" = 1 ] && cores_alive="$cores_alive $c"
+                found=1
             done
         else
             for pf in /tmp/dcat-rCPU_core_hang-c*.pid; do
                 [ -f "$pf" ] || continue
                 c=$(echo "$pf" | sed 's/.*-c\([0-9]*\)\.pid/\1/')
+                alive=0
                 for pid in $(cat "$pf" 2>/dev/null); do
-                    if kill -0 "$pid" 2>/dev/null; then
-                        n=$((n + 1))
-                        active_cores="$active_cores $c"
-                    fi
+                    kill -0 "$pid" 2>/dev/null && { n=$((n + 1)); alive=1; }
                 done
+                [ "$alive" = 1 ] && cores_alive="$cores_alive $c"
+                found=1
             done
         fi
-        if [ -n "$active_cores" ]; then
-            echo "core_hang: $n RT procs alive on cores:[$active_cores]"
+        if [ "$found" = 1 ] && [ -n "$cores_alive" ]; then
+            clist=$(echo $cores_alive | tr ' ' ',')
+            echo "core_hang: hung cores [$clist] ($n RT procs alive)"
             exit 0
+        elif [ "$found" = 1 ]; then
+            echo "core_hang: 0 RT procs alive"; exit 1
         else
             echo "no active core_hang"; exit 1
         fi

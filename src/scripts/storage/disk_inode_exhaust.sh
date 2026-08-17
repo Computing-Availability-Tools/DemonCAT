@@ -9,7 +9,7 @@ SIDECAR_PFX="/tmp/dcat-rDISK_inode_exhaust"
 case "${DCAT_OP:-inject}" in
     inject)
         path=${DCAT_PARAM_PATH:?missing required param: path}
-        count=${DCAT_PARAM_COUNT:-100000}
+        count=${DCAT_PARAM_COUNT:-0}
         case "$count" in *[!0-9]*|"") echo "count must be an integer" >&2; exit 1;; esac
         [ -d "$path" ] || { echo "$path is not a directory" >&2; exit 1; }
         safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')
@@ -17,12 +17,12 @@ case "${DCAT_OP:-inject}" in
         dir="$path/dcat.inodes.$$"
         mkdir -p "$dir" || { echo "mkdir $dir failed" >&2; exit 1; }
         i=0; ok=0
-        while [ "$i" -lt "$count" ]; do
-            if : > "$dir/f$i" 2>/dev/null; then ok=$((ok + 1)); else break; fi
+        while [ "$count" -eq 0 ] || [ "$i" -lt "$count" ]; do
+            if ( : > "$dir/f$i" ) 2>/dev/null; then ok=$((ok + 1)); else break; fi
             i=$((i + 1))
         done
         printf '%s\n' "$dir" > "$SIDECAR"
-        echo "created $ok files in $dir (requested $count)"
+        echo "created $ok files in $dir (requested ${count:-fill-to-ENOSPC})"
         ;;
 
     clean)
@@ -61,9 +61,9 @@ case "${DCAT_OP:-inject}" in
             dir=$(cat "$SIDECAR" 2>/dev/null)
             if [ -n "$dir" ] && [ -d "$dir" ]; then
                 n=$(find "$dir" -type f 2>/dev/null | wc -l)
-                echo "inode_exhaust: $n files in $dir"
-                echo "filesystem inode usage:"
-                df -hi "$dir" 2>/dev/null | tail -1 | awk '{printf "  total=%s used=%s free=%s (%s)\n", $2, $3, $4, $5}'
+                echo "inode_exhaust: $n files created in $dir"
+                parent=$(dirname "$dir")
+                df -i "$parent" 2>/dev/null | awk 'NR==2{print "  inodes total="$2" used="$3" free="$4" ("$5" used)"}'
                 exit 0
             else
                 echo "no active inode_exhaust"
@@ -76,14 +76,12 @@ case "${DCAT_OP:-inject}" in
                 dir=$(cat "$sc" 2>/dev/null)
                 if [ -n "$dir" ] && [ -d "$dir" ]; then
                     n=$(find "$dir" -type f 2>/dev/null | wc -l)
-                    echo "inode_exhaust: $n files in $dir"
-                    echo "filesystem inode usage:"
-                    df -hi "$dir" 2>/dev/null | tail -1 | awk '{printf "  total=%s used=%s free=%s (%s)\n", $2, $3, $4, $5}'
+                    echo "inode_exhaust: $n files created in $dir"
                     active=1
                 fi
             done
             if [ "$active" = 1 ]; then
-                df -i 2>/dev/null | tail -1
+                df -i 2>/dev/null | awk 'NR==2{print "  inodes total="$2" used="$3" free="$4" ("$5" used)"}'
                 exit 0
             else
                 echo "no active inode_exhaust"

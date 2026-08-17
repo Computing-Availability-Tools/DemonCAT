@@ -48,6 +48,7 @@ case "${DCAT_OP:-inject}" in
             safe=$(echo "$DCAT_PARAM_IFACE" | tr -c 'a-zA-Z0-9' '_')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             iface=$(cat "$SIDECAR" 2>/dev/null)
+            [ -n "$iface" ] || { echo "no active net_corrupt"; exit 1; }
             out=$(tc -o qdisc show dev "$iface" 2>/dev/null)
             echo "$out"
             echo "$out" | grep -q "netem" && echo "$out" | grep -q "corrupt" && exit 0 || exit 1

@@ -22,27 +22,21 @@ size_to_mb() {
 case "${DCAT_OP:-inject}" in
     inject)
         path=${DCAT_PARAM_PATH:?missing required param: path}
-        size=${DCAT_PARAM_SIZE:-}
+        size=${DCAT_PARAM_SIZE:?missing required param: size}
         [ -d "$path" ] || { echo "$path is not a directory" >&2; exit 1; }
         safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         f="$path/dcat.fillfile.$$"
-        if [ -n "$size" ]; then
-            # plain number → MB (preserve old behavior); suffixed passes through to fallocate
-            falloc_size=$size
-            case "$size" in *[0-9]) falloc_size="${size}M";; esac
-            if fallocate -l "$falloc_size" "$f" 2>/dev/null; then
-                :
-            else
-                mb=$(size_to_mb "$size") || { echo "invalid size: $size" >&2; exit 1; }
-                dd if=/dev/zero of="$f" bs=1M count="$mb" 2>/dev/null
-            fi
+        falloc_size=$size
+        case "$size" in *[0-9]) falloc_size="${size}M";; esac
+        if fallocate -l "$falloc_size" "$f" 2>/dev/null; then
+            :
         else
-            # no size: grow until ENOSPC
-            fallocate -l 1T "$f" 2>/dev/null || dd if=/dev/zero of="$f" bs=1M 2>/dev/null || true
+            mb=$(size_to_mb "$size") || { echo "invalid size: $size" >&2; exit 1; }
+            dd if=/dev/zero of="$f" bs=1M count="$mb" 2>/dev/null
         fi
         printf '%s\n' "$f" > "$SIDECAR"
-        echo "fill file created: $f (size=${size:-fill-to-full})"
+        echo "fill file created: $f (size=$size)"
         ;;
     clean)
         if [ -n "${DCAT_PARAM_PATH:-}" ]; then

@@ -8,7 +8,7 @@ PIDFILE="/tmp/dcat-rPROC_loop.pid"
 
 case "${DCAT_OP:-inject}" in
     inject)
-        threads=${DCAT_PARAM_THREADS:-1}
+        threads=${DCAT_PARAM_THREADS:?missing required param: threads}
         case "$threads" in *[!0-9]*|"") echo "threads must be an integer" >&2; exit 1;; esac
         [ "$threads" -lt 1 ] && { echo "threads must be >= 1" >&2; exit 1; }
 

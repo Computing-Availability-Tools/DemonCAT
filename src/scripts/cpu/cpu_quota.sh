@@ -65,7 +65,6 @@ case "${DCAT_OP:-inject}" in
             orig_max=$(cat "$base/cpu.max" 2>/dev/null)
             echo "$quota_us $period" > "$base/cpu.max" 2>/dev/null || { echo "set cpu.max failed" >&2; exit 1; }
             : > "$PIDLIST"
-            echo "--- moving PIDs from cores [$cpus] into $base ---"
             moved=0
             for pid in $(find_pids_on_cores "$cores"); do
                 if echo "$pid" > "$base/cgroup.procs" 2>/dev/null; then
@@ -88,7 +87,6 @@ case "${DCAT_OP:-inject}" in
             echo "$cpus" > "$cbase/cpuset.cpus" 2>/dev/null || true
             echo "0" > "$cbase/cpuset.mems" 2>/dev/null || true
             : > "$PIDLIST"
-            echo "--- moving PIDs from cores [$cpus] into $base + $cbase ---"
             moved=0
             for pid in $(find_pids_on_cores "$cores"); do
                 echo "$pid" > "$cbase/tasks" 2>/dev/null || true
@@ -173,7 +171,7 @@ case "${DCAT_OP:-inject}" in
                 cur=$(cat "$base/cpu.cfs_quota_us" 2>/dev/null)
                 cpus=$(cat "$extra/cpuset.cpus" 2>/dev/null)
             fi
-            quota_pct=$((cur / 1000))
+            quota_pct=$(( ${cur%% *} / 1000 ))
             [ "$quota_pct" -lt 1 ] 2>/dev/null && quota_pct=0
             echo "FAULT CONFIRMED: cores [$cpus] capped at ${quota_pct}% CPU"
             echo "--- actual core utilization (1s sample) ---"

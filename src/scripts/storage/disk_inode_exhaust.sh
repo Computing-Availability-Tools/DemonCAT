@@ -9,7 +9,7 @@ SIDECAR_PFX="/tmp/dcat-rDISK_inode_exhaust"
 case "${DCAT_OP:-inject}" in
     inject)
         path=${DCAT_PARAM_PATH:?missing required param: path}
-        count=${DCAT_PARAM_COUNT:-100000}
+        count=${DCAT_PARAM_COUNT:?missing required param: count}
         case "$count" in *[!0-9]*|"") echo "count must be an integer" >&2; exit 1;; esac
         [ -d "$path" ] || { echo "$path is not a directory" >&2; exit 1; }
         safe=$(echo "$path" | tr -c 'a-zA-Z0-9' '_')

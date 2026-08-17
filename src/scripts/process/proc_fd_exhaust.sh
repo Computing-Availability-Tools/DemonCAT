@@ -9,8 +9,9 @@ PIDFILE="/tmp/dcat-rPROC_fd_exhaust.pid"
 
 case "${DCAT_OP:-inject}" in
     inject)
-        count=${DCAT_PARAM_COUNT:-0}   # 0 = until RLIMIT_NOFILE
-        case "$count" in *[!0-9]*|"") echo "count must be an integer" >&2; exit 1;; esac
+        count=${DCAT_PARAM_COUNT:?missing required param: count}
+        case "$count" in *[!0-9]*|"") echo "count must be a positive integer" >&2; exit 1;; esac
+        [ "$count" -lt 1 ] && { echo "count must be >= 1 (0/unbounded not allowed)" >&2; exit 1; }
         if command -v python3 >/dev/null 2>&1; then
             python3 -c '
 import sys, os, time

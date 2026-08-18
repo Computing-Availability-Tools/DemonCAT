@@ -45,7 +45,9 @@ npu_acl_dev_id() {
 # devdrv driver's dev_id attribute = Phy-ID (exact mapping, no sorting needed).
 npu_phy_to_bdf() {
     local phy_id="$1" bdf
-    for bdf in $(ls -1 /sys/bus/pci/drivers/devdrv_device_driver/ 2>/dev/null | grep '^0000:'); do
+    for bdf in /sys/bus/pci/drivers/devdrv_device_driver/0000:*; do
+        [ -e "$bdf" ] || continue
+        bdf=$(basename "$bdf")
         if [ "$(cat "/sys/bus/pci/drivers/devdrv_device_driver/$bdf/dev_id" 2>/dev/null)" = "$phy_id" ]; then
             echo "$bdf"
             return 0

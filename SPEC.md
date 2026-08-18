@@ -9,7 +9,7 @@
 
 ### 1.1 软件定位
 
-DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU）的**故障注入工具**。其核心价值不是实现每一种故障原语，而是提供**统一命令面、状态跟踪**，把具体故障以**外部脚本 + 声明式配置**的方式接入。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
+DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统）的**故障注入工具**。其核心价值不是实现每一种故障原语，而是提供**统一命令面、状态跟踪**，把具体故障以**外部脚本 + 声明式配置**的方式接入。加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
 ### 1.2 技术栈
 
@@ -50,7 +50,7 @@ DemonCAT 是面向计算系统（CPU / 内存 / 存储 / 网络 / 进程 / NPU�
 dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ```
 
-- `subcommand` ∈ `{ inject, clean, query, list }`
+- `subcommand` ∈ `{ inject, clean, query, list, serve }`
 - `uid`：故障唯一标识（如 `rCPU_overload`），在配置中声明；`query` 和 `list` 可省略 uid
 - 所有参数以 `--key=value` 标志传入，可选参数不填即省略对应标志
 - 全局选项 `--config` / `--help` 与参数标志混合使用
@@ -64,6 +64,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | `clean --all` | 对全部支持 clean 的故障 fan-out 无参 clean（stateless，不依赖 state.json）；聚合每 uid 结果。state.json 丢失/损坏时仍可清 | — |
 | `query [uid] [--k1=v1 ...]` | 无 uid：查询 dcat 自身全部活跃注入记录；有 uid：调脚本 `query` 分支验证故障是否真的在系统上生效，用户参数与 inject 参数独立 | `inject,clean,query` |
 | `list` | 列出配置中声明的全部故障目录 | 所有 |
+| `serve [--port N] [--bind ADDR] [--webroot DIR] [--allow-write]` | 启动 HTTP 控制平面（长驻）：内置静态前端 + `/api/*` 端点；默认只读，`--allow-write` 开注入/清理 | — |
 
 > `inject`-only 故障（如 `rPROC_exit`）不支持 `clean` / `query`；注入即终结，无活跃记录。
 > 本期不实现超时自动恢复；所有可恢复故障注入后需用户手动 `clean`。
@@ -104,7 +105,7 @@ dcat list
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
-| `module` | 是 | 模块归类：`cpu` / `memory` / `storage` / `network` / `process` / `npu` |
+| `module` | 是 | 模块归类：`cpu` / `memory` / `storage` / `network` / `process` / `npu` / `docker` / `filesystem` / `system` |
 | `desc` | 否 | 一句话描述 |
 | `script` | 是 | 外部脚本路径（绝对或相对；相对路径基于项目根目录自动解析为绝对），须可执行 |
 | `supported_ops` | 是 | 支持的操作子集，逗号分隔：`inject` 或 `inject,clean,query` |
@@ -128,7 +129,7 @@ dcat list
 
 | UID | module | supported_ops | inject_required | inject_optional |
 | --- | --- | --- | --- | --- |
-| `rCPU_overload` * | cpu | inject,clean,query | cores | — |
+| `rCPU_overload` * | cpu | inject,clean,query | cores | load_pct |
 | `rNET_delay` * | network | inject,clean,query | iface,delay_ms | — |
 | `rNET_loss` | network | inject,clean,query | iface,loss_pct | — |
 | `rNET_reorder` | network | inject,clean,query | iface,reorder_pct | — |
@@ -149,18 +150,37 @@ dcat list
 | `rNPU_ip_change` | npu | inject,clean,query | chip,address,netmask | — |
 | `rNPU_gw_change` | npu | inject,clean,query | chip,gateway | — |
 | `rNPU_netdetect_change` | npu | inject,clean,query | chip,address | — |
-| `rNPU_arp_poison` | npu | inject,clean,query | chip,dev,ip,mac | — |
-| `rNPU_arp_del` | npu | inject,clean,query | chip,dev,ip | — |
-| `rNPU_route_add` | npu | inject,clean,query | chip,address,netmask,gateway | — |
-| `rNPU_route_del` | npu | inject,clean,query | chip,address,netmask | — |
-| `rNPU_iprule_add` | npu | inject,clean,query | chip,dir,ip,table | — |
-| `rNPU_iprule_del` | npu | inject,clean,query | chip,dir,ip | — |
-| `rNPU_iproute_add` | npu | inject,clean,query | chip,ip,ip_mask,via,dev,table | — |
-| `rNPU_iproute_del` | npu | inject,clean,query | chip,ip,ip_mask,table | — |
+| `rNPU_arp` | npu | inject,clean,query | chip,action,dev,ip | mac |
+| `rNPU_route` | npu | inject,clean,query | chip,action,address,netmask | gateway |
+| `rNPU_iprule` | npu | inject,clean,query | chip,action,dir,ip | table |
+| `rNPU_iproute` | npu | inject,clean,query | chip,action,ip,ip_mask,table | via,dev |
 | `rNPU_bw_limit` | npu | inject,clean,query | chip,bw_limit | — |
 | `rNPU_mtu_mismatch` | npu | inject,clean,query | chip,size | — |
 | `rNPU_dscp_tc_change` | npu | inject,clean,query | chip,dscp,tc | — |
 | `rNPU_roce_port_change` | npu | inject,clean,query | chip,port | — |
+| `rCPU_quota` | cpu | inject,clean,query | cores,quota_pct | — |
+| `rCPU_freq` | cpu | inject,clean,query | cores,freq_mhz | — |
+| `rCPU_core_hang` | cpu | inject,clean,query | cores | — |
+| `rDISK_part_full` | storage | inject,clean,query | path | size |
+| `rDISK_inode_exhaust` | storage | inject,clean,query | path | count |
+| `rDISK_io_delay` | storage | inject,clean,query | device,delay_ms | — |
+| `rNET_corrupt` | network | inject,clean,query | iface,corrupt_pct | — |
+| `rPROC_fork_bomb` | process | inject,clean,query | count | — |
+| `rPROC_fd_exhaust` | process | inject,clean,query | count | — |
+| `rMEM_leak` | memory | inject,clean,query | size_mb | — |
+| `rMEM_oom` | memory | inject,clean,query | rate_mb | — |
+| `rMEM_fragment` | memory | inject,clean,query | blocks | block_kb |
+| `rMEM_swap_overload` | memory | inject,clean,query | size_mb | — |
+| `rFS_file_lock` | filesystem | inject,clean,query | path,mode | — |
+| `rNPU_pcie_down` | npu | inject,clean,query | npu_id | gen |
+| `rNPU_aic_load` | npu | inject,clean,query | chip | load_pct |
+| `rNPU_aiv_load` | npu | inject,clean,query | chip | load_pct |
+| `rNPU_hbm_load` | npu | inject,clean,query | chip,size | — |
+| `rNPU_chip_reset` | npu | inject,clean,query | npu_id | core |
+| `rNPU_driver_unbind` | npu | inject,query | chip | — |
+| `rNPU_pcie_remove` | npu | inject,query | chip | — |
+| `rSYS_panic` | system | inject | — | — |
+| `rSYS_poweroff` | system | inject | mode | — |
 
 ### 3.4 扩展约定
 
@@ -261,7 +281,7 @@ dcat 通过环境变量向脚本传递操作与参数（免 shell 注入、语�
 
 对同一资源的重复注入，dcat **默认拒绝**（退出码 5），需显式 `--force` 才原子替换。
 
-- **资源键** = 故障的 `clean_required` 各参数（资源标识，非值参数）。例：`rCPU_overload` 资源键=`cores`；`rNET_delay` 资源键=`iface`；`rNPU_arp_poison` 资源键=`chip,dev,ip`。
+- **资源键** = 故障的 `clean_required` 各参数（资源标识，非值参数）。例：`rCPU_overload` 资源键=`cores`；`rNET_delay` 资源键=`iface`；`rNPU_arp` 资源键=`chip,dev,ip`。
 - **重叠判定**：
     - `cores` 参数走**集合交集**（核集语义）：`0,1` 与 `0-8` 重叠（核 0、1 相交），`0,1` 与 `2,3` 不重叠。
     - 其余参数（device/iface/port/pid/chip/...）走**精确等值**；多参资源键（如 chip,dev,ip）各参精确 AND。
@@ -353,6 +373,7 @@ yes_processes: 2
 | 2 | 解析错误（命令格式不合法） |
 | 3 | 预检拒绝 |
 | 4 | 未找到（uid 不在目录中） |
+| 5 | 重注入拒绝（同资源已注入，需 `--force`） |
 
 ---
 
@@ -405,7 +426,8 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
-| **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 19）+ 测试 | ✅ 已完成 |
+| **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 16）+ 测试 | ✅ 已完成 |
+| **v0.1.0** | 扩展至 52 条故障（8 模块：cpu 5 / storage 4 / network 12 / process 5 / memory 4 / filesystem 1 / npu 19 / system 2）+ 27 ctest / 53 scripts / 459 e2e steps / 236 flows | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/ut/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
@@ -427,7 +449,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 单元测试 | cli 解析、registry 查找、预检全路径、state 记录 | CTest + mock_executor | test_cli / test_registry / test_precheck / test_state |
 | 执行器 mock | executor_run/run_raw 的 mock 钩子 | CTest | test_executor_mock |
 | 输出格式 | result_t 构建/打印/释放 | CTest | test_output |
-| 表驱动故障 | 33 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
+| 表驱动故障 | 52 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
 | 真实脚本测试 | 2 个示例故障用 mock（不断言真 CPU / 真 tc） | CTest | 同上 |
 | 端到端冒烟 | 真实 dcat 二进制：inject→query→clean→query→无残留 | 手工冒烟 | — |
 
@@ -445,13 +467,39 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 错误隔离 | 单个故障 inject/clean 失败不影响 dcat 主流程与其他故障 |
 | 资源占用 | 静态二进制；核心路径零动态分配 |
 | 跨平台 | Linux（glibc/musl）；WSL 兼容；不要求 Windows |
-| 可测 | mock_executor + 表驱动；无硬件可测全部 33 故障的下发命令串 |
+| 可测 | mock_executor + 表驱动；无硬件可测全部 52 故障的下发命令串 |
 | 状态持久化 | state 变更后写 `~/.demoncat/state.json`（cJSON 序列化），启动加载恢复 record_id 计数与未清理记录 |
 
 ---
 
-## 11. 高级扩展点（本期不实现，仅留位）
+## 11. 高级扩展点
 
 少数需要进程内自定义逻辑（精确定时、二进制协议）的故障可走**编译注入器**路径：实现 `injector_t`（`uid` + 4 个函数指针 `inject/clean/query/precheck`）并注册到 `builtin_injectors[]`。registry 查找时 cnf 故障优先，未命中再查编译注入器。
 
 > 本期 YAGNI，仅文档与头文件 `src/injectors/injector.h` 留位。所有故障均走 cnf + 脚本路径。
+
+### 11.1 动态插件层（第三层 dispatch）
+
+除 cnf + 脚本（第一层）与编译注入器（第二层）外，dispatch 还支持**第三层动态插件**（`dlopen` 加载的 `.so`），运行时可插拔，无需重编译 dcat。三层按优先级回退：
+
+1. **cnf 数据驱动**（`registry_find` 命中 `fault_def_t`）→ executor 调脚本
+2. **编译注入器**（`injector_find` 命中 `injector_t`）→ 直接函数调用
+3. **动态插件**（`plugin_find` 命中 `dcat_plugin_t`）→ `plugin_dispatch` 调函数指针
+
+插件接口 `dcat_plugin_t`（`src/plugins/plugin.h`）含 ABI 版本门控 + per-op 参数声明 + `init`/`fini` 生命周期钩子 + `precheck`/`inject`/`clean`/`query` 函数指针。插件目录默认 `<root>/plugins`，`--plugins <dir>` 可覆盖。完整设计见 [docs/Dynamic_Plugin_Implement.md](docs/Dynamic_Plugin_Implement.md)。
+
+> 示例插件 `src/plugins/sample/sample_plugin.c`（`rSAMPLE_test`），本期仅用于集成测试。
+
+---
+
+## 12. Web 控制平面（dcat serve）
+
+`dcat serve` 在二进制内内置 HTTP 控制平面 + 静态前端（`src/web/`），把故障目录、活跃注入、历史记录搬到浏览器。默认**只读**（`--allow-write` 开启注入/清理），无外部 HTTP 依赖。
+
+- **子命令**：`dcat serve [--port N] [--bind ADDR] [--webroot DIR] [--allow-write]`
+- **默认**：端口 8080，绑定 `0.0.0.0`（SSH 隧道访问可用 `--bind 127.0.0.1`）
+- **API 端点**：`/api/state`（活跃记录）、`/api/history`（历史）、`/api/catalog`（目录）、`/api/inject`（需 `--allow-write`）、`/api/clean`（需 `--allow-write`）
+- **安全**：`realpath()` 路径穿越防护 + `%2e` URL 编码检测 + `--port` CLI 校验
+- **state 同步**：`/api/state` 与 `/api/history` 从磁盘 reload `state.json`，同步命令行修改
+
+> 详见 [User_Manual.md 第六章](User_Manual.md)。

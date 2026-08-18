@@ -55,6 +55,8 @@ repos:
           - --exclude=SC1090
           - --exclude=SC1091
           - --exclude=SC2128
+          - --exclude=SC3043
+          - --exclude=SC3045
 
       - id: e2e-cases-sync
         name: E2E cases in sync with fault catalog

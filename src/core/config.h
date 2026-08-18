@@ -1,7 +1,7 @@
 #ifndef DCAT_CONFIG_H
 #define DCAT_CONFIG_H
 #include "types.h"
-#define DCAT_MAX_FAULTS 64
+#define DCAT_MAX_FAULTS 128
 typedef struct {
     char state_file[256];
     char log_level[16];

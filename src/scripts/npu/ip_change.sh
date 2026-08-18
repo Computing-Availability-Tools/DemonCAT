@@ -35,15 +35,28 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for bak in /tmp/dcat-rNPU_ip_change-*.bak; do
                 [ -f "$bak" ] || continue
                 c=${bak##*/dcat-rNPU_ip_change-}; c=${c%.bak}
-                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                    cleaned=1
+                else
+                    echo "restore failed for chip $c" >&2
+                    failed=1
+                fi
             done
-            [ "$cleaned" = 1 ] && echo "restored ip (all chips)" || echo "restored ip (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "ip_change: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored ip (all chips)"
+            else
+                echo "restored ip (no active injection)"
+            fi
         elif fault_present; then
             _sc=$(SIDECAR_FN)
-            . "$_sc"
+            address=$(grep '^address=' "$_sc" 2>/dev/null | cut -d= -f2)
+            netmask=$(grep '^netmask=' "$_sc" 2>/dev/null | cut -d= -f2)
             : ${address:=0.0.0.0}; : ${netmask:=255.255.255.0}
             $HCCN -ip -s address "$address" netmask "$netmask" || { echo "ip restore failed" >&2; exit 1; }
             rm -f "$_sc"

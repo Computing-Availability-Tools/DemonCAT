@@ -2,7 +2,7 @@
 
 > **DemonCAT** — Demon Computing Availability Tools，专注于计算故障注入工具。
 
-覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块，提供统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
+覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统模块，提供统一的命令面、预检护栏、状态跟踪；具体故障以**外部脚本 + 声明式配置**接入。
 
 加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
@@ -36,7 +36,11 @@
 | | `systemctl` | `systemd` | `systemd` | ✅ |
 | | `python3` | `python3` | `python3` | — |
 | **进程** | `kill`, `perl` | `util-linux`, `perl` | `util-linux`, `perl` | 部分需要 |
-| **NPU** | `hccn_tool` | — (Atlas 驱动自带) | — | ✅ |
+| **内存** | `perl` / `python3` | `perl` / `python3` | `perl` / `python3` | — |
+| **文件系统** | `mkfs`, `mount` | `e2fsprogs`, `util-linux` | `e2fsprogs`, `util-linux` | ✅ |
+| **Docker** | `docker` | `docker.io` | `docker` | ✅ |
+| **NPU** | `hccn_tool`, `npu-smi`, `setpci` | — (Atlas 驱动自带), `pciutils` | — | ✅ |
+| **系统** | `sysctl`, `date` | `procps`, `coreutils` | `procps-ng`, `coreutils` | ✅ |
 
 > 无 NPU 硬件的环境可跳过 NPU 模块，不影响其他模块使用。
 
@@ -72,7 +76,7 @@ dcat inject rCPU_overload --help
 
 > **提示**：本文档所有命令均以 `dcat` 形式书写。若未执行上方安装（或无 sudo 权限），请将 `dcat` 替换为 `./build/dcat`。
 
-E2E 测试（CSV 驱动，8 类分类，354 步骤 / 165 流程）详见 [tests/e2e/README.md](tests/e2e/README.md) 与 [docs/DESIGN.md](docs/DESIGN.md)。
+E2E 测试（CSV 驱动，8 类分类，501 步骤 / 250 流程）详见 [tests/e2e/README.md](tests/e2e/README.md) 与 [docs/DESIGN.md](docs/DESIGN.md)。
 
 ## 命令格式
 
@@ -127,7 +131,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | [SPEC.md](SPEC.md) | 功能规格说明书 |
 | [User_Manual.md](User_Manual.md) | 使用手册 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 架构设计 |
-| [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md) | 故障目录（33 条） |
+| [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md) | 故障目录（52 条） |
 | [docs/Test_Report.md](docs/Test_Report.md) | 测试报告 |
 | [docs/Dynamic_Plugin_Implement.md](docs/Dynamic_Plugin_Implement.md) | 动态插件开发指南 |
 | [docs/Manual_Test_Reference.md](docs/Manual_Test_Reference.md) | 手动测试参考 |

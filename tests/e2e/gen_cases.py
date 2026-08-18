@@ -2,7 +2,7 @@
 """tests/e2e/gen_cases.py — dcat e2e 测试用例自动生成器
 
 8 类分类（混沌工程 + 测试矩阵）：
-  FUNC  : 功能基线 — 33 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
+  FUNC  : 功能基线 — 52 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
   BOUND : 边界值 — 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法）
   SEC   : 安全 — 命令注入(inject+clean+query) + 权限边界 + 主机安全(路径穿越/symlink)
   STATE : 状态一致性 — clean×2/--force/reinject 拒绝/query 幂等/并发 inject
@@ -31,6 +31,10 @@ COLUMNS = [
 
 DCAT = "./build/dcat"
 
+# NPU chip/npu_id parameterized via env vars (default: chip=2, npu_id=2)
+E2E_CHIP = os.environ.get("DCAT_E2E_CHIP", "2")
+E2E_NPU_ID = os.environ.get("DCAT_E2E_NPU_ID", "2")
+
 # ---- 每故障观测知识 ----
 OBS = {
     "rCPU_overload": dict(module="cpu", inject_args="--cores=0 --load_pct=100",
@@ -41,10 +45,10 @@ OBS = {
         clean_args="--cores=1", provision="none", precondition="root+sysfs_writable+allow_cpu_offline",
         v_cmd="cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA", v_assert="eq:0",
         c_cmd="cat /sys/devices/system/cpu/cpu1/online 2>/dev/null || echo NA", c_assert="eq:1"),
-    "rDISK_write_overload": dict(module="storage", inject_args="--device=/tmp --workers=2 --size_mb=200",
-        clean_args="--device=/tmp", provision="none", precondition="none",
-        v_cmd="ls /tmp/dcat.stress.* 2>/dev/null | wc -l", v_assert=">=1",
-        c_cmd="ls /tmp/dcat.stress.* 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_write_overload": dict(module="storage", inject_args="--device=/dev/shm --workers=2 --size_mb=10",
+        clean_args="--device=/dev/shm", provision="none", precondition="none",
+        v_cmd="ls /dev/shm/dcat.stress.* 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /dev/shm/dcat.stress.* 2>/dev/null | wc -l", c_assert="==0"),
     "rNET_delay": dict(module="network", inject_args="--iface={iface} --delay_ms=100",
         clean_args="--iface={iface}", provision="dummy_iface", precondition="root+tc+dummy_iface",
         v_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", v_assert=">=1",
@@ -102,76 +106,140 @@ OBS = {
         v_cmd="awk '/^State:/{print $2}' /proc/{pid}/status 2>/dev/null || echo NONE", v_assert="eq:Z",
         c_cmd="", c_assert=""),
     # NPU (16 faults)
-    "rNPU_link_down": dict(module="npu", inject_args="--chip=2", clean_args="--chip=2",
-        provision="none", precondition="roce_link_up",
-        v_cmd="hccn_tool -i 2 -link -g 2>/dev/null", v_assert="contains:DOWN",
-        c_cmd="hccn_tool -i 2 -link -g 2>/dev/null", c_assert="notcontains:DOWN"),
-    "rNPU_ip_change": dict(module="npu", inject_args="--chip=2 --address=10.0.0.99 --netmask=255.255.255.0",
-        clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip -g 2>/dev/null", v_assert="contains:10.0.0.99",
-        c_cmd="hccn_tool -i 2 -ip -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
-    "rNPU_gw_change": dict(module="npu", inject_args="--chip=2 --gateway=10.20.10.3",
-        clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; hccn_tool -i 2 -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i 2 -gateway -s gateway 10.20.10.254 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", v_assert="contains:10.20.10.3",
-        c_cmd="hccn_tool -i 2 -gateway -g 2>/dev/null", c_assert="notcontains:10.20.10.3"),
-    "rNPU_netdetect_change": dict(module="npu", inject_args="--chip=2 --address=10.0.0.99",
-        clean_args="--chip=2", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -netdetect -g 2>/dev/null", v_assert="contains:10.0.0.99",
-        c_cmd="hccn_tool -i 2 -netdetect -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
-    "rNPU_arp_poison": dict(module="npu", inject_args="--chip=2 --dev=eth0 --ip=10.20.10.200 --mac=00:11:22:33:44:55",
-        clean_args="--chip=2 --dev=eth0 --ip=10.20.10.200", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="contains:00:11:22:33:44:55",
-        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="notcontains:00:11:22:33:44:55"),
-    "rNPU_arp_del": dict(module="npu", inject_args="--chip=2 --dev=eth0 --ip=10.20.10.200",
-        clean_args="--chip=2 --dev=eth0 --ip=10.20.10.200", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -arp -a dev eth0 ip 10.20.10.200 mac 00:11:22:33:44:55 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", v_assert="notcontains:10.20.10.200",
-        c_cmd="hccn_tool -i 2 -arp -g 2>/dev/null", c_assert="contains:10.20.10.200"),
-    "rNPU_route_add": dict(module="npu", inject_args="--chip=2 --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.20.10.254",
-        clean_args="--chip=2 --address=10.30.40.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="contains:10.30.40.0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="notcontains:10.30.40.0"),
-    "rNPU_route_del": dict(module="npu", inject_args="--chip=2 --address=10.30.41.0 --netmask=255.255.255.0",
-        clean_args="--chip=2 --address=10.30.41.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -link -s up 2>/dev/null; " + f"{DCAT} inject rNPU_route_add --chip=2 --address=10.30.41.0 --netmask=255.255.255.0 --gateway=10.20.10.254",
-        v_cmd="hccn_tool -i 2 -route -g 2>/dev/null", v_assert="notcontains:10.30.41.0",
-        c_cmd="hccn_tool -i 2 -route -g 2>/dev/null", c_assert="contains:10.30.41.0"),
-    "rNPU_iprule_add": dict(module="npu", inject_args="--chip=2 --dir=from --ip=10.20.10.210 --table=150",
-        clean_args="--chip=2 --dir=from --ip=10.20.10.210", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="contains:10.20.10.210",
-        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="notcontains:10.20.10.210"),
-    "rNPU_iprule_del": dict(module="npu", inject_args="--chip=2 --dir=from --ip=10.20.10.211",
-        clean_args="--chip=2 --dir=from --ip=10.20.10.211", provision="none", precondition="hccn_tool",
-        setup_cmd="hccn_tool -i 2 -ip_rule -d dir from ip 10.20.10.211 2>/dev/null; " + f"{DCAT} inject rNPU_iprule_add --chip=2 --dir=from --ip=10.20.10.211 --table=150",
-        v_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", v_assert="notcontains:10.20.10.211",
-        c_cmd="hccn_tool -i 2 -ip_rule -g 2>/dev/null", c_assert="contains:10.20.10.211"),
-    "rNPU_iproute_add": dict(module="npu", inject_args="--chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.20.10.254 --dev=eth0 --table=100",
-        clean_args="--chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="contains:10.30.50.0",
-        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="notcontains:10.30.50.0"),
-    "rNPU_iproute_del": dict(module="npu", inject_args="--chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100",
-        clean_args="--chip=2 --ip=10.30.51.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
-        setup_cmd=f"{DCAT} inject rNPU_iproute_add --chip=2 --ip=10.30.51.0 --ip_mask=24 --via=10.20.10.254 --dev=eth0 --table=100",
-        v_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", v_assert="notcontains:10.30.51.0",
-        c_cmd="hccn_tool -i 2 -ip_route -g table 100 2>/dev/null", c_assert="contains:10.30.51.0"),
-    "rNPU_bw_limit": dict(module="npu", inject_args="--chip=2 --bw_limit=50000", clean_args="--chip=2",
+    "rNPU_link_down": dict(module="npu", inject_args="--chip={e2e_chip}", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", v_assert="contains:50000",
-        c_cmd="hccn_tool -i 2 -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", c_assert="notcontains:50000"),
-    "rNPU_mtu_mismatch": dict(module="npu", inject_args="--chip=2 --size=1280", clean_args="--chip=2",
+        v_cmd="hccn_tool -i {e2e_chip} -link -g 2>/dev/null", v_assert="contains:DOWN",
+        c_cmd="hccn_tool -i {e2e_chip} -link -g 2>/dev/null", c_assert="notcontains:DOWN"),
+    "rNPU_ip_change": dict(module="npu", inject_args="--chip={e2e_chip} --address=10.0.0.99 --netmask=255.255.255.0",
+        clean_args="--chip={e2e_chip}", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -ip -g 2>/dev/null", v_assert="contains:10.0.0.99",
+        c_cmd="hccn_tool -i {e2e_chip} -ip -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
+    "rNPU_gw_change": dict(module="npu", inject_args="--chip={e2e_chip} --gateway=10.20.10.1",
+        clean_args="--chip={e2e_chip}", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -link -s up 2>/dev/null; hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null | grep -q '10.20.10.254' || hccn_tool -i {e2e_chip} -gateway -s gateway 10.20.10.254 2>/dev/null",
+        v_cmd="hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null", v_assert="contains:10.20.10.1",
+        c_cmd="hccn_tool -i {e2e_chip} -gateway -g 2>/dev/null", c_assert="notcontains:10.20.10.1"),
+    "rNPU_netdetect_change": dict(module="npu", inject_args="--chip={e2e_chip} --address=10.0.0.99",
+        clean_args="--chip={e2e_chip}", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null", v_assert="contains:10.0.0.99",
+        c_cmd="hccn_tool -i {e2e_chip} -netdetect -g 2>/dev/null", c_assert="notcontains:10.0.0.99"),
+    "rNPU_arp": dict(module="npu", inject_args="--chip={e2e_chip} --dev=eth0 --ip=10.30.12.200 --mac=00:11:22:33:44:55",
+        clean_args="--chip={e2e_chip} --dev=eth0 --ip=10.30.12.200", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -arp -g 2>/dev/null", v_assert="contains:00:11:22:33:44:55",
+        c_cmd="hccn_tool -i {e2e_chip} -arp -g 2>/dev/null", c_assert="notcontains:00:11:22:33:44:55"),
+    "rNPU_route": dict(module="npu", inject_args="--chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.20.10.1",
+        clean_args="--chip={e2e_chip} --address=10.30.40.0 --netmask=255.255.255.0", provision="none", precondition="hccn_tool",
+        setup_cmd="hccn_tool -i {e2e_chip} -link -s up 2>/dev/null",
+        v_cmd="hccn_tool -i {e2e_chip} -route -g 2>/dev/null", v_assert="contains:10.30.40.0",
+        c_cmd="hccn_tool -i {e2e_chip} -route -g 2>/dev/null", c_assert="notcontains:10.30.40.0"),
+    "rNPU_iprule": dict(module="npu", inject_args="--chip={e2e_chip} --dir=from --ip=10.20.10.50 --table=150",
+        clean_args="--chip={e2e_chip} --dir=from --ip=10.20.10.50", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null", v_assert="contains:10.20.10.50",
+        c_cmd="hccn_tool -i {e2e_chip} -ip_rule -g 2>/dev/null", c_assert="notcontains:10.20.10.50"),
+    "rNPU_iproute": dict(module="npu", inject_args="--chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --via=10.20.10.1 --dev=eth0 --table=100",
+        clean_args="--chip={e2e_chip} --ip=10.30.50.0 --ip_mask=24 --table=100", provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null", v_assert="contains:10.30.50.0",
+        c_cmd="hccn_tool -i {e2e_chip} -ip_route -g table 100 2>/dev/null", c_assert="notcontains:10.30.50.0"),
+    "rNPU_bw_limit": dict(module="npu", inject_args="--chip={e2e_chip} --bw_limit=50000", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", v_assert="contains:1280",
-        c_cmd="hccn_tool -i 2 -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", c_assert="notcontains:1280"),
-    "rNPU_dscp_tc_change": dict(module="npu", inject_args="--chip=2 --dscp=46 --tc=1", clean_args="--chip=2 --dscp=46",
+        v_cmd="hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", v_assert="contains:50000",
+        c_cmd="hccn_tool -i {e2e_chip} -shaping -g 2>/dev/null | grep -oE 'bw_limit\\[[0-9]+'", c_assert="notcontains:50000"),
+    "rNPU_mtu_mismatch": dict(module="npu", inject_args="--chip={e2e_chip} --size=1280", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", v_assert="eq:1",
-        c_cmd="hccn_tool -i 2 -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", c_assert="eq:0"),
-    "rNPU_roce_port_change": dict(module="npu", inject_args="--chip=2 --port=4792", clean_args="--chip=2",
+        v_cmd="hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", v_assert="contains:1280",
+        c_cmd="hccn_tool -i {e2e_chip} -mtu -g 2>/dev/null | grep -oE 'mtu:[0-9]+'", c_assert="notcontains:1280"),
+    "rNPU_dscp_tc_change": dict(module="npu", inject_args="--chip={e2e_chip} --dscp=46 --tc=1", clean_args="--chip={e2e_chip} --dscp=46",
         provision="none", precondition="hccn_tool",
-        v_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", v_assert="contains:4792",
-        c_cmd="hccn_tool -i 2 -udp -g 2>/dev/null", c_assert="contains:4791"),
+        v_cmd="hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", v_assert="eq:1",
+        c_cmd="hccn_tool -i {e2e_chip} -dscp_to_tc -g dscp 46 2>/dev/null | awk '$1==46{print $2}'", c_assert="eq:0"),
+    "rNPU_roce_port_change": dict(module="npu", inject_args="--chip={e2e_chip} --port=4792", clean_args="--chip={e2e_chip}",
+        provision="none", precondition="hccn_tool",
+        v_cmd="hccn_tool -i {e2e_chip} -udp -g 2>/dev/null", v_assert="contains:4792",
+        c_cmd="hccn_tool -i {e2e_chip} -udp -g 2>/dev/null", c_assert="contains:4791"),
+    # ---- batch2 新增故障 (26 条, 排除 sys_panic/sys_poweroff) ----
+    "rMEM_leak": dict(module="memory", inject_args="--size_mb=32", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rMEM_oom": dict(module="memory", inject_args="--rate_mb=256", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_oom.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rMEM_fragment": dict(module="memory", inject_args="--blocks=20", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_fragment.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rMEM_swap_overload": dict(module="memory", inject_args="--size_mb=128", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rMEM_swap_overload.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rCPU_quota": dict(module="cpu", inject_args="--cores=0 --quota_pct=50", clean_args="",
+        provision="none", precondition="root+cgroup",
+        v_cmd="ls /tmp/dcat-rCPU_quota-*.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rCPU_quota-*.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rCPU_freq": dict(module="cpu", inject_args="--cores=0 --freq_mhz=1000", clean_args="",
+        provision="none", precondition="root+cpufreq",
+        v_cmd="cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null", v_assert="eq:1000000",
+        c_cmd="cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null", c_assert="ne:1000000"),
+    "rCPU_core_hang": dict(module="cpu", inject_args="--cores=0", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rCPU_core_hang-c*.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rCPU_core_hang-c*.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_part_full": dict(module="storage", inject_args="--path=/tmp --size=50M", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rDISK_part_full-*.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_part_full-*.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_inode_exhaust": dict(module="storage", inject_args="--path=/tmp --count=500", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rDISK_inode_exhaust-*.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_inode_exhaust-*.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_io_delay": dict(module="storage", inject_args="--device={loop_dev} --delay_ms=10", clean_args="",
+        provision="loop_device", precondition="root+dm_delay",
+        v_cmd="ls /tmp/dcat-rDISK_io_delay-*.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_io_delay-*.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rNET_corrupt": dict(module="network", inject_args="--iface={iface} --corrupt_pct=10", clean_args="",
+        provision="dummy_iface", precondition="root+tc+dummy_iface",
+        v_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", v_assert=">=1",
+        c_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", c_assert="==0"),
+    "rPROC_fork_bomb": dict(module="process", inject_args="--count=20", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rPROC_fd_exhaust": dict(module="process", inject_args="--count=256", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rPROC_fd_exhaust.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rFS_file_lock": dict(module="filesystem", inject_args="--path=/tmp/dcat_fslock_test --mode=nowrite", clean_args="",
+        provision="none", precondition="none",
+        setup_cmd="echo test > /tmp/dcat_fslock_test",
+        v_cmd="stat -c %a /tmp/dcat_fslock_test 2>/dev/null", v_assert="eq:444",
+        c_cmd="stat -c %a /tmp/dcat_fslock_test 2>/dev/null", c_assert="ne:444"),
+    "rNPU_pcie_down": dict(module="npu", inject_args="--npu_id={e2e_npu_id} --gen=1", clean_args="--npu_id={e2e_npu_id}",
+        provision="none", precondition="hccn_tool",
+        v_cmd="ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l", c_assert="==0"),
+    "rNPU_aic_load": dict(module="npu", inject_args="--chip={e2e_chip} --load_pct=100", clean_args="--chip={e2e_chip}",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query rNPU_aic_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_aic_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_aiv_load": dict(module="npu", inject_args="--chip={e2e_chip} --load_pct=100", clean_args="--chip={e2e_chip}",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query rNPU_aiv_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_aiv_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_hbm_load": dict(module="npu", inject_args="--chip={e2e_chip} --size=2G", clean_args="--chip={e2e_chip}",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query rNPU_hbm_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_hbm_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_chip_reset": dict(module="npu", inject_args="--npu_id={e2e_npu_id}", clean_args="--npu_id={e2e_npu_id}",
+        provision="none", precondition="npu-smi",
+        v_cmd="ls /tmp/dcat-rNPU_chip_reset-{e2e_npu_id}-0.bak 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="npu-smi info 2>/dev/null | grep -c 'OK'", c_assert=">=1"),
+    "rNPU_driver_unbind": dict(module="npu", inject_args="--chip=5",
+        provision="none", precondition="root+npu-smi",
+        v_cmd="ls /tmp/dcat-rNPU_driver_unbind-5.bak 2>/dev/null | wc -l", v_assert=">=1"),
+    "rNPU_pcie_remove": dict(module="npu", inject_args="--chip=5",
+        provision="none", precondition="root+npu-smi",
+        v_cmd="ls /tmp/dcat-rNPU_pcie_remove-5.bak 2>/dev/null | wc -l", v_assert=">=1"),
 }
 
 
@@ -194,28 +262,35 @@ def gen():
         })
 
     # ================================================================
-    # FUNC: 功能基线 (33 faults × inject→verify→clean→query + query<uid> + plugin)
+    # FUNC: 功能基线 (inject→verify→clean→query + query<uid> + plugin)
+    # Dangerous faults are skipped (require cold boot to recover)
+    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_chip_reset", "rNPU_link_down", "rSYS_panic", "rSYS_poweroff"}
     # ================================================================
     for uid in sorted(OBS):
         o = OBS[uid]
+        real_uid = o.get("real_uid", uid)
         flow = f"FUNC-{uid}"
+        if uid in SKIP_FLOWS:
+            add(flow, 0, o["module"], real_uid, "skip", "none",
+                "echo 'SKIP: dangerous fault (requires cold boot to recover)'", 0, "",
+                "", "", "", "skipped: dangerous fault"); continue
         s = 0
         if o.get("provision", "none") != "none" or o.get("setup_cmd"):
-            add(flow, s, o["module"], uid, "setup", o["precondition"], o.get("setup_cmd", ""), 0, "",
+            add(flow, s, o["module"], real_uid, "setup", o["precondition"], o.get("setup_cmd", ""), 0, "",
                 "", "", o.get("provision", "none"), "provision " + o.get("provision", "none")); s += 1
-        add(flow, s, o["module"], uid, "inject", o["precondition"],
-            f"{DCAT} inject {uid} {o['inject_args']}", 0, '"status":"ok"',
+        add(flow, s, o["module"], real_uid, "inject", o["precondition"],
+            f"{DCAT} inject {real_uid} {o['inject_args']}", 0, '"status":"ok"',
             o["v_cmd"], o["v_assert"], "", "fault active after inject"); s += 1
         if not o.get("inject_only"):
-            add(flow, s, o["module"], uid, "clean", o["precondition"],
-                f"{DCAT} clean {uid} {o['clean_args']}", 0, "", o["c_cmd"], o["c_assert"],
+            add(flow, s, o["module"], real_uid, "clean", o["precondition"],
+                f"{DCAT} clean {real_uid} {o['clean_args']}", 0, "", o["c_cmd"], o["c_assert"],
                 "", "fault cleaned, system restored"); s += 1
-            add(flow, s, o["module"], uid, "query", o["precondition"],
-                f"{DCAT} query", 0, "", "", f"state_not_contains:{uid}", "",
+            add(flow, s, o["module"], real_uid, "query", o["precondition"],
+                f"{DCAT} query", 0, "", "", f"state_not_contains:{real_uid}", "",
                 "no ghost record after clean"); s += 1
         else:
-            add(flow, s, o["module"], uid, "clean_rejected", o["precondition"],
-                f"{DCAT} clean {uid} {o['inject_args']}", 3, "", "", "exitcode:3",
+            add(flow, s, o["module"], real_uid, "clean_rejected", o["precondition"],
+                f"{DCAT} clean {real_uid} {o['inject_args']}", 3, "", "", "exitcode:3",
                 "", "inject-only: clean rejected"); s += 1
 
     # FUNC-Q: query<uid> confirmed (representative non-root faults)
@@ -237,9 +312,9 @@ def gen():
     q_case("rPROC_hang", "--pid={pid}", "--pid={pid}", "sleep_pid")
     q_case("rPROC_zstate", "--pid={pid}", "--pid={pid}", "sleep_pid")
     # FUNC-Q6: NPU query<uid> confirmed (mtu_mismatch)
-    q_case("rNPU_mtu_mismatch", "--chip=2 --size=1280", "--chip=2", "")
+    q_case("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=1280", "--chip={e2e_chip}", "")
     # FUNC-Q7: NPU query<uid> confirmed (bw_limit)
-    q_case("rNPU_bw_limit", "--chip=2 --bw_limit=50000", "--chip=2", "")
+    q_case("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=50000", "--chip={e2e_chip}", "")
     # FUNC-Q5: query<uid> no-params
     flow = f"FUNC-Q{s_q}"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none",
@@ -329,23 +404,81 @@ def gen():
     # service (string)
     b_reject("rNET_service_stop", "--service=", 3, 'missing required parameter', "service: empty")
     # encoding (enum)
-    b_reject("rNPU_ip_change", "--chip=2 --address=invalid --netmask=255.255.255.0", 1, '', "address: invalid format")
+    b_reject("rNPU_ip_change", "--chip={e2e_chip} --address=invalid --netmask=255.255.255.0", 1, '', "address: invalid format")
     # bitmap (comma-separated digits)
     # bw_limit (positive integer)
-    b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=0", 1, '', "bw_limit: 0 invalid")
-    b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=-1", 1, '', "bw_limit: negative")
-    b_reject("rNPU_bw_limit", "--chip=2 --bw_limit=abc", 1, '', "bw_limit: non-numeric")
+    b_reject("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=0", 1, '', "bw_limit: 0 invalid")
+    b_reject("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=-1", 1, '', "bw_limit: negative")
+    b_reject("rNPU_bw_limit", "--chip={e2e_chip} --bw_limit=abc", 1, '', "bw_limit: non-numeric")
     # size (positive integer, 68-9702)
-    b_reject("rNPU_mtu_mismatch", "--chip=2 --size=0", 1, '', "size: 0 invalid")
-    b_reject("rNPU_mtu_mismatch", "--chip=2 --size=-1", 1, '', "size: negative")
-    b_reject("rNPU_mtu_mismatch", "--chip=2 --size=abc", 1, '', "size: non-numeric")
+    b_reject("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=0", 1, '', "size: 0 invalid")
+    b_reject("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=-1", 1, '', "size: negative")
+    b_reject("rNPU_mtu_mismatch", "--chip={e2e_chip} --size=abc", 1, '', "size: non-numeric")
     # port (positive integer)
-    b_reject("rNPU_roce_port_change", "--chip=2 --port=0", 1, '', "port: 0 invalid")
-    b_reject("rNPU_roce_port_change", "--chip=2 --port=-1", 1, '', "port: negative")
-    b_reject("rNPU_roce_port_change", "--chip=2 --port=abc", 1, '', "port: non-numeric")
+    b_reject("rNPU_roce_port_change", "--chip={e2e_chip} --port=0", 1, '', "port: 0 invalid")
+    b_reject("rNPU_roce_port_change", "--chip={e2e_chip} --port=-1", 1, '', "port: negative")
+    b_reject("rNPU_roce_port_change", "--chip={e2e_chip} --port=abc", 1, '', "port: non-numeric")
     # dscp (0-63)
-    b_reject("rNPU_dscp_tc_change", "--chip=2 --dscp=64 --tc=1", 1, '', "dscp: 64 above range")
-    b_reject("rNPU_dscp_tc_change", "--chip=2 --dscp=-1 --tc=1", 1, '', "dscp: negative")
+    b_reject("rNPU_dscp_tc_change", "--chip={e2e_chip} --dscp=64 --tc=1", 1, '', "dscp: 64 above range")
+    b_reject("rNPU_dscp_tc_change", "--chip={e2e_chip} --dscp=-1 --tc=1", 1, '', "dscp: negative")
+
+    # ---- batch2 新增参数类型边界值 ----
+    # quota_pct (1-99 range)
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=0", 1, 'quota_pct must be', "quota_pct: 0 below range")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=100", 1, 'quota_pct must be', "quota_pct: 100 above range")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=-1", 1, 'quota_pct must be', "quota_pct: negative")
+    b_reject("rCPU_quota", "--cores=0 --quota_pct=abc", 1, 'quota_pct must be', "quota_pct: non-numeric")
+    b_reject("rCPU_quota", "--quota_pct=50", 3, 'missing required parameter', "cores: missing")
+    b_reject("rCPU_quota", "--cores=0", 3, 'missing required parameter', "quota_pct: missing")
+    b_reject("rCPU_quota", "", 3, 'missing required parameter', "cores+quota_pct: missing")
+    # freq_mhz (positive integer)
+    b_reject("rCPU_freq", "--cores=0 --freq_mhz=0", 1, '', "freq_mhz: 0 invalid")
+    b_reject("rCPU_freq", "--cores=0 --freq_mhz=-1", 1, '', "freq_mhz: negative")
+    b_reject("rCPU_freq", "--cores=0 --freq_mhz=abc", 1, '', "freq_mhz: non-numeric")
+    # corrupt_pct (0-100 range)
+    b_reject("rNET_corrupt", "--iface=dcat-e2e0 --corrupt_pct=-1", 1, '', "corrupt_pct: negative")
+    b_reject("rNET_corrupt", "--iface=dcat-e2e0 --corrupt_pct=101", 1, '', "corrupt_pct: 101 above 100")
+    b_reject("rNET_corrupt", "--iface=dcat-e2e0 --corrupt_pct=abc", 1, '', "corrupt_pct: non-numeric")
+    # blocks (positive integer)
+    b_reject("rMEM_fragment", "--blocks=0", 1, '', "blocks: 0 invalid")
+    b_reject("rMEM_fragment", "--blocks=-1", 1, '', "blocks: negative")
+    b_reject("rMEM_fragment", "--blocks=abc", 1, '', "blocks: non-numeric")
+    # count (positive integer, rPROC_fork_bomb)
+    b_reject("rPROC_fork_bomb", "--count=0", 1, '', "count: 0 invalid")
+    b_reject("rPROC_fork_bomb", "--count=-1", 1, '', "count: negative")
+    b_reject("rPROC_fork_bomb", "--count=abc", 1, '', "count: non-numeric")
+    # rate_mb (positive integer)
+    b_reject("rMEM_oom", "--rate_mb=0", 1, '', "rate_mb: 0 invalid")
+    b_reject("rMEM_oom", "--rate_mb=-1", 1, '', "rate_mb: negative")
+    b_reject("rMEM_oom", "--rate_mb=abc", 1, '', "rate_mb: non-numeric")
+    # size_mb (positive integer, rMEM_leak)
+    b_reject("rMEM_leak", "--size_mb=0", 1, '', "size_mb: 0 invalid")
+    b_reject("rMEM_leak", "--size_mb=-1", 1, '', "size_mb: negative")
+    b_reject("rMEM_leak", "--size_mb=abc", 1, '', "size_mb: non-numeric")
+    # mode (enum noread/nowrite/norw/nodelete)
+    b_reject("rFS_file_lock", "--path=/tmp --mode=invalid", 1, 'mode must be one of', "mode: invalid enum")
+    b_reject("rFS_file_lock", "--path=/tmp", 3, 'missing required parameter', "mode: missing")
+    # path (directory, rDISK_part_full)
+    b_reject("rDISK_part_full", "--path=/nonexistent_dir_xyz", 1, '', "path: not a directory")
+    b_reject("rDISK_part_full", "--path=", 3, 'missing required parameter', "path: empty")
+
+    # ---- NPU 新故障 BOUND ----
+    # chip (NPU aic/aiv/hbm)
+    b_reject("rNPU_aic_load", "--chip=abc", 1, '', "chip: non-numeric")
+    b_reject("rNPU_aic_load", "", 3, 'missing required parameter', "chip: missing")
+    b_reject("rNPU_aiv_load", "--chip=abc", 1, '', "chip: non-numeric")
+    b_reject("rNPU_aiv_load", "", 3, 'missing required parameter', "chip: missing")
+    b_reject("rNPU_hbm_load", "--chip=abc --size=2G", 1, '', "chip: non-numeric")
+    b_reject("rNPU_hbm_load", "", 3, 'missing required parameter', "chip: missing")
+    # npu_id + gen (NPU pcie_down)
+    b_reject("rNPU_pcie_down", "--npu_id=abc --gen=1", 1, '', "npu_id: non-numeric")
+    b_reject("rNPU_pcie_down", "--npu_id={e2e_npu_id} --gen=abc", 1, '', "gen: non-numeric")
+    b_reject("rNPU_pcie_down", "--npu_id={e2e_npu_id} --gen=5", 1, '', "gen: out of range (1-3)")
+    b_reject("rNPU_pcie_down", "", 3, 'missing required parameter', "npu_id: missing")
+    # npu_id (NPU chip_reset)
+    b_reject("rNPU_chip_reset", "--npu_id=abc", 1, '', "npu_id: non-numeric")
+    b_reject("rNPU_chip_reset", "--npu_id=99", 1, '', "npu_id: nonexistent NPU")
+    b_reject("rNPU_chip_reset", "", 3, 'missing required parameter', "npu_id: missing")
 
     # ================================================================
     # SEC: 安全 (命令注入 inject+clean+query + 权限边界 + 主机安全)
@@ -358,8 +491,11 @@ def gen():
         ("rCPU_overload", "--cores=0{x}"),
         ("rDISK_write_overload", "--device=/tmp{x}"),
         ("rNET_service_stop", "--service=cron{x}"),
-        ("rNPU_bw_limit", "--chip=2{x} --bw_limit=10000"),
-        ("rNPU_ip_change", "--chip=2 --address=1.1.1.1{x} --netmask=255.255.255.0"),
+        ("rNPU_bw_limit", "--chip={e2e_chip}{x} --bw_limit=10000"),
+        ("rNPU_ip_change", "--chip={e2e_chip} --address=1.1.1.1{x} --netmask=255.255.255.0"),
+        ("rFS_file_lock", "--path=/tmp{x} --mode=nowrite"),
+        ("rDISK_part_full", "--path=/tmp{x} --size=10M"),
+        ("rMEM_leak", "--size_mb=32{x}"),
     ]
     s_i = 1
     for uid, argtmpl in INJ_TARGETS:
@@ -438,7 +574,7 @@ def gen():
     flow = f"STATE-{s_s}"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject")
     add(flow, 1, "cpu", "rCPU_overload", "clean1", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "pgrep -x perl | wc -l", "==0", "", "first clean ok")
-    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 1, "", "", "", "", "second clean: no active")
+    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 1, "", "", "", "", "second clean: no active (dispatch returns 1)")
     s_s += 1
     # S2: 无参 clean ×2
     flow = f"STATE-{s_s}"
@@ -480,10 +616,29 @@ def gen():
     # 前置 setup 重置 MTU 到默认 1500，确保 inject(1280) 始终生效，
     # 避免受前序 flow（如 RES-7 clean --all 丢 state 后）残留 MTU=1280 的影响。
     flow = f"STATE-{s_s}"
-    add(flow, 0, "npu", "rNPU_mtu_mismatch", "setup", "none", "hccn_tool -i 2 -mtu -s size 1500 2>/dev/null", 0, "", "", "", "", "reset MTU baseline 1500")
-    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject1 NPU")
-    add(flow, 2, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
-    add(flow, 3, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip=2", 0, "", "", "", "", "cleanup NPU")
+    add(flow, 0, "npu", "rNPU_mtu_mismatch", "setup", "none", "hccn_tool -i {e2e_chip} -mtu -s size 1500 2>/dev/null", 0, "", "", "", "", "reset MTU baseline 1500")
+    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject1", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip={{e2e_chip}} --size=1280", 0, '"status":"ok"', "", "", "", "inject1 NPU")
+    add(flow, 2, "npu", "rNPU_mtu_mismatch", "reject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip={{e2e_chip}} --size=1280", 5, "", "", "exitcode:5", "", "NPU reinject rejected code5")
+    add(flow, 3, "npu", "rNPU_mtu_mismatch", "clean", "none", f"{DCAT} clean rNPU_mtu_mismatch --chip={{e2e_chip}}", 0, "", "", "", "", "cleanup NPU")
+    s_s += 1
+    # S8: batch2 新增故障 clean×2 (rMEM_leak, 无参 clean 幂等)
+    flow = f"STATE-{s_s}"
+    add(flow, 0, "memory", "rMEM_leak", "inject", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject")
+    add(flow, 1, "memory", "rMEM_leak", "clean1", "none", f"{DCAT} clean rMEM_leak", 0, "", "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", "==0", "", "first clean ok")
+    add(flow, 2, "memory", "rMEM_leak", "clean2", "none", f"{DCAT} clean rMEM_leak", 0, "", "", "", "", "second clean: idempotent (exit 0)")
+    s_s += 1
+    # S9: batch2 新增故障 reinject 拒绝 code5 (rMEM_leak)
+    flow = f"STATE-{s_s}"
+    add(flow, 0, "memory", "rMEM_leak", "inject1", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject1")
+    add(flow, 1, "memory", "rMEM_leak", "reject", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 5, "", "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", ">=1", "", "reinject rejected code5")
+    add(flow, 2, "memory", "rMEM_leak", "clean", "none", f"{DCAT} clean rMEM_leak", 0, "", "", "", "", "cleanup")
+    s_s += 1
+    # S10: batch2 新增故障 --force 替换 (rMEM_leak)
+    flow = f"STATE-{s_s}"
+    add(flow, 0, "memory", "rMEM_leak", "inject1", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject1")
+    add(flow, 1, "memory", "rMEM_leak", "force_replace", "none", f"{DCAT} inject rMEM_leak --size_mb=32 --force", 0, '"status":"ok"', "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", ">=1", "", "--force replace")
+    add(flow, 2, "memory", "rMEM_leak", "query_one", "none", f"{DCAT} query", 0, "", "", "state_contains:rMEM_leak", "", "one record")
+    add(flow, 3, "memory", "rMEM_leak", "clean", "none", f"{DCAT} clean rMEM_leak", 0, "", "", "", "", "cleanup")
     s_s += 1
 
     # ================================================================
@@ -531,7 +686,7 @@ def gen():
     # R7: NPU + CPU 多故障 → 删 state → clean --all
     flow = "RES-7"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject CPU fault")
-    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip=2 --size=1280", 0, '"status":"ok"', "", "", "", "inject NPU fault")
+    add(flow, 1, "npu", "rNPU_mtu_mismatch", "inject", "none", f"{DCAT} inject rNPU_mtu_mismatch --chip={{e2e_chip}} --size=1280", 0, '"status":"ok"', "", "", "", "inject NPU fault")
     add(flow, 2, "mixed", "all", "lose_state", "none", "rm -f $E2E_HOME/.demoncat/state.json", 0, "", "", "", "", "simulate state deletion")
     add(flow, 3, "mixed", "all", "clean_all", "none", f"{DCAT} clean --all", 0, "", "pgrep -x perl | wc -l", "==0", "", "one-click recovery (CPU+NPU)")
     add(flow, 4, "mixed", "all", "query_empty", "none", f"{DCAT} query", 0, "", "", "state_empty", "", "no ghost")

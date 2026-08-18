@@ -26,12 +26,24 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for bak in /tmp/dcat-rNPU_gw_change-*.bak; do
                 [ -f "$bak" ] || continue
                 c=${bak##*/dcat-rNPU_gw_change-}; c=${c%.bak}
-                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                    cleaned=1
+                else
+                    echo "restore failed for chip $c" >&2
+                    failed=1
+                fi
             done
-            [ "$cleaned" = 1 ] && echo "restored gateway (all chips)" || echo "restored gateway (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "gw_change: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored gateway (all chips)"
+            else
+                echo "restored gateway (no active injection)"
+            fi
         elif fault_present; then
             orig=$(sidecar_load rNPU_gw_change "$chip")
             if [ "$orig" = "none" ] || [ -z "$orig" ]; then

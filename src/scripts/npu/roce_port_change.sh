@@ -26,12 +26,24 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for bak in /tmp/dcat-rNPU_roce_port_change-*.bak; do
                 [ -f "$bak" ] || continue
                 c=${bak##*/dcat-rNPU_roce_port_change-}; c=${c%.bak}
-                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                    cleaned=1
+                else
+                    echo "restore failed for chip $c" >&2
+                    failed=1
+                fi
             done
-            [ "$cleaned" = 1 ] && echo "restored roce udp port (all chips)" || echo "restored roce udp port (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "roce_port_change: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored roce udp port (all chips)"
+            else
+                echo "restored roce udp port (no active injection)"
+            fi
         elif fault_present; then
             orig=$(sidecar_load rNPU_roce_port_change "$chip"); orig=${orig:-4791}
             $HCCN -udp -s port "$orig" || { echo "udp restore failed" >&2; exit 1; }

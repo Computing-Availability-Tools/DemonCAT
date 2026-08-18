@@ -16,7 +16,7 @@
 
 ### 版本定位
 
-DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU 模块，提供统一的命令面、预检护栏、状态跟踪；33 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
+DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统模块，提供统一的命令面、预检护栏、状态跟踪；57 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
 
 ### 变更摘要
 
@@ -27,22 +27,26 @@ DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU 模
 - 3-tier dispatch：cnf 故障 → 编译注入器 → 动态插件（`dlopen .so`）
 - 示例动态插件 `plugins/libsample.so`
 
-#### 故障目录（33 条）
+#### 故障目录（57 条）
 
-CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
+CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 / NPU 19 / 系统 2，按模块分布：
 
-- **CPU 2 条**：核满载（可调负载 1-100%）、核离线
-- **存储 1 条**：磁盘写压
-- **网络 11 条**：延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包
-- **进程 3 条**：进程退出（inject-only）/ 进程挂起 / 僵尸进程
-- **NPU 16 条**：RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
+- **CPU 5 条**：核满载（可调负载 1-100%）、核离线、核挂起（RT 优先级）、CPU 降频（scaling_max_freq）、CPU 核心限幅（cgroup cpu.max）
+- **存储 5 条**：磁盘写压、分区填满、inode 耗尽、IO 延迟、IO 错误
+- **网络 13 条**：延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 / 网络破坏 / 连接耗尽
+- **进程 5 条**：进程退出（inject-only）/ 进程挂起 / 僵尸进程 / fork 炸弹 / fd 耗尽
+- **内存 4 条**：内存泄漏 / OOM / swap 压力 / 内存碎片
+- **文件系统 2 条**：文件锁 / IO 等待高负载
+- **Docker 2 条**：容器 kill / 容器内存过载
+- **系统 2 条**：内核 panic / 关机
+- **NPU 19 条**：rNPU_pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove + RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
 
-合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条。
+合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 57 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条后 batch2 新增 7 条（pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove）增至 19 条。
 
 #### Web 控制台（dcat serve）
 
 - HTTP 长驻服务，浏览器远程查看 active/history/catalog + 注入/清理故障
-- 默认只读（`--allow-write` 开启写操作），绑定 `127.0.0.1`（SSH 隧道访问）
+- 默认只读（`--allow-write` 开启写操作），绑定 `0.0.0.0`（建议用 `--bind 127.0.0.1` 限制为本地访问）
 - 支持 `--port` / `--bind` / `--webroot` 参数
 - 安全加固：`realpath()` 路径穿越防护 + `%2e` URL 编码检测 + `--port` CLI 校验
 
@@ -70,7 +74,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 
 #### NPU 真机验证（Atlas 910B4）
 
-- 16 条 `rNPU_*` 故障全部通过真机 inject/clean/query 验证（device 2 & 5）
+- 19 条 `rNPU_*` 故障全部通过真机 inject/clean/query 验证（device 2 & 5）
 - 4 种清理策略（reverse op / sidecar replay / set to max / cfg recovery）真机全覆盖
 - `link_down.sh` 修复：`hccn_tool -link -s down` 交互式 y/n 确认 → `echo y |` 自动应答
 - NPU inject 回读：`fault_present()` 条件化，inject 参数降为可选（query 场景）
@@ -108,7 +112,7 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 - `disk_write_overload.sh`：trap 杀 dd 子进程防孤儿
 - STATE-7 `rNPU_mtu_mismatch`：`--size=1500` 在 MTU=1500 机器上是 no-op → 改为 1280
 
-#### E2E 测试框架（354 步骤 / 165 流程）
+#### E2E 测试框架（501 步骤 / 250 流程）
 
 - 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
 - NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
@@ -132,24 +136,24 @@ CPU 2 / 存储 1 / 网络 11 / 进程 3 / NPU 16，按模块分布：
 #### 文档
 
 - README（含依赖说明 + 一键安装脚本 `scripts/install_deps.sh`）
-- 用户手册 `User_Manual.md`（33 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
+- 用户手册 `User_Manual.md`（57 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
 - 手动测试指南 `docs/Manual_Test_Reference.md`
 - SPEC（技术规格）+ DESIGN（架构设计）
 - Release Notes + docs/Test_Report.md
 
 ### 测试
 
-- **ctest**：26/26 全通过
-    - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / cli / faults / help / plugin_manager + plugin_integration）
-    - Tier 1 mock 表驱动故障测试（33 条全覆盖）
-    - Tier 2 脚本语法检查（sh -n 全部 33 脚本 + _common.sh）
+- **ctest：27/27 全通过
+    - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
+    - Tier 1 mock 表驱动故障测试（57 条全覆盖）
+    - Tier 2 脚本语法检查（sh -n 全部 58 脚本 + _common.sh）
     - Tier 3 真实执行测试（非 root 故障）
     - root 冒烟测试（smoke_root.sh）
-- **E2E**：354 步骤 / 165 流程，8 类混沌工程测试矩阵
+- **E2E**：501 步骤 / 250 流程，8 类混沌工程测试矩阵
 
 ### 已知限制
 
-- NPU 16 条故障需 Atlas 物理机 + `hccn_tool` 真机验证（910B4 + 910C 已验证）
+- NPU 19 条故障需 Atlas 物理机 + `hccn_tool` 真机验证（910B4 + 910C 已验证）
 - 网络 11 条 / 进程 3 条故障依赖 root 权限（`tc` / `iptables` / `ip` / `ethtool` / `systemctl`）
 - `rNET_degrade` 在 dummy 虚拟网卡上不支持（需真实物理网卡）
 - 不实现超时自动恢复：所有可恢复故障注入后需用户手动 clean

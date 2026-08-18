@@ -1,7 +1,7 @@
 #!/bin/sh
 # rDISK_write_overload: Disk write IO overload (dd writers)
-# inject: spawn N dd writers, write pidfile, exit immediately
-# clean:  read pidfile, kill dd processes, remove temp files + pidfile, exit
+# inject: spawn N dd writers (infinite), write pidfile, exit immediately
+# clean:  kill dd writers via pkill + pidfile, remove temp files, exit
 # query:  check dd process count and temp files
 
 dev="${DCAT_PARAM_DEVICE:-}"
@@ -19,14 +19,11 @@ case "${DCAT_OP:-inject}" in
         case "$size" in ''|*[!0-9]*) echo "size_mb must be a positive integer, got: '$size'" >&2; exit 1 ;; esac
         [ "$size" -ge 1 ] 2>/dev/null || { echo "size_mb must be >= 1, got: $size" >&2; exit 1; }
 
-        # Validate device path: any absolute directory is allowed (no /tmp whitelist).
-        # Reject non-absolute paths (avoids relative-path ambiguity and `;`/meta injection via `$dev`).
         case "$dev" in
             /*) ;;
             *) echo "device path must be absolute, got: '$dev'" >&2; exit 1 ;;
         esac
         [ -d "$dev" ] || { echo "device path not found: $dev" >&2; exit 1; }
-        # symlink protection: reject symlinks and resolve real path
         if [ -L "$dev" ]; then
             real=$(readlink -f "$dev" 2>/dev/null || echo "$dev")
             echo "device path must not be a symlink: '$dev' -> '$real'" >&2; exit 1
@@ -37,27 +34,20 @@ case "${DCAT_OP:-inject}" in
 
         if [ -f "$PIDFILE" ]; then
             old_pids=$(sed -n '1p' "$PIDFILE" 2>/dev/null)
-            for pid in $old_pids; do kill "$pid" 2>/dev/null; done
+            for pid in $old_pids; do kill -9 "$pid" 2>/dev/null; done
             rm -f "$PIDFILE"
         fi
+        pkill -9 -f 'dd.*dcat\.stress' 2>/dev/null
+        pkill -9 -f 'dd.*dcat\.write' 2>/dev/null
+        rm -f /tmp/dcat.stress.* /tmp/dcat.write.* 2>/dev/null
+        sleep 0.2
+        pkill -9 -f 'dd.*dcat\.stress' 2>/dev/null
 
-        # determine target path for stress files
-        if [ -d "$dev" ]; then
-            target="$dev/dcat.stress.$$"
-        else
-            target="/tmp/dcat.write.$$"
-        fi
-
+        target="$dev/dcat.stress.$$"
         pids=""
         i=0
         while [ "$i" -lt "$workers" ]; do
-            (
-                trap 'kill $! 2>/dev/null; exit 0' TERM
-                while true; do
-                    dd if=/dev/zero of="${target}.${i}" bs=1M count="$size" conv=fdatasync 2>/dev/null &
-                    wait $!
-                done
-            ) >/dev/null 2>&1 &
+            dd if=/dev/zero of="${target}.${i}" bs=1M 2>/dev/null &
             pids="$pids $!"
             i=$((i + 1))
         done
@@ -81,32 +71,24 @@ case "${DCAT_OP:-inject}" in
             [ -n "$dev_clean" ] || continue
             PIDFILE="/tmp/dcat-rDISK_write_overload-${dev_clean}.pid"
             if [ -f "$PIDFILE" ]; then
-                line1=$(sed -n '1p' "$PIDFILE" 2>/dev/null)
-                line2=$(sed -n '2p' "$PIDFILE" 2>/dev/null)
-                pids="$line1"
-                [ -n "$line2" ] && dev="$line2"
-                for pid in $pids; do
-                    kill -TERM "$pid" 2>/dev/null
-                done
-                sleep 0.5
+                pids=$(sed -n '1p' "$PIDFILE" 2>/dev/null)
+                dev=$(sed -n '2p' "$PIDFILE" 2>/dev/null)
                 for pid in $pids; do
                     kill -9 "$pid" 2>/dev/null
                 done
                 rm -f "$PIDFILE"
-                sleep 0.3
-                if [ -n "$dev" ]; then
-                    pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.stress" 2>/dev/null
-                    pkill -9 -f "dd if=/dev/zero of=${dev}/dcat.write" 2>/dev/null
-                    [ -d "$dev" ] && rm -f "${dev}/dcat.stress."* 2>/dev/null
-                    rm -f "${dev}/dcat.write."* 2>/dev/null
-                fi
+                [ -n "$dev" ] && rm -f "${dev}"/dcat.stress.* 2>/dev/null
                 cleaned=1
             fi
         done
-        pkill -9 -f 'dd if=/dev/zero of=/tmp/dcat.write' 2>/dev/null
-        pkill -9 -f 'dd if=/dev/zero of=/tmp/dcat.stress' 2>/dev/null
+        pkill -9 -f 'dd.*dcat\.stress' 2>/dev/null
+        pkill -9 -f 'dd.*dcat\.write' 2>/dev/null
         rm -f /tmp/dcat.write.* /tmp/dcat.stress.* 2>/dev/null
         rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
+        sleep 0.5
+        pkill -9 -f 'dd.*dcat\.stress' 2>/dev/null
+        pkill -9 -f 'dd.*dcat\.write' 2>/dev/null
+        rm -f /tmp/dcat.stress.* /tmp/dcat.write.* 2>/dev/null
         if [ "$cleaned" = 1 ]; then echo "cleaned";
         else echo "cleaned (no active injection)"; fi
         ;;
@@ -136,7 +118,5 @@ case "${DCAT_OP:-inject}" in
         ;;
 
     *)
-        echo "unknown op: $DCAT_OP" >&2
-        exit 1
-        ;;
+        echo "unknown op: $DCAT_OP" >&2; exit 1 ;;
 esac

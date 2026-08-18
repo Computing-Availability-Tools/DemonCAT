@@ -264,7 +264,7 @@ def gen():
     # ================================================================
     # FUNC: 功能基线 (inject→verify→clean→query + query<uid> + plugin)
     # Dangerous faults are skipped (require cold boot to recover)
-    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_link_down", "rSYS_panic", "rSYS_poweroff"}
+    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_chip_reset", "rNPU_link_down", "rSYS_panic", "rSYS_poweroff"}
     # ================================================================
     for uid in sorted(OBS):
         o = OBS[uid]

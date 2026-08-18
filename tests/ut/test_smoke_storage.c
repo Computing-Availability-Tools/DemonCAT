@@ -96,10 +96,13 @@ int main(void) {
 
         sleep(1);
         /* check port is occupied */
-        char cmd[128]; snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
+        char cmd[128];
+        snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
         FILE *f = popen(cmd, "r");
         CK(f);
-        int n = 0; fscanf(f, "%d", &n); pclose(f);
+        int n = 0;
+        fscanf(f, "%d", &n);
+        pclose(f);
         CK(n >= 1);
 
         r = dispatch_route("rNET_port_occupy", "clean", &p);
@@ -110,7 +113,9 @@ int main(void) {
         snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
         f = popen(cmd, "r");
         CK(f);
-        n = 0; fscanf(f, "%d", &n); pclose(f);
+        n = 0;
+        fscanf(f, "%d", &n);
+        pclose(f);
         CK(n == 0);
     }
 

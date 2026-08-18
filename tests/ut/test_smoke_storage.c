@@ -13,7 +13,13 @@
 #include <sys/types.h>
 #include <glob.h>
 
-#define CK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL: %s\n", #cond); return 1; } } while (0)
+#define CK(cond)                                  \
+    do {                                          \
+        if (!(cond)) {                            \
+            fprintf(stderr, "FAIL: %s\n", #cond); \
+            return 1;                             \
+        }                                         \
+    } while (0)
 
 /* Count alive rDISK_write_overload worker subshells by scanning dcat pidfiles
  * (/tmp/dcat-rDISK_write_overload-<dev>.pid, space-separated PIDs per file) + kill -0 probe.
@@ -63,10 +69,17 @@ int main(void) {
 
     /* ---- rDISK_write_overload (dd writers) ---- */
     {
-        params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "device"); strcpy(p.items[0].value, "/tmp"); p.count = 1;
-        strcpy(p.items[1].key, "workers"); strcpy(p.items[1].value, "2"); p.count = 2;
-        strcpy(p.items[2].key, "size_mb"); strcpy(p.items[2].value, "500"); p.count = 3;
+        params_t p;
+        memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "device");
+        strcpy(p.items[0].value, "/tmp");
+        p.count = 1;
+        strcpy(p.items[1].key, "workers");
+        strcpy(p.items[1].value, "2");
+        p.count = 2;
+        strcpy(p.items[2].key, "size_mb");
+        strcpy(p.items[2].value, "500");
+        p.count = 3;
 
         result_t *r = dispatch_route("rDISK_write_overload", "inject", &p);
         CK(r && r->code == 0);
@@ -87,8 +100,11 @@ int main(void) {
 
     /* ---- rNET_port_occupy (python3 socket holder) ---- */
     {
-        params_t p; memset(&p, 0, sizeof p);
-        strcpy(p.items[0].key, "port"); strcpy(p.items[0].value, "19999"); p.count = 1;
+        params_t p;
+        memset(&p, 0, sizeof p);
+        strcpy(p.items[0].key, "port");
+        strcpy(p.items[0].value, "19999");
+        p.count = 1;
 
         result_t *r = dispatch_route("rNET_port_occupy", "inject", &p);
         CK(r && r->code == 0);

@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统九大模块，共 57 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / NPU / 系统八大模块，共 52 条故障。
 > 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)，故障速查见 [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md)。
 >
 > **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行一次 `sudo make install` 即可在 `/usr/local/bin` 创建全局入口（符号链接指向 `build/dcat`，后续更新只需 `git pull`，无需重新安装）；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。
@@ -13,15 +13,14 @@
 | 模块 | 条数 | 故障范围 |
 | --- | :---: | --- |
 | CPU | 5 | 核满载 / 核离线 / CPU 限额 / 降频 / RT 核饿死 |
-| 存储 | 5 | 磁盘写压 / 分区填满 / inode 耗尽 / IO 延迟 / IO 错误 |
-| 网络 | 13 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 / 包损坏 / 连接耗尽 |
+| 存储 | 4 | 磁盘写压 / 分区填满 / inode 耗尽 / IO 延迟 |
+| 网络 | 12 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 / 包损坏 |
 | 进程 | 5 | 进程退出 / 挂起 / 僵尸 / fork 炸弹 / FD 耗尽 |
 | 内存 | 4 | 内存泄漏 / OOM / 内存碎片 / Swap 过载 |
-| 文件系统 | 2 | 文件锁 / iowait 飙高 |
-| Docker | 2 | 容器 kill / 容器内存过载 |
+| 文件系统 | 1 | 文件锁 |
 | NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / PCIe 降速 / AICore 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
 | 系统 | 2 | 内核 panic / 下电重启 |
-| **合计** | **57** | |
+| **合计** | **52** | |
 
 ---
 
@@ -36,13 +35,12 @@
     - [1.3 rCPU_quota](#13-rcpu_quota) — CPU 限额（cgroup）
     - [1.4 rCPU_freq](#14-rcpu_freq) — CPU 降频
     - [1.5 rCPU_core_hang](#15-rcpu_core_hang) — RT 核饿死
-- [第二章 存储模块](#第二章-存储模块5-条)
+- [第二章 存储模块](#第二章-存储模块4-条)
     - [2.1 rDISK_write_overload](#21-rdisk_write_overload) — 磁盘写压
     - [2.2 rDISK_part_full](#22-rdisk_part_full) — 分区填满
     - [2.3 rDISK_inode_exhaust](#23-rdisk_inode_exhaust) — inode 耗尽
     - [2.4 rDISK_io_delay](#24-rdisk_io_delay) — IO 延迟
-    - [2.5 rDISK_io_error](#25-rdisk_io_error) — IO 错误
-- [第三章 网络模块](#第三章-网络模块13-条)
+- [第三章 网络模块](#第三章-网络模块12-条)
     - [3.1 rNET_delay](#31-rnet_delay) — 网络延迟
     - [3.2 rNET_loss](#32-rnet_loss) — 网络丢包
     - [3.3 rNET_reorder](#33-rnet_reorder) — 网络乱序
@@ -55,7 +53,6 @@
     - [3.10 rNET_jitter](#310-rnet_jitter) — 延迟抖动
     - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包
     - [3.12 rNET_corrupt](#312-rnet_corrupt) — 包损坏
-    - [3.13 rNET_conn_exhaust](#313-rnet_conn_exhaust) — 连接耗尽
 - [第四章 进程模块](#第四章-进程模块5-条)
     - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出
     - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起
@@ -67,37 +64,33 @@
     - [5.2 rMEM_oom](#52-rmem_oom) — OOM
     - [5.3 rMEM_fragment](#53-rmem_fragment) — 内存碎片
     - [5.4 rMEM_swap_overload](#54-rmem_swap_overload) — Swap 过载
-- [第六章 文件系统模块](#第六章-文件系统模块2-条)
+- [第六章 文件系统模块](#第六章-文件系统模块1-条)
     - [6.1 rFS_file_lock](#61-rfs_file_lock) — 文件锁
-    - [6.2 rFS_iowait_high](#62-rfs_iowait_high) — iowait 飙高
-- [第七章 Docker 模块](#第七章-docker-模块2-条)
-    - [7.1 rDOCKER_kill](#71-rdocker_kill) — 容器 kill
-    - [7.2 rDOCKER_mem_overload](#72-rdocker_mem_overload) — 容器内存过载
-- [第八章 NPU 模块](#第八章-npu-模块19-条)
-    - [8.0 前置准备](#80-前置准备实机参数查询与调整)
-    - [8.1 rNPU_link_down](#81-rnpu_link_down) — RoCE 链路 down
-    - [8.2 rNPU_ip_change](#82-rnpu_ip_change) — RoCE IP 变更
-    - [8.3 rNPU_gw_change](#83-rnpu_gw_change) — RoCE 网关变更
-    - [8.4 rNPU_netdetect_change](#84-rnpu_netdetect_change) — Netdetect IP 变更
-    - [8.5 rNPU_arp](#85-rnpu_arp) — ARP 操控
-    - [8.6 rNPU_route](#86-rnpu_route) — RoCE 路由操控
-    - [8.7 rNPU_iprule](#87-rnpu_iprule) — ip rule 操控
-    - [8.8 rNPU_iproute](#88-rnpu_iproute) — ip route 操控
-    - [8.9 rNPU_bw_limit](#89-rnpu_bw_limit) — RoCE 带宽限速
-    - [8.10 rNPU_mtu_mismatch](#810-rnpu_mtu_mismatch) — RoCE MTU 变更
-    - [8.11 rNPU_dscp_tc_change](#811-rnpu_dscp_tc_change) — DSCP→TC 映射变更
-    - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
-    - [8.13 rNPU_pcie_down](#813-rnpu_pcie_down) — NPU PCIe 降速
-    - [8.14 rNPU_aic_load](#814-rnpu_aic_load) — AICore 负载
-    - [8.15 rNPU_aiv_load](#815-rnpu_aiv_load) — AIVector 负载
-    - [8.16 rNPU_hbm_load](#816-rnpu_hbm_load) — HBM 负载
-    - [8.17 rNPU_chip_reset](#817-rnpu_chip_reset) — 芯片复位
-    - [8.18 rNPU_driver_unbind](#818-rnpu_driver_unbind) — 驱动解绑
-    - [8.19 rNPU_pcie_remove](#819-rnpu_pcie_remove) — PCIe 拔卡
-- [第九章 系统模块](#第九章-系统模块2-条)
-    - [9.1 rSYS_panic](#91-rsys_panic) — 内核 panic
-    - [9.2 rSYS_poweroff](#92-rsys_poweroff) — 下电重启
-- [第十章 Web 控制台（dcat serve）](#第十章-web-控制台dcat-serve)
+- [第七章 NPU 模块](#第七章-npu-模块19-条)
+    - [7.0 前置准备](#70-前置准备实机参数查询与调整)
+    - [7.1 rNPU_link_down](#71-rnpu_link_down) — RoCE 链路 down
+    - [7.2 rNPU_ip_change](#72-rnpu_ip_change) — RoCE IP 变更
+    - [7.3 rNPU_gw_change](#73-rnpu_gw_change) — RoCE 网关变更
+    - [7.4 rNPU_netdetect_change](#74-rnpu_netdetect_change) — Netdetect IP 变更
+    - [7.5 rNPU_arp](#75-rnpu_arp) — ARP 操控
+    - [7.6 rNPU_route](#76-rnpu_route) — RoCE 路由操控
+    - [7.7 rNPU_iprule](#77-rnpu_iprule) — ip rule 操控
+    - [7.8 rNPU_iproute](#78-rnpu_iproute) — ip route 操控
+    - [7.9 rNPU_bw_limit](#79-rnpu_bw_limit) — RoCE 带宽限速
+    - [7.10 rNPU_mtu_mismatch](#710-rnpu_mtu_mismatch) — RoCE MTU 变更
+    - [7.11 rNPU_dscp_tc_change](#711-rnpu_dscp_tc_change) — DSCP→TC 映射变更
+    - [7.12 rNPU_roce_port_change](#712-rnpu_roce_port_change) — RoCE UDP 端口变更
+    - [7.13 rNPU_pcie_down](#713-rnpu_pcie_down) — NPU PCIe 降速
+    - [7.14 rNPU_aic_load](#714-rnpu_aic_load) — AICore 负载
+    - [7.15 rNPU_aiv_load](#715-rnpu_aiv_load) — AIVector 负载
+    - [7.16 rNPU_hbm_load](#716-rnpu_hbm_load) — HBM 负载
+    - [7.17 rNPU_chip_reset](#717-rnpu_chip_reset) — 芯片复位
+    - [7.18 rNPU_driver_unbind](#718-rnpu_driver_unbind) — 驱动解绑
+    - [7.19 rNPU_pcie_remove](#719-rnpu_pcie_remove) — PCIe 拔卡
+- [第八章 系统模块](#第八章-系统模块2-条)
+    - [8.1 rSYS_panic](#81-rsys_panic) — 内核 panic
+    - [8.2 rSYS_poweroff](#82-rsys_poweroff) — 下电重启
+- [第九章 Web 控制台（dcat serve）](#第九章-web-控制台dcat-serve)
 
 ---
 
@@ -322,7 +315,7 @@ dcat clean  rCPU_core_hang
 
 ---
 
-## 第二章 存储模块（5 条）
+## 第二章 存储模块（4 条）
 
 ### 2.1 rDISK_write_overload — 磁盘写压（dd 多实例）
 
@@ -466,41 +459,9 @@ dcat clean  rDISK_io_delay
 
 ---
 
-### 2.5 rDISK_io_error — IO 错误（dm-error）
+## 第三章 网络模块（12 条）
 
-**UID**: `rDISK_io_error`
-
-**描述**: 通过 device-mapper `error` 目标使块设备的所有 IO 返回 EIO（输入/输出错误），模拟磁盘故障。
-
-**实现原理**:
-
-- **inject**: 在块设备 `device` 上创建 dm-error 设备 `dcat-error-<devname>`，使用 `dmsetup create` 设置 `error` target。dm 设备名存入 sidecar。
-- **clean**: `dmsetup remove` 删除 dm-error 设备。
-- **query**: `dmsetup info/table` 检查 dm-error 设备是否存在。
-
-**使用示例**:
-
-```bash
-dcat inject rDISK_io_error --device=/dev/sdb
-dcat query  rDISK_io_error
-dcat clean  rDISK_io_error
-```
-
-**参数可选范围**:
-
-| 参数 | 是否必填 | 类型 | 说明 |
-| --- | --- | --- | --- |
-| device | inject 必填 | 块设备路径 | 目标块设备（如 `/dev/sdb`） |
-
-**危险等级**: 高 — 所有 IO 返回 EIO，可能导致文件系统只读、数据损坏。仅在空闲设备上测试。
-
-**补充说明**: 需要 root + `dmsetup` + 内核 `dm-error` 模块。**严禁对已挂载的根分区或关键设备执行**。与 `rDISK_io_delay` 的区别：delay 是延迟 IO，error 是直接返回错误。
-
----
-
-## 第三章 网络模块（13 条）
-
-本章涵盖 DemonCAT 网络故障注入模块的全部 13 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动、包损坏、连接耗尽等多种网络异常场景。
+本章涵盖 DemonCAT 网络故障注入模块的全部 12 条故障规则。网络模块通过 `tc`（Traffic Control）、`ip`、`iptables`、`systemctl` 及 Python socket 等手段，模拟延迟、丢包、乱序、带宽限制、链路中断、端口占用、服务停止、链路抖动、包损坏、连接耗尽等多种网络异常场景。
 
 > **互斥说明**：基于 `tc qdisc` 的故障（rNET_delay / rNET_loss / rNET_reorder / rNET_bw_limit / rNET_degrade / rNET_jitter / rNET_corrupt）在同一网卡上**互斥**——一个网卡只能有一个 root qdisc。如需在同一网卡注入新故障，必须先 `dcat clean` 恢复旧故障后再注入。若注入失败提示"已有 root qdisc"，执行 `dcat clean --all` 或 `tc qdisc del dev <iface> root` 清理残留后重试。
 
@@ -856,35 +817,6 @@ dcat clean rNET_corrupt --iface=eth0
 
 ---
 
-### 3.13 rNET_conn_exhaust — 连接耗尽
-
-**UID**: `rNET_conn_exhaust`
-
-**描述**: 向目标 `host:port` 发起大量 TCP 连接并保持不关闭，耗尽目标端的连接资源（模拟连接耗尽攻击）。
-
-**实现原理**: `inject` 使用 Python socket 向 `target`（`host:port` 格式）发起 `count` 个 TCP 连接，建立后保持不关闭，以后台进程运行。PID 写入 pidfile。`clean` 读取 pidfile，kill 持有连接的进程。`query` 检查进程是否存活及 `ss -s` 连接数统计。
-
-**使用示例**:
-
-```bash
-dcat inject rNET_conn_exhaust --target=192.168.1.1:80 --count=1000
-dcat query rNET_conn_exhaust
-dcat clean rNET_conn_exhaust
-```
-
-**参数可选范围**:
-
-| 参数 | 是否必填 | 类型 | 说明 |
-| --- | --- | --- | --- |
-| target | inject 必填 | host:port | 目标地址和端口，格式 `IP:port` |
-| count | 可选 | 整数 | 发起连接数，默认 1000 |
-
-**危险等级**: 中 — 大量连接占用目标端资源，可能导致目标服务拒绝新连接。对本机测试时也会消耗本机端口和文件描述符。
-
-**补充说明**: 依赖 `python3`。连接耗尽效果取决于目标端的 `somaxconn`、`nf_conntrack_max`、文件描述符限制等。count 过大可能先耗尽本机资源。
-
----
-
 ## 第四章 进程模块（5 条）
 
 ### 4.1 rPROC_exit — 进程退出（kill -9，inject-only）
@@ -1179,7 +1111,7 @@ dcat clean rMEM_swap_overload
 
 ---
 
-## 第六章 文件系统模块（2 条）
+## 第六章 文件系统模块（1 条）
 
 ### 6.1 rFS_file_lock — 文件锁
 
@@ -1224,113 +1156,13 @@ dcat clean  rFS_file_lock
 
 ---
 
-### 6.2 rFS_iowait_high — iowait 飙高
-
-**UID**: `rFS_iowait_high`
-
-**描述**: 在目标挂载点上启动多个 worker 执行 `dd` 写入+`fdatasync`，推高该文件系统的 iowait。
-
-**实现原理**:
-
-- **inject**: 在 `path`（应为挂载点）下创建临时目录，启动 `workers` 个 worker 循环执行 `dd bs=4k count=100 conv=fdatasync`。PID 写入 pidfile。
-- **clean**: kill 所有 worker，删除临时目录。
-- **query**: 检查 worker 进程存活及 `mpstat` iowait 统计。
-
-**使用示例**:
-
-```bash
-dcat inject rFS_iowait_high --path=/data --workers=4
-dcat query rFS_iowait_high
-dcat clean rFS_iowait_high
-```
-
-**参数可选范围**:
-
-| 参数 | 是否必填 | 类型 | 说明 |
-| --- | --- | --- | --- |
-| path | inject 必填 | 目录路径 | 目标挂载点目录（应为 `mount` 输出第 3 列的挂载点） |
-| workers | 可选 | 整数 | dd worker 数量，默认 4 |
-
-**危险等级**: 中 — 高 iowait 影响同文件系统上其他 IO 任务的响应延迟。不会损坏数据。
-
-**补充说明**: 与 `rDISK_write_overload` 的区别：write_overload 面向块设备写吞吐过载；iowait_high 面向挂载点的 iowait 指标。path 应为挂载点而非裸设备。
-
----
-
-## 第七章 Docker 模块（2 条）
-
-### 7.1 rDOCKER_kill — 容器 kill
-
-**UID**: `rDOCKER_kill`
-
-**描述**: 通过 `docker kill` 强制停止容器；clean 通过 `docker start` 恢复。
-
-**实现原理**:
-
-- **inject**: 执行 `docker kill <container>`，容器被强制停止（SIGKILL）。容器名存入 sidecar。
-- **clean**: 从 sidecar 读取容器名，执行 `docker start <container>` 恢复。
-- **query**: `docker inspect` 检查容器 State.Status。
-
-**使用示例**:
-
-```bash
-dcat inject rDOCKER_kill --container=myapp
-dcat query rDOCKER_kill --container=myapp
-dcat clean rDOCKER_kill --container=myapp
-```
-
-**参数可选范围**:
-
-| 参数 | 是否必填 | 类型 | 说明 |
-| --- | --- | --- | --- |
-| container | inject/clean/query 必填 | 字符串 | 容器名或 ID |
-
-**危险等级**: 高 — 容器内进程被 SIGKILL 立即终止，数据可能丢失。clean 通过 `docker start` 恢复容器，但容器内进程的状态（如内存数据）不可恢复。
-
-**补充说明**: 依赖 `docker` 命令。inject 前检查容器是否存在（`docker inspect`）。与 `docker stop` 的区别：`kill` 发送 SIGKILL（不可拦截），`stop` 发送 SIGTERM（可拦截）后超时再 SIGKILL。
-
----
-
-### 7.2 rDOCKER_mem_overload — 容器内存过载
-
-**UID**: `rDOCKER_mem_overload`
-
-**描述**: 通过 `docker exec` 在容器内分配 `size` 内存，触发容器 OOM 或内存压力。
-
-**实现原理**:
-
-- **inject**: 通过 `docker exec <container>` 在容器内执行 Python 或 perl 内存持有进程，分配 `size`（支持 `512M`/`2G` 等单位）内存。`docker exec` 的宿主机 PID 写入 pidfile。
-- **clean**: kill 宿主机 docker-exec PID（容器内 holder 随之终止）。
-- **query**: 检查 docker-exec PID 存活及 `docker stats`。
-
-**使用示例**:
-
-```bash
-dcat inject rDOCKER_mem_overload --container=myapp --size=2G
-dcat query rDOCKER_mem_overload --container=myapp
-dcat clean rDOCKER_mem_overload --container=myapp
-```
-
-**参数可选范围**:
-
-| 参数 | 是否必填 | 类型 | 说明 |
-| --- | --- | --- | --- |
-| container | inject/clean/query 必填 | 字符串 | 容器名或 ID |
-| size | inject 必填 | 大小字符串 | 要分配的内存大小（如 `512`=`512MB`、`512M`、`2G`） |
-
-**危险等级**: 高 — 容器内内存过载会触发容器 OOM killer（如果设了 `--memory` 限制），或导致宿主机内存压力（如果未设限制）。
-
-**补充说明**: 依赖 `docker` 命令。容器内需有 `python3` 或 `perl`。如果容器设了 `--memory` 限制且 size 超过限制，容器内 OOM killer 会杀掉 holder 进程（故障自动结束）。
-
----
-
-## 第八章 NPU 模块（19 条）
+## 第七章 NPU 模块（19 条）
 
 NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool`、`npu-smi`、CANN及 PCIe sysfs 对 RoCE 网口、芯片硬件注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）、`npu_validate_chip`（校验芯片号）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 
-> ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「8.0 前置参数查询」查出目标机器实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth2 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
+> ⚠️ **实机必读**：本章示例中的 `chip`、`dev`、`gateway`、各网段地址均为**机器相关**值——每台机器的 NPU IP、网关、网口名、已用网段都不一样，直接照抄大概率失败。**注入前必须先按下方「7.0 前置参数查询」查出目标机器实际值，再填入各 fault 参数**。下文中 `10.30.12.x / 网关 10.30.12.254 / eth2 / 芯片 2` 是一台 Atlas 8 卡机器的示例拓扑值，仅用于演示查询与换算过程。
 
-### 8.0 前置准备：实机参数查询与调整
+### 7.0 前置准备：实机参数查询与调整
 
 所有 NPU 用例注入前，按下列步骤确认目标机器的实际参数。命令中 `chip` 用目标芯片号（Phy-ID，示例取 2，请替换为本机可用芯片号）。
 
@@ -1342,7 +1174,7 @@ npu-smi info                      # 查看 NPU 卡拓扑、芯片状态与健康
 hccn_tool -i 2 -status -g          # 查询芯片 2 的网口名，输出 "Settings for eth2:" → dev 为 eth2（示例机）
 ```
 
-> **chip vs npu_id**：多数 NPU 故障使用 `chip`（物理芯片 Phy-ID，`ls /dev/davinci*` 查看）；`pcie_down` 和 `chip_reset` 使用 `npu_id`（NPU 卡号，`npu-smi info` 第一列）。详见 8.0 节⑥。
+> **chip vs npu_id**：多数 NPU 故障使用 `chip`（物理芯片 Phy-ID，`ls /dev/davinci*` 查看）；`pcie_down` 和 `chip_reset` 使用 `npu_id`（NPU 卡号，`npu-smi info` 第一列）。详见 7.0 节⑥。
 >
 > **关键**：`hccn_tool` 的 `dev` 是 **NPU 内部网卡名**（示例机为 `eth2`，不同机器可能是 `eth0`/`eth2` 等），不是 Linux 系统接口名。用 `hccn_tool -i <chip> -status -g` 可查询，输出首行 `Settings for ethX:` 中的 `ethX` 即为该芯片的 dev 值。
 
@@ -1402,7 +1234,7 @@ NPU 故障的 `chip` 参数有两种语义，取决于故障类型：
 
 ---
 
-### 8.1 rNPU_link_down — RoCE 链路 down
+### 7.1 rNPU_link_down — RoCE 链路 down
 
 **UID**: `rNPU_link_down`
 
@@ -1430,7 +1262,7 @@ dcat clean rNPU_link_down --chip=0
 
 ---
 
-### 8.2 rNPU_ip_change — RoCE IP 变更
+### 7.2 rNPU_ip_change — RoCE IP 变更
 
 **UID**: `rNPU_ip_change`
 
@@ -1458,7 +1290,7 @@ dcat clean rNPU_ip_change --chip=0
 
 ---
 
-### 8.3 rNPU_gw_change — RoCE 网关变更
+### 7.3 rNPU_gw_change — RoCE 网关变更
 
 **UID**: `rNPU_gw_change`
 
@@ -1492,7 +1324,7 @@ dcat clean rNPU_gw_change --chip=2
 
 ---
 
-### 8.4 rNPU_netdetect_change — Netdetect IP 变更
+### 7.4 rNPU_netdetect_change — Netdetect IP 变更
 
 **UID**: `rNPU_netdetect_change`
 
@@ -1519,7 +1351,7 @@ dcat clean rNPU_netdetect_change --chip=0
 
 ---
 
-### 8.5 rNPU_arp — ARP 操控
+### 7.5 rNPU_arp — ARP 操控
 
 **UID**: `rNPU_arp`
 
@@ -1555,7 +1387,7 @@ dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 
 ---
 
-### 8.6 rNPU_route — RoCE 路由操控
+### 7.6 rNPU_route — RoCE 路由操控
 
 **UID**: `rNPU_route`
 
@@ -1591,7 +1423,7 @@ dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 
 ---
 
-### 8.7 rNPU_iprule — ip rule 操控
+### 7.7 rNPU_iprule — ip rule 操控
 
 **UID**: `rNPU_iprule`
 
@@ -1627,7 +1459,7 @@ dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 
 ---
 
-### 8.8 rNPU_iproute — ip route 操控
+### 7.8 rNPU_iproute — ip route 操控
 
 **UID**: `rNPU_iproute`
 
@@ -1665,7 +1497,7 @@ dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 
 ---
 
-### 8.9 rNPU_bw_limit — RoCE 带宽限速
+### 7.9 rNPU_bw_limit — RoCE 带宽限速
 
 **UID**: `rNPU_bw_limit`
 
@@ -1694,7 +1526,7 @@ dcat clean rNPU_bw_limit --chip=0
 
 ---
 
-### 8.10 rNPU_mtu_mismatch — RoCE MTU 变更
+### 7.10 rNPU_mtu_mismatch — RoCE MTU 变更
 
 **UID**: `rNPU_mtu_mismatch`
 
@@ -1724,7 +1556,7 @@ dcat clean rNPU_mtu_mismatch --chip=2
 
 ---
 
-### 8.11 rNPU_dscp_tc_change — DSCP→TC 映射变更
+### 7.11 rNPU_dscp_tc_change — DSCP→TC 映射变更
 
 **UID**: `rNPU_dscp_tc_change`
 
@@ -1752,7 +1584,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46
 
 ---
 
-### 8.12 rNPU_roce_port_change — RoCE UDP 端口变更
+### 7.12 rNPU_roce_port_change — RoCE UDP 端口变更
 
 **UID**: `rNPU_roce_port_change`
 
@@ -1779,7 +1611,7 @@ dcat clean rNPU_roce_port_change --chip=0
 
 ---
 
-### 8.13 rNPU_pcie_down — NPU PCIe 降速
+### 7.13 rNPU_pcie_down — NPU PCIe 降速
 
 **UID**: `rNPU_pcie_down`
 
@@ -1823,7 +1655,7 @@ dcat clean rNPU_pcie_down --npu_id=2
 
 ---
 
-### 8.14 rNPU_aic_load — AICore 负载
+### 7.14 rNPU_aic_load — AICore 负载
 
 **UID**: `rNPU_aic_load`
 
@@ -1861,7 +1693,7 @@ dcat clean rNPU_aic_load --chip=2
 
 ---
 
-### 8.15 rNPU_aiv_load — AIVector 负载
+### 7.15 rNPU_aiv_load — AIVector 负载
 
 **UID**: `rNPU_aiv_load`
 
@@ -1895,7 +1727,7 @@ dcat clean rNPU_aiv_load --chip=2
 
 ---
 
-### 8.16 rNPU_hbm_load — HBM 负载
+### 7.16 rNPU_hbm_load — HBM 负载
 
 **UID**: `rNPU_hbm_load`
 
@@ -1926,7 +1758,7 @@ dcat clean rNPU_hbm_load --chip=2
 
 ---
 
-### 8.17 rNPU_chip_reset — 芯片复位
+### 7.17 rNPU_chip_reset — 芯片复位
 
 **UID**: `rNPU_chip_reset`
 
@@ -1962,7 +1794,7 @@ dcat clean rNPU_chip_reset --npu_id=2
 
 ---
 
-### 8.18 rNPU_driver_unbind — 驱动解绑
+### 7.18 rNPU_driver_unbind — 驱动解绑
 
 **UID**: `rNPU_driver_unbind`
 
@@ -1995,7 +1827,7 @@ dcat query rNPU_driver_unbind --chip=2
 
 ---
 
-### 8.19 rNPU_pcie_remove — PCIe 拔卡
+### 7.19 rNPU_pcie_remove — PCIe 拔卡
 
 **UID**: `rNPU_pcie_remove`
 
@@ -2028,11 +1860,11 @@ dcat query rNPU_pcie_remove --chip=2
 
 ---
 
-## 第九章 系统模块（2 条）
+## 第八章 系统模块（2 条）
 
 > ⚠️ **危险故障**：本章故障均为 inject-only 且不可逆，会导致系统宕机或关机。仅在测试环境中使用，确保有带外管理或物理访问能力。
 
-### 9.1 rSYS_panic — 内核 panic
+### 8.1 rSYS_panic — 内核 panic
 
 **UID**: `rSYS_panic`
 
@@ -2057,7 +1889,7 @@ dcat inject rSYS_panic
 
 ---
 
-### 9.2 rSYS_poweroff — 下电重启
+### 8.2 rSYS_poweroff — 下电重启
 
 **UID**: `rSYS_poweroff`
 
@@ -2090,7 +1922,7 @@ dcat inject rSYS_poweroff --mode=1
 
 ---
 
-## 第十章 Web 控制台（dcat serve）
+## 第九章 Web 控制台（dcat serve）
 
 ### 10.1 概述
 

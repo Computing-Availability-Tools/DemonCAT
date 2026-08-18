@@ -103,22 +103,6 @@ int main(void) {
         CK(r && r->code == 0);
         result_free(r);
     }
-    /* rDISK_io_error (device) */
-    SUBTEST("rDISK_io_error inject") {
-        params_t p = mkparams("device", "/dev/loop0", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rDISK_io_error", "inject", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("disk_io_error.sh");
-        check_param_env("device", "/dev/loop0");
-        result_free(r);
-    }
-    SUBTEST("rDISK_io_error clean") {
-        params_t p = mkparams("device", "/dev/loop0", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rDISK_io_error", "clean", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-    }
-
     /* ---- network extensions ---- */
     /* rNET_corrupt (iface,corrupt_pct) */
     SUBTEST("rNET_corrupt inject") {
@@ -136,23 +120,6 @@ int main(void) {
         CK(r && r->code == 0);
         result_free(r);
     }
-    /* rNET_conn_exhaust (target, optional count) */
-    SUBTEST("rNET_conn_exhaust inject") {
-        params_t p = mkparams("target", "127.0.0.1:8080", "count", "500", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNET_conn_exhaust", "inject", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("net_conn_exhaust.sh");
-        check_param_env("target", "127.0.0.1:8080");
-        check_param_env("count", "500");
-        result_free(r);
-    }
-    SUBTEST("rNET_conn_exhaust clean") {
-        params_t p = mkparams("target", "127.0.0.1:8080", "count", "500", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNET_conn_exhaust", "clean", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-    }
-
     /* ---- process extensions ---- */
     /* rPROC_fork_bomb (count) */
     SUBTEST("rPROC_fork_bomb inject") {
@@ -250,6 +217,6 @@ int main(void) {
     }
 
     faults_teardown();
-    printf("test_faults_batch2_ext: all 18 faults passed\n");
+    printf("test_faults_batch2_ext: all 13 faults passed\n");
     return FAULTS_MAIN_RETURN();
 }

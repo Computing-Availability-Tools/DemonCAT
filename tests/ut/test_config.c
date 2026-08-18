@@ -8,7 +8,7 @@ int test_load_faults(void) {
     config_t cfg;
     int rc = config_load("config/demoncat.conf", &cfg);
     ASSERT_INT_EQ(rc, 0);
-    ASSERT_INT_EQ(cfg.fault_count, 57);
+    ASSERT_INT_EQ(cfg.fault_count, 52);
     const fault_def_t *f = config_find(&cfg, "rNET_delay");
     ASSERT_TRUE(f != NULL);
     ASSERT_STREQ(f->module, "network");

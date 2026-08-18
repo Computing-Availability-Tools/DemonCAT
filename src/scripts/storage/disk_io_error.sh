@@ -58,12 +58,11 @@ case "${DCAT_OP:-inject}" in
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             dm=$(cat "$SIDECAR" 2>/dev/null)
             if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
-                echo "dm-error active: $dm"
-                dmsetup table "$dm" 2>/dev/null
+                echo "io_error: all IO to /dev/mapper/$dm returns EIO (Input/output error)"
+                echo "  raw dm table: $(dmsetup table "$dm" 2>/dev/null)"
                 exit 0
             else
-                echo "no active io_error"
-                exit 1
+                echo "no active io_error"; exit 1
             fi
         else
             active=0
@@ -71,17 +70,11 @@ case "${DCAT_OP:-inject}" in
                 [ -f "$sc" ] || continue
                 dm=$(cat "$sc" 2>/dev/null)
                 if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
-                    echo "dm-error active: $dm"
-                    dmsetup table "$dm" 2>/dev/null
+                    echo "io_error: /dev/mapper/$dm returns EIO"
                     active=1
                 fi
             done
-            if [ "$active" = 1 ]; then
-                exit 0
-            else
-                echo "no active io_error"
-                exit 1
-            fi
+            [ "$active" = 1 ] && exit 0 || { echo "no active io_error"; exit 1; }
         fi
         ;;
 

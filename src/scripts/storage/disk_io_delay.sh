@@ -60,12 +60,13 @@ case "${DCAT_OP:-inject}" in
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             dm=$(cat "$SIDECAR" 2>/dev/null)
             if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
-                echo "dm-delay active: $dm"
-                dmsetup table "$dm" 2>/dev/null
+                tbl=$(dmsetup table "$dm" 2>/dev/null)
+                delay_ms=$(echo "$tbl" | awk '{print $NF}')
+                echo "io_delay: ${delay_ms}ms delay active — every IO to /dev/mapper/$dm is delayed"
+                echo "  raw dm table: $tbl"
                 exit 0
             else
-                echo "no active io_delay"
-                exit 1
+                echo "no active io_delay"; exit 1
             fi
         else
             active=0
@@ -73,17 +74,13 @@ case "${DCAT_OP:-inject}" in
                 [ -f "$sc" ] || continue
                 dm=$(cat "$sc" 2>/dev/null)
                 if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
-                    echo "dm-delay active: $dm"
-                    dmsetup table "$dm" 2>/dev/null
+                    tbl=$(dmsetup table "$dm" 2>/dev/null)
+                    delay_ms=$(echo "$tbl" | awk '{print $NF}')
+                    echo "io_delay: ${delay_ms}ms delay on /dev/mapper/$dm"
                     active=1
                 fi
             done
-            if [ "$active" = 1 ]; then
-                exit 0
-            else
-                echo "no active io_delay"
-                exit 1
-            fi
+            [ "$active" = 1 ] && exit 0 || { echo "no active io_delay"; exit 1; }
         fi
         ;;
 

@@ -75,12 +75,13 @@ time.sleep(1e9)
             if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
                 pid=$(cat "$PIDFILE")
                 fds=$(ls -1 /proc/$pid/fd 2>/dev/null | wc -l)
-                echo "conn_exhaust driver pid=$pid (fds~$fds)"
+                maxfds=$(ulimit -n)
+                echo "conn_exhaust: pid=$pid holding ~$fds connections (per-proc fd limit=$maxfds; bounded by target backlog/conntrack)"
+                echo "  ss summary below (TCP total / ESTAB):"
                 ss -s 2>/dev/null | head -5
                 exit 0
             else
-                echo "no active conn_exhaust"
-                exit 1
+                echo "no active conn_exhaust"; exit 1
             fi
         else
             active=0
@@ -90,10 +91,11 @@ time.sleep(1e9)
                 kill -0 "$pid" 2>/dev/null || continue
                 active=1
                 fds=$(ls -1 /proc/$pid/fd 2>/dev/null | wc -l)
-                echo "conn_exhaust driver pid=$pid (fds~$fds)"
+                echo "conn_exhaust: pid=$pid holding ~$fds connections"
             done
+            echo "  per-proc fd limit=$(ulimit -n); ss summary:"
             ss -s 2>/dev/null | head -5
-            [ "$active" -eq 1 ] && exit 0 || exit 1
+            [ "$active" -eq 1 ] && exit 0 || { echo "no active conn_exhaust"; exit 1; }
         fi
         ;;
     *) echo "unknown op: $DCAT_OP" >&2; exit 1;;

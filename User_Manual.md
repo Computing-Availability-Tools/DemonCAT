@@ -149,7 +149,7 @@ dcat clean --all                      # 清全部故障（stateless，state.json
 
 **描述**: 通过 `taskset` 绑定到指定 CPU 核运行纯用户态死循环（`perl -e '1 while 1'`），使指定核 100% 用户态满载。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 从 `DCAT_PARAM_CORES` 取必填的 cores 规格（支持 `0,2,4` / `0-3` / `0-3,7` 等混合格式，由 `parse_cores` 展开为单核号列表）。对每个核，用 `taskset -c <n>` 绑定启动 `perl -e '1 while 1'`（纯用户态死循环，无系统调用开销），后台运行并重定向到 `/dev/null`；若系统无 perl，自动回退为 `yes`（会引入约 60% 系统调用开销）。将所有子进程 pid 写入 pidfile `/tmp/dcat-rCPU_overload-${spec}.pid`（spec 为原始参数串），输出注入结果。
 - **clean**: 读取 pidfile，逐个 `kill` 进程并删除 pidfile；若 pidfile 不存在则报错并 `exit 1`。
 - **query**: 用 `pgrep -f 'perl -e'` 与 `pgrep -x yes` 统计系统中 burn 进程总数，打印 per-core CPU（mpstat）及匹配进程的 `pid/%cpu/psr/cmd` 详情；进程总数 > 0 时返回成功（exit 0），否则失败。**无 `--cores` 参数时查询全部在线核**（读 `/sys/devices/system/cpu/online`，形如 `0-27`）；带 `--cores=0,1` 则只查指定核。
@@ -180,7 +180,7 @@ dcat clean  rCPU_overload --cores=0,1
 
 **描述**: 通过 sysfs 将指定 CPU 核下线（`echo 0 > /sys/devices/system/cpu/cpu<N>/online`），直接减少系统可用算力。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 对每个核，检查 `/sys/devices/system/cpu/cpu<N>/online` 是否可写；不可写（如 cpu0）则跳过并告警，可写则 `echo 0` 下线。实际下线成功的核列表写入 sidecar `/tmp/dcat-rCPU_core_offline.list`。
 - **clean**: 读取 sidecar 中的核列表，对每个核 `echo 1` 重新上线，删除 sidecar。
 - **query**: 读取每个请求核的 online 值，打印 `core/online/status` 表格；存在 OFFLINE 核即返回成功。
@@ -209,7 +209,7 @@ dcat clean rCPU_core_offline --cores=2,3
 
 **描述**: 通过 cgroup 将指定 CPU 核心的最大使用率限制在 `quota_pct`%（1–99%）。创建 cgroup 设定 `cpuset.cpus`（限定核）+ `cpu.max`（限额度），并将该核上现有进程移入 cgroup。`top` 查看该核占用即被限制为目标值。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 创建 cgroup，设 `cpuset.cpus=<cores>` 限定核 + `cpu.max=<quota_pct>%` 限额度。扫描 `/proc/[0-9]*/stat` field 39（last processor）找出目标核上的进程，移入 cgroup。PID 列表存入 sidecar。
 - **clean**: 将所有进程移回根 cgroup，恢复原值，删除 cgroup。
 - **query**: 显示受限核号、限额百分比和实际使用率（采样 /proc/stat 1 秒）。
@@ -251,7 +251,7 @@ dcat clean  rCPU_quota
 
 **描述**: 通过 sysfs 设置 `scaling_max_freq` 限制指定 CPU 核的最高频率（降频），模拟 CPU 性能降级。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 对每个核，读取原 `scaling_max_freq` 和 `scaling_min_freq` 存入 sidecar。若目标频率低于 `scaling_min_freq`（策略下限），先降低 `scaling_min_freq` 再设置 `scaling_max_freq`。写入后回读验证，不匹配则回滚所有已改核并退出。
 - **clean**: 先恢复 `scaling_max_freq`（抬上限），再恢复 `scaling_min_freq`（抬下限），避免 min > max 被内核拒绝。
 - **query**: 打印每核当前 `scaling_max_freq`。
@@ -283,7 +283,7 @@ dcat clean  rCPU_freq
 
 **描述**: 通过 `chrt -f 99`（SCHED_FIFO 实时调度）+ `taskset` 绑核，在每个目标核上运行 RT 优先级死循环，饿死同核上的普通进程。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 对每个核，用 `chrt -f 99 taskset -c <n> sh -c 'while :; do :; done'` 启动 RT 99 优先级的忙循环进程。pid 写入 pidfile。
 - **clean**: 读取 pidfile，`kill` 所有 RT 进程。
 - **query**: 统计存活的 RT 循环进程数。
@@ -314,7 +314,7 @@ dcat clean  rCPU_core_hang
 
 **描述**: 通过多路 `dd` 进程持续向目标设备写入数据（`if=/dev/zero` + `fdatasync`），制造磁盘写 IO 过载。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 启动 workers 个后台循环，每轮执行 `dd if=/dev/zero of=${target}.${i} bs=1M count=$size conv=fdatasync`（强制落盘），失败则 `sleep 1` 重试。将所有 worker pid 写入 pidfile。
 - **clean**: 读取 pidfile，逐个 kill worker 进程，删除 pidfile 和临时文件（`dcat.stress.*` / `dcat.write.*`）。
 - **query**: 用 `pgrep -af 'dd if=/dev/zero'` 统计 dd 进程数，存在则打印进程列表与临时文件。
@@ -345,7 +345,7 @@ dcat clean rDISK_write_overload --device=/data
 
 **描述**: 在目标路径创建大填充文件，快速消耗磁盘空间直至填满（或达到指定大小）。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 在 `path` 下创建填充文件 `dcat.fill.<pid>`。若指定 `size`，用 `dd` 或 `fallocate` 创建指定大小文件（支持 `100M`/`2G` 等单位）；若省略 `size`，持续写入直到 ENOSPC。路径存入 sidecar。
 - **clean**: 从 sidecar 读取路径，删除填充文件。
 - **query**: 检查填充文件是否存在，打印大小与 `df`。
@@ -382,7 +382,7 @@ dcat clean  rDISK_part_full
 
 **描述**: 在目标路径下创建大量空文件，耗尽文件系统 inode（即使磁盘空间未满也无法创建新文件）。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 在 `path/dcat.inodes.<pid>/` 下循环创建空文件 `f0, f1, ...`，直到达到 `count` 或创建失败（inode 耗尽）。目录路径存入 sidecar。
 - **clean**: `rm -rf` sidecar 中记录的目录。
 - **query**: 打印创建的文件数与 `df -i`。
@@ -414,7 +414,7 @@ dcat clean  rDISK_inode_exhaust
 
 **描述**: 通过 device-mapper `delay` 目标在块设备上叠加读延迟，所有 IO 操作被延迟指定毫秒数。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 在块设备 `device` 上创建 dm-delay 设备 `dcat-delay-<devname>`，使用 `dmsetup create` 设置 `delay <delay_ms>`。dm 设备名存入 sidecar。
 - **clean**: `dmsetup remove` 删除 dm-delay 设备。
 - **query**: `dmsetup info/table` 检查 dm-delay 设备是否存在。
@@ -444,7 +444,7 @@ dcat clean  rDISK_io_delay
 
 **描述**: 通过 device-mapper `error` 目标使块设备的所有 IO 返回 EIO（输入/输出错误），模拟磁盘故障。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 在块设备 `device` 上创建 dm-error 设备 `dcat-error-<devname>`，使用 `dmsetup create` 设置 `error` target。dm 设备名存入 sidecar。
 - **clean**: `dmsetup remove` 删除 dm-error 设备。
 - **query**: `dmsetup info/table` 检查 dm-error 设备是否存在。
@@ -860,7 +860,7 @@ dcat inject rPROC_exit --pid=12345
 
 **描述**: 对目标进程发送 `SIGSTOP` 使其挂起暂停，clean 发送 `SIGCONT` 恢复（可逆）。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 对目标 PID 执行 `kill -STOP`，进程被暂停（状态变为 T），将 PID 写入 sidecar。
 - **clean**: 从 sidecar 或参数取 PID，执行 `kill -CONT` 恢复进程运行，删除 sidecar。
 - **query**: 通过 `kill -0` 确认进程存在，读取 `/proc/$pid/status` 的 `State:` 字段，状态以 `T` 开头则 exit 0。
@@ -891,7 +891,7 @@ dcat clean rPROC_hang --pid=12345
 
 **描述**: 将指定进程 kill 后变为僵尸进程（进程退出但父进程未调用 wait 回收，残留为 Z 状态）。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 读取 `DCAT_PARAM_PID` 获取目标进程 PID，记录其父进程 PID（PPID）到 sidecar 文件，然后 `kill -9` 目标进程。进程退出后，如果父进程没有调用 wait 回收，则成为僵尸进程。
 - **clean**: 从 sidecar 读取目标 PID 和 PPID。如果僵尸仍存在，kill 父进程使僵尸 reparent 到 init（PID 1），init 自动回收。
 - **query**: 检查目标 PID 的 `/proc/<pid>/status` 中 State 是否为 Z。
@@ -920,7 +920,7 @@ dcat clean rPROC_zstate --pid=12345
 
 **描述**: 创建 `count` 个子进程（受控版 fork 炸弹），消耗进程表与内存资源。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 启动一个 supervisor 进程，在循环中 `fork` 出 `count` 个 `sleep 3600` 子进程。supervisor 的 PID 写入 pidfile，trap SIGTERM 时 kill 所有子进程。
 - **clean**: 读取 pidfile，kill supervisor（supervisor 的 trap 会 kill 所有子进程）。
 - **query**: 统计 supervisor 的子进程数。
@@ -949,7 +949,7 @@ dcat clean rPROC_fork_bomb
 
 **描述**: 单个进程不断打开文件描述符直至达到 RLIMIT_NOFILE（或指定 count），模拟进程级 FD 耗尽。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 使用 Python 不断 `os.open('/dev/null')` 打开 FD，直到达到 `RLIMIT_NOFILE` 或指定 `count`。PID 写入 pidfile。
 - **clean**: kill 进程，所有 FD 自动关闭。
 - **query**: 检查进程存活及 `/proc/<pid>/fd` 下的 FD 数量。
@@ -985,7 +985,7 @@ dcat clean rPROC_fd_exhaust
 
 **描述**: 分配 `size_mb` 内存并持有不释放，模拟内存泄漏。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 使用 perl（`"x" x (size*1024*1024)`）或 Python 持有 `size_mb` 的内存块，进程阻塞在 `sleep` 中。PID 写入 pidfile。
 - **clean**: kill 进程，内存自动回收。
 - **query**: 检查进程存活及其 RSS（`ps -o rss`）。
@@ -1014,7 +1014,7 @@ dcat clean rMEM_leak
 
 **描述**: 以 `rate_mb`（MB/秒）的速率持续分配内存不释放，直到触发 OOM killer。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 使用 perl 或 Python 在循环中每 0.05 秒分配 `rate_mb` MB 内存，持续增长直到 OOM killer 触发杀掉进程。PID 写入 pidfile。
 - **clean**: kill 进程（可能已被 OOM killer 杀掉），删除 pidfile。
 - **query**: 检查进程存活，或在 `dmesg` 中搜索最近的 OOM-kill 事件。
@@ -1043,7 +1043,7 @@ dcat clean rMEM_oom
 
 **描述**: 分配 N 个内存块后释放其中一半，制造内存碎片化（用户空间空洞），模拟内存碎片导致的性能降级。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 使用 perl 或 Python 分配 `blocks` 个 `block_kb` KB 的内存块，然后释放偶数索引的块（保留奇数块），形成用户空间碎片化。PID 写入 pidfile。
 - **clean**: kill 进程。
 - **query**: 检查进程存活及 `/proc/buddyinfo`（内核空闲块分布）。
@@ -1073,7 +1073,7 @@ dcat clean rMEM_fragment
 
 **描述**: 分配 `size_mb`（大于系统可用 RAM）的内存并逐页写入（dirty），强制系统将内存页换出到 swap。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 使用 perl 或 Python 分配 `size_mb` 内存，以 16MB 为块逐块写入（touch each page），强制 swap-out。PID 写入 pidfile。
 - **clean**: kill 进程，内存自动回收，swap 页释放。
 - **query**: 检查进程存活及 `free -m` 中 Swap used。
@@ -1104,7 +1104,7 @@ dcat clean rMEM_swap_overload
 
 **描述**: 通过 `chmod` + `chattr +i` + `mount --bind` 锁定文件，使其不可读/不可写/不可删除（限制对 root 也生效）。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 根据 `mode` 参数：
   - `noread`: `chmod a-r` + 对文件 `mount --bind /dev/null`（读取返回空，对 root 也生效；目录仅 chmod）
   - `nowrite`: `chmod a-w` + `chattr +i`（写入失败，root 亦不可写）
@@ -1144,7 +1144,7 @@ dcat clean  rFS_file_lock
 
 **描述**: 在目标挂载点上启动多个 worker 执行 `dd` 写入+`fdatasync`，推高该文件系统的 iowait。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 在 `path`（应为挂载点）下创建临时目录，启动 `workers` 个 worker 循环执行 `dd bs=4k count=100 conv=fdatasync`。PID 写入 pidfile。
 - **clean**: kill 所有 worker，删除临时目录。
 - **query**: 检查 worker 进程存活及 `mpstat` iowait 统计。
@@ -1176,7 +1176,7 @@ dcat clean rFS_iowait_high
 
 **描述**: 通过 `docker kill` 强制停止容器；clean 通过 `docker start` 恢复。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 执行 `docker kill <container>`，容器被强制停止（SIGKILL）。容器名存入 sidecar。
 - **clean**: 从 sidecar 读取容器名，执行 `docker start <container>` 恢复。
 - **query**: `docker inspect` 检查容器 State.Status。
@@ -1205,7 +1205,7 @@ dcat clean rDOCKER_kill --container=myapp
 
 **描述**: 通过 `docker exec` 在容器内分配 `size` 内存，触发容器 OOM 或内存压力。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 通过 `docker exec <container>` 在容器内执行 Python 或 perl 内存持有进程，分配 `size`（支持 `512M`/`2G` 等单位）内存。`docker exec` 的宿主机 PID 写入 pidfile。
 - **clean**: kill 宿主机 docker-exec PID（容器内 holder 随之终止）。
 - **query**: 检查 docker-exec PID 存活及 `docker stats`。
@@ -1421,7 +1421,7 @@ dcat clean rNPU_netdetect_change --chip=0
 
 **描述**: 向指定芯片 ARP 表注入伪造条目（`action=add`，等效 ARP 毒化）或删除 ARP 条目（`action=del`），导致流量被误导或停滞。
 
-**实现原理**: 
+**实现原理**:
 - **action=add**: 执行 `-arp -a dev <dev> ip <ip> mac <mac>` 添加伪造 ARP。
 - **action=del**: 先 `-arp -g` 查询原 MAC 存 sidecar，再 `-arp -d` 删除。clean 从 sidecar 恢复原 MAC。
 - **clean**: add 模式执行 `-arp -d` 删除伪造条目；del 模式从 sidecar 取原 MAC 执行 `-arp -a` 恢复。
@@ -1460,7 +1460,7 @@ dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 
 **描述**: 向指定芯片路由表添加路由（`action=add`）或删除路由（`action=del`），可能误导流量走向错误网关或导致网段不可达。
 
-**实现原理**: 
+**实现原理**:
 - **action=add**: 执行 `-route -a address <addr> netmask <mask> gateway <gw>` 添加路由。
 - **action=del**: 先 `-route -g` 查询原 gateway 存 sidecar，再 `-route -d` 删除。clean 从 sidecar 恢复。
 - **clean**: add 模式执行 `-route -d` 删除；del 模式从 sidecar 取原 gateway 执行 `-route -a` 恢复。
@@ -1499,7 +1499,7 @@ dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 
 **描述**: 向指定芯片添加策略路由规则（`action=add`）或删除规则（`action=del`），可能改变流量选路。
 
-**实现原理**: 
+**实现原理**:
 - **action=add**: 执行 `-ip_rule -a dir <dir> ip <ip> table <table>` 添加规则。
 - **action=del**: 先 `-ip_rule -g` 查询原 table 存 sidecar，再 `-ip_rule -d` 删除。clean 从 sidecar 恢复。
 - **clean**: add 模式执行 `-ip_rule -d` 删除；del 模式从 sidecar 取原 table 执行 `-ip_rule -a` 恢复。
@@ -1538,7 +1538,7 @@ dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 
 **描述**: 向指定芯片策略路由表添加路由（`action=add`）或删除路由（`action=del`），可能误导流量或导致网段不可达。
 
-**实现原理**: 
+**实现原理**:
 - **action=add**: 执行 `-ip_route -a ip <ip> ip_mask <mask> via <via> dev <dev> table <table>` 添加路由。
 - **action=del**: 先 `-ip_route -g table <table>` 查询原 via/dev 存 sidecar，再 `-ip_route -d` 删除。clean 从 sidecar 恢复。
 - **clean**: add 模式执行 `-ip_route -d` 删除；del 模式从 sidecar 取原 via/dev 执行 `-ip_route -a` 恢复。
@@ -1685,7 +1685,7 @@ dcat clean rNPU_roce_port_change --chip=0
 
 **描述**: 通过 `setpci` 修改 PCIe Link Control 2 寄存器的 Target Link Speed，将 NPU PCIe 链路降速，大幅削减 PCIe 带宽。NPU 在降速后仍可正常访问。
 
-**实现原理**: 
+**实现原理**:
 - PCIe 链路两端——**Root Port**（CPU 侧 PCIe 控制器，上游）和 **Endpoint**（NPU 设备，下游）——各有独立的 Link Control 2 寄存器。两端 Target Link Speed 都需修改，然后从 Root Port 端触发 Link Retrain 使链路重新协商到新速度。
 - **inject**: 从 `npu-smi info -t board` 获取芯片 PCIe BDF，通过 sysfs 找到上游 Root Port。读取两端 LnkCtl2 原始值并保存到 sidecar。将 Target Link Speed 设为目标 Gen 值，在 Root Port 端触发 Link Retrain。
 - **clean**: 从 sidecar 恢复原 LnkCtl2 值，重新 Retrain 恢复原速。
@@ -1726,7 +1726,7 @@ dcat clean rNPU_pcie_down --npu_id=2
 
 **描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（2048×2048×2048），持续施压 Cube 计算单元，拉高 AICore 使用率。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次矩阵乘法算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Cube 单元利用率。自适应：优先查 `Aicube` 列（910C/npu-smi 26+），无此列则查 `Aicore`（910B4/npu-smi 25，该列即 Cube）。
@@ -1762,7 +1762,7 @@ dcat clean rNPU_aic_load --chip=2
 
 **描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（128M 元素 = 256MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 运行 `build/_npu_stress aivector <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次 exp 算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
@@ -1794,7 +1794,7 @@ dcat clean rNPU_aiv_load --chip=2
 
 **描述**: 通过 `aclrtMalloc`+`aclrtMemset` 分配并填充指定大小的 HBM 内存并持续持有，占满 HBM 显存空间。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 运行 `build/_npu_stress hbm <dev_id> 0 <size_mb>` 后台进程，使用 `aclrtMalloc` + `aclrtMemset` 分配并填充 HBM 内存。PID 写入 sidecar。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 HBM Usage Rate。
@@ -1823,7 +1823,7 @@ dcat clean rNPU_hbm_load --chip=2
 
 **描述**: 通过 `npu-smi set -t reset` 复位指定 NPU 芯片，模拟芯片级硬件复位。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 执行 `printf 'y\n' | npu-smi set -t reset -i <npu_id> -c <core>`（自动确认），芯片被复位，服务中断。
 - **clean**: 清除 sidecar 状态（芯片复位后自动恢复，无需手动 clean）。
 - **query**: `npu-smi info` 检查 Health 列。
@@ -1856,7 +1856,7 @@ dcat clean rNPU_chip_reset --npu_id=2
 
 **描述**: 将 NPU 从 `devdrv_device_driver` 驱动解绑（`echo <pcie_addr> > unbind`），模拟驱动异常/设备失联。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 查找 chip 的 PCIe 地址（`npu-smi info` 或 `lspci` + `/dev/davinci*` 回退），`echo <pcie_addr> > /sys/bus/pci/drivers/devdrv_device_driver/unbind`。
 - **clean**: `echo <pcie_addr> > bind` 重新绑定，然后执行 FLR（Function Level Reset）。
 - **query**: 检查设备是否仍绑定到驱动。
@@ -1886,7 +1886,7 @@ dcat query rNPU_driver_unbind --chip=2
 
 **描述**: 从 PCIe 总线移除 NPU 设备（`echo 1 > /sys/bus/pci/devices/<addr>/remove`），模拟 NPU 卡物理拔出。
 
-**实现原理**: 
+**实现原理**:
 - **inject**: 查找 chip 的 PCIe 地址，`echo 1 > /sys/bus/pci/devices/<pcie_addr>/remove`。设备从 PCIe 总线消失。
 - **clean**: `echo 1 > /sys/bus/pci/rescan` 重新扫描 PCIe 总线，然后执行 FLR。
 - **query**: 检查 NPU 设备是否仍存在于 PCIe 总线。
@@ -1944,7 +1944,7 @@ dcat inject rSYS_panic
 
 **描述**: 关机或重启机器，inject-only 不可逆。
 
-**实现原理**: 
+**实现原理**:
 - **mode=0**: 执行 `reboot`（或 `shutdown -r now`），系统下电后重启。
 - **mode=1**: 执行 `poweroff`（或 `shutdown -h now`），系统下电后保持关机状态（不自动重启）。
 

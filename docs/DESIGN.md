@@ -11,19 +11,19 @@
     - [1.4 与编译注入器的关系](#14-与编译注入器的关系)
 - [2. 数据结构](#2-数据结构)
 - [3. 模块职责](#3-模块职责)
-  - [3.1 main.c](#31-mainc)
-  - [3.2 cli.c（命令解析器）](#32-clic命令解析器)
-  - [3.3 registry.c](#33-registryc)
-  - [3.4 executor.c](#34-executorc)
-  - [3.5 precheck.c](#35-precheckc)
-  - [3.6 state.c](#36-statec)
-  - [3.7 config.c](#37-configc)
-  - [3.8 output.c](#38-outputc)
-  - [3.9 dispatch.c](#39-dispatchc)
-  - [3.10 help.c](#310-helpc)
-  - [3.11 reinject.c](#311-reinjectc)
-  - [3.12 serve.c](#312-servec)
-  - [3.13 plugin_manager.c](#313-plugin_managerc)
+    - [3.1 main.c](#31-mainc)
+    - [3.2 cli.c（命令解析器）](#32-clic命令解析器)
+    - [3.3 registry.c](#33-registryc)
+    - [3.4 executor.c](#34-executorc)
+    - [3.5 precheck.c](#35-precheckc)
+    - [3.6 state.c](#36-statec)
+    - [3.7 config.c](#37-configc)
+    - [3.8 output.c](#38-outputc)
+    - [3.9 dispatch.c](#39-dispatchc)
+    - [3.10 help.c](#310-helpc)
+    - [3.11 reinject.c](#311-reinjectc)
+    - [3.12 serve.c](#312-servec)
+    - [3.13 plugin_manager.c](#313-plugin_managerc)
 - [4. 故障详设（按模块分组）](#4-故障详设按模块分组)
     - [4.1 网络模块（network）](#41-网络模块network)
     - [4.2 进程模块（process）](#42-进程模块process)
@@ -40,34 +40,34 @@
     - [6.3 inject-only 故障脚本](#63-inject-only-故障脚本)
     - [6.4 默认值约定](#64-默认值约定)
 - [7. 注入器设计实现](#7-注入器设计实现)
-  - [7.1 设计动机与定位](#71-设计动机与定位)
-  - [7.2 injector_t 接口定义](#72-injector_t-接口定义)
-  - [7.3 接口契约](#73-接口契约)
-  - [7.4 注册与查找](#74-注册与查找)
-  - [7.5 dispatch 路由](#75-dispatch-路由)
-  - [7.6 与 cnf+脚本路径的关系](#76-与-cnf脚本路径的关系)
+    - [7.1 设计动机与定位](#71-设计动机与定位)
+    - [7.2 injector_t 接口定义](#72-injector_t-接口定义)
+    - [7.3 接口契约](#73-接口契约)
+    - [7.4 注册与查找](#74-注册与查找)
+    - [7.5 dispatch 路由](#75-dispatch-路由)
+    - [7.6 与 cnf+脚本路径的关系](#76-与-cnf脚本路径的关系)
 - [8. Reinject 默认拒绝与原子替换（--force）](#8-reinject-默认拒绝与原子替换--force)
-  - [8.1 目标与动机](#81-目标与动机)
-  - [8.2 适用范围（v1）](#82-适用范围v1)
-  - [8.3 资源键](#83-资源键)
-  - [8.4 overlap 检测算法](#84-overlap-检测算法)
-  - [8.5 cores 解析器](#85-cores-解析器)
-  - [8.6 CLI（--force）](#86-cli--force)
-  - [8.7 dispatch 路由改动](#87-dispatch-路由改动)
-  - [8.8 向后兼容（BREAKING）](#88-向后兼容breaking)
-  - [8.9 测试计划（TDD）](#89-测试计划tdd)
-  - [8.10 deferred 与约束](#810-deferred-与约束)
+    - [8.1 目标与动机](#81-目标与动机)
+    - [8.2 适用范围（v1）](#82-适用范围v1)
+    - [8.3 资源键](#83-资源键)
+    - [8.4 overlap 检测算法](#84-overlap-检测算法)
+    - [8.5 cores 解析器](#85-cores-解析器)
+    - [8.6 CLI（--force）](#86-cli--force)
+    - [8.7 dispatch 路由改动](#87-dispatch-路由改动)
+    - [8.8 向后兼容（BREAKING）](#88-向后兼容breaking)
+    - [8.9 测试计划（TDD）](#89-测试计划tdd)
+    - [8.10 deferred 与约束](#810-deferred-与约束)
 - [9. 目录结构](#9-目录结构)
 - [10. 构建](#10-构建)
 - [11. 测试设计](#11-测试设计)
-  - [11.1 mock_executor](#111-mock_executor)
-  - [11.2 表驱动](#112-表驱动)
-  - [11.3 故障覆盖矩阵](#113-故障覆盖矩阵)
-  - [11.4 真实环境冒烟](#114-真实环境冒烟)
+    - [11.1 mock_executor](#111-mock_executor)
+    - [11.2 表驱动](#112-表驱动)
+    - [11.3 故障覆盖矩阵](#113-故障覆盖矩阵)
+    - [11.4 真实环境冒烟](#114-真实环境冒烟)
 - [12. 命令行与使用场景](#12-命令行与使用场景)
-  - [12.1 命令结构](#121-命令结构)
-  - [12.2 全局参数](#122-全局参数)
-  - [12.3 使用场景](#123-使用场景)
+    - [12.1 命令结构](#121-命令结构)
+    - [12.2 全局参数](#122-全局参数)
+    - [12.3 使用场景](#123-使用场景)
 - [13. 与 SPEC 的对应](#13-与-spec-的对应)
 
 ---
@@ -520,10 +520,10 @@ parse → registry_find(uid)
 
 - **query（无 uid）**：`state_list` 遍历活跃记录，输出记录数组 JSON。不调用脚本/注入器。
 - **query（有 uid）**：验证故障是否真的生效。用户参数传入（与 inject 参数独立）。
-  - cnf 故障：`executor_run_raw_fault(f, "query", params)`，脚本 stdout 原样输出到终端。
-  - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
-  - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
-  - **query 不强制必填参数**：precheck 对 query 不做必填校验（与 inject/clean 不同）。无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤；query 参数声明在 `query_optional`。`query_required` 已弃用（解析兼容保留，留空）。
+    - cnf 故障：`executor_run_raw_fault(f, "query", params)`，脚本 stdout 原样输出到终端。
+    - 注入器故障：`inj->query(params)`，函数返回的 result_t 中携带证据文本。
+    - dcat 打印 `---` 分隔符后输出 JSON `{"confirmed":true/false}`。inject-only 故障在 precheck 拒绝（退出码 3）。
+    - **query 不强制必填参数**：precheck 对 query 不做必填校验（与 inject/clean 不同）。无参时脚本自行展示全部（如全部核/全部网卡），有参则按参过滤；query 参数声明在 `query_optional`。`query_required` 已弃用（解析兼容保留，留空）。
 - **list**：`registry_list()`，输出 cnf fault 目录文本表格（含 supported_ops / 6 个 per-op required/optional 字段 / desc）。注入器故障本期不纳入 list 输出。
 
 ---
@@ -796,8 +796,8 @@ if (strcmp(op, "inject") == 0) {
 ### 8.8 向后兼容（BREAKING）
 
 - **CPU `cores` 加法并集（PR#15）→ 默认拒绝**：有意 breaking（用户的动机场景）。
-  - `0,1` 已注入 → 再 `0,1`（同）：旧 idempotent-ok，现 **REJECT**。
-  - `0,1` 已注入 → `0-8`（重叠）：旧并集共存，现 **REJECT**。
+    - `0,1` 已注入 → 再 `0,1`（同）：旧 idempotent-ok，现 **REJECT**。
+    - `0,1` 已注入 → `0-8`（重叠）：旧并集共存，现 **REJECT**。
 - 网络 / 进程 / 存储：本就同资源不可并存（tc qdisc / ipset / 单 pid），只是把隐式打架显式化为 reject，基本非 breaking。
 - 迁移：重注入改加 `--force`；不同资源（不重叠核 / 不同 iface）仍并发 OK。
 

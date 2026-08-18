@@ -62,7 +62,7 @@ jobs:
           esac
 
       - name: Reject unauthorized
-        if: steps.auth.outputs.authorized != 'true'
+        if: steps.auth.conclusion == 'success' && steps.auth.outputs.authorized != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ github.event.issue.number }}
@@ -82,6 +82,10 @@ jobs:
           set -eu
           RUNS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             "https://api.github.com/repos/$REPO/actions/runs?head_sha=$PR_SHA&per_page=100")
+          echo "$RUNS" | jq -e '.workflow_runs | type == "array"' >/dev/null 2>&1 || {
+            echo "::error::API error fetching runs for $PR_SHA: $(echo "$RUNS" | jq -r '.message // "unknown"')"
+            exit 1
+          }
           CANDIDATES=$(echo "$RUNS" | jq -r --arg self "$SELF_RUN_ID" \
             '[.workflow_runs[]? | select(.status != "completed" and ((.id | tostring) != $self))] | .[].id' 2>/dev/null || true)
           if [ -z "$CANDIDATES" ]; then

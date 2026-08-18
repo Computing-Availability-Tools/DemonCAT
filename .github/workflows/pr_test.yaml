@@ -51,6 +51,7 @@ jobs:
     uses: ./.github/workflows/_unit_test.yaml
     with:
       runner: ${{ matrix.runner }}
+      mode: regular
 
   e2e-light:
     name: E2E smoke (${{ matrix.runner }})
@@ -116,6 +117,7 @@ jobs:
     with:
       runner: ubuntu-latest
       coverage: true
+      mode: full
 
   ci-gate:
     name: CI Gate

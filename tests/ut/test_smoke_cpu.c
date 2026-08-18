@@ -15,17 +15,17 @@
 #include <glob.h>
 #include <sched.h>
 
-#define CK(cond)                                  \
-    do {                                          \
-        if (!(cond)) {                            \
-            fprintf(stderr, "FAIL: %s\n", #cond); \
-            return 1;                             \
-        }                                         \
+static const char *g_smoke_name = "";
+
+#define CK(cond)                                                            \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            fprintf(stderr, "FAIL: %s\n", #cond);                           \
+            fprintf(stderr, "DCAT_SUBTEST|smoke|%s|FAIL|\n", g_smoke_name); \
+            return 1;                                                       \
+        }                                                                   \
     } while (0)
 
-/* 找到两个相邻、且当前进程 affinity 允许的核 (a, a+1)。
- * 共享容器里会用 taskset/cpuset 屏蔽某些核(例如此环境 0,2-639 不含核1),
- * 对这些核 taskset -c 会 EINVAL, 故不能硬编码 "0,1"。失败返回 -1。 */
 static int find_adjacent_cores(int *a) {
     cpu_set_t set;
     if (sched_getaffinity(0, sizeof set, &set) != 0) return -1;
@@ -39,9 +39,6 @@ static int find_adjacent_cores(int *a) {
     return -1;
 }
 
-/* Count alive rCPU_overload burn processes by scanning dcat pidfiles
- * (/tmp/dcat-rCPU_overload-c<core>.pid, one PID per file) + kill -0 probe.
- * Immune to stray perl from interrupted runs / serve / unrelated processes. */
 static int count_burn(void) {
     glob_t g;
     if (glob("/tmp/dcat-rCPU_overload-c*.pid", 0, NULL, &g) != 0) {
@@ -60,8 +57,6 @@ static int count_burn(void) {
     return count;
 }
 
-/* 轮询等待 burn 进程数 >= min，最多等 timeout_sec 秒。
- * 代替固定 sleep(1)：系统高负载时 perl 启动可能慢于 1 秒。 */
 static int wait_burn_min(int min, int timeout_sec) {
     for (int i = 0; i < timeout_sec * 10; i++) {
         if (count_burn() >= min) return 1;
@@ -70,7 +65,6 @@ static int wait_burn_min(int min, int timeout_sec) {
     return 0;
 }
 
-/* 轮询等待 burn 进程数 == 0，最多等 timeout_sec 秒。 */
 static int wait_burn_zero(int timeout_sec) {
     for (int i = 0; i < timeout_sec * 10; i++) {
         if (count_burn() == 0) return 1;
@@ -100,8 +94,8 @@ int main(void) {
 
     int base;
     if (find_adjacent_cores(&base) != 0) {
-        /* 连两个相邻可调度核都没有 → 环境无法支撑本测试, 明确报错 */
         fprintf(stderr, "FAIL: no two adjacent schedulable cores available\n");
+        fprintf(stderr, "DCAT_SUBTEST|smoke|rCPU_overload setup|FAIL|\n");
         return 1;
     }
     char cores2[16], cores_range[16], core1[16];
@@ -110,6 +104,7 @@ int main(void) {
     snprintf(core1, sizeof core1, "%d", base);
 
     /* ---- rCPU_overload (perl) ---- */
+    g_smoke_name = "rCPU_overload inject+clean";
     {
         params_t p;
         memset(&p, 0, sizeof p);
@@ -130,8 +125,10 @@ int main(void) {
 
         CK(wait_burn_zero(5));
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     /* ---- rCPU_overload re-inject: 默认拒绝 + --force 原子替换 ---- */
+    g_smoke_name = "rCPU_overload reinject reject+force";
     {
         params_t p;
         memset(&p, 0, sizeof p);
@@ -145,13 +142,11 @@ int main(void) {
 
         CK(wait_burn_min(2, 5));
 
-        /* 同规格重注入: 默认拒绝 (code 5), 旧进程仍在 */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 0);
         CK(r && r->code == 5);
         result_free(r);
         CK(wait_burn_min(2, 5));
 
-        /* --force 原子替换: 旧清掉再注入, 不应翻倍 (<4) */
         r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
         CK(r && r->code == 0);
         result_free(r);
@@ -164,8 +159,10 @@ int main(void) {
 
         CK(wait_burn_zero(5));
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     /* ---- rCPU_overload 重叠核集: 默认拒绝 + --force 替换 ---- */
+    g_smoke_name = "rCPU_overload overlap reject+force";
     {
         params_t p1;
         memset(&p1, 0, sizeof p1);
@@ -184,12 +181,10 @@ int main(void) {
 
         CK(wait_burn_min(2, 5));
 
-        /* 重叠核 base (含于 base-(base+1)): 默认拒绝 */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 0);
         CK(r && r->code == 5);
         result_free(r);
 
-        /* --force 替换: base-(base+1) 清掉, 注入 base (perl 数从 2 降为 1) */
         r = dispatch_route_force("rCPU_overload", "inject", &p2, 1);
         CK(r && r->code == 0);
         result_free(r);
@@ -202,8 +197,8 @@ int main(void) {
 
         CK(wait_burn_zero(5));
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     smoke_teardown();
-    printf("test_smoke_cpu: 3 faults passed\n");
     return 0;
 }

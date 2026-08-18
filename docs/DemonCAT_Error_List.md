@@ -1,6 +1,6 @@
 # DemonCAT 故障目录
 
-当前共 52 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / 文件系统 / 系统八个模块。
+当前共 57 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统九个模块。
 
 ## CPU 模块（5 条）
 
@@ -12,7 +12,7 @@
 | `rCPU_freq` | cores,freq_mhz | — | CPU frequency limit (cpufreq scaling) |
 | `rCPU_quota` | cores,quota_pct | — | CPU core max utilization via cgroup |
 
-## 存储模块（4 条）
+## 存储模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |
@@ -20,8 +20,9 @@
 | `rDISK_part_full` | path | size | Partition fill (dd file creation) |
 | `rDISK_inode_exhaust` | path | count | Inode exhaustion (small file creation) |
 | `rDISK_io_delay` | device,delay_ms | — | Disk IO delay (device-mapper delay) |
+| `rDISK_io_error` | device | — | Disk IO error (device-mapper error) |
 
-## 网络模块（12 条）
+## 网络模块（13 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |
@@ -36,6 +37,7 @@
 | `rNET_bw_limit` | iface,rate_kbps | — | Bandwidth limit (tc tbf) |
 | `rNET_jitter` | iface,delay_ms,jitter_ms | — | Delay + jitter (tc netem) |
 | `rNET_tcp_loss` | port | direction | TCP packet loss (iptables DROP) |
+| `rNET_conn_exhaust` | target | count | Connection exhaustion (socket flood) |
 | `rNET_corrupt` | iface,corrupt_pct | — | Packet corruption (tc netem) |
 
 ## 进程模块（5 条）
@@ -57,11 +59,19 @@
 | `rMEM_fragment` | blocks | — | Memory fragmentation (scatter allocation) |
 | `rMEM_swap_overload` | size_mb | — | Swap overload (force swapping) |
 
-## 文件系统模块（1 条）
+## 文件系统模块（2 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |
 | `rFS_file_lock` | path,mode | — | File lock (chmod+chattr+mount --bind: noread/nowrite/norw/nodelete) |
+| `rFS_iowait_high` | path | workers | High iowait (parallel dd readers) |
+
+## Docker 模块（2 条）
+
+| UID | 必填参数 | 可选参数 | 说明 |
+| --- | --- | --- | --- |
+| `rDOCKER_kill` | container | — | Docker container kill |
+| `rDOCKER_mem_overload` | container | size | Docker container memory overload (stress) |
 
 ## NPU 模块（19 条）
 

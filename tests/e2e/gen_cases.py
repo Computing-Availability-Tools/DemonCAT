@@ -2,7 +2,7 @@
 """tests/e2e/gen_cases.py — dcat e2e 测试用例自动生成器
 
 8 类分类（混沌工程 + 测试矩阵）：
-  FUNC  : 功能基线 — 52 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
+  FUNC  : 功能基线 — 57 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
   BOUND : 边界值 — 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法）
   SEC   : 安全 — 命令注入(inject+clean+query) + 权限边界 + 主机安全(路径穿越/symlink)
   STATE : 状态一致性 — clean×2/--force/reinject 拒绝/query 幂等/并发 inject
@@ -197,10 +197,18 @@ OBS = {
         provision="loop_device", precondition="root+dm_delay",
         v_cmd="ls /tmp/dcat-rDISK_io_delay-*.sidecar 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rDISK_io_delay-*.sidecar 2>/dev/null | wc -l", c_assert="==0"),
+    "rDISK_io_error": dict(module="storage", inject_args="--device={loop_dev}", clean_args="",
+        provision="loop_device", precondition="root+dm_delay",
+        v_cmd="ls /tmp/dcat-rDISK_io_error-*.sidecar 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDISK_io_error-*.sidecar 2>/dev/null | wc -l", c_assert="==0"),
     "rNET_corrupt": dict(module="network", inject_args="--iface={iface} --corrupt_pct=10", clean_args="",
         provision="dummy_iface", precondition="root+tc+dummy_iface",
         v_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", v_assert=">=1",
         c_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", c_assert="==0"),
+    "rNET_conn_exhaust": dict(module="network", inject_args="--target=127.0.0.1:{port} --count=20", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rNET_conn_exhaust-*.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rNET_conn_exhaust-*.pid 2>/dev/null | wc -l", c_assert="==0"),
     "rPROC_fork_bomb": dict(module="process", inject_args="--count=20", clean_args="",
         provision="none", precondition="none",
         v_cmd="ls /tmp/dcat-rPROC_fork_bomb.pid 2>/dev/null | wc -l", v_assert=">=1",
@@ -214,6 +222,18 @@ OBS = {
         setup_cmd="echo test > /tmp/dcat_fslock_test",
         v_cmd="stat -c %a /tmp/dcat_fslock_test 2>/dev/null", v_assert="eq:444",
         c_cmd="stat -c %a /tmp/dcat_fslock_test 2>/dev/null", c_assert="ne:444"),
+    "rFS_iowait_high": dict(module="filesystem", inject_args="--path=/tmp --workers=1", clean_args="",
+        provision="none", precondition="none",
+        v_cmd="ls /tmp/dcat-rFS_iowait_high-*.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rFS_iowait_high-*.pid 2>/dev/null | wc -l", c_assert="==0"),
+    "rDOCKER_kill": dict(module="docker", inject_args="--container={ctr}", clean_args="",
+        provision="docker_container", precondition="docker",
+        v_cmd="docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null", v_assert="eq:exited",
+        c_cmd="docker inspect -f '{{.State.Status}}' {ctr} 2>/dev/null", c_assert="eq:running"),
+    "rDOCKER_mem_overload": dict(module="docker", inject_args="--container={ctr} --size=128M", clean_args="",
+        provision="docker_container", precondition="docker",
+        v_cmd="ls /tmp/dcat-rDOCKER_mem_overload-*.pid 2>/dev/null | wc -l", v_assert=">=1",
+        c_cmd="ls /tmp/dcat-rDOCKER_mem_overload-*.pid 2>/dev/null | wc -l", c_assert="==0"),
     "rNPU_pcie_down": dict(module="npu", inject_args="--npu_id={e2e_npu_id} --gen=1", clean_args="--npu_id={e2e_npu_id}",
         provision="none", precondition="hccn_tool",
         v_cmd="ls /tmp/dcat-rNPU_pcie_down-{e2e_npu_id}.bak 2>/dev/null | wc -l", v_assert=">=1",
@@ -264,7 +284,7 @@ def gen():
     # ================================================================
     # FUNC: 功能基线 (inject→verify→clean→query + query<uid> + plugin)
     # Dangerous faults are skipped (require cold boot to recover)
-    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_chip_reset", "rNPU_link_down", "rSYS_panic", "rSYS_poweroff"}
+    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_chip_reset", "rNPU_link_down", "rDOCKER_kill", "rDOCKER_mem_overload", "rSYS_panic", "rSYS_poweroff"}
     # ================================================================
     for uid in sorted(OBS):
         o = OBS[uid]
@@ -461,6 +481,14 @@ def gen():
     # path (directory, rDISK_part_full)
     b_reject("rDISK_part_full", "--path=/nonexistent_dir_xyz", 1, '', "path: not a directory")
     b_reject("rDISK_part_full", "--path=", 3, 'missing required parameter', "path: empty")
+    # device (block device, rDISK_io_error)
+    b_reject("rDISK_io_error", "--device=/tmp/not_a_block_dev", 1, '', "device: not a block device")
+    # target (host:port format, rNET_conn_exhaust)
+    b_reject("rNET_conn_exhaust", "--target=", 3, 'missing required parameter', "target: empty")
+    b_reject("rNET_conn_exhaust", "--target=noport", 1, '', "target: no port separator")
+    # container (string, must exist, rDOCKER_kill)
+    b_reject("rDOCKER_kill", "--container=", 3, 'missing required parameter', "container: empty")
+    b_reject("rDOCKER_kill", "--container=nonexistent_ctr_xyz", 1, '', "container: not found")
 
     # ---- NPU 新故障 BOUND ----
     # chip (NPU aic/aiv/hbm)

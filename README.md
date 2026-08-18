@@ -131,7 +131,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 | [SPEC.md](SPEC.md) | 功能规格说明书 |
 | [User_Manual.md](User_Manual.md) | 使用手册 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 架构设计 |
-| [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md) | 故障目录（52 条） |
+| [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md) | 故障目录（57 条） |
 | [docs/Test_Report.md](docs/Test_Report.md) | 测试报告 |
 | [docs/Dynamic_Plugin_Implement.md](docs/Dynamic_Plugin_Implement.md) | 动态插件开发指南 |
 | [docs/Manual_Test_Reference.md](docs/Manual_Test_Reference.md) | 手动测试参考 |

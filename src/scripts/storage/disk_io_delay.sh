@@ -42,6 +42,7 @@ case "${DCAT_OP:-inject}" in
             fi
         else
             cleaned=0
+            failed=0
             for sc in ${SIDECAR_PFX}-*.sidecar; do
                 [ -f "$sc" ] || continue
                 dm=$(cat "$sc")
@@ -50,9 +51,12 @@ case "${DCAT_OP:-inject}" in
                     cleaned=1
                 else
                     echo "cleanup failed: dmsetup remove $dm (keeping $sc)" >&2
+                    failed=1
                 fi
             done
-            if [ "$cleaned" = 1 ]; then
+            if [ "$failed" = 1 ]; then
+                echo "io_delay: some cleanups failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
                 echo "cleaned all io_delay"
             else
                 echo "no active io_delay" >&2; exit 0

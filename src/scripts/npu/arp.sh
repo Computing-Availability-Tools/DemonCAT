@@ -36,7 +36,7 @@ case "${DCAT_OP:-inject}" in
                 ;;
             del)
                 orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'at [0-9a-f:]+' | awk '{print $2}')
-                printf '%s\n' "${orig_mac:-}" > "$SIDECAR"
+                printf 'dev=%s\nip=%s\nmac=%s\n' "$dev" "$ip" "${orig_mac:-}" > "$SIDECAR"
                 $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
                 fault_present || { echo "rNPU_arp 注入回读校验失败:动作未生效" >&2; exit 1; }
                 echo "deleted arp $dev/$ip on chip $chip (was mac ${orig_mac:-none})"
@@ -47,14 +47,28 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for bak in /tmp/dcat-rNPU_arp-*.bak; do
                 [ -f "$bak" ] || continue
                 c=${bak##*/dcat-rNPU_arp-}; c=${c%.bak}
-                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                    cleaned=1
+                else
+                    echo "restore failed for chip $c" >&2
+                    failed=1
+                fi
             done
-            [ "$cleaned" = 1 ] && echo "restored arp (all chips)" || echo "restored arp (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "arp: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored arp (all chips)"
+            else
+                echo "restored arp (no active injection)"
+            fi
         elif is_del_action; then
-            orig_mac=$(cat "$SIDECAR" 2>/dev/null); orig_mac=${orig_mac:-00:00:00:00:00:00}
+            dev=$(grep '^dev=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
+            ip=$(grep '^ip=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
+            orig_mac=$(grep '^mac=' "$SIDECAR" 2>/dev/null | cut -d= -f2-); orig_mac=${orig_mac:-00:00:00:00:00:00}
             $HCCN -arp -a dev "$dev" ip "$ip" mac "$orig_mac" || { echo "arp re-add failed" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "restored arp $dev/$ip -> $orig_mac on chip $chip"

@@ -30,6 +30,7 @@ case "${DCAT_OP:-inject}" in
             fi
         else
             found=0
+            failed=0
             for sf in ${SIDECAR_PFX}-*.sidecar; do
                 [ -f "$sf" ] || continue
                 c=$(cat "$sf")
@@ -38,9 +39,16 @@ case "${DCAT_OP:-inject}" in
                     found=1
                 else
                     echo "cleanup failed: docker start $c (keeping $sf)" >&2
+                    failed=1
                 fi
             done
-            [ "$found" = 1 ] && echo "cleaned all docker_kill" || { echo "no active docker_kill" >&2; exit 0; }
+            if [ "$failed" = 1 ]; then
+                echo "docker_kill: some cleanups failed (state preserved)" >&2; exit 1
+            elif [ "$found" = 1 ]; then
+                echo "cleaned all docker_kill"
+            else
+                echo "no active docker_kill" >&2; exit 0
+            fi
         fi
         ;;
     query)

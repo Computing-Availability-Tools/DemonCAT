@@ -42,7 +42,7 @@ case "${DCAT_OP:-inject}" in
                 cur=$($HCCN -ip_route -g table "$table" 2>/dev/null | grep "$ip")
                 o_via=$(echo "$cur" | grep -oE 'via [0-9.]+' | awk '{print $2}')
                 o_dev=$(echo "$cur" | grep -oE 'dev [a-z0-9]+' | awk '{print $2}')
-                printf 'via=%s\ndev=%s\n' "${o_via:-}" "${o_dev:-}" > "$SIDECAR"
+                printf 'ip=%s\nmask=%s\ntable=%s\nvia=%s\ndev=%s\n' "$ip" "$mask" "$table" "${o_via:-}" "${o_dev:-}" > "$SIDECAR"
                 $HCCN -ip_route -d ip "$ip" ip_mask "$mask" table "$table" || { echo "ip_route del failed" >&2; exit 1; }
                 fault_present || { echo "rNPU_iproute 注入回读校验失败:动作未生效" >&2; exit 1; }
                 echo "deleted ip_route $ip/$mask table $table on chip $chip (was via ${o_via:-none} dev ${o_dev:-none})"
@@ -53,15 +53,30 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for bak in /tmp/dcat-rNPU_iproute-*.bak; do
                 [ -f "$bak" ] || continue
                 c=${bak##*/dcat-rNPU_iproute-}; c=${c%.bak}
-                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                    cleaned=1
+                else
+                    echo "restore failed for chip $c" >&2
+                    failed=1
+                fi
             done
-            [ "$cleaned" = 1 ] && echo "restored ip_route (all chips)" || echo "restored ip_route (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "ip_route: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored ip_route (all chips)"
+            else
+                echo "restored ip_route (no active injection)"
+            fi
         elif is_del_action; then
-            via=$(grep '^via=' "$SIDECAR" 2>/dev/null | cut -d= -f2)
-            dev=$(grep '^dev=' "$SIDECAR" 2>/dev/null | cut -d= -f2)
+            ip=$(grep '^ip=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
+            mask=$(grep '^mask=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
+            table=$(grep '^table=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
+            via=$(grep '^via=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
+            dev=$(grep '^dev=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
             : ${via:=0.0.0.0}; : ${dev:=eth0}
             $HCCN -ip_route -a ip "$ip" ip_mask "$mask" via "$via" dev "$dev" table "$table" || { echo "ip_route re-add failed" >&2; exit 1; }
             rm -f "$SIDECAR"

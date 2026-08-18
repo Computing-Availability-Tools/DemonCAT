@@ -80,12 +80,14 @@ case "${DCAT_OP:-inject}" in
             fi
         else
             cleaned=0
+            failed=0
             for sc in ${SIDECAR_PFX}-*.sidecar; do
                 [ -f "$sc" ] || continue
                 { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$sc"
                 if [ "$mounted" = 1 ]; then
                     if ! umount "$path" 2>/dev/null; then
                         echo "cleanup failed: umount $path (keeping $sc)" >&2
+                        failed=1
                         continue
                     fi
                 fi
@@ -96,7 +98,9 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$sc"
                 cleaned=1
             done
-            if [ "$cleaned" = 1 ]; then
+            if [ "$failed" = 1 ]; then
+                echo "file_lock: some cleanups failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
                 echo "cleaned all file_lock"
             else
                 echo "no active file_lock" >&2; exit 0

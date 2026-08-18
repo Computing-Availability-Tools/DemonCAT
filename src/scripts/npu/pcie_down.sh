@@ -108,7 +108,7 @@ case "${DCAT_OP:-inject}" in
         esac
         ;;
     clean)
-        [ -f "$SIDECAR" ] || { echo "no pcie_down state for npu_id $npu_id" >&2; exit 1; }
+        [ -f "$SIDECAR" ] || { echo "no pcie_down state for npu_id $npu_id" >&2; exit 0; }
         state=$(cat "$SIDECAR")
         npu_bdf=${state%%|*}; rest=${state#*|}
         parent_bdf=${rest%%|*}; rest=${rest#*|}

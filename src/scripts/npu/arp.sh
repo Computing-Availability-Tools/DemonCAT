@@ -1,81 +1,55 @@
 #!/bin/sh
-# rNPU_arp: ARP entry manipulation (add=poison, del=delete). Clean auto-undoes.
+# rNPU_arp: ARP entry poisoning (inject=add, clean=del).
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
-action=${DCAT_PARAM_ACTION:-}
 dev=${DCAT_PARAM_DEV:-}
 ip=${DCAT_PARAM_IP:-}
 mac=${DCAT_PARAM_MAC:-}
 HCCN="hccn_tool -i $chip"
 SIDECAR="/tmp/dcat-rNPU_arp-$chip.bak"
 
-is_del_action() { [ -f "$SIDECAR" ]; }
-
 fault_present() {
-    if is_del_action; then
-        ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip"
-    else
-        $HCCN -arp -g 2>/dev/null | grep -F "$ip" | grep -Fq "$mac"
-    fi
+    case "${DCAT_OP:-inject}" in
+        clean) ! $HCCN -arp -g 2>/dev/null | grep -Fq "$ip" ;;
+        *)     $HCCN -arp -g 2>/dev/null | grep -F "$ip" | grep -Fq "$mac" ;;
+    esac
 }
 
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
-        : ${action:?missing required param: action (add or del)}
         : ${dev:?missing required param: dev}
         : ${ip:?missing required param: ip}
+        : ${mac:?missing required param: mac}
         npu_check_env
-        case "$action" in
-            add)
-                : ${mac:?missing required param: mac (required for action=add)}
-                $HCCN -arp -a dev "$dev" ip "$ip" mac "$mac" || { echo "arp add failed" >&2; exit 1; }
-                fault_present || { echo "rNPU_arp 注入回读校验失败:动作未生效" >&2; exit 1; }
-                echo "poisoned arp $dev/$ip -> $mac on chip $chip"
-                ;;
-            del)
-                orig_mac=$($HCCN -arp -g 2>/dev/null | grep "$ip" | grep -oE 'at [0-9a-f:]+' | awk '{print $2}')
-                printf 'dev=%s\nip=%s\nmac=%s\n' "$dev" "$ip" "${orig_mac:-}" > "$SIDECAR"
-                $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
-                fault_present || { echo "rNPU_arp 注入回读校验失败:动作未生效" >&2; exit 1; }
-                echo "deleted arp $dev/$ip on chip $chip (was mac ${orig_mac:-none})"
-                ;;
-            *) echo "invalid action: $action (expected add or del)" >&2; exit 1 ;;
-        esac
+        $HCCN -arp -a dev "$dev" ip "$ip" mac "$mac" || { echo "arp add failed" >&2; exit 1; }
+        printf 'dev=%s\nip=%s\n' "$dev" "$ip" > "$SIDECAR"
+        fault_present || { echo "rNPU_arp 注入回读校验失败:动作未生效" >&2; exit 1; }
+        echo "poisoned arp $dev/$ip -> $mac on chip $chip"
         ;;
     clean)
         if [ -z "$chip" ]; then
-            cleaned=0
-            failed=0
+            cleaned=0; failed=0
             for bak in /tmp/dcat-rNPU_arp-*.bak; do
                 [ -f "$bak" ] || continue
+                cleaned=1
                 c=${bak##*/dcat-rNPU_arp-}; c=${c%.bak}
-                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
-                    cleaned=1
-                else
-                    echo "restore failed for chip $c" >&2
-                    failed=1
-                fi
+                d=$(grep '^dev=' "$bak" 2>/dev/null | cut -d= -f2-)
+                i=$(grep '^ip=' "$bak" 2>/dev/null | cut -d= -f2-)
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" DCAT_PARAM_DEV="$d" DCAT_PARAM_IP="$i" "$0" >/dev/null 2>&1; then :
+                else echo "clean failed for chip $c" >&2; failed=1; fi
             done
-            if [ "$failed" = 1 ]; then
-                echo "arp: some restores failed (state preserved)" >&2; exit 1
-            elif [ "$cleaned" = 1 ]; then
-                echo "restored arp (all chips)"
-            else
-                echo "restored arp (no active injection)"
-            fi
-        elif is_del_action; then
-            dev=$(grep '^dev=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
-            ip=$(grep '^ip=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
-            orig_mac=$(grep '^mac=' "$SIDECAR" 2>/dev/null | cut -d= -f2-); orig_mac=${orig_mac:-00:00:00:00:00:00}
-            $HCCN -arp -a dev "$dev" ip "$ip" mac "$orig_mac" || { echo "arp re-add failed" >&2; exit 1; }
-            rm -f "$SIDECAR"
-            echo "restored arp $dev/$ip -> $orig_mac on chip $chip"
-        elif fault_present; then
+            [ "$failed" = 1 ] && { echo "arp: some cleans failed (state preserved)" >&2; exit 1; }
+            [ "$cleaned" = 1 ] && echo "cleaned arp (all chips)" || echo "cleaned arp (no active injection)"
+        else
+            : ${dev:?missing required param: dev}
+            : ${ip:?missing required param: ip}
             $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
-            echo "removed poisoned arp $dev/$ip on chip $chip"
-        else echo "arp entry not present, no-op"; fi
+            fault_present || { echo "rNPU_arp 清除回读校验失败:动作未生效" >&2; exit 1; }
+            rm -f "$SIDECAR"
+            echo "removed arp $dev/$ip on chip $chip"
+        fi
         ;;
     query) npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

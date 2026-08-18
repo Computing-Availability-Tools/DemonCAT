@@ -1,81 +1,55 @@
 #!/bin/sh
-# rNPU_iprule: ip rule manipulation (add/delete). Clean auto-undoes.
+# rNPU_iprule: ip rule poisoning (inject=add, clean=del).
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
-action=${DCAT_PARAM_ACTION:-}
 dir=${DCAT_PARAM_DIR:-}
 ip=${DCAT_PARAM_IP:-}
 table=${DCAT_PARAM_TABLE:-}
 HCCN="hccn_tool -i $chip"
 SIDECAR="/tmp/dcat-rNPU_iprule-$chip.bak"
 
-is_del_action() { [ -f "$SIDECAR" ]; }
-
 fault_present() {
-    if is_del_action; then
-        ! $HCCN -ip_rule -g 2>/dev/null | grep -Fq "$ip"
-    else
-        $HCCN -ip_rule -g 2>/dev/null | grep -F "$ip" | grep -Fq "$table"
-    fi
+    case "${DCAT_OP:-inject}" in
+        clean) ! $HCCN -ip_rule -g 2>/dev/null | grep -Fq "$ip" ;;
+        *)     $HCCN -ip_rule -g 2>/dev/null | grep -F "$ip" | grep -Fq "$table" ;;
+    esac
 }
 
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
-        : ${action:?missing required param: action (add or del)}
         : ${dir:?missing required param: dir}
         : ${ip:?missing required param: ip}
+        : ${table:?missing required param: table}
         npu_check_env
-        case "$action" in
-            add)
-                : ${table:?missing required param: table (required for action=add)}
-                $HCCN -ip_rule -a dir "$dir" ip "$ip" table "$table" || { echo "ip_rule add failed" >&2; exit 1; }
-                fault_present || { echo "rNPU_iprule 注入回读校验失败:动作未生效" >&2; exit 1; }
-                echo "added ip_rule $dir $ip -> table $table on chip $chip"
-                ;;
-            del)
-                orig_table=$($HCCN -ip_rule -g 2>/dev/null | grep "$ip" | grep -oE 'lookup [0-9]+' | awk '{print $2}')
-                printf 'dir=%s\nip=%s\ntable=%s\n' "$dir" "$ip" "${orig_table:-}" > "$SIDECAR"
-                $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
-                fault_present || { echo "rNPU_iprule 注入回读校验失败:动作未生效" >&2; exit 1; }
-                echo "deleted ip_rule $dir $ip on chip $chip (was table ${orig_table:-none})"
-                ;;
-            *) echo "invalid action: $action (expected add or del)" >&2; exit 1 ;;
-        esac
+        $HCCN -ip_rule -a dir "$dir" ip "$ip" table "$table" || { echo "ip_rule add failed" >&2; exit 1; }
+        printf 'dir=%s\nip=%s\n' "$dir" "$ip" > "$SIDECAR"
+        fault_present || { echo "rNPU_iprule 注入回读校验失败:动作未生效" >&2; exit 1; }
+        echo "added ip_rule $dir $ip -> table $table on chip $chip"
         ;;
     clean)
         if [ -z "$chip" ]; then
-            cleaned=0
-            failed=0
+            cleaned=0; failed=0
             for bak in /tmp/dcat-rNPU_iprule-*.bak; do
                 [ -f "$bak" ] || continue
+                cleaned=1
                 c=${bak##*/dcat-rNPU_iprule-}; c=${c%.bak}
-                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
-                    cleaned=1
-                else
-                    echo "restore failed for chip $c" >&2
-                    failed=1
-                fi
+                d=$(grep '^dir=' "$bak" 2>/dev/null | cut -d= -f2-)
+                i=$(grep '^ip=' "$bak" 2>/dev/null | cut -d= -f2-)
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" DCAT_PARAM_DIR="$d" DCAT_PARAM_IP="$i" "$0" >/dev/null 2>&1; then :
+                else echo "clean failed for chip $c" >&2; failed=1; fi
             done
-            if [ "$failed" = 1 ]; then
-                echo "ip_rule: some restores failed (state preserved)" >&2; exit 1
-            elif [ "$cleaned" = 1 ]; then
-                echo "restored ip_rule (all chips)"
-            else
-                echo "restored ip_rule (no active injection)"
-            fi
-        elif is_del_action; then
-            dir=$(grep '^dir=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
-            ip=$(grep '^ip=' "$SIDECAR" 2>/dev/null | cut -d= -f2-)
-            orig_table=$(grep '^table=' "$SIDECAR" 2>/dev/null | cut -d= -f2-); orig_table=${orig_table:-0}
-            $HCCN -ip_rule -a dir "$dir" ip "$ip" table "$orig_table" || { echo "ip_rule re-add failed" >&2; exit 1; }
-            rm -f "$SIDECAR"
-            echo "restored ip_rule $dir $ip -> table $orig_table on chip $chip"
-        elif fault_present; then
+            [ "$failed" = 1 ] && { echo "ip_rule: some cleans failed (state preserved)" >&2; exit 1; }
+            [ "$cleaned" = 1 ] && echo "cleaned ip_rule (all chips)" || echo "cleaned ip_rule (no active injection)"
+        else
+            : ${dir:?missing required param: dir}
+            : ${ip:?missing required param: ip}
             $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
+            fault_present || { echo "rNPU_iprule 清除回读校验失败:动作未生效" >&2; exit 1; }
+            rm -f "$SIDECAR"
             echo "removed ip_rule $dir $ip on chip $chip"
-        else echo "ip_rule not present, no-op"; fi
+        fi
         ;;
     query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
 esac

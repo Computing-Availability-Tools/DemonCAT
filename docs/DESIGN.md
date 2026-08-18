@@ -455,7 +455,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 
 | clean 策略 | 适用 UID | 机制 |
 | --- | --- | --- |
-| 反向操作 | arp, route, iprule, iproute | action=del 反向操作（add 加的 / del 删的） |
+| 反向操作 | arp, route, iprule, iproute | inject=add / clean=del 简化设计（inject 只 add, clean 只 del） |
 | sidecar 回放 | ip_change, gw_change, netdetect_change, mtu, dscp_tc, roce_port | inject 前 -g 存原值；clean 回放 |
 | 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
 | -cfg recovery | link_down | hccn_tool 内置恢复 |
@@ -909,10 +909,10 @@ DemonCAT/
 │   │       ├── ip_change.sh
 │   │       ├── gw_change.sh
 │   │       ├── netdetect_change.sh
-│   │       ├── arp.sh            # ARP（action=add/del）
-│   │       ├── route.sh          # 路由（action=add/del）
-│   │       ├── iprule.sh         # 策略路由（action=add/del）
-│   │       ├── iproute.sh       # IP 路由（action=add/del）
+│   │       ├── arp.sh            # ARP（inject=add / clean=del）
+│   │       ├── route.sh          # 路由（inject=add / clean=del）
+│   │       ├── iprule.sh         # 策略路由（inject=add / clean=del）
+│   │       ├── iproute.sh       # IP 路由（inject=add / clean=del）
 │   │       ├── bw_limit.sh
 │   │       ├── mtu_mismatch.sh
 │   │       ├── dscp_tc_change.sh

@@ -114,7 +114,7 @@
 | test_faults_cpu_storage | 3 | CPU(2) + 存储(1) | PASS | 0.01s |
 | test_faults_network | 11 | 网络(11) | PASS | 0.03s |
 | test_faults_process | 3 | 进程(3) | PASS | 0.01s |
-| test_faults_npu | 16 | NPU(12 故障, 16 用例含 action=add/del) | PASS | 0.04s |
+| test_faults_npu | 12 | NPU(12 故障, 12 用例) | PASS | 0.04s |
 | test_faults_batch2_ext | 16 | CPU(3) + 存储(4) + 网络(2) + 进程(3) + NPU(4) | PASS | 0.01s |
 | test_faults_batch2_newmods | 10 | 内存(4) + 文件系统(2) + Docker(2) + 系统(2) | PASS | 0.01s |
 
@@ -196,10 +196,10 @@
 | rNPU_ip_change | chip=2,address=10.20.10.100,netmask=255.255.255.0 | ✅ | IP=.100 | ✅ confirmed:true | ✅ | IP=.1 | **PASS**‡ |
 | rNPU_gw_change | chip=2,gateway=10.20.10.254 | ✅ | GW=.254 | — | ✅ | GW=.1 | **PASS** |
 | rNPU_netdetect_change | chip=2,address=10.20.10.254 | ✅ | netdetect=.254 | — | ✅ | 0.0.0.0 | **PASS** |
-| rNPU_arp | chip=2,action=add/del,dev=eth0,ip=10.20.10.200[,mac=de:ad:be:ef:00:01] | ✅ | add→表项存在, del→表项删除 | — | ✅ | 表项消失/恢复 | **PASS** |
-| rNPU_route | chip=2,action=add/del,address=10.30.0.0,netmask=...[,gateway=10.20.10.1] | ✅ | add→路由存在, del→路由删除 | — | ✅ | 路由消失/恢复 | **PASS** |
-| rNPU_iprule | chip=2,action=add/del,dir=from,ip=10.20.10.0[,table=100] | ✅ | add→规则存在, del→规则删除 | — | ✅ | 规则消失/恢复 | **PASS** |
-| rNPU_iproute | chip=2,action=add/del,ip=10.40.0.0,ip_mask=24[,via=10.20.10.1,dev=eth0,table=0] | ✅ | add→路由存在, del→路由删除 | — | ✅ | 路由消失/恢复 | **PASS** |
+| rNPU_arp | chip=2,dev=eth0,ip=10.20.10.200,mac=de:ad:be:ef:00:01 | ✅ | inject→表项存在, clean→表项删除 | — | ✅ | 表项消失/恢复 | **PASS** |
+| rNPU_route | chip=2,address=10.30.0.0,netmask=...,gateway=10.20.10.1 | ✅ | inject→路由存在, clean→路由删除 | — | ✅ | 路由消失/恢复 | **PASS** |
+| rNPU_iprule | chip=2,dir=from,ip=10.20.10.0,table=100 | ✅ | inject→规则存在, clean→规则删除 | — | ✅ | 规则消失/恢复 | **PASS** |
+| rNPU_iproute | chip=2,ip=10.40.0.0,ip_mask=24,via=10.20.10.1,dev=eth0,table=0 | ✅ | inject→路由存在, clean→路由删除 | — | ✅ | 路由消失/恢复 | **PASS** |
 | rNPU_bw_limit | chip=2,bw_limit=50000 | ✅ | bw=50000 | — | ✅ | bw=200000 | **PASS** |
 | rNPU_mtu_mismatch | chip=2,size=1500 | ✅ | mtu=1500 | — | ✅ | mtu=8192 | **PASS** |
 | rNPU_dscp_tc_change | chip=2,dscp=10,tc=2 | ✅ | tc=2 | — | ✅ | tc=0 | **PASS** |
@@ -321,7 +321,7 @@
 
 | 限制 | 故障 | 原因 | 影响范围 | 兜底恢复 |
 | ------ | ------ | ------ | --------- | --------- |
-| rNPU_route setup 偶发 | rNPU_route (action=add) | 前序 link_down 测试残留 link DOWN，setup_cmd 的 route add 失败 | 910B4 无交换机环境 | `hccn_tool -link -s up` |
+| rNPU_route setup 偶发 | rNPU_route inject | 前序 link_down 测试残留 link DOWN，setup_cmd 的 route add 失败 | 910B4 无交换机环境 | `hccn_tool -link -s up` |
 
 > **NPU 兜底恢复**: 所有 NPU 故障可通过 `npu-smi set -t reset -i <id>` 复位芯片恢复原始状态。本次测试全程未需使用。
 
@@ -449,7 +449,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 
 | ID | 故障 | 原因 |
 | --- | --- | --- |
-| E2E-081 | rNPU_iprule clean (action=add) | 910B4 `hccn_tool -ip_rule` 驱动限制，clean 后规则仍存在 |
+| E2E-081 | rNPU_iprule clean | 910B4 `hccn_tool -ip_rule` 驱动限制，clean 后规则仍存在 |
 | E2E-088 | rNPU_link_down clean | 910B4 无交换机 link 始终 DOWN（910C 已验证通过） |
 | E2E-272 | STATE-7 rNPU_mtu_mismatch inject | 910B4 `hccn_tool -mtu` 注入回读校验失败（驱动限制） |
 

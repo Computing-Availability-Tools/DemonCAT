@@ -81,10 +81,10 @@
 | `rNPU_ip_change` | chip,address,netmask | — | RoCE IP change |
 | `rNPU_gw_change` | chip,gateway | — | RoCE gateway change |
 | `rNPU_netdetect_change` | chip,address | — | Netdetect IP change |
-| `rNPU_arp` | chip,action,dev,ip | mac | ARP manipulation (action=add poison / action=del delete) |
-| `rNPU_route` | chip,action,address,netmask | gateway | RoCE route manipulation (action=add / action=del) |
-| `rNPU_iprule` | chip,action,dir,ip | table | ip rule manipulation (action=add / action=del) |
-| `rNPU_iproute` | chip,action,ip,ip_mask,table | via,dev | ip route manipulation (action=add / action=del) |
+| `rNPU_arp` | chip,dev,ip,mac | — | ARP poison (inject adds fake ARP entry, clean deletes it) |
+| `rNPU_route` | chip,address,netmask,gateway | — | RoCE route (inject adds route, clean deletes it) |
+| `rNPU_iprule` | chip,dir,ip,table | — | ip rule (inject adds rule, clean deletes it) |
+| `rNPU_iproute` | chip,ip,ip_mask,table,via,dev | — | ip route (inject adds route, clean deletes it) |
 | `rNPU_bw_limit` | chip,bw_limit | — | RoCE bandwidth shaping limit |
 | `rNPU_mtu_mismatch` | chip,size | — | RoCE MTU mismatch |
 | `rNPU_dscp_tc_change` | chip,dscp,tc | — | DSCP-to-TC mapping change |

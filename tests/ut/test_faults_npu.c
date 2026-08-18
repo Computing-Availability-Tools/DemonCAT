@@ -1,4 +1,4 @@
-/* tests/ut/test_faults_npu.c — Tier 1: mock table-driven tests for NPU (16) */
+/* tests/ut/test_faults_npu.c — Tier 1: mock table-driven tests for NPU (24) */
 #include "test_faults_common.h"
 
 int main(void) {
@@ -67,75 +67,39 @@ int main(void) {
         CK(r && r->code == 0);
         result_free(r);
     }
-    /* rNPU_arp (add) */
-    SUBTEST("rNPU_arp inject (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "dev", "eth0", "ip", "192.168.1.50",
-                              "mac", "aa:bb:cc:dd:ee:ff", NULL, NULL);
+    /* rNPU_arp */
+    SUBTEST("rNPU_arp inject") {
+        params_t p = mkparams("chip", "0", "dev", "eth0", "ip", "192.168.1.50", "mac", "aa:bb:cc:dd:ee:ff", NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_arp", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("arp.sh");
         CK(check_param_env("mac", "aa:bb:cc:dd:ee:ff") == 0);
         result_free(r);
     }
-    SUBTEST("rNPU_arp clean (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "dev", "eth0", "ip", "192.168.1.50",
-                              "mac", "aa:bb:cc:dd:ee:ff", NULL, NULL);
+    SUBTEST("rNPU_arp clean") {
+        params_t p = mkparams("chip", "0", "dev", "eth0", "ip", "192.168.1.50", NULL, NULL, NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_arp", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
     }
-    /* rNPU_arp (del) */
-    SUBTEST("rNPU_arp inject (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "dev", "eth0", "ip", "192.168.1.50",
-                              NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNPU_arp", "inject", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("arp.sh");
-        result_free(r);
-    }
-    SUBTEST("rNPU_arp clean (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "dev", "eth0", "ip", "192.168.1.50",
-                              NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNPU_arp", "clean", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-    }
-    /* rNPU_route (add) */
-    SUBTEST("rNPU_route inject (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "address", "10.0.0.0", "netmask", "255.0.0.0",
-                              "gateway", "192.168.1.1", NULL, NULL);
+    /* rNPU_route */
+    SUBTEST("rNPU_route inject") {
+        params_t p = mkparams("chip", "0", "address", "10.0.0.0", "netmask", "255.0.0.0", "gateway", "192.168.1.1", NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_route", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("route.sh");
+        CK(check_param_env("gateway", "192.168.1.1") == 0);
         result_free(r);
     }
-    SUBTEST("rNPU_route clean (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "address", "10.0.0.0", "netmask", "255.0.0.0",
-                              "gateway", "192.168.1.1", NULL, NULL);
+    SUBTEST("rNPU_route clean") {
+        params_t p = mkparams("chip", "0", "address", "10.0.0.0", "netmask", "255.0.0.0", NULL, NULL, NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_route", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
     }
-    /* rNPU_route (del) */
-    SUBTEST("rNPU_route inject (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "address", "10.0.0.0", "netmask", "255.0.0.0",
-                              NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNPU_route", "inject", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("route.sh");
-        result_free(r);
-    }
-    SUBTEST("rNPU_route clean (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "address", "10.0.0.0", "netmask", "255.0.0.0",
-                              NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNPU_route", "clean", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-    }
-    /* rNPU_iprule (add) */
-    SUBTEST("rNPU_iprule inject (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "dir", "in", "ip", "192.168.1.50",
-                              "table", "100", NULL, NULL);
+    /* rNPU_iprule */
+    SUBTEST("rNPU_iprule inject") {
+        params_t p = mkparams("chip", "0", "dir", "in", "ip", "192.168.1.50", "table", "100", NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_iprule", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("iprule.sh");
@@ -143,33 +107,15 @@ int main(void) {
         CK(check_param_env("table", "100") == 0);
         result_free(r);
     }
-    SUBTEST("rNPU_iprule clean (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "dir", "in", "ip", "192.168.1.50",
-                              "table", "100", NULL, NULL);
+    SUBTEST("rNPU_iprule clean") {
+        params_t p = mkparams("chip", "0", "dir", "in", "ip", "192.168.1.50", NULL, NULL, NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_iprule", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);
     }
-    /* rNPU_iprule (del) */
-    SUBTEST("rNPU_iprule inject (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "dir", "in", "ip", "192.168.1.50",
-                              NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNPU_iprule", "inject", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("iprule.sh");
-        result_free(r);
-    }
-    SUBTEST("rNPU_iprule clean (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "dir", "in", "ip", "192.168.1.50",
-                              NULL, NULL, NULL, NULL);
-        result_t *r = dispatch_route("rNPU_iprule", "clean", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-    }
-    /* rNPU_iproute (add) */
-    SUBTEST("rNPU_iproute inject (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "ip", "10.0.0.1", "ip_mask", "255.0.0.0",
-                              "table", "100", NULL, NULL);
+    /* rNPU_iproute */
+    SUBTEST("rNPU_iproute inject") {
+        params_t p = mkparams("chip", "0", "ip", "10.0.0.1", "ip_mask", "255.0.0.0", "table", "100", NULL, NULL, NULL, NULL);
         params_set(&p, "via", "192.168.1.1");
         params_set(&p, "dev", "eth0");
         result_t *r = dispatch_route("rNPU_iproute", "inject", &p);
@@ -181,27 +127,8 @@ int main(void) {
         CK(check_param_env("table", "100") == 0);
         result_free(r);
     }
-    SUBTEST("rNPU_iproute clean (add)") {
-        params_t p = mkparams("chip", "0", "action", "add", "ip", "10.0.0.1", "ip_mask", "255.0.0.0",
-                              "table", "100", NULL, NULL);
-        params_set(&p, "via", "192.168.1.1");
-        params_set(&p, "dev", "eth0");
-        result_t *r = dispatch_route("rNPU_iproute", "clean", &p);
-        CK(r && r->code == 0);
-        result_free(r);
-    }
-    /* rNPU_iproute (del) */
-    SUBTEST("rNPU_iproute inject (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "ip", "10.0.0.1", "ip_mask", "255.0.0.0",
-                              "table", "100", NULL, NULL);
-        result_t *r = dispatch_route("rNPU_iproute", "inject", &p);
-        CK(r && r->code == 0);
-        CMD_CONTAINS("iproute.sh");
-        result_free(r);
-    }
-    SUBTEST("rNPU_iproute clean (del)") {
-        params_t p = mkparams("chip", "0", "action", "del", "ip", "10.0.0.1", "ip_mask", "255.0.0.0",
-                              "table", "100", NULL, NULL);
+    SUBTEST("rNPU_iproute clean") {
+        params_t p = mkparams("chip", "0", "ip", "10.0.0.1", "ip_mask", "255.0.0.0", "table", "100", NULL, NULL, NULL, NULL);
         result_t *r = dispatch_route("rNPU_iproute", "clean", &p);
         CK(r && r->code == 0);
         result_free(r);

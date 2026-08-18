@@ -227,7 +227,6 @@ int test_reinject_multiparam_and_logic(void) {
     params_t a;
     params_init(&a);
     params_set(&a, "chip", "0");
-    params_set(&a, "action", "add");
     params_set(&a, "dev", "eth0");
     params_set(&a, "ip", "1.1.1.1");
     params_set(&a, "mac", "de:ad:01");
@@ -236,7 +235,6 @@ int test_reinject_multiparam_and_logic(void) {
     params_t b;
     params_init(&b); /* 不同 ip → 不同资源 */
     params_set(&b, "chip", "0");
-    params_set(&b, "action", "add");
     params_set(&b, "dev", "eth0");
     params_set(&b, "ip", "2.2.2.2");
     params_set(&b, "mac", "de:ad:02");
@@ -245,7 +243,6 @@ int test_reinject_multiparam_and_logic(void) {
     params_t c;
     params_init(&c); /* 同 chip,dev,ip → 重叠 */
     params_set(&c, "chip", "0");
-    params_set(&c, "action", "add");
     params_set(&c, "dev", "eth0");
     params_set(&c, "ip", "1.1.1.1");
     params_set(&c, "mac", "de:ad:03");

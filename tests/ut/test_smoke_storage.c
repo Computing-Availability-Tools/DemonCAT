@@ -13,17 +13,17 @@
 #include <sys/types.h>
 #include <glob.h>
 
-#define CK(cond)                                  \
-    do {                                          \
-        if (!(cond)) {                            \
-            fprintf(stderr, "FAIL: %s\n", #cond); \
-            return 1;                             \
-        }                                         \
+static const char *g_smoke_name = "";
+
+#define CK(cond)                                                            \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            fprintf(stderr, "FAIL: %s\n", #cond);                           \
+            fprintf(stderr, "DCAT_SUBTEST|smoke|%s|FAIL|\n", g_smoke_name); \
+            return 1;                                                       \
+        }                                                                   \
     } while (0)
 
-/* Count alive rDISK_write_overload worker subshells by scanning dcat pidfiles
- * (/tmp/dcat-rDISK_write_overload-<dev>.pid, space-separated PIDs per file) + kill -0 probe.
- * Immune to stray dd processes from other sources. */
 static int count_writers(void) {
     glob_t g;
     if (glob("/tmp/dcat-rDISK_write_overload-*.pid", 0, NULL, &g) != 0) {
@@ -58,7 +58,6 @@ static void smoke_teardown(void) {
     state_reset();
     state_set_file("");
     unlink("/tmp/dcat_smoke_storage.json");
-    /* unlink() 不支持 glob,需用 shell 通配清理 */
     if (system("rm -f /tmp/dcat-rDISK_write_overload-*.pid")) {}
     if (system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*")) {}
     if (system("rm -f /tmp/dcat-rNET_port_occupy-*.pid")) {}
@@ -68,6 +67,7 @@ int main(void) {
     smoke_setup();
 
     /* ---- rDISK_write_overload (dd writers) ---- */
+    g_smoke_name = "rDISK_write_overload";
     {
         params_t p;
         memset(&p, 0, sizeof p);
@@ -97,8 +97,10 @@ int main(void) {
         n = count_writers();
         CK(n == 0);
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     /* ---- rNET_port_occupy (python3 socket holder) ---- */
+    g_smoke_name = "rNET_port_occupy";
     {
         params_t p;
         memset(&p, 0, sizeof p);
@@ -111,7 +113,6 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        /* check port is occupied */
         char cmd[128];
         snprintf(cmd, sizeof cmd, "ss -tlnp 2>/dev/null | grep ':19999' | wc -l");
         FILE *f = popen(cmd, "r");
@@ -134,8 +135,8 @@ int main(void) {
         pclose(f);
         CK(n == 0);
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     smoke_teardown();
-    printf("test_smoke_storage: 2 faults passed\n");
     return 0;
 }

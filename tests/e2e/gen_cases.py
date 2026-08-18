@@ -626,7 +626,7 @@ def gen():
     flow = f"STATE-{s_s}"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject")
     add(flow, 1, "cpu", "rCPU_overload", "clean1", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "pgrep -x perl | wc -l", "==0", "", "first clean ok")
-    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 1, "", "", "", "", "second clean: no active")
+    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "", "", "", "second clean: idempotent (exit 0)")
     s_s += 1
     # S2: 无参 clean ×2
     flow = f"STATE-{s_s}"
@@ -677,7 +677,7 @@ def gen():
     flow = f"STATE-{s_s}"
     add(flow, 0, "memory", "rMEM_leak", "inject", "none", f"{DCAT} inject rMEM_leak --size_mb=32", 0, '"status":"ok"', "", "", "", "inject")
     add(flow, 1, "memory", "rMEM_leak", "clean1", "none", f"{DCAT} clean rMEM_leak", 0, "", "ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l", "==0", "", "first clean ok")
-    add(flow, 2, "memory", "rMEM_leak", "clean2", "none", f"{DCAT} clean rMEM_leak", 1, "", "", "", "", "second clean: no active")
+    add(flow, 2, "memory", "rMEM_leak", "clean2", "none", f"{DCAT} clean rMEM_leak", 0, "", "", "", "", "second clean: idempotent (exit 0)")
     s_s += 1
     # S9: batch2 新增故障 reinject 拒绝 code5 (rMEM_leak)
     flow = f"STATE-{s_s}"

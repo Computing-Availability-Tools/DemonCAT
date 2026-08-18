@@ -387,7 +387,7 @@ E2E-385,SEC-S1,0,storage,rDISK_write_overload,inject,ln -sf /etc /tmp/dcat_symte
 E2E-386,SEC-S1,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp/dcat_symtest; rm -f /tmp/dcat_symtest,0,,,,,none,cleanup symlink
 E2E-387,STATE-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
 E2E-388,STATE-1,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,none,first clean ok
-E2E-389,STATE-1,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload --cores=0,1,,,,,none,second clean: no active
+E2E-389,STATE-1,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,second clean: idempotent (exit 0)
 E2E-390,STATE-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
 E2E-391,STATE-2,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload,0,,pgrep -x perl | wc -l,==0,,none,no-arg clean ok
 E2E-392,STATE-2,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload,0,,,,,none,no-arg clean idempotent
@@ -414,7 +414,7 @@ E2E-412,STATE-7,2,npu,rNPU_mtu_mismatch,reject,./build/dcat inject rNPU_mtu_mism
 E2E-413,STATE-7,3,npu,rNPU_mtu_mismatch,clean,./build/dcat clean rNPU_mtu_mismatch --chip={e2e_chip},0,,,,,none,cleanup NPU
 E2E-414,STATE-8,0,memory,rMEM_leak,inject,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,none,inject
 E2E-415,STATE-8,1,memory,rMEM_leak,clean1,./build/dcat clean rMEM_leak,0,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,==0,,none,first clean ok
-E2E-416,STATE-8,2,memory,rMEM_leak,clean2,./build/dcat clean rMEM_leak,1,,,,,none,second clean: no active
+E2E-416,STATE-8,2,memory,rMEM_leak,clean2,./build/dcat clean rMEM_leak,0,,,,,none,second clean: idempotent (exit 0)
 E2E-417,STATE-9,0,memory,rMEM_leak,inject1,./build/dcat inject rMEM_leak --size_mb=32,0,"""status"":""ok""",,,,none,inject1
 E2E-418,STATE-9,1,memory,rMEM_leak,reject,./build/dcat inject rMEM_leak --size_mb=32,5,,ls /tmp/dcat-rMEM_leak.pid 2>/dev/null | wc -l,>=1,,none,reinject rejected code5
 E2E-419,STATE-9,2,memory,rMEM_leak,clean,./build/dcat clean rMEM_leak,0,,,,,none,cleanup

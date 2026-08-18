@@ -26,12 +26,24 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for bak in /tmp/dcat-rNPU_mtu_mismatch-*.bak; do
                 [ -f "$bak" ] || continue
                 c=${bak##*/dcat-rNPU_mtu_mismatch-}; c=${c%.bak}
-                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                    cleaned=1
+                else
+                    echo "restore failed for chip $c" >&2
+                    failed=1
+                fi
             done
-            [ "$cleaned" = 1 ] && echo "restored mtu (all chips)" || echo "restored mtu (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "mtu_mismatch: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored mtu (all chips)"
+            else
+                echo "restored mtu (no active injection)"
+            fi
         elif fault_present; then
             orig=$(sidecar_load rNPU_mtu_mismatch "$chip"); orig=${orig:-1500}
             $HCCN -mtu -s size "$orig" || { echo "mtu restore failed" >&2; exit 1; }

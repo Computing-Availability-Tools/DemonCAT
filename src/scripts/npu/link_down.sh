@@ -18,15 +18,27 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -z "$chip" ]; then
             cleaned=0
+            failed=0
             for c in $(npu_list_chips); do
                 _oc=$chip; _oh=$HCCN
                 chip=$c; HCCN="hccn_tool -i $c"
                 if fault_present; then
-                    DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+                    if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
+                        cleaned=1
+                    else
+                        echo "restore failed for chip $c" >&2
+                        failed=1
+                    fi
                 fi
                 chip=$_oc; HCCN=$_oh
             done
-            [ "$cleaned" = 1 ] && echo "restored link (all chips)" || echo "restored link (no active injection)"
+            if [ "$failed" = 1 ]; then
+                echo "link_down: some restores failed (state preserved)" >&2; exit 1
+            elif [ "$cleaned" = 1 ]; then
+                echo "restored link (all chips)"
+            else
+                echo "restored link (no active injection)"
+            fi
         elif fault_present; then
             $HCCN -cfg recovery || { echo "cfg recovery failed" >&2; exit 1; }
             echo "restored config (link up) on chip $chip"

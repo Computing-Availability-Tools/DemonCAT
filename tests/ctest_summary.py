@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""解析 ctest JUnit XML (build/ctest-junit.xml) 生成结构化单元测试摘要:
-- markdown 总览表(总数/通过/失败/跳过/耗时/通过率)+ 失败用例详情,写入 $GITHUB_STEP_SUMMARY
-  (Actions run 详情 + PR checks 即见,无需翻作业日志)。
-- 每个失败用例 emit `::error file=...,line=...::msg` 工作流注解 → 内联出现在 PR Files changed / run Annotations。
-本地运行(无 GITHUB_ACTIONS/GITHUB_STEP_SUMMARY)→ markdown 打到 stdout,不写 job summary。
+"""解析 ctest JUnit XML (build/ctest-junit.xml) + DCAT_SUBTEST 行 (build/ctest_run.log)
+生成结构化单元测试摘要:
+- markdown 总览表(可执行级:总数/通过/失败/跳过/耗时/通过率)+ 失败用例详情
+- 场景级总览(hermetic:解析 DCAT_SUBTEST|<tier>|<name>|<status>| 行,按 tier 分层)
+- 每个失败用例 emit `::error file=...,line=...::msg` 工作流注解
+本地运行(无 GITHUB_ACTIONS)→ markdown 打到 stdout。
 
-用法: python3 tests/ctest_summary.py [build/ctest-junit.xml]
+用法: python3 tests/ctest_summary.py [build/ctest-junit.xml [build/ctest_run.log]]
+环境: DCAT_TEST_MODE=regular|full(标题标识;空=regular)
 """
 import os
 import re
@@ -14,9 +16,10 @@ import platform
 import xml.etree.ElementTree as ET
 
 JUNIT_DEFAULT = "build/ctest-junit.xml"
+LOG_DEFAULT = "build/ctest_run.log"
 
-# 自定义框架(test.h)断言输出形如 "ASSERT_TRUE fail: file.c:NN"、"INT_EQ fail: ... file.c:NN"
 _FILE_LINE_RE = re.compile(r"([^\s:]+\.c):(\d+)")
+_SUBTEST_RE = re.compile(r"^(?:\d+:\s*)?DCAT_SUBTEST\|([^|]*)\|([^|]*)\|([^|]*)(?:\|(.*))?$")
 
 
 def _fnum(node, attr, default=0.0):
@@ -49,7 +52,6 @@ def _fmt_duration(seconds):
 
 
 def _iter_testsuites(root):
-    """yield 所有 <testsuite>(兼容 root 为 <testsuite> 或 <testsuites>)。"""
     if root is None:
         return []
     if root.tag == "testsuite":
@@ -58,10 +60,6 @@ def _iter_testsuites(root):
 
 
 def parse_junit(junit):
-    """解析 JUnit XML,返回汇总 dict。
-    键: tests,failures,skipped,passed,time,failures_list(name,time,file,line,detail)。
-    文件缺失/解析失败 → 空 结果(failures_list=[]),并设 _error。
-    """
     res = {"tests": 0, "failures": 0, "skipped": 0, "passed": 0, "time": 0.0,
            "failures_list": []}
     if not junit or not os.path.exists(junit):
@@ -89,7 +87,7 @@ def parse_junit(junit):
         total_time += _fnum(ts, "time")
         for tc in ts.findall("testcase"):
             fail = tc.find("failure")
-            if fail is None:  # CTest 某些版本失败信息在 <error> 里
+            if fail is None:
                 fail = tc.find("error")
             if fail is None:
                 continue
@@ -112,9 +110,36 @@ def parse_junit(junit):
     return res
 
 
-def render_markdown(parsed, arch):
-    """渲染结构化 markdown 摘要(总览表 + 失败用例详情)。"""
-    out = [f"## Unit tests (ctest) · {arch}\n"]
+def parse_subtests(log):
+    """解析 ctest_run.log 的 DCAT_SUBTEST|<tier>|<name>|<status>|<detail> 行。
+    返回 {tiers: {tier: {total,pass,fail}}, list: [{tier,name,status,detail}]}。
+    无 log/无行 → 空(tiers={}, list=[])。"""
+    out = {"tiers": {}, "list": []}
+    if not log or not os.path.exists(log):
+        return out
+    try:
+        with open(log, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                m = _SUBTEST_RE.match(line.strip())
+                if not m:
+                    continue
+                tier, name, status, detail = (m.group(1), m.group(2),
+                                              m.group(3), m.group(4) or "")
+                t = out["tiers"].setdefault(tier, {"total": 0, "pass": 0, "fail": 0})
+                t["total"] += 1
+                if status == "FAIL":
+                    t["fail"] += 1
+                elif status == "PASS":
+                    t["pass"] += 1
+                out["list"].append({"tier": tier, "name": name,
+                                    "status": status, "detail": detail})
+    except Exception:
+        pass
+    return out
+
+
+def render_markdown(parsed, subtests, arch, mode):
+    out = [f"## Unit tests (ctest·{mode}) · {arch}\n"]
     err = parsed.get("_error")
     if err:
         if err == "no-junit":
@@ -129,9 +154,22 @@ def render_markdown(parsed, arch):
     skipped = parsed["skipped"]
     dur = _fmt_duration(parsed["time"])
     rate = (passed / tests * 100.0) if tests else 0.0
+    out.append("### 可执行级(ctest entry)\n")
     out.append("| 总数 | 通过 | 失败 | 跳过 | 耗时 | 通过率 |")
     out.append("|---:|---:|---:|---:|---:|---:|")
     out.append(f"| {tests} | {passed} | {failures} | {skipped} | {dur} | {rate:.1f}% |\n")
+
+    tiers = subtests.get("tiers", {})
+    if tiers:
+        out.append("### 场景级(per-case,DCAT_SUBTEST)\n")
+        out.append("| 层 | 总数 | 通过 | 失败 |")
+        out.append("|---|---:|---:|---:|")
+        gt = gp = gf = 0
+        for tier in sorted(tiers):
+            t = tiers[tier]
+            out.append(f"| {tier} | {t['total']} | {t['pass']} | {t['fail']} |")
+            gt += t["total"]; gp += t["pass"]; gf += t["fail"]
+        out.append(f"| **合计** | **{gt}** | **{gp}** | **{gf}** |\n")
 
     fl = parsed["failures_list"]
     if not fl:
@@ -165,7 +203,6 @@ def render_markdown(parsed, arch):
 
 
 def render_annotations(parsed):
-    """为每个失败用例生成 `::error file=...,line=...,title=...::msg` 工作流注解(单行)。"""
     anns = []
     for f in parsed["failures_list"]:
         title = f["name"]
@@ -179,11 +216,14 @@ def render_annotations(parsed):
 
 def main():
     junit = sys.argv[1] if len(sys.argv) > 1 else JUNIT_DEFAULT
+    log = sys.argv[2] if len(sys.argv) > 2 else LOG_DEFAULT
     arch = platform.machine() or "unknown"
+    mode = os.environ.get("DCAT_TEST_MODE") or "regular"
     parsed = parse_junit(junit)
-    md = render_markdown(parsed, arch)
+    subtests = parse_subtests(log)
+    md = render_markdown(parsed, subtests, arch, mode)
 
-    print(md)  # 始终打到 stdout(本地/日志可见)
+    print(md)
     if os.environ.get("GITHUB_ACTIONS") == "true":
         for a in render_annotations(parsed):
             print(a)
@@ -194,7 +234,7 @@ def main():
                 fh.write(md + "\n")
         except Exception as e:
             print(f"WARN: write GITHUB_STEP_SUMMARY failed: {e}", file=sys.stderr)
-    return 0  # 摘要为 best-effort 报告:不叠加失败(ctest 步已红)
+    return 0
 
 
 if __name__ == "__main__":

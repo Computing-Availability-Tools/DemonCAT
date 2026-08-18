@@ -109,6 +109,7 @@ dcat_test(test_smoke_cpu      tests/ut/test_smoke_cpu.c)
 dcat_test(test_smoke_process  tests/ut/test_smoke_process.c)
 dcat_test(test_smoke_storage  tests/ut/test_smoke_storage.c)
 dcat_test(test_smoke_state_lost tests/ut/test_smoke_state_lost.c)
+set_tests_properties(test_smoke_cpu test_smoke_process test_smoke_storage test_smoke_state_lost PROPERTIES LABELS "smoke")
 
 # ---- 示例动态插件 (编译到 plugins/libsample.so) ----
 add_library(sample_plugin MODULE

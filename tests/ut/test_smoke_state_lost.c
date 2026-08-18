@@ -253,37 +253,21 @@ static int t_clean_no_params_reconciles_state(void) {
 
 int main(void) {
     int fail = 0;
-    fprintf(stderr, "  -> t_clean_with_params_after_state_lost ... ");
-    fflush(stderr);
-    fail |= t_clean_with_params_after_state_lost();
-    fprintf(stderr, "%s\n", fail & 1 ? "FAIL" : "ok");
-    fprintf(stderr, "  -> t_clean_no_params_after_state_lost ... ");
-    fflush(stderr);
-    {
-        int r = t_clean_no_params_after_state_lost();
-        fail |= (r << 1);
-        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
-    }
-    fprintf(stderr, "  -> t_clean_all_after_state_lost ... ");
-    fflush(stderr);
-    {
-        int r = t_clean_all_after_state_lost();
-        fail |= (r << 2);
-        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
-    }
-    fprintf(stderr, "  -> t_clean_partial_state_safe_no_fallback ... ");
-    fflush(stderr);
-    {
-        int r = t_clean_partial_state_safe_no_fallback();
-        fail |= (r << 3);
-        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
-    }
-    fprintf(stderr, "  -> t_clean_no_params_reconciles_state ... ");
-    fflush(stderr);
-    {
-        int r = t_clean_no_params_reconciles_state();
-        fail |= (r << 4);
-        fprintf(stderr, "%s\n", r ? "FAIL" : "ok");
-    }
+    int r;
+    r = t_clean_with_params_after_state_lost();
+    fail |= r;
+    fprintf(stderr, "DCAT_SUBTEST|smoke|t_clean_with_params_after_state_lost|%s|\n", r ? "FAIL" : "PASS");
+    r = t_clean_no_params_after_state_lost();
+    fail |= r;
+    fprintf(stderr, "DCAT_SUBTEST|smoke|t_clean_no_params_after_state_lost|%s|\n", r ? "FAIL" : "PASS");
+    r = t_clean_all_after_state_lost();
+    fail |= r;
+    fprintf(stderr, "DCAT_SUBTEST|smoke|t_clean_all_after_state_lost|%s|\n", r ? "FAIL" : "PASS");
+    r = t_clean_partial_state_safe_no_fallback();
+    fail |= r;
+    fprintf(stderr, "DCAT_SUBTEST|smoke|t_clean_partial_state_safe_no_fallback|%s|\n", r ? "FAIL" : "PASS");
+    r = t_clean_no_params_reconciles_state();
+    fail |= r;
+    fprintf(stderr, "DCAT_SUBTEST|smoke|t_clean_no_params_reconciles_state|%s|\n", r ? "FAIL" : "PASS");
     return fail ? 1 : 0;
 }

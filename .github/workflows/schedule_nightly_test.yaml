@@ -40,6 +40,7 @@ jobs:
     with:
       runner: ${{ matrix.runner }}
       ref: ${{ matrix.branch }}
+      mode: full
 
   e2e-full:
     name: E2E full (${{ matrix.branch }})
@@ -80,6 +81,7 @@ jobs:
       runner: ubuntu-latest
       coverage: true
       ref: ${{ matrix.branch }}
+      mode: full
 
   ci-gate:
     name: Nightly Gate

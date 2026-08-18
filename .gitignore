@@ -1,7 +1,10 @@
 build/
 .idea/
+.vscode/
 *.o
 *.a
+*.pyc
+__pycache__/
 plugins/*.so
 tests/plugins/*.so
 Testing/Temporary/

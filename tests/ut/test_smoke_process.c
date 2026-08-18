@@ -14,12 +14,15 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#define CK(cond)                                  \
-    do {                                          \
-        if (!(cond)) {                            \
-            fprintf(stderr, "FAIL: %s\n", #cond); \
-            return 1;                             \
-        }                                         \
+static const char *g_smoke_name = "";
+
+#define CK(cond)                                                            \
+    do {                                                                    \
+        if (!(cond)) {                                                      \
+            fprintf(stderr, "FAIL: %s\n", #cond);                           \
+            fprintf(stderr, "DCAT_SUBTEST|smoke|%s|FAIL|\n", g_smoke_name); \
+            return 1;                                                       \
+        }                                                                   \
     } while (0)
 
 static void smoke_setup(void) {
@@ -42,8 +45,8 @@ int main(void) {
     smoke_setup();
 
     /* ---- rPROC_exit (inject-only, kill -9) ---- */
+    g_smoke_name = "rPROC_exit";
     {
-        /* spawn a dummy process to kill */
         pid_t pid = fork();
         if (pid == 0) {
             sleep(60);
@@ -61,17 +64,19 @@ int main(void) {
 
         result_t *r = dispatch_route("rPROC_exit", "inject", &p);
         CK(r && r->code == 0);
-        CK(strstr(r->json, "record_id") == NULL); /* inject-only: no state */
+        CK(strstr(r->json, "record_id") == NULL);
         result_free(r);
 
         sleep(1);
         int status;
         pid_t ret = waitpid(pid, &status, WNOHANG);
-        CK(ret == pid);          /* child was killed (zombie reaped) */
-        CK(WIFSIGNALED(status)); /* killed by signal (SIGKILL) */
+        CK(ret == pid);
+        CK(WIFSIGNALED(status));
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     /* ---- rPROC_hang (SIGSTOP / SIGCONT) ---- */
+    g_smoke_name = "rPROC_hang";
     {
         pid_t pid = fork();
         if (pid == 0) {
@@ -93,7 +98,6 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        /* check process is stopped (T state) */
         char path[64];
         snprintf(path, sizeof path, "/proc/%d/status", pid);
         FILE *f = fopen(path, "r");
@@ -111,16 +115,15 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        /* process should be running again */
         CK(kill(pid, 0) == 0);
         kill(pid, 9);
-        waitpid(pid, NULL, 0); /* reap to avoid zombie interfering with zstate test */
+        waitpid(pid, NULL, 0);
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
-    /* ---- rPROC_zstate (kill target → zombie) ---- */
+    /* ---- rPROC_zstate (kill target -> zombie) ---- */
+    g_smoke_name = "rPROC_zstate";
     {
-        /* Create watcher process (detached via setsid) that forks target and won't reap.
-         * This isolates the parent so clean killing the parent doesn't kill the test. */
         pid_t watcher = fork();
         CK(watcher >= 0);
         if (watcher == 0) {
@@ -138,7 +141,7 @@ int main(void) {
             sleep(30);
             _exit(0);
         }
-        sleep(1); /* wait for watcher to write target PID */
+        sleep(1);
 
         char target_str[16] = {0};
         FILE *f = fopen("/tmp/dcat_zstate_test.pid", "r");
@@ -163,7 +166,6 @@ int main(void) {
         result_free(r);
 
         sleep(1);
-        /* target should be gone (reaped) */
         char cmd[128];
         snprintf(cmd, sizeof cmd, "ls /proc/%s 2>/dev/null | wc -l", target_str);
         f = popen(cmd, "r");
@@ -175,8 +177,8 @@ int main(void) {
         kill(watcher, 9);
         waitpid(watcher, NULL, 0);
     }
+    fprintf(stderr, "DCAT_SUBTEST|smoke|%s|PASS|\n", g_smoke_name);
 
     smoke_teardown();
-    printf("test_smoke_process: 3 faults passed\n");
     return 0;
 }

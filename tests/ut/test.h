@@ -3,16 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 static int g_test_count = 0, g_test_fail = 0;
-#define RUN_TEST(fn)                          \
-    do {                                      \
-        g_test_count++;                       \
-        fprintf(stderr, "  -> %s ... ", #fn); \
-        int r = fn();                         \
-        if (r) {                              \
-            g_test_fail++;                    \
-            fprintf(stderr, "FAIL\n");        \
-        } else                                \
-            fprintf(stderr, "ok\n");          \
+#define RUN_TEST(fn)                                                              \
+    do {                                                                          \
+        g_test_count++;                                                           \
+        int _r = fn();                                                            \
+        fprintf(stderr, "DCAT_SUBTEST|unit|%s|%s|\n", #fn, _r ? "FAIL" : "PASS"); \
+        if (_r) g_test_fail++;                                                    \
     } while (0)
 /* NULL 防御 + 单次求值（避免带副作用参数二次求值）；失败 return 1 中断当前测试而非崩进程 */
 #define ASSERT_TRUE(x)                                                        \

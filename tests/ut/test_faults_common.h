@@ -17,6 +17,7 @@
 static const char *g_last_cmd;
 static const char *const *g_env;
 static int g_mock_called;
+static int g_faults_count = 0, g_faults_fail = 0;
 
 static result_t *mock_ok(const char *cmd, const char *const *env) {
     g_last_cmd = cmd;
@@ -25,28 +26,38 @@ static result_t *mock_ok(const char *cmd, const char *const *env) {
     return result_ok("inject", "mock", 0, "ok");
 }
 
-#define CK(cond)                                  \
-    do {                                          \
-        if (!(cond)) {                            \
-            fprintf(stderr, "FAIL: %s\n", #cond); \
-            return 1;                             \
-        }                                         \
-    } while (0)
+#define SUBTEST(name)                                                                         \
+    for (int _st_ok = 1, _st_done = 0; !_st_done;                                             \
+         _st_done = 1,                                                                        \
+             fprintf(stderr, "DCAT_SUBTEST|unit|%s|%s|\n", (name), _st_ok ? "PASS" : "FAIL"), \
+             g_faults_count++, (_st_ok ? 0 : (g_faults_fail++, 0)))
+
+#define CK(cond)                              \
+    if (!(cond)) {                            \
+        fprintf(stderr, "FAIL: %s\n", #cond); \
+        _st_ok = 0;                           \
+        continue;                             \
+    }
 
 #define CMD_CONTAINS(str) CK(strstr(g_last_cmd ? g_last_cmd : "", str) != NULL)
-#define ENV_EQ(key, val)                              \
-    do {                                              \
-        char _eb[80];                                 \
-        snprintf(_eb, sizeof _eb, "%s=%s", key, val); \
-        int _found = 0;                               \
-        for (int _i = 0; g_env && g_env[_i]; _i++) {  \
-            if (strcmp(g_env[_i], _eb) == 0) {        \
-                _found = 1;                           \
-                break;                                \
-            }                                         \
-        }                                             \
-        CK(_found);                                   \
-    } while (0)
+
+#define ENV_EQ(key, val)                                           \
+    {                                                              \
+        char _eb[80];                                              \
+        snprintf(_eb, sizeof _eb, "%s=%s", (key), (val));          \
+        int _found = 0;                                            \
+        for (int _i = 0; g_env && g_env[_i]; _i++) {               \
+            if (strcmp(g_env[_i], _eb) == 0) {                     \
+                _found = 1;                                        \
+                break;                                             \
+            }                                                      \
+        }                                                          \
+        if (!_found) {                                             \
+            fprintf(stderr, "FAIL: ENV_EQ %s=%s\n", (key), (val)); \
+            _st_ok = 0;                                            \
+            continue;                                              \
+        }                                                          \
+    }
 #define MOCK_CALLED CK(g_mock_called)
 
 static void faults_setup(void) {
@@ -98,8 +109,10 @@ static int check_param_env(const char *key, const char *expected) {
             break;
         }
     }
-    CK(found);
-    return 0;
+    if (!found) fprintf(stderr, "FAIL: check_param_env %s=%s\n", key, expected);
+    return found ? 0 : 1;
 }
+
+#define FAULTS_MAIN_RETURN() (g_faults_fail ? 1 : 0)
 
 #endif /* TEST_FAULTS_COMMON_H */

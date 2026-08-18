@@ -363,6 +363,8 @@ dcat inject rDISK_part_full --path=/data
 dcat clean  rDISK_part_full
 ```
 
+> **Ctrl+C 中断后清理**：省略 `--size` 时 `dd` 持续填充至 ENOSPC，耗时较长。若 Ctrl+C 中断 inject，`dcat clean rDISK_part_full --path=<path>` 会报 `no active injection`（inject 未完成、未写 state 记录）；此时用 **`dcat clean --all` 兜底**清残留填充文件（stateless fan-out，不依赖 state 记录，脚本自行扫描 `/tmp` sidecar 清理）。
+
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |
 |---|---|---|---|
@@ -392,6 +394,8 @@ dcat inject rDISK_inode_exhaust --path=/data --count=100000
 dcat query  rDISK_inode_exhaust
 dcat clean  rDISK_inode_exhaust
 ```
+
+> **Ctrl+C 中断后清理**：大 `count`（或省略 `count` 耗尽到 ENOSPC）耗时较长。若 Ctrl+C 中断 inject，带参 `clean` 会报 `no active injection`（未写 state 记录）；此时用 **`dcat clean --all` 兜底**清残留的 `dcat.inodes.*` 目录。
 
 **参数可选范围**:
 | 参数 | 是否必填 | 类型 | 说明 |

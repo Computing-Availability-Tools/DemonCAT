@@ -29,7 +29,13 @@ case "${DCAT_OP:-inject}" in
         ;;
     clean)
         if [ -z "$chip" ]; then
-            echo "no active injection (chip required for bw_limit clean)"
+            cleaned=0
+            for bak in /tmp/dcat-rNPU_bw_limit-*.bak; do
+                [ -f "$bak" ] || continue
+                c=${bak##*/dcat-rNPU_bw_limit-}; c=${c%.bak}
+                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+            done
+            [ "$cleaned" = 1 ] && echo "restored bw_limit (all chips)" || echo "restored bw_limit (no active injection)"
         elif fault_present; then
             $HCCN -shaping -s bw_limit "$orig" || { echo "shaping restore failed" >&2; exit 1; }
             sidecar_clear rNPU_bw_limit "$chip"

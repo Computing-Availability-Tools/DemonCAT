@@ -1,6 +1,6 @@
 # DemonCAT 故障目录
 
-当前共 58 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统九个模块。
+当前共 57 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统九个模块。
 
 ## CPU 模块（5 条）
 
@@ -40,7 +40,7 @@
 | `rNET_conn_exhaust` | target | count | Connection exhaustion (socket flood) |
 | `rNET_corrupt` | iface,corrupt_pct | — | Packet corruption (tc netem) |
 
-## 进程模块（6 条）
+## 进程模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
@@ -48,7 +48,6 @@
 | `rPROC_hang` | pid | — | Process hang (SIGSTOP) |
 | `rPROC_zstate` | pid | — | Zombie process (kill target → zombie) |
 | `rPROC_fork_bomb` | count | — | Fork bomb (controlled process explosion) |
-| `rPROC_loop` | threads | — | CPU loop (multi-thread busy loop) |
 | `rPROC_fd_exhaust` | count | — | File descriptor exhaustion |
 
 ## 内存模块（4 条）
@@ -64,7 +63,7 @@
 
 | UID | 必填参数 | 可选参数 | 说明 |
 |---|---|---|---|
-| `rFS_file_lock` | path,mode | — | File lock (flock: noread/nowrite/norw/nodelete) |
+| `rFS_file_lock` | path,mode | — | File lock (chmod+chattr+mount --bind: noread/nowrite/norw/nodelete) |
 | `rFS_iowait_high` | path | workers | High iowait (parallel dd readers) |
 
 ## Docker 模块（2 条）

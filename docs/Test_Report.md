@@ -3,7 +3,7 @@
 > **项目**: DemonCAT (dcat) — Linux 计算故障注入工具
 > **版本**: v0.1.0
 > **日期**: 2026-08-14
-> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 507 步骤 / 254 流程
+> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 501 步骤 / 250 流程
 
 ---
 
@@ -11,12 +11,12 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1.0 核心框架 + 58 条故障的完整性和正确性：
+验证 DemonCAT v0.1.0 核心框架 + 57 条故障的完整性和正确性：
 
 - 核心框架 9 模块 + 插件架构功能正确
-- 全部 58 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
-- 全部 59 个脚本无语法错误
-- **58 条故障真机 inject/query/clean 全覆盖**（CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统）
+- 全部 57 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
+- 全部 58 个脚本无语法错误
+- **57 条故障真机 inject/query/clean 全覆盖**（CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统）
 - 误操作/边界场景 9 种验证
 - strict C11 可移植性验证
 
@@ -28,12 +28,12 @@
 | CTest 通过 | **27** |
 | CTest 失败 | **0** |
 | CTest 通过率 | **100%** |
-| E2E 用例总数 | **507 步骤 / 254 流程** |
-| E2E PASS | **251** |
+| E2E 用例总数 | **501 步骤 / 250 流程** |
+| E2E PASS | **247** |
 | E2E FAIL（硬件限制） | **3** |
 | E2E 通过率 | **99%** |
-| 手动故障测试 | **58 条全覆盖** |
-| 手动 PASS | **58** |
+| 手动故障测试 | **57 条全覆盖** |
+| 手动 PASS | **57** |
 | 手动 FAIL（硬件限制） | **0** |
 | 发现并修复的 Bug | **8** |
 | 已知限制（非 Bug） | **1** |
@@ -70,7 +70,7 @@
 | 编译选项 | `-Wall -Wextra -Werror` | ✅ 零警告 |
 | 二进制 | `build/dcat` | ✅ |
 | 动态插件 | `plugins/libsample.so` | ✅ |
-| 脚本语法 | `sh -n` 全部 59 脚本 | ✅ |
+| 脚本语法 | `sh -n` 全部 58 脚本 | ✅ |
 
 ---
 
@@ -82,7 +82,7 @@
 |------|---|:----:|:----:|
 | test_types | params_t helpers | PASS | 0.00s |
 | test_output | result_ok/err/print + JSON | PASS | 0.00s |
-| test_config | INI 解析 + fault_count=58 | PASS | 0.00s |
+| test_config | INI 解析 + fault_count=57 | PASS | 0.00s |
 | test_registry | fault_def 查找 + list | PASS | 0.00s |
 | test_executor | mock 拦截 + build_env | PASS | 0.00s |
 | test_precheck | per-op required 校验 | PASS | 0.00s |
@@ -107,7 +107,7 @@
 |------|:----:|:----:|
 | test_plugin_integration | PASS | 0.01s |
 
-### 4.3 Tier 1: Mock 表驱动故障测试 (58 条全覆盖)
+### 4.3 Tier 1: Mock 表驱动故障测试 (57 条全覆盖)
 
 | 测试 | 覆盖故障数 | 模块 | 结果 | 耗时 |
 |------|:---:|---|:----:|:----:|
@@ -122,7 +122,7 @@
 
 | 测试 | 检查范围 | 结果 | 耗时 |
 |------|---|:----:|:----:|
-| test_syntax | 全部 59 个 .sh 脚本 (`sh -n`) | PASS | 0.06s |
+| test_syntax | 全部 58 个 .sh 脚本 (`sh -n`) | PASS | 0.06s |
 
 ### 4.5 Tier 3: 真实执行测试
 
@@ -135,7 +135,7 @@
 
 ---
 
-## 5. 真机手动测试结果（58 条全覆盖）
+## 5. 真机手动测试结果（57 条全覆盖）
 
 > 每条故障测试流程：inject → 底层工具验证 → query → clean → 恢复验证
 > 测试日期：2026-07-30 | 测试人：root@Atlas910B4
@@ -178,7 +178,7 @@
 | rNET_corrupt | iface=docker0,corrupt_pct=10 | ✅ | tc: netem corrupt 10% | ✅ confirmed:true | ✅ | noqueue | **PASS** |
 | rNET_conn_exhaust | target=127.0.0.1:8080,count=500 | ✅ | ss: 500 ESTAB 连接 | ✅ confirmed:true | ✅ | 连接释放 | **PASS** |
 
-### 5.4 进程模块（6 条）
+### 5.4 进程模块（5 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 |------|------|:------:|---------|:----:|:-----:|:----:|:----:|
@@ -186,7 +186,6 @@
 | rPROC_hang | pid=测试进程 | ✅ SIGSTOP | State=T | ✅ state=T, confirmed:true | ✅ SIGCONT | State=S | **PASS** |
 | rPROC_zstate | pid=测试进程 | ✅ kill→zombie | State=Z, `<defunct>` | ✅ state=Z, confirmed:true | ✅ kill 父 | reaped | **PASS** |
 | rPROC_fork_bomb | count=100 | ✅ | fork 子进程数↑ | ✅ confirmed:true | ✅ | 子进程清理 | **PASS** |
-| rPROC_loop | threads=2 | ✅ | busy-loop 线程占用 CPU | ✅ confirmed:true | ✅ | 线程终止 | **PASS** |
 | rPROC_fd_exhaust | count=4096 | ✅ | /proc/*/fd 数↑ | ✅ confirmed:true | ✅ | fd 释放 | **PASS** |
 
 ### 5.5 NPU 模块（19 条）
@@ -327,7 +326,7 @@
 | tests/test.h | 共享 | 测试框架宏 |
 | tests/test_faults_common.h | 共享 | mock 设置 + 断言宏 |
 | tests/test_*.c (15个) | Tier 0 | 核心单元测试 |
-| tests/test_faults_*.c (6个) | Tier 1 | 58 条 mock 表驱动 |
+| tests/test_faults_*.c (6个) | Tier 1 | 57 条 mock 表驱动 |
 | tests/check_syntax.sh | Tier 2 | 脚本语法检查 |
 | tests/test_smoke_*.c (4个) | Tier 3 | 真实执行测试 |
 | tests/smoke_root.sh | root | root 级自动化测试 |
@@ -336,11 +335,11 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 507 步骤 / 254 流程，**251 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**58 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步骤 / 250 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**57 条故障真机手动测试全覆盖**：
 
-- **58 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
+- **57 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
-**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 507 步骤 E2E 用例无回归。
+**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 501 步骤 E2E 用例无回归。
 
 **测试结论：代码逻辑正确，v0.1.0 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
 
@@ -368,7 +367,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 507 步�
 
 ### 11.3 脚本层 no-arg clean 全覆盖
 
-全部 58 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
+全部 57 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
 
 | 模式 | 脚本 | 无参 clean 行为 |
 |---|---|---|
@@ -383,11 +382,11 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 507 步�
 |---|---|:---:|
 | test_dispatch（新增 6 例） | `clean <uid>` 无参→直接调脚本 clean（不传 DCAT_PARAM_*）；`clean --all` fan-out 次数 = 支持 clean 的故障数；state 丢失→带参 clean 回退脚本；**无参 clean / `clean --all` 成功后 reconcile state（记录标 inactive，query 无幽灵）**；**`clean --all` 某 uid 脚本 clean 失败时不得 reconcile 该 uid（仅成功才 reconcile，防反向幽灵）** | PASS |
 | test_state（新增 2 例） | `state_is_lost()` 在文件缺失/JSON 损坏时为真、内存空 | PASS |
-| test_syntax | 全部 59 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
+| test_syntax | 全部 58 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
 | test_smoke_process | rPROC_zstate inject→clean→reaped（验证 proc_zstate 单行输出约定，避免 executor 单次 read pipe 后 SIGPIPE 误报） | PASS |
 | **test_smoke_state_lost（新增，5 例端到端）** | **state.json 误删后 stateless clean 仍清除活跃故障**：①`clean <uid> --params` 回退用用户参数调脚本；②`clean <uid>` 无参 glob `/tmp` 工件；③`clean --all` fan-out；④部分损坏（文件有效但记录被抹）带参 clean 不回退（安全不动系统资源），无参 clean 仍可恢复；⑤**state 完好时无参 clean 既清系统又 reconcile state（query 无幽灵）**。用 rPROC_hang 真实 inject→删/不删 state→clean→验证进程恢复+sidecar 消失+state 一致 | PASS |
 | 手动 `dcat clean rCPU_overload`（无参） | inject cores=1,10 → clean 无参 → query 由 2 条→0 条（修复前为 2 条幽灵） | PASS |
-| 手动 `dcat clean --all` | 58 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
+| 手动 `dcat clean --all` | 57 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
 | 手动 `dcat inject <uid>`（无参） | 21 条新改脚本均拒绝并报 "missing required param"（强制未放松） | PASS |
 
 > CTest 当前共 **27** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost + test_serve + test_faults_batch2_ext + test_faults_batch2_newmods）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
@@ -408,9 +407,9 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 507 步�
 
 
 
-## 12. E2E 测试（CSV 驱动，507 步骤 / 254 流程）
+## 12. E2E 测试（CSV 驱动，501 步骤 / 250 流程）
 
-> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，507 步骤 / 254 流程），结果见 `tests/e2e/results_*.csv`。
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，501 步骤 / 250 流程），结果见 `tests/e2e/results_*.csv`。
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 - NPU: Atlas 910B4 device 2 (RoCE link DOWN)
@@ -421,9 +420,9 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 507 步�
 
 | 指标 | 值 |
 |------|------|
-| **步骤** | **507** |
-| **流程** | **254** |
-| **PASS** | **251** |
+| **步骤** | **501** |
+| **流程** | **250** |
+| **PASS** | **247** |
 | **FAIL（硬件限制）** | **3** |
 | **通过率** | **99%** |
 
@@ -431,8 +430,8 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 507 步�
 
 | 分类 | 说明 | 步骤 | 流程 |
 |---|---|---|---|
-| FUNC | 58 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 234 | 68 |
-| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 99 | 96 |
+| FUNC | 57 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 231 | 67 |
+| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 96 | 93 |
 | SEC | 安全（命令注入+权限边界+主机安全+symlink） | 59 | 46 |
 | STATE | 状态一致性/幂等（含 NPU reinject 拒绝） | 37 | 10 |
 | RES | 韧性/自愈（含 NPU+CPU clean --all） | 27 | 7 |

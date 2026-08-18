@@ -22,17 +22,23 @@ case "${DCAT_OP:-inject}" in
             safe=$(echo "$ctr" | tr '/:' '__')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             [ -f "$SIDECAR" ] || { echo "no active docker_kill for $ctr" >&2; exit 0; }
-            docker start "$ctr" 2>/dev/null || true
-            rm -f "$SIDECAR"
-            echo "cleaned docker_kill (started $ctr)"
+            if docker start "$ctr" 2>/dev/null; then
+                rm -f "$SIDECAR"
+                echo "cleaned docker_kill (started $ctr)"
+            else
+                echo "cleanup failed: docker start $ctr (state preserved)" >&2; exit 1
+            fi
         else
             found=0
             for sf in ${SIDECAR_PFX}-*.sidecar; do
                 [ -f "$sf" ] || continue
                 c=$(cat "$sf")
-                docker start "$c" 2>/dev/null || true
-                rm -f "$sf"
-                found=1
+                if docker start "$c" 2>/dev/null; then
+                    rm -f "$sf"
+                    found=1
+                else
+                    echo "cleanup failed: docker start $c (keeping $sf)" >&2
+                fi
             done
             [ "$found" = 1 ] && echo "cleaned all docker_kill" || { echo "no active docker_kill" >&2; exit 0; }
         fi

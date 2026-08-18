@@ -52,7 +52,13 @@ case "${DCAT_OP:-inject}" in
         ;;
     clean)
         if [ -z "$chip" ]; then
-            echo "no active injection (chip required for ip_route clean)"
+            cleaned=0
+            for bak in /tmp/dcat-rNPU_iproute-*.bak; do
+                [ -f "$bak" ] || continue
+                c=${bak##*/dcat-rNPU_iproute-}; c=${c%.bak}
+                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+            done
+            [ "$cleaned" = 1 ] && echo "restored ip_route (all chips)" || echo "restored ip_route (no active injection)"
         elif is_del_action; then
             via=$(grep '^via=' "$SIDECAR" 2>/dev/null | cut -d= -f2)
             dev=$(grep '^dev=' "$SIDECAR" 2>/dev/null | cut -d= -f2)

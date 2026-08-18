@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统九大模块，共 58 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统九大模块，共 57 条故障。
 > 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)，故障速查见 [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md)。
 
 > **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行一次 `sudo make install` 即可在 `/usr/local/bin` 创建全局入口（符号链接指向 `build/dcat`，后续更新只需 `git pull`，无需重新安装）；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。
@@ -15,13 +15,13 @@
 | CPU | 5 | 核满载 / 核离线 / CPU 限额 / 降频 / RT 核饿死 |
 | 存储 | 5 | 磁盘写压 / 分区填满 / inode 耗尽 / IO 延迟 / IO 错误 |
 | 网络 | 13 | 延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 / 包损坏 / 连接耗尽 |
-| 进程 | 6 | 进程退出 / 挂起 / 僵尸 / fork 炸弹 / 死循环 / FD 耗尽 |
+| 进程 | 5 | 进程退出 / 挂起 / 僵尸 / fork 炸弹 / FD 耗尽 |
 | 内存 | 4 | 内存泄漏 / OOM / 内存碎片 / Swap 过载 |
 | 文件系统 | 2 | 文件锁 / iowait 飙高 |
 | Docker | 2 | 容器 kill / 容器内存过载 |
 | NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / PCIe 降速 / AICore 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
 | 系统 | 2 | 内核 panic / 下电重启 |
-| **合计** | **58** | |
+| **合计** | **57** | |
 
 ---
 
@@ -56,13 +56,12 @@
   - [3.11 rNET_tcp_loss](#311-rnet_tcp_loss) — TCP 丢包
   - [3.12 rNET_corrupt](#312-rnet_corrupt) — 包损坏
   - [3.13 rNET_conn_exhaust](#313-rnet_conn_exhaust) — 连接耗尽
-- [第四章 进程模块](#第四章-进程模块6-条)
+- [第四章 进程模块](#第四章-进程模块5-条)
   - [4.1 rPROC_exit](#41-rproc_exit) — 进程退出
   - [4.2 rPROC_hang](#42-rproc_hang) — 进程挂起
   - [4.3 rPROC_zstate](#43-rproc_zstate) — 僵尸进程
   - [4.4 rPROC_fork_bomb](#44-rproc_fork_bomb) — fork 炸弹
-  - [4.5 rPROC_loop](#45-rproc_loop) — 死循环
-  - [4.6 rPROC_fd_exhaust](#46-rproc_fd_exhaust) — FD 耗尽
+  - [4.5 rPROC_fd_exhaust](#45-rproc_fd_exhaust) — FD 耗尽
 - [第五章 内存模块](#第五章-内存模块4-条)
   - [5.1 rMEM_leak](#51-rmem_leak) — 内存泄漏
   - [5.2 rMEM_oom](#52-rmem_oom) — OOM
@@ -829,7 +828,7 @@ dcat clean rNET_conn_exhaust
 
 ---
 
-## 第四章 进程模块（6 条）
+## 第四章 进程模块（5 条）
 
 ### 4.1 rPROC_exit — 进程退出（kill -9，inject-only）
 
@@ -944,41 +943,7 @@ dcat clean rPROC_fork_bomb
 
 ---
 
-### 4.5 rPROC_loop — 死循环
-
-**UID**: `rPROC_loop`
-
-**描述**: 启动一个（或多线程）进程运行无限忙循环，持续消耗 CPU 资源。
-
-**实现原理**: 
-- **inject**: 根据 `threads` 参数，启动单线程（`perl -e '1 while 1'` 或 `yes`）或多线程（Python `threading`）忙循环进程。PID 写入 pidfile。
-- **clean**: 读取 pidfile，kill 进程。
-- **query**: 检查进程存活及 CPU 占用、线程数。
-
-**使用示例**:
-```bash
-# 单线程死循环
-dcat inject rPROC_loop --threads=1
-dcat query rPROC_loop
-dcat clean rPROC_loop
-
-# 4 线程死循环
-dcat inject rPROC_loop --threads=4
-dcat clean rPROC_loop
-```
-
-**参数可选范围**:
-| 参数 | 是否必填 | 类型 | 说明 |
-|---|---|---|---|
-| threads | 可选 | 正整数 | 线程数，默认 1。threads=1 用 perl/yes（单进程），threads>1 用 Python threading |
-
-**危险等级**: 中 — 持续消耗 CPU 资源（每个线程 100%），但不影响其他核的调度。多线程时可影响多个核。
-
-**补充说明**: 与 `rCPU_overload` 的区别：overload 用 `taskset` 绑定到指定核；loop 不绑核，由调度器自由分配。threads>1 时依赖 `python3`。
-
----
-
-### 4.6 rPROC_fd_exhaust — FD 耗尽
+### 4.5 rPROC_fd_exhaust — FD 耗尽
 
 **UID**: `rPROC_fd_exhaust`
 
@@ -1137,17 +1102,17 @@ dcat clean rMEM_swap_overload
 
 **UID**: `rFS_file_lock`
 
-**描述**: 通过 `chmod` 或 `chattr +i` 锁定文件，使其不可读/不可写/不可删除。
+**描述**: 通过 `chmod` + `chattr +i` + `mount --bind` 锁定文件，使其不可读/不可写/不可删除（限制对 root 也生效）。
 
 **实现原理**: 
 - **inject**: 根据 `mode` 参数：
-  - `noread`: `chmod 000`（不可读）
-  - `nowrite`: `chmod 444`（只读）
-  - `norw`: `chmod 000`（不可读写）
+  - `noread`: `chmod a-r` + 对文件 `mount --bind /dev/null`（读取返回空，对 root 也生效；目录仅 chmod）
+  - `nowrite`: `chmod a-w` + `chattr +i`（写入失败，root 亦不可写）
+  - `norw`: `chmod a-rw` + `chattr +i` + 对文件 `mount --bind -o ro <空文件>`（读取为空，写入返回 EROFS）
   - `nodelete`: `chattr +i`（不可删/改/重命名）
-  - 原始 mode 和 immutable 状态存入 sidecar。
-- **clean**: 从 sidecar 恢复原始 mode；若注入了 `+i` 则 `chattr -i`。
-- **query**: 打印当前 mode 与 lsattr。
+  - 原始 mode、immutable 状态、bind-mount 状态存入 sidecar。
+- **clean**: 若 bind-mount 则先 `umount`；若注入了 `+i` 则 `chattr -i`；从 sidecar 恢复原始 mode。
+- **query**: 打印当前 mode、lsattr 与 bind-mount 状态。
 
 **使用示例**:
 ```bash
@@ -1169,7 +1134,7 @@ dcat clean  rFS_file_lock
 
 **危险等级**: 中 — 锁定关键文件可能导致依赖该文件的服务异常。`nodelete`（immutable）需要 root 且文件系统支持 ext attrs。
 
-**补充说明**: `nodelete` 使用 `chattr +i`（需要 root，仅 ext2/3/4、xfs 等支持）。其他模式使用 `chmod`（需要文件属主或 root）。clean 恢复 sidecar 中保存的原始 mode。
+**补充说明**: `nodelete` 使用 `chattr +i`（需要 root，仅 ext2/3/4、xfs 等支持）。`noread` / `nowrite` / `norw` 对文件额外用 `mount --bind`（需要 root）使限制对 root 也生效；目录仅用 `chmod` + `chattr`（mount 不支持目录）。clean 从 sidecar 恢复原始 mode 并 umount。
 
 ---
 

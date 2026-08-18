@@ -47,7 +47,13 @@ case "${DCAT_OP:-inject}" in
         ;;
     clean)
         if [ -z "$chip" ]; then
-            echo "no active injection (chip required for route clean)"
+            cleaned=0
+            for bak in /tmp/dcat-rNPU_route-*.bak; do
+                [ -f "$bak" ] || continue
+                c=${bak##*/dcat-rNPU_route-}; c=${c%.bak}
+                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+            done
+            [ "$cleaned" = 1 ] && echo "restored route (all chips)" || echo "restored route (no active injection)"
         elif is_del_action; then
             orig_gw=$(cat "$SIDECAR" 2>/dev/null); orig_gw=${orig_gw:-0.0.0.0}
             $HCCN -route -a address "$addr" netmask "$mask" gateway "$orig_gw" || { echo "route re-add failed" >&2; exit 1; }

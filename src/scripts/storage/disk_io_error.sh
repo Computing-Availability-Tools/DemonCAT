@@ -29,9 +29,12 @@ case "${DCAT_OP:-inject}" in
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             if [ -f "$SIDECAR" ]; then
                 dm=$(cat "$SIDECAR")
-                dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null || true
-                rm -f "$SIDECAR"
-                echo "cleaned io_error (removed $dm)"
+                if dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null; then
+                    rm -f "$SIDECAR"
+                    echo "cleaned io_error (removed $dm)"
+                else
+                    echo "cleanup failed: dmsetup remove $dm (state preserved)" >&2; exit 1
+                fi
             else
                 echo "no active io_error" >&2; exit 0
             fi
@@ -40,9 +43,12 @@ case "${DCAT_OP:-inject}" in
             for sc in ${SIDECAR_PFX}-*.sidecar; do
                 [ -f "$sc" ] || continue
                 dm=$(cat "$sc")
-                dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null || true
-                rm -f "$sc"
-                cleaned=1
+                if dmsetup remove "$dm" 2>/dev/null || dmsetup remove -f "$dm" 2>/dev/null; then
+                    rm -f "$sc"
+                    cleaned=1
+                else
+                    echo "cleanup failed: dmsetup remove $dm (keeping $sc)" >&2
+                fi
             done
             if [ "$cleaned" = 1 ]; then
                 echo "cleaned all io_error"

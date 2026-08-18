@@ -16,7 +16,7 @@
 
 ### 版本定位
 
-DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统模块，提供统一的命令面、预检护栏、状态跟踪；58 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
+DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统模块，提供统一的命令面、预检护栏、状态跟踪；57 条故障以外部脚本 + 声明式配置接入，加一个故障 = 加一个脚本 + 配置文件一行，免重新编译。
 
 ### 变更摘要
 
@@ -27,21 +27,21 @@ DemonCAT 的初始开源版本。覆盖 CPU / 存储 / 网络 / 进程 / NPU / D
 - 3-tier dispatch：cnf 故障 → 编译注入器 → 动态插件（`dlopen .so`）
 - 示例动态插件 `plugins/libsample.so`
 
-#### 故障目录（58 条）
+#### 故障目录（57 条）
 
-CPU 5 / 存储 5 / 网络 13 / 进程 6 / 内存 4 / 文件系统 2 / Docker 2 / NPU 19 / 系统 2，按模块分布：
+CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 / NPU 19 / 系统 2，按模块分布：
 
 - **CPU 5 条**：核满载（可调负载 1-100%）、核离线、核挂起（RT 优先级）、CPU 降频（scaling_max_freq）、CPU 核心限幅（cgroup cpu.max）
 - **存储 5 条**：磁盘写压、分区填满、inode 耗尽、IO 延迟、IO 错误
 - **网络 13 条**：延迟 / 丢包 / 乱序 / 网卡 down / 降速 / 端口占用 / 服务停止 / 链路闪断 / 带宽限制 / 抖动 / TCP 丢包 / 网络破坏 / 连接耗尽
-- **进程 6 条**：进程退出（inject-only）/ 进程挂起 / 僵尸进程 / fork 炸弹 / 进程死循环 / fd 耗尽
+- **进程 5 条**：进程退出（inject-only）/ 进程挂起 / 僵尸进程 / fork 炸弹 / fd 耗尽
 - **内存 4 条**：内存泄漏 / OOM / swap 压力 / 内存碎片
 - **文件系统 2 条**：文件锁 / IO 等待高负载
 - **Docker 2 条**：容器 kill / 容器内存过载
 - **系统 2 条**：内核 panic / 关机
 - **NPU 19 条**：rNPU_pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove + RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
 
-合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 58 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条后 batch2 新增 7 条（pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove）增至 19 条。
+合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 57 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条后 batch2 新增 7 条（pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove）增至 19 条。
 
 #### Web 控制台（dcat serve）
 
@@ -112,7 +112,7 @@ CPU 5 / 存储 5 / 网络 13 / 进程 6 / 内存 4 / 文件系统 2 / Docker 2 /
 - `disk_write_overload.sh`：trap 杀 dd 子进程防孤儿
 - STATE-7 `rNPU_mtu_mismatch`：`--size=1500` 在 MTU=1500 机器上是 no-op → 改为 1280
 
-#### E2E 测试框架（507 步骤 / 254 流程）
+#### E2E 测试框架（501 步骤 / 250 流程）
 
 - 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
 - NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
@@ -136,7 +136,7 @@ CPU 5 / 存储 5 / 网络 13 / 进程 6 / 内存 4 / 文件系统 2 / Docker 2 /
 #### 文档
 
 - README（含依赖说明 + 一键安装脚本 `scripts/install_deps.sh`）
-- 用户手册 `User_Manual.md`（58 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
+- 用户手册 `User_Manual.md`（57 条故障 × 7 字段，含目录，NPU 章节含 §0 前置准备 + 实机示例）
 - 手动测试指南 `docs/Manual_Test_Reference.md`
 - SPEC（技术规格）+ DESIGN（架构设计）
 - Release Notes + docs/Test_Report.md
@@ -145,11 +145,11 @@ CPU 5 / 存储 5 / 网络 13 / 进程 6 / 内存 4 / 文件系统 2 / Docker 2 /
 
 - **ctest：27/27 全通过
   - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
-  - Tier 1 mock 表驱动故障测试（58 条全覆盖）
-  - Tier 2 脚本语法检查（sh -n 全部 59 脚本 + _common.sh）
+  - Tier 1 mock 表驱动故障测试（57 条全覆盖）
+  - Tier 2 脚本语法检查（sh -n 全部 58 脚本 + _common.sh）
   - Tier 3 真实执行测试（非 root 故障）
   - root 冒烟测试（smoke_root.sh）
-- **E2E**：507 步骤 / 254 流程，8 类混沌工程测试矩阵
+- **E2E**：501 步骤 / 250 流程，8 类混沌工程测试矩阵
 
 ### 已知限制
 

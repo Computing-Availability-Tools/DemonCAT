@@ -168,7 +168,6 @@ dcat list
 | `rNET_corrupt` | network | inject,clean,query | iface,corrupt_pct | — |
 | `rNET_conn_exhaust` | network | inject,clean,query | target | count |
 | `rPROC_fork_bomb` | process | inject,clean,query | count | — |
-| `rPROC_loop` | process | inject,clean,query | threads | — |
 | `rPROC_fd_exhaust` | process | inject,clean,query | count | — |
 | `rMEM_leak` | memory | inject,clean,query | size_mb | — |
 | `rMEM_oom` | memory | inject,clean,query | rate_mb | — |
@@ -433,7 +432,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 批次 | 范围 | 状态 |
 |---|---|---|
 | **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 16）+ 测试 | ✅ 已完成 |
-| **v0.1.0** | 扩展至 58 条故障（9 模块：cpu 5 / storage 5 / network 13 / process 6 / memory 4 / filesystem 2 / docker 2 / npu 19 / system 2）+ 27 ctest / 59 scripts / 507 e2e steps / 254 flows | ✅ 已完成 |
+| **v0.1.0** | 扩展至 57 条故障（9 模块：cpu 5 / storage 5 / network 13 / process 5 / memory 4 / filesystem 2 / docker 2 / npu 19 / system 2）+ 27 ctest / 58 scripts / 501 e2e steps / 250 flows | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 
@@ -455,7 +454,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 单元测试 | cli 解析、registry 查找、预检全路径、state 记录 | CTest + mock_executor | test_cli / test_registry / test_precheck / test_state |
 | 执行器 mock | executor_run/run_raw 的 mock 钩子 | CTest | test_executor_mock |
 | 输出格式 | result_t 构建/打印/释放 | CTest | test_output |
-| 表驱动故障 | 58 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
+| 表驱动故障 | 57 故障的 inject/clean/query 下发命令串 + env | CTest + mock_executor | test_faults（通用）+ test_faults_network / test_faults_process / test_faults_cpu_storage / test_faults_npu（按模块） |
 | 真实脚本测试 | 2 个示例故障用 mock（不断言真 CPU / 真 tc） | CTest | 同上 |
 | 端到端冒烟 | 真实 dcat 二进制：inject→query→clean→query→无残留 | 手工冒烟 | — |
 
@@ -473,7 +472,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 错误隔离 | 单个故障 inject/clean 失败不影响 dcat 主流程与其他故障 |
 | 资源占用 | 静态二进制；核心路径零动态分配 |
 | 跨平台 | Linux（glibc/musl）；WSL 兼容；不要求 Windows |
-| 可测 | mock_executor + 表驱动；无硬件可测全部 58 故障的下发命令串 |
+| 可测 | mock_executor + 表驱动；无硬件可测全部 57 故障的下发命令串 |
 | 状态持久化 | state 变更后写 `~/.demoncat/state.json`（cJSON 序列化），启动加载恢复 record_id 计数与未清理记录 |
 
 ---

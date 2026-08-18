@@ -65,7 +65,9 @@ case "${DCAT_OP:-inject}" in
             if [ -f "$SIDECAR" ]; then
                 { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$SIDECAR"
                 if [ "$mounted" = 1 ]; then
-                    umount "$path" 2>/dev/null || true
+                    if ! umount "$path" 2>/dev/null; then
+                        echo "cleanup failed: umount $path (state preserved)" >&2; exit 1
+                    fi
                 fi
                 if [ "$imm" = 0 ]; then
                     chattr -i "$path" 2>/dev/null || true
@@ -82,7 +84,10 @@ case "${DCAT_OP:-inject}" in
                 [ -f "$sc" ] || continue
                 { read -r path; read -r orig_mode; read -r imm; read -r mounted; } < "$sc"
                 if [ "$mounted" = 1 ]; then
-                    umount "$path" 2>/dev/null || true
+                    if ! umount "$path" 2>/dev/null; then
+                        echo "cleanup failed: umount $path (keeping $sc)" >&2
+                        continue
+                    fi
                 fi
                 if [ "$imm" = 0 ]; then
                     chattr -i "$path" 2>/dev/null || true

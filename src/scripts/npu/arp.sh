@@ -46,7 +46,13 @@ case "${DCAT_OP:-inject}" in
         ;;
     clean)
         if [ -z "$chip" ]; then
-            echo "no active injection (chip required for arp clean)"
+            cleaned=0
+            for bak in /tmp/dcat-rNPU_arp-*.bak; do
+                [ -f "$bak" ] || continue
+                c=${bak##*/dcat-rNPU_arp-}; c=${c%.bak}
+                DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1 && cleaned=1
+            done
+            [ "$cleaned" = 1 ] && echo "restored arp (all chips)" || echo "restored arp (no active injection)"
         elif is_del_action; then
             orig_mac=$(cat "$SIDECAR" 2>/dev/null); orig_mac=${orig_mac:-00:00:00:00:00:00}
             $HCCN -arp -a dev "$dev" ip "$ip" mac "$orig_mac" || { echo "arp re-add failed" >&2; exit 1; }

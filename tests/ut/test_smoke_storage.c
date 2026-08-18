@@ -60,9 +60,12 @@ static void smoke_teardown(void) {
     unlink("/tmp/dcat_smoke_storage.json");
     /* unlink() 不支持 glob,需用 shell 通配清理 */
     int rc;
-    rc = system("rm -f /tmp/dcat-rDISK_write_overload-*.pid"); (void)rc;
-    rc = system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*"); (void)rc;
-    rc = system("rm -f /tmp/dcat-rNET_port_occupy-*.pid"); (void)rc;
+    rc = system("rm -f /tmp/dcat-rDISK_write_overload-*.pid");
+    (void)rc;
+    rc = system("rm -f /tmp/dcat.write.* /tmp/dcat.stress.*");
+    (void)rc;
+    rc = system("rm -f /tmp/dcat-rNET_port_occupy-*.pid");
+    (void)rc;
 }
 
 int main(void) {

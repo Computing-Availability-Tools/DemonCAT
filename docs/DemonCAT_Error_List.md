@@ -104,36 +104,3 @@
 |---|---|---|---|
 | `rSYS_panic` | — | — | 系统崩溃 (kernel panic, 导致系统宕机) |
 | `rSYS_poweroff` | mode | — | 系统关机 (直接断电关机) |
-
-## 清理说明（clean）
-
-dcat 的 clean 有三种用法，按"是否能找到注入记录"分层：
-
-| 命令 | 行为 | 何时用 |
-|---|---|---|
-| `dcat clean <uid> --key=value` | 带参 clean：在 state 里按参数匹配活跃注入记录，逐条调脚本 clean | 正常清理（inject 完成后） |
-| `dcat clean <uid>`（无参） | stateless clean：绕过 state，脚本自行 glob `/tmp` 工件清理 | per-uid 兜底 |
-| `dcat clean --all` | 遍历全部故障执行无参 stateless clean（fan-out） | **全量兜底** |
-
-### Ctrl+C 中断后的兜底清理
-
-带参 `clean <uid> --key=value` **需要 state 记录**（inject 正常完成才写入）。如果 inject 被 Ctrl+C 中断（没完成、没写 state 记录），但 `/tmp` 工件（fill file / inode dir / pidfile / dm 设备等）已部分产生，此时带参 clean 会报 `no active injection`。
-
-**用 `dcat clean --all` 兜底**：它对每个故障执行无参 stateless clean，脚本自行扫描 `/tmp` 工件清理，不依赖 state 记录。例如：
-
-```bash
-dcat inject rDISK_part_full --path=/tmp   # Ctrl+C 中断（fill file 残留）
-dcat clean rDISK_part_full --path=/tmp    # → no active injection（无 state 记录）
-dcat clean --all                          # ← 兜底！清掉残留 fill file
-```
-
-> 注：clean 是幂等的——无活跃实例时返回 cleaned（非 error）。`clean --all` 报 error 仅有 NPU 硬件类故障（`rNPU_pcie_down` 等需真机驱动）。
-
-### 带 state 记录的正常 clean
-
-绝大多数情况下 inject 会正常完成并写 state 记录，此时用带参 clean 精确清理：
-
-```bash
-dcat inject rDISK_part_full --path=/tmp --size=100M
-dcat clean rDISK_part_full --path=/tmp    # 正常清理（state 有记录）
-```

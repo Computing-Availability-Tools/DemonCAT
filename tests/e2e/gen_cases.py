@@ -626,7 +626,7 @@ def gen():
     flow = f"STATE-{s_s}"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject")
     add(flow, 1, "cpu", "rCPU_overload", "clean1", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "pgrep -x perl | wc -l", "==0", "", "first clean ok")
-    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "", "", "", "second clean: idempotent (exit 0)")
+    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 1, "", "", "", "", "second clean: no active (dispatch returns 1)")
     s_s += 1
     # S2: 无参 clean ×2
     flow = f"STATE-{s_s}"

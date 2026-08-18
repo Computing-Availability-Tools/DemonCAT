@@ -88,7 +88,7 @@ case "${DCAT_OP:-inject}" in
         if [ -n "${DCAT_PARAM_CORES:-}" ]; then
             safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
-            clean_freq_file "$SIDECAR" || { echo "no active cpu_freq" >&2; exit 1; }
+            clean_freq_file "$SIDECAR" || { echo "no active cpu_freq" >&2; exit 0; }
             echo "cleaned cpu_freq (restored scaling_min/max_freq)"
         else
             found=0
@@ -98,7 +98,7 @@ case "${DCAT_OP:-inject}" in
             done
             if [ "$found" -eq 0 ]; then
                 echo "no active cpu_freq" >&2
-                exit 1
+                exit 0
             fi
             echo "cleaned all cpu_freq"
         fi

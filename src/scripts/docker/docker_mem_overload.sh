@@ -61,7 +61,7 @@ select(undef, undef, undef, undef);
             PIDFILE="${PIDFILE_PFX}-${safe}.pid"
             SIDECAR="${PIDFILE_PFX}-${safe}.sidecar"
             if [ ! -f "$PIDFILE" ]; then
-                echo "no active docker_mem_overload for $ctr" >&2; exit 1
+                echo "no active docker_mem_overload for $ctr" >&2; exit 0
             fi
             pid=$(cat "$PIDFILE")
             ctr_pid=$(sed -n '2p' "$SIDECAR" 2>/dev/null)
@@ -83,7 +83,7 @@ select(undef, undef, undef, undef);
                 rm -f "$pf" "${pf%.pid}.sidecar"
                 found=1
             done
-            [ "$found" = 1 ] && echo "cleaned all docker_mem_overload" || { echo "no active docker_mem_overload" >&2; exit 1; }
+            [ "$found" = 1 ] && echo "cleaned all docker_mem_overload" || { echo "no active docker_mem_overload" >&2; exit 0; }
         fi
         ;;
     query)

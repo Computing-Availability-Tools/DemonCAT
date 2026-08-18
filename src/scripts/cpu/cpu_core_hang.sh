@@ -82,7 +82,7 @@ case "${DCAT_OP:-inject}" in
                 found=1
             done
         fi
-        [ "$found" = 1 ] && echo "cleaned core_hang" || { echo "no active core_hang" >&2; exit 1; }
+        [ "$found" = 1 ] && echo "cleaned core_hang" || { echo "no active core_hang" >&2; exit 0; }
         ;;
     query)
         spec="${DCAT_PARAM_CORES:-}"

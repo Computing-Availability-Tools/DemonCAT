@@ -40,7 +40,7 @@ time.sleep(1e9)
             rm -f "$PIDFILE"
             echo "cleaned fragmentation driver (pid $pid)"
         else
-            echo "no active fragmentation driver" >&2; exit 1
+            echo "no active fragmentation driver" >&2; exit 0
         fi
         ;;
     query)

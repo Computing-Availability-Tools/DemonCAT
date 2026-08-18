@@ -74,7 +74,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$SIDECAR"
                 echo "cleaned file_lock (restored $path mode=$orig_mode imm=$imm mounted=$mounted)"
             else
-                echo "no active file_lock" >&2; exit 1
+                echo "no active file_lock" >&2; exit 0
             fi
         else
             cleaned=0
@@ -94,7 +94,7 @@ case "${DCAT_OP:-inject}" in
             if [ "$cleaned" = 1 ]; then
                 echo "cleaned all file_lock"
             else
-                echo "no active file_lock" >&2; exit 1
+                echo "no active file_lock" >&2; exit 0
             fi
         fi
         ;;

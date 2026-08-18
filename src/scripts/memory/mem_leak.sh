@@ -32,7 +32,7 @@ case "${DCAT_OP:-inject}" in
             rm -f "$PIDFILE"
             echo "cleaned memory leak (pid $pid)"
         else
-            echo "no active memory leak" >&2; exit 1
+            echo "no active memory leak" >&2; exit 0
         fi
         ;;
     query)

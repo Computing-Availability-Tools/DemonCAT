@@ -44,7 +44,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$PIDFILE"
                 echo "cleaned iowait_high (removed $target)"
             else
-                echo "no active iowait_high" >&2; exit 1
+                echo "no active iowait_high" >&2; exit 0
             fi
         else
             cleaned=0
@@ -59,7 +59,7 @@ case "${DCAT_OP:-inject}" in
             if [ "$cleaned" = 1 ]; then
                 echo "cleaned all iowait_high"
             else
-                echo "no active iowait_high" >&2; exit 1
+                echo "no active iowait_high" >&2; exit 0
             fi
         fi
         ;;

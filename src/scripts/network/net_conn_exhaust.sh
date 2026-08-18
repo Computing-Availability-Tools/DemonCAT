@@ -50,7 +50,7 @@ time.sleep(1e9)
                 rm -f "$PIDFILE"
                 echo "cleaned conn_exhaust (pid $pid)"
             else
-                echo "no active conn_exhaust" >&2; exit 1
+                echo "no active conn_exhaust" >&2; exit 0
             fi
         else
             found=0
@@ -64,7 +64,7 @@ time.sleep(1e9)
             if [ "$found" -eq 1 ]; then
                 echo "cleaned all conn_exhaust"
             else
-                echo "no active conn_exhaust" >&2; exit 1
+                echo "no active conn_exhaust" >&2; exit 0
             fi
         fi
         ;;

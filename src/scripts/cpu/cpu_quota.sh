@@ -133,7 +133,7 @@ case "${DCAT_OP:-inject}" in
         if [ -n "${DCAT_PARAM_CORES:-}" ]; then
             safe=$(echo "$DCAT_PARAM_CORES" | tr -c 'a-zA-Z0-9' '_')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
-            clean_quota_file "$SIDECAR" || { echo "no active cpu_quota" >&2; exit 1; }
+            clean_quota_file "$SIDECAR" || { echo "no active cpu_quota" >&2; exit 0; }
             echo "cleaned cpu_quota (restored, moved PIDs back to root)"
         else
             found=0
@@ -143,7 +143,7 @@ case "${DCAT_OP:-inject}" in
             done
             if [ "$found" -eq 0 ]; then
                 echo "no active cpu_quota" >&2
-                exit 1
+                exit 0
             fi
             echo "cleaned all cpu_quota"
         fi

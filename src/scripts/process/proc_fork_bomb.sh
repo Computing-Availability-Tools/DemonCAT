@@ -32,7 +32,7 @@ case "${DCAT_OP:-inject}" in
             rm -f "$PIDFILE"
             echo "cleaned fork_bomb (supervisor $pid)"
         else
-            echo "no active fork_bomb" >&2; exit 1
+            echo "no active fork_bomb" >&2; exit 0
         fi
         ;;
     query)

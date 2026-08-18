@@ -23,7 +23,7 @@ case "${DCAT_OP:-inject}" in
             safe=$(echo "$DCAT_PARAM_IFACE" | tr -c 'a-zA-Z0-9' '_')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
             iface=$(cat "$SIDECAR" 2>/dev/null)
-            [ -n "$iface" ] || { echo "no iface to clean" >&2; exit 1; }
+            [ -n "$iface" ] || { echo "no iface to clean" >&2; exit 0; }
             tc qdisc del dev "$iface" root 2>/dev/null
             rm -f "$SIDECAR"
             echo "cleaned packet corruption on $iface"
@@ -39,7 +39,7 @@ case "${DCAT_OP:-inject}" in
             if [ "$found" -eq 1 ]; then
                 echo "cleaned all net_corrupt"
             else
-                echo "no active net_corrupt" >&2; exit 1
+                echo "no active net_corrupt" >&2; exit 0
             fi
         fi
         ;;

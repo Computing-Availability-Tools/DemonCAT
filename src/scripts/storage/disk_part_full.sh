@@ -53,7 +53,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$SIDECAR"
                 echo "cleaned part_full (removed $f)"
             else
-                echo "no active part_full" >&2; exit 1
+                echo "no active part_full" >&2; exit 0
             fi
         else
             cleaned=0
@@ -67,7 +67,7 @@ case "${DCAT_OP:-inject}" in
             if [ "$cleaned" = 1 ]; then
                 echo "cleaned all part_full"
             else
-                echo "no active part_full" >&2; exit 1
+                echo "no active part_full" >&2; exit 0
             fi
         fi
         ;;

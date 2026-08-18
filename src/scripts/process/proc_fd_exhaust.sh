@@ -41,7 +41,7 @@ time.sleep(1e9)
             rm -f "$PIDFILE"
             echo "cleaned fd_exhaust (pid $pid)"
         else
-            echo "no active fd_exhaust" >&2; exit 1
+            echo "no active fd_exhaust" >&2; exit 0
         fi
         ;;
     query)

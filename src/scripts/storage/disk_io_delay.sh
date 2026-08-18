@@ -35,7 +35,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$SIDECAR"
                 echo "cleaned io_delay (removed $dm)"
             else
-                echo "no active io_delay" >&2; exit 1
+                echo "no active io_delay" >&2; exit 0
             fi
         else
             cleaned=0
@@ -49,7 +49,7 @@ case "${DCAT_OP:-inject}" in
             if [ "$cleaned" = 1 ]; then
                 echo "cleaned all io_delay"
             else
-                echo "no active io_delay" >&2; exit 1
+                echo "no active io_delay" >&2; exit 0
             fi
         fi
         ;;

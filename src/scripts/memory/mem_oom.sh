@@ -39,7 +39,7 @@ while True:
             rm -f "$PIDFILE"
             echo "cleaned oom driver (pid $pid)"
         else
-            echo "no active oom driver" >&2; exit 1
+            echo "no active oom driver" >&2; exit 0
         fi
         ;;
     query)

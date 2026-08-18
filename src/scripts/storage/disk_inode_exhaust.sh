@@ -35,7 +35,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$SIDECAR"
                 echo "cleaned inode_exhaust (removed $dir)"
             else
-                echo "no active inode_exhaust" >&2; exit 1
+                echo "no active inode_exhaust" >&2; exit 0
             fi
         else
             cleaned=0
@@ -49,7 +49,7 @@ case "${DCAT_OP:-inject}" in
             if [ "$cleaned" = 1 ]; then
                 echo "cleaned all inode_exhaust"
             else
-                echo "no active inode_exhaust" >&2; exit 1
+                echo "no active inode_exhaust" >&2; exit 0
             fi
         fi
         ;;

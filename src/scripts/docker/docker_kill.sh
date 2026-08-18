@@ -21,7 +21,7 @@ case "${DCAT_OP:-inject}" in
         if [ -n "$ctr" ]; then
             safe=$(echo "$ctr" | tr '/:' '__')
             SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
-            [ -f "$SIDECAR" ] || { echo "no active docker_kill for $ctr" >&2; exit 1; }
+            [ -f "$SIDECAR" ] || { echo "no active docker_kill for $ctr" >&2; exit 0; }
             docker start "$ctr" 2>/dev/null || true
             rm -f "$SIDECAR"
             echo "cleaned docker_kill (started $ctr)"
@@ -34,7 +34,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$sf"
                 found=1
             done
-            [ "$found" = 1 ] && echo "cleaned all docker_kill" || { echo "no active docker_kill" >&2; exit 1; }
+            [ "$found" = 1 ] && echo "cleaned all docker_kill" || { echo "no active docker_kill" >&2; exit 0; }
         fi
         ;;
     query)

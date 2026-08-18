@@ -144,11 +144,11 @@ CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 /
 ### 测试
 
 - **ctest：27/27 全通过
-  - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
-  - Tier 1 mock 表驱动故障测试（57 条全覆盖）
-  - Tier 2 脚本语法检查（sh -n 全部 58 脚本 + _common.sh）
-  - Tier 3 真实执行测试（非 root 故障）
-  - root 冒烟测试（smoke_root.sh）
+    - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
+    - Tier 1 mock 表驱动故障测试（57 条全覆盖）
+    - Tier 2 脚本语法检查（sh -n 全部 58 脚本 + _common.sh）
+    - Tier 3 真实执行测试（非 root 故障）
+    - root 冒烟测试（smoke_root.sh）
 - **E2E**：501 步骤 / 250 流程，8 类混沌工程测试矩阵
 
 ### 已知限制

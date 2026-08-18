@@ -5,7 +5,7 @@
 DemonCAT 容器化方案将编译依赖、运行时工具链全部打包进一个镜像，免去用户手动安装依赖的繁琐过程。
 
 | 特性 | 说明 |
-|------|------|
+| ------ | ------ |
 | 基础镜像 | `debian:bookworm-slim`（glibc，为未来 dcmi 链接预留） |
 | 构建方式 | 多阶段：builder 编译 `dcat` → runtime 精简运行时 |
 | 运行模式 | `--privileged` + `--network host` + `--pid host` |
@@ -77,7 +77,7 @@ docker run -d --name demoncat --privileged --network host --pid host \
 ## 4. 镜像内包含的运行时依赖
 
 | 包 | 用途 |
-|---|---|
+| --- | --- |
 | iproute2 | `tc`、`ip`（网络故障注入） |
 | ethtool | 网卡速率控制 |
 | iptables | TCP 丢包（iptables DROP） |
@@ -99,7 +99,7 @@ docker run -d --name demoncat --privileged --network host --pid host \
 ### 为什么用 `--privileged` + `--network host` + `--pid host`？
 
 | Docker 参数 | 原因 |
-|---|---|
+| --- | --- |
 | `--privileged` | tc/iptables 需要 CAP_NET_ADMIN；磁盘操作需要 /dev/sd*；NPU 需要 /dev/davinci* |
 | `--network host` | tc/iptables 直接操作宿主机网络接口（不是容器虚拟网卡） |
 | `--pid host` | systemctl 可达宿主机 systemd（rNET_service_stop 需要）；进程故障可操作宿主机 PID |
@@ -111,6 +111,7 @@ docker run -d --name demoncat --privileged --network host --pid host \
 ### 二进制路径解析
 
 `dcat` 通过 `/proc/self/exe` 解析项目树路径：
+
 - 二进制：`/app/build/dcat`
 - 配置：`/app/config/demoncat.conf`（`/app/build/../config/`）
 - 脚本：`/app/src/scripts/`（`/app/build/../src/scripts/`）
@@ -131,6 +132,7 @@ docker exec demoncat ls /dev/davinci*    # 容器内验证
 ```
 
 如需限制容器可见的芯片范围，设置环境变量：
+
 ```yaml
 environment:
   DCAT_NPU_CHIPS: "0,1,2,3"    # 只允许操作这 4 个 Phy-ID
@@ -141,7 +143,7 @@ environment:
 容器以只读方式挂载宿主机 Ascend 目录：
 
 | 挂载路径 | 内容 | 用途 |
-|---|---|---|
+| --- | --- | --- |
 | `/usr/local/Ascend/driver` | `hccn_tool`、`npu-smi`、`libdcmi.so` | NPU 管理/查询 |
 | `/usr/local/Ascend/nnae` | `libc_sec.so`、`libmmpa.so` | 运行时库依赖 |
 | `/usr/local/Ascend/ascend-toolkit` | `libopapi.so`、`libnnopbase.so`、OPP 算子库 | aclnn 负载故障（aic/aiv/hbm_load） |
@@ -150,12 +152,14 @@ environment:
 
 `_npu_stress`（ACL 负载工具）在镜像构建时**不会**编译（Docker builder 无 CANN）。
 compose.npu.yml 会从宿主机挂载预编译的二进制：
+
 ```yaml
 volumes:
   - ${DCAT_BUILD_DIR:-../build}/_npu_stress:/app/build/_npu_stress:ro
 ```
 
 确保宿主机上已编译 `_npu_stress`（需安装 CANN toolkit）：
+
 ```bash
 cd DemonCAT/build && cmake .. && make _npu_stress
 ```
@@ -163,7 +167,7 @@ cd DemonCAT/build && cmake .. && make _npu_stress
 ### 环境变量
 
 | 环境变量 | 值 | 作用 |
-|---|---|---|
+| --- | --- | --- |
 | `PATH` | `/usr/local/Ascend/driver/tools:...` | `hccn_tool`、`npu-smi` 可被找到 |
 | `LD_LIBRARY_PATH` | driver + nnae + toolkit 的 lib64 | 运行时库链接（ascendcl、opapi、nnopbase） |
 | `ASCEND_OPP_PATH` | `/usr/local/Ascend/ascend-toolkit/latest/opp` | aclnn 算子库路径（aic/aiv/hbm_load 必需） |
@@ -211,6 +215,7 @@ docker rmi demoncat
 ### Q: systemctl 相关故障（rNET_service_stop）不生效
 
 容器使用 `--pid host` 模式，systemctl 会直接操作宿主机的 systemd。确保：
+
 1. compose 中已配置 `pid: host`
 2. 宿主机已安装 systemd 并以 systemd 作为 PID 1
 

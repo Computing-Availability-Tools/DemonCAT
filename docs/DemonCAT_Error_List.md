@@ -5,7 +5,7 @@
 ## CPU 模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rCPU_overload` | cores | load_pct | CPU overload (multi-core burn, pure user-space) |
 | `rCPU_core_offline` | cores | — | CPU core offline via sysfs |
 | `rCPU_core_hang` | cores | — | CPU core hang (isolating core, migration stop) |
@@ -15,7 +15,7 @@
 ## 存储模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rDISK_write_overload` | device | workers,size_mb | Disk write IO overload (dd writers) |
 | `rDISK_part_full` | path | size | Partition fill (dd file creation) |
 | `rDISK_inode_exhaust` | path | count | Inode exhaustion (small file creation) |
@@ -25,7 +25,7 @@
 ## 网络模块（13 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rNET_delay` | iface,delay_ms | — | Network egress delay via tc netem |
 | `rNET_loss` | iface,loss_pct | — | Network packet loss (tc netem) |
 | `rNET_reorder` | iface,reorder_pct | — | Network packet reorder (tc netem) |
@@ -43,7 +43,7 @@
 ## 进程模块（5 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rPROC_exit` | pid | — | Process exit (kill -9, irreversible) |
 | `rPROC_hang` | pid | — | Process hang (SIGSTOP) |
 | `rPROC_zstate` | pid | — | Zombie process (kill target → zombie) |
@@ -53,7 +53,7 @@
 ## 内存模块（4 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rMEM_leak` | size_mb | — | Memory leak (progressive allocation) |
 | `rMEM_oom` | rate_mb | — | OOM pressure (rapid allocation) |
 | `rMEM_fragment` | blocks | — | Memory fragmentation (scatter allocation) |
@@ -62,21 +62,21 @@
 ## 文件系统模块（2 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rFS_file_lock` | path,mode | — | File lock (chmod+chattr+mount --bind: noread/nowrite/norw/nodelete) |
 | `rFS_iowait_high` | path | workers | High iowait (parallel dd readers) |
 
 ## Docker 模块（2 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rDOCKER_kill` | container | — | Docker container kill |
 | `rDOCKER_mem_overload` | container | size | Docker container memory overload (stress) |
 
 ## NPU 模块（19 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rNPU_link_down` | chip | — | RoCE link down (hccn_tool) |
 | `rNPU_ip_change` | chip,address,netmask | — | RoCE IP change |
 | `rNPU_gw_change` | chip,gateway | — | RoCE gateway change |
@@ -100,6 +100,6 @@
 ## 系统模块（2 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `rSYS_panic` | — | — | 系统崩溃 (kernel panic, 导致系统宕机) |
 | `rSYS_poweroff` | mode | — | 系统关机 (直接断电关机) |

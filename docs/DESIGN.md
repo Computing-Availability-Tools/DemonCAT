@@ -217,7 +217,7 @@ typedef struct {
 ```
 
 > `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
-
+>
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 
 ---
@@ -225,6 +225,7 @@ typedef struct {
 ## 3. 模块职责
 
 ### 3.1 main.c
+
 读取配置（`config_load`，固定路径见 SPEC §7）→ 注册 `fault_def` 表到 registry → 读取 argv（subcommand + uid + flags，含 `--config` / `--plugins` / `--help`）→ `cli_parse` → `state_load()` → `plugin_load_dir(plugindir)`（§3.13）→ 按 op 分发：`serve` 走 serve.c（§3.12），其余走 `dispatch_route`（三层回退：cnf → injector → plugin，§1.4）→ `output_print` → `state_save()` + `plugin_fini()` → 返回退出码。
 
 ### 3.2 cli.c（命令解析器）
@@ -311,9 +312,11 @@ INI 解析 `demoncat.conf`：
 - cnf 故障与注入器故障共用同一输出 schema。
 
 ### 3.9 dispatch.c
+
 按 op 路由，串联各模块（见 §5 关键流程）。`inject` 分支区分 `inject`-only 与可恢复；`clean` / `query` 对 `inject`-only 故障在 precheck 阶段拒绝（退出码 3）。`serve` 子命令由 §3.12 serve.c 独立处理，不经 dispatch_route。
 
 **按故障来源分流**（§1.4 三层）：
+
 - **cnf 故障**（`registry_find` 命中 `fault_def_t`）：inject/clean 走 `executor_run`，query 走 `executor_run_raw`。
 - **注入器故障**（`injector_find` 命中 `injector_t`）：直接调 `inj->inject/clean/query` 函数指针，不 fork、不设环境变量。
 - **动态插件**（`plugin_find` 命中 `dcat_plugin_t`）：`plugin_dispatch` 调 `p->inject/clean/query` 函数指针，自带 precheck（§3.13）。
@@ -322,17 +325,20 @@ INI 解析 `demoncat.conf`：
 - **Reinject 默认拒绝**（§8）：inject 路径在调脚本前先做 `reinject_find_overlap` 资源重叠检测；同资源重叠且无 `--force` → 退出码 5 拒绝；`--force` → 逐条 clean 旧记录后重新 inject。`dispatch_route_force(uid, op, params, force)` 承载 force 参数，`dispatch_route(...)` 退化为 `force=0` 的 wrapper 保后向兼容。
 
 ### 3.10 help.c
+
 - 子命令感知 `--help`：`dcat --help` 输出全局用法；`dcat inject --help` 列出所有支持 inject 的故障及参数；`dcat inject <uid> --help` 输出该故障的参数详情。
 - 全局帮助列 `--config <path>` / `--plugins <dir>` 全局选项；inject/clean/query 子命令帮助尾部提示动态插件故障参数见 `dcat list`。
 - `clean --all` / 无参 clean 说明纳入全局用法。
 
 ### 3.11 reinject.c
+
 - `reinject_find_overlap(fault_def, params, ids[], cap)`：对同 uid 的活动记录做资源重叠检测（§8.4）。资源键 = `fault_def->clean_required` 各参数值；`cores` 走集合交集，其余走精确串等，多参键取各参精确 AND。
 - `cores_parse(spec, bits)` / `cores_intersect(a, b)`：核集解析（`"0,1"` / `"0-3"` / 混合格式）+ 位 AND 交集（§8.5）。
 - 被 dispatch.c inject 分支调用（§3.9）：同资源 overlap 且无 `--force` → 退出码 5；`--force` → 逐条 clean 旧记录后 inject。
 - **仅 CNF 路径接入**；插件 / legacy injector 路径 deferred（§8.10）；inject-only 无 state 天然免检。
 
 ### 3.12 serve.c
+
 - `dcat serve` HTTP 控制平面：内置静态前端（`src/web/`）+ `/api/*` 端点。
 - **端点**：`/api/state`（活跃记录，从磁盘 reload state.json）、`/api/history`（历史）、`/api/catalog`（故障目录）、`/api/inject` + `/api/clean`（需 `--allow-write`）。
 - **参数**：`--port`（默认 8080）、`--bind`（默认 `0.0.0.0`）、`--webroot`（覆盖内置前端目录）、`--allow-write`（默认只读）。
@@ -340,6 +346,7 @@ INI 解析 `demoncat.conf`：
 - 不经 `dispatch_route`；main.c 检测到 `op=serve` 时直接调用 serve 模块。
 
 ### 3.13 plugin_manager.c
+
 - `plugin_load_dir(dir)`：扫描 `*.so`，`dlopen` + ABI 版本校验（`abi_version == DCAT_PLUGIN_ABI_VERSION`）+ `init()` + 注册到 `g_plugins[]`。
 - `plugin_find(uid)` / `plugin_list()` / `plugin_count()` / `plugin_fini()`。
 - 插件接口 `dcat_plugin_t`（`src/plugins/plugin.h`）：ABI 版本 + 元数据（uid/module/supported_ops/per-op 参数声明）+ `init`/`fini` 生命周期 + `precheck`/`inject`/`clean`/`query` 函数指针。
@@ -828,7 +835,7 @@ if (strcmp(op, "inject") == 0) {
 
 ## 9. 目录结构
 
-```
+```text
 DemonCAT/
 ├── CMakeLists.txt              # C11, -Wall -Wextra -Werror, cjson + pthread + dlopen
 ├── LICENSE                     # Apache-2.0

@@ -7,7 +7,7 @@
 加一个故障 = 加一个脚本 + 配置文件一行，**免重新编译**。
 
 | 项目 | 说明 |
-|------|------|
+| ------ | ------ |
 | 版本号 | v0.1.0 |
 | 发布时间 | 2026-08-11 |
 | 许可证 | Apache-2.0 |
@@ -127,7 +127,7 @@ dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--help]
 ## 文档
 
 | 文档 | 说明 |
-|------|------|
+| ------ | ------ |
 | [SPEC.md](SPEC.md) | 功能规格说明书 |
 | [User_Manual.md](User_Manual.md) | 使用手册 |
 | [docs/DESIGN.md](docs/DESIGN.md) | 架构设计 |

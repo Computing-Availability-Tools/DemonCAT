@@ -1,4 +1,4 @@
-/* tests/test_smoke_state_lost.c — Tier 3: state.json 丢失后 stateless clean 仍能清除活跃故障。
+/* tests/ut/test_smoke_state_lost.c — Tier 3: state.json 丢失后 stateless clean 仍能清除活跃故障。
  *
  * 场景：注入真实故障（写 /tmp sidecar + state.json）→ 模拟运维误删 state.json →
  *       分别走三条 clean 路径，验证故障确已从系统移除（进程恢复 + sidecar 消失）。

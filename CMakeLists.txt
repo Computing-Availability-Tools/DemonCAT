@@ -64,54 +64,54 @@ enable_testing()
 
 function(dcat_test name src)
     add_executable(${name} ${src} ${DCAT_CORE})
-    target_include_directories(${name} PRIVATE src src/core src/injectors src/plugins third_party/cjson tests)
+    target_include_directories(${name} PRIVATE src src/core src/injectors src/plugins third_party/cjson tests/ut)
     target_link_libraries(${name} PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endfunction()
 
 # ---- Tier 0: 核心单元测试 ----
-dcat_test(test_types        tests/test_types.c)
-dcat_test(test_output       tests/test_output.c)
-dcat_test(test_config       tests/test_config.c)
-dcat_test(test_registry     tests/test_registry.c)
-dcat_test(test_executor     tests/test_executor_mock.c)
-dcat_test(test_precheck     tests/test_precheck.c)
-dcat_test(test_state        tests/test_state.c)
-dcat_test(test_injectors    tests/test_injectors.c)
-dcat_test(test_dispatch     tests/test_dispatch.c)
-dcat_test(test_reinject     tests/test_reinject.c)
-dcat_test(test_cli          tests/test_cli.c)
-dcat_test(test_faults       tests/test_faults.c)
-dcat_test(test_help         tests/test_help.c)
+dcat_test(test_types        tests/ut/test_types.c)
+dcat_test(test_output       tests/ut/test_output.c)
+dcat_test(test_config       tests/ut/test_config.c)
+dcat_test(test_registry     tests/ut/test_registry.c)
+dcat_test(test_executor     tests/ut/test_executor_mock.c)
+dcat_test(test_precheck     tests/ut/test_precheck.c)
+dcat_test(test_state        tests/ut/test_state.c)
+dcat_test(test_injectors    tests/ut/test_injectors.c)
+dcat_test(test_dispatch     tests/ut/test_dispatch.c)
+dcat_test(test_reinject     tests/ut/test_reinject.c)
+dcat_test(test_cli          tests/ut/test_cli.c)
+dcat_test(test_faults       tests/ut/test_faults.c)
+dcat_test(test_help        tests/ut/test_help.c)
 
 # ---- Tier 0c: serve.c static 纯函数(直接 #include serve.c;不复用 dcat_test 宏防重复定义) ----
-add_executable(test_serve tests/test_serve.c ${DCAT_CORE_NO_SERVE})
-target_include_directories(test_serve PRIVATE src src/core src/injectors src/plugins third_party/cjson tests)
+add_executable(test_serve tests/ut/test_serve.c ${DCAT_CORE_NO_SERVE})
+target_include_directories(test_serve PRIVATE src src/core src/injectors src/plugins third_party/cjson tests/ut)
 target_link_libraries(test_serve PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})
 add_test(NAME test_serve COMMAND test_serve)
 set_tests_properties(test_serve PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # ---- Tier 0b: 插件测试 ----
-dcat_test(test_plugin_manager     tests/test_plugin_manager.c)
-dcat_test(test_plugin_integration tests/test_plugin_integration.c)
+dcat_test(test_plugin_manager     tests/ut/test_plugin_manager.c)
+dcat_test(test_plugin_integration tests/ut/test_plugin_integration.c)
 
-# ---- Tier 1: Mock 表驱动故障测试 (v0.1 33 条 + 批次2 30 条全覆盖) ----
-dcat_test(test_faults_cpu_storage  tests/test_faults_cpu_storage.c)
-dcat_test(test_faults_network      tests/test_faults_network.c)
-dcat_test(test_faults_process     tests/test_faults_process.c)
-dcat_test(test_faults_npu         tests/test_faults_npu.c)
-dcat_test(test_faults_batch2_newmods tests/test_faults_batch2_newmods.c)
-dcat_test(test_faults_batch2_ext     tests/test_faults_batch2_ext.c)
+# ---- Tier 1: Mock 表驱动故障测试 (57 条全覆盖) ----
+dcat_test(test_faults_cpu_storage  tests/ut/test_faults_cpu_storage.c)
+dcat_test(test_faults_network      tests/ut/test_faults_network.c)
+dcat_test(test_faults_process     tests/ut/test_faults_process.c)
+dcat_test(test_faults_npu         tests/ut/test_faults_npu.c)
+dcat_test(test_faults_batch2_newmods tests/ut/test_faults_batch2_newmods.c)
+dcat_test(test_faults_batch2_ext     tests/ut/test_faults_batch2_ext.c)
 
 # ---- Tier 2: 脚本语法检查 (sh -n) ----
 add_test(NAME test_syntax COMMAND sh tests/check_syntax.sh WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 # ---- Tier 3: 真实执行测试 (无需 root) ----
-dcat_test(test_smoke_cpu      tests/test_smoke_cpu.c)
-dcat_test(test_smoke_process  tests/test_smoke_process.c)
-dcat_test(test_smoke_storage  tests/test_smoke_storage.c)
-dcat_test(test_smoke_state_lost tests/test_smoke_state_lost.c)
+dcat_test(test_smoke_cpu      tests/ut/test_smoke_cpu.c)
+dcat_test(test_smoke_process  tests/ut/test_smoke_process.c)
+dcat_test(test_smoke_storage  tests/ut/test_smoke_storage.c)
+dcat_test(test_smoke_state_lost tests/ut/test_smoke_state_lost.c)
 
 # ---- 示例动态插件 (编译到 plugins/libsample.so) ----
 add_library(sample_plugin MODULE

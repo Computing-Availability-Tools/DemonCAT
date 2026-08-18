@@ -93,4 +93,4 @@ ci: add problem matchers for actionlint/markdownlint
 1. 状态机幂等性与韧性(clean 幂等 / 孤儿恢复 / clean --all fan-out)。
 2. 退出码语义正确(预检拒绝走 `3`,未找到走 `4`,重注入走 `5`)。
 3. C 内存安全 + pthread 并发安全。
-4. PR 是否带对应单测(`tests/` 下 ctest)或 E2E 用例(`tests/e2e/cases.csv`)。
+4. PR 是否带对应单测(`tests/ut/` 下 ctest)或 E2E 用例(`tests/e2e/cases.csv`)。

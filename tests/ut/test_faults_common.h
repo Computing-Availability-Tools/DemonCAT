@@ -1,4 +1,4 @@
-/* tests/test_faults_common.h — shared helpers for mock table-driven fault tests */
+/* tests/ut/test_faults_common.h — shared helpers for mock table-driven fault tests */
 #ifndef TEST_FAULTS_COMMON_H
 #define TEST_FAULTS_COMMON_H
 

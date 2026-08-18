@@ -1,13 +1,13 @@
 #!/bin/bash
-# tests/smoke_root.sh — 自动化测试需要 root 的故障
-# 用法: sudo bash tests/smoke_root.sh
+# tests/ut/smoke_root.sh — 自动化测试需要 root 的故障
+# 用法: sudo bash tests/ut/smoke_root.sh
 # 自动检测可用工具，能测的都测，不能测的跳过并说明原因
 set -e
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 # ---- 前置检查 ----
-[ "$(id -u)" = 0 ] || { echo "ERROR: 需要 root 权限运行 (sudo bash tests/smoke_root.sh)"; exit 1; }
+[ "$(id -u)" = 0 ] || { echo "ERROR: 需要 root 权限运行 (sudo bash tests/ut/smoke_root.sh)"; exit 1; }
 
 # 编译（子 shell 防止 cd 污染当前目录）
 [ -x build/dcat ] || { mkdir -p build && (cd build && cmake .. && make); }

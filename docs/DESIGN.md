@@ -718,7 +718,7 @@ dispatch_route(uid, op, params):
 
 ## 8. Reinject 默认拒绝与原子替换（--force）
 
-> 对同一资源的重复注入从"隐式并集/覆盖"改为"默认拒绝 + `--force` 原子替换"。TDD 完成，由 `tests/test_reinject.c` 覆盖（见 Test_Report.md / §11）。
+> 对同一资源的重复注入从"隐式并集/覆盖"改为"默认拒绝 + `--force` 原子替换"。TDD 完成，由 `tests/ut/test_reinject.c` 覆盖（见 Test_Report.md / §11）。
 
 ### 8.1 目标与动机
 
@@ -801,7 +801,7 @@ if (strcmp(op, "inject") == 0) {
 - 网络 / 进程 / 存储：本就同资源不可并存（tc qdisc / ipset / 单 pid），只是把隐式打架显式化为 reject，基本非 breaking。
 - 迁移：重注入改加 `--force`；不同资源（不重叠核 / 不同 iface）仍并发 OK。
 
-### 8.9 测试计划（TDD，`tests/test_reinject.c`，先全红）
+### 8.9 测试计划（TDD，`tests/ut/test_reinject.c`，先全红）
 
 1. `cores_parse`：`"0,1"`→{0,1}；`"0-3"`→{0,1,2,3}；`"0,1,4-6"`→{0,1,4,5,6}；`"0"`→{0}；非法→-1。
 2. `cores_intersect`：{0,1}∩{0,2}={0}；{0,1}∩{2,3}=∅；{0,1}∩{0-8}={0,1}。
@@ -940,38 +940,20 @@ DemonCAT/
 │   ├── cJSON.c               # vendored JSON 库
 │   └── cJSON.h
 └── tests/
-    ├── test.h                 # 测试框架宏
-    ├── test_faults_common.h   # 通用 mock + 断言宏
-    ├── test_types.c           # Tier 0: params_t helpers
-    ├── test_output.c          # Tier 0: result_ok/err/print
-    ├── test_config.c          # Tier 0: INI 解析
-    ├── test_registry.c        # Tier 0: fault_def 查找
-    ├── test_executor_mock.c   # Tier 0: mock 拦截
-    ├── test_precheck.c        # Tier 0: per-op required 校验
-    ├── test_state.c           # Tier 0: 记录 + 持久化 + 并发
-    ├── test_injectors.c       # Tier 0: injector_t 接口
-    ├── test_dispatch.c        # Tier 0: 3-tier 路由 + reinject
-    ├── test_reinject.c        # Tier 0: 资源重叠检测 + --force
-    ├── test_cli.c             # Tier 0: 子命令解析
-    ├── test_faults.c          # Tier 0: 表驱动示例
-    ├── test_help.c            # Tier 0: --help 系统
-    ├── test_plugin_manager.c     # Tier 0b: dlopen + ABI
-    ├── test_plugin_integration.c # Tier 0b: 插件集成
-    ├── test_faults_cpu_storage.c # Tier 1: 2 条 CPU + 1 条存储
-    ├── test_faults_network.c      # Tier 1: 11 条网络
-    ├── test_faults_process.c      # Tier 1: 3 条进程
-    ├── test_faults_npu.c          # Tier 1: 19 条 NPU
-    ├── check_syntax.sh            # Tier 2: sh -n 语法检查
-    ├── test_smoke_cpu.c          # Tier 3: CPU 真实执行
-    ├── test_smoke_process.c      # Tier 3: 进程真实执行
-    ├── test_smoke_storage.c      # Tier 3: 存储+端口真实执行
-    ├── test_smoke_state_lost.c   # Tier 3: state 丢失 stateless clean
-    ├── smoke_root.sh             # root 级自动化测试
-    └── e2e/                      # E2E 测试框架
-        ├── README.md
-        ├── cases.csv             # 501 步骤 / 250 流程
-        ├── gen_cases.py          # 用例生成
-        └── run_e2e.py            # 执行框架
+    ├── ut/                        # ctest 单元 + 冒烟测试 (C 实现)
+    │   ├── test.h                 # 测试框架宏
+    │   ├── test_faults_common.h   # 通用 mock + 断言宏
+    │   ├── test_*.c               # Tier 0 核心单元测试
+    │   ├── test_faults_*.c        # Tier 1 mock 表驱动 (CPU/存储/网络/进程/NPU)
+    │   ├── test_faults_batch2_*.c # Tier 1 批次2 扩展 (新模块 + NPU 扩展)
+    │   ├── test_smoke_cpu.c       # CPU 真实执行 (2 条)
+    │   ├── test_smoke_process.c   # 进程真实执行 (3 条)
+    │   ├── test_smoke_storage.c   # 存储+端口真实执行 (2 条)
+    │   ├── test_smoke_state_lost.c # state.json 丢失后 stateless clean
+    │   └── smoke_root.sh          # root 级自动化测试
+    ├── check_syntax.sh            # sh -n 全脚本语法检查
+    ├── ctest_summary.py           # CI 单测摘要解析
+    └── e2e/                       # E2E (CSV 驱动, run_e2e.py + cases.csv)
 ```
 
 > `src/injectors/` 目录含 `injector.h`（接口定义，§7.2）与 `injectors.c`（注册表 + 查找，§7.4）。本期 `builtin_injectors[]` 为空数组。
@@ -990,7 +972,7 @@ DemonCAT/
 ## 11. 测试设计
 
 > 开发遵循 TDD：先写测试用例（定义期望命令串 + 环境变量 + 退出码 + JSON 输出），再实现功能代码使测试通过。测试用例是行为的权威定义（见 SPEC §9.1）。
-> Reinject 默认拒绝与 --force 的测试设计见 §8.9（`tests/test_reinject.c`）。
+> Reinject 默认拒绝与 --force 的测试设计见 §8.9（`tests/ut/test_reinject.c`）。
 
 ### 11.1 mock_executor
 

@@ -167,6 +167,33 @@ int test_parse_force_on_clean_parsed(void) {
     return 0;
 }
 
+int test_cli_has_help(void) {
+    const char *a1[] = {"dcat", "--help"};
+    ASSERT_INT_EQ(cli_has_help(2, (char **)a1), 1);
+    const char *a2[] = {"dcat", "inject", "rNET_loss", "--help"};
+    ASSERT_INT_EQ(cli_has_help(4, (char **)a2), 1);
+    const char *a3[] = {"dcat", "inject", "rNET_loss"};
+    ASSERT_INT_EQ(cli_has_help(3, (char **)a3), 0);
+    const char *a4[] = {"dcat"};
+    ASSERT_INT_EQ(cli_has_help(1, (char **)a4), 0);
+    const char *a5[] = {"dcat", "--helpful"};
+    ASSERT_INT_EQ(cli_has_help(2, (char **)a5), 0);
+    return 0;
+}
+
+int test_cli_subcommand(void) {
+    const char *a1[] = {"dcat", "inject", "rNET_loss"};
+    ASSERT_STREQ(cli_subcommand(3, (char **)a1), "inject");
+    const char *a2[] = {"dcat", "serve"};
+    ASSERT_STREQ(cli_subcommand(2, (char **)a2), "serve");
+    const char *a3[] = {"dcat", "bogus"};
+    ASSERT_TRUE(cli_subcommand(2, (char **)a3) == NULL);
+    const char *a4[] = {"dcat", "--config", "x.conf", "inject"};
+    ASSERT_TRUE(cli_subcommand(4, (char **)a4) == NULL);
+    ASSERT_TRUE(cli_subcommand(1, (char **)a4) == NULL);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_parse_inject_flags);
     RUN_TEST(test_parse_clean_flags);
@@ -185,5 +212,7 @@ int main(void) {
     RUN_TEST(test_parse_force_default_zero);
     RUN_TEST(test_parse_force_with_value_error);
     RUN_TEST(test_parse_force_on_clean_parsed);
+    RUN_TEST(test_cli_has_help);
+    RUN_TEST(test_cli_subcommand);
     return TEST_MAIN_RETURN();
 }

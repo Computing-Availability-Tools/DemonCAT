@@ -1,4 +1,4 @@
-/* tests/test_smoke_process.c — Tier 3: real execution tests for process faults */
+/* tests/ut/test_smoke_process.c — Tier 3: real execution tests for process faults */
 #include "core/config.h"
 #include "core/registry.h"
 #include "core/state.h"

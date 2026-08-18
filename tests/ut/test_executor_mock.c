@@ -58,8 +58,16 @@ int test_run_raw_mock(void) {
     return 0;
 }
 
+int test_executor_check_tool(void) {
+    ASSERT_INT_EQ(executor_check_tool("/bin/sh"), 0);
+    ASSERT_INT_EQ(executor_check_tool("/nonexistent/dcat_xyz"), -1);
+    ASSERT_INT_EQ(executor_check_tool(""), -1);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_build_cmd_and_env);
     RUN_TEST(test_run_raw_mock);
+    RUN_TEST(test_executor_check_tool);
     return TEST_MAIN_RETURN();
 }

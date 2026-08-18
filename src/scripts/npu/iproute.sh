@@ -13,8 +13,8 @@ SIDECAR="/tmp/dcat-rNPU_iproute-$chip.bak"
 
 fault_present() {
     case "${DCAT_OP:-inject}" in
-        clean) ! $HCCN -ip_route -g 2>/dev/null | grep -Fq "$ip" ;;
-        *)     $HCCN -ip_route -g 2>/dev/null | grep -Fq "$ip" ;;
+        clean) ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip" ;;
+        *)     $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip" ;;
     esac
 }
 

@@ -1375,7 +1375,6 @@ hccn_tool -i 2 -mtu -g                         # 当前 MTU
 #### ⑤ 测试网段选择原则
 
 - `route`/`iproute` 使用的**目标网段**（`address`/`ip`）必须是**目标机器尚未使用、且与 NPU 网段不冲突**的地址，否则查询/断言会误判。
-- `action=del` 类用例的**前提**是目标项已存在：先注入对应 `action=add` 类用例再注入删除。
 - 这些是**机器相关**参数：在另一台机器上请换成未占用的网段。
 
 #### ⑥ chip 参数语义说明
@@ -1524,25 +1523,20 @@ dcat clean rNPU_netdetect_change --chip=0
 
 **UID**: `rNPU_arp`
 
-**描述**: 向指定芯片 ARP 表注入伪造条目（`action=add`，等效 ARP 毒化）或删除 ARP 条目（`action=del`），导致流量被误导或停滞。
+**描述**: 向指定芯片 ARP 表注入伪造 ARP 条目（ARP 毒化），导致流量被误导或停滞。clean 删除注入的条目。
 
 **实现原理**:
 
-- **action=add**: 执行 `-arp -a dev <dev> ip <ip> mac <mac>` 添加伪造 ARP。
-- **action=del**: 先 `-arp -g` 查询原 MAC 存 sidecar，再 `-arp -d` 删除。clean 从 sidecar 恢复原 MAC。
-- **clean**: add 模式执行 `-arp -d` 删除伪造条目；del 模式从 sidecar 取原 MAC 执行 `-arp -a` 恢复。
-- **query**: add 模式检查 ARP 表中是否同时存在 ip+mac；del 模式检查 ip 是否已不存在。
+- **inject**: 执行 `-arp -a dev <dev> ip <ip> mac <mac>` 添加伪造 ARP 条目，存 sidecar 记录定位键。
+- **clean**: 从 sidecar 或参数读取定位键，执行 `-arp -d dev <dev> ip <ip>` 删除条目，rm sidecar。
+- **query**: 检查 ARP 表中是否存在 ip+mac。
 
 **使用示例**:
 
 ```bash
 # ARP 毒化（注入伪造 ARP）
-dcat inject rNPU_arp --chip=2 --action=add --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
+dcat inject rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200 --mac=00:11:22:33:44:55
 dcat query rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
-dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
-
-# ARP 删除（前提：条目已存在）
-dcat inject rNPU_arp --chip=2 --action=del --dev=eth2 --ip=10.30.12.200
 dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 ```
 
@@ -1551,14 +1545,13 @@ dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
-| action | inject 必填 | add/del | `add`=注入伪造 ARP（需 mac），`del`=删除 ARP 条目 |
 | dev | 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认，勿照抄示例的 eth2） |
 | ip | 必填 | IPv4 | ARP 条目的 IP |
-| mac | action=add 时必填 | MAC | 伪造的 MAC 地址 |
+| mac | inject 必填 | MAC | 伪造的 MAC 地址 |
 
 **危险等级**: 高 — 流量被静默导向错误 MAC，可能导致数据泄漏或连接中断。
 
-**补充说明**: `dev` 是 NPU 内部网口名（机器相关），不是 Linux 系统接口名。`action=del` 前提条件：目标 ARP 条目必须已存在，否则报 "configuration does not exist"。
+**补充说明**: `dev` 是 NPU 内部网口名（机器相关），不是 Linux 系统接口名。
 
 ---
 
@@ -1566,25 +1559,20 @@ dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 
 **UID**: `rNPU_route`
 
-**描述**: 向指定芯片路由表添加路由（`action=add`）或删除路由（`action=del`），可能误导流量走向错误网关或导致网段不可达。
+**描述**: 向指定芯片路由表添加路由，可能误导流量走向错误网关或导致网段不可达。clean 删除注入的路由。
 
 **实现原理**:
 
-- **action=add**: 执行 `-route -a address <addr> netmask <mask> gateway <gw>` 添加路由。
-- **action=del**: 先 `-route -g` 查询原 gateway 存 sidecar，再 `-route -d` 删除。clean 从 sidecar 恢复。
-- **clean**: add 模式执行 `-route -d` 删除；del 模式从 sidecar 取原 gateway 执行 `-route -a` 恢复。
-- **query**: add 模式检查路由表是否包含该网段；del 模式检查该网段是否已不存在。
+- **inject**: 执行 `-route -a address <addr> netmask <mask> gateway <gw>` 添加路由，存 sidecar 记录定位键。
+- **clean**: 从 sidecar 或参数读取定位键，执行 `-route -d address <addr> netmask <mask>` 删除路由，rm sidecar。
+- **query**: 检查路由表是否包含该网段。
 
 **使用示例**:
 
 ```bash
 # 添加路由
-dcat inject rNPU_route --chip=2 --action=add --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.30.12.254
+dcat inject rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0 --gateway=10.30.12.254
 dcat query rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
-dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
-
-# 删除路由（前提：路由已存在）
-dcat inject rNPU_route --chip=2 --action=del --address=10.30.40.0 --netmask=255.255.255.0
 dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 ```
 
@@ -1593,14 +1581,13 @@ dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
-| action | inject 必填 | add/del | `add`=添加路由（需 gateway），`del`=删除路由 |
 | address | 必填 | IPv4 | 目标网段地址（须未使用、不与 NPU 网段冲突） |
 | netmask | 必填 | IPv4 | 子网掩码 |
-| gateway | action=add 时必填 | IPv4 | 下一跳网关，**必须与 NPU IP 同网段** |
+| gateway | inject 必填 | IPv4 | 下一跳网关，**必须与 NPU IP 同网段** |
 
-**危险等级**: 中/高 — add=错误路由可能将流量导向不可达网关；del=删除关键路由后对应网段立即不可达。
+**危险等级**: 中/高 — 添加错误路由可能将流量导向不可达网关。
 
-**补充说明**: `gateway` 必须与 NPU IP 同网段，否则报 "segment doesn't match"。`action=del` 前提：目标路由必须已存在。
+**补充说明**: `gateway` 必须与 NPU IP 同网段，否则报 "segment doesn't match"。
 
 ---
 
@@ -1608,25 +1595,20 @@ dcat clean rNPU_route --chip=2 --address=10.30.40.0 --netmask=255.255.255.0
 
 **UID**: `rNPU_iprule`
 
-**描述**: 向指定芯片添加策略路由规则（`action=add`）或删除规则（`action=del`），可能改变流量选路。
+**描述**: 向指定芯片添加策略路由规则，可能改变流量选路。clean 删除注入的规则。
 
 **实现原理**:
 
-- **action=add**: 执行 `-ip_rule -a dir <dir> ip <ip> table <table>` 添加规则。
-- **action=del**: 先 `-ip_rule -g` 查询原 table 存 sidecar，再 `-ip_rule -d` 删除。clean 从 sidecar 恢复。
-- **clean**: add 模式执行 `-ip_rule -d` 删除；del 模式从 sidecar 取原 table 执行 `-ip_rule -a` 恢复。
-- **query**: add 模式检查是否同时存在 ip+table；del 模式检查 ip 是否已不存在。
+- **inject**: 执行 `-ip_rule -a dir <dir> ip <ip> table <table>` 添加规则，存 sidecar 记录定位键。
+- **clean**: 从 sidecar 或参数读取定位键，执行 `-ip_rule -d dir <dir> ip <ip>` 删除规则，rm sidecar。
+- **query**: 检查是否同时存在 ip+table。
 
 **使用示例**:
 
 ```bash
 # 添加 ip rule
-dcat inject rNPU_iprule --chip=2 --action=add --dir=from --ip=10.30.12.210 --table=150
+dcat inject rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210 --table=150
 dcat query rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
-dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
-
-# 删除 ip rule（前提：规则已存在）
-dcat inject rNPU_iprule --chip=2 --action=del --dir=from --ip=10.30.12.210
 dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 ```
 
@@ -1635,14 +1617,13 @@ dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
-| action | inject 必填 | add/del | `add`=添加规则（需 table），`del`=删除规则 |
 | dir | 必填 | from/to/in/out | 策略匹配方向 |
 | ip | 必填 | IPv4 | 策略匹配的源/目的 IP |
-| table | action=add 时必填 | 整数 | 路由表编号 |
+| table | inject 必填 | 整数 | 路由表编号 |
 
 **危险等级**: 中 — 受匹配的流量将改走指定路由表，可能改变选路结果。
 
-**补充说明**: `action=del` 前提：目标 ip rule 必须已存在。注入前用 `-ip_rule -g` 查看已有规则避免冲突。
+**补充说明**: 注入前用 `-ip_rule -g` 查看已有规则避免冲突。
 
 ---
 
@@ -1650,25 +1631,20 @@ dcat clean rNPU_iprule --chip=2 --dir=from --ip=10.30.12.210
 
 **UID**: `rNPU_iproute`
 
-**描述**: 向指定芯片策略路由表添加路由（`action=add`）或删除路由（`action=del`），可能误导流量或导致网段不可达。
+**描述**: 向指定芯片策略路由表添加路由，可能误导流量或导致网段不可达。clean 删除注入的路由。
 
 **实现原理**:
 
-- **action=add**: 执行 `-ip_route -a ip <ip> ip_mask <mask> via <via> dev <dev> table <table>` 添加路由。
-- **action=del**: 先 `-ip_route -g table <table>` 查询原 via/dev 存 sidecar，再 `-ip_route -d` 删除。clean 从 sidecar 恢复。
-- **clean**: add 模式执行 `-ip_route -d` 删除；del 模式从 sidecar 取原 via/dev 执行 `-ip_route -a` 恢复。
-- **query**: add 模式检查该 table 是否包含指定 ip；del 模式检查 ip 是否已不存在。
+- **inject**: 执行 `-ip_route -a ip <ip> ip_mask <mask> via <via> dev <dev> table <table>` 添加路由，存 sidecar 记录定位键。
+- **clean**: 从 sidecar 或参数读取定位键，执行 `-ip_route -d ip <ip> ip_mask <mask> table <table>` 删除路由，rm sidecar。
+- **query**: 检查该 table 是否包含指定 ip。
 
 **使用示例**:
 
 ```bash
 # 添加 ip route
-dcat inject rNPU_iproute --chip=2 --action=add --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
+dcat inject rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --via=10.30.12.254 --dev=eth2 --table=100
 dcat query rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
-dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
-
-# 删除 ip route（前提：路由已存在）
-dcat inject rNPU_iproute --chip=2 --action=del --ip=10.30.50.0 --ip_mask=24 --table=100
 dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 ```
 
@@ -1677,16 +1653,15 @@ dcat clean rNPU_iproute --chip=2 --ip=10.30.50.0 --ip_mask=24 --table=100
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
-| action | inject 必填 | add/del | `add`=添加路由（需 via/dev），`del`=删除路由 |
 | ip | 必填 | IPv4 | 目标网段地址 |
 | ip_mask | 必填 | 整数 0-32 | **CIDR 位数**（如 `24` 表示 /24），不是点分掩码 |
-| via | action=add 时必填 | IPv4 | 下一跳地址，**必须与 NPU IP 同网段** |
-| dev | action=add 时必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认） |
 | table | 必填 | 整数 0-255 | 路由表编号 |
+| via | inject 必填 | IPv4 | 下一跳地址，**必须与 NPU IP 同网段** |
+| dev | inject 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认） |
 
-**危险等级**: 中/高 — add=添加路由可能改变选路结果；del=删除路由后对应网段立即不可达。
+**危险等级**: 中/高 — 添加路由可能改变选路结果。
 
-**补充说明**: **ip_mask 是 CIDR 位数**（0-32），不是点分掩码。`via` 必须与 NPU IP 同网段。`dev` 是 NPU 内部名（机器相关），不是 Linux 系统接口名。`action=del` 前提：目标 ip_route 必须已存在。
+**补充说明**: **ip_mask 是 CIDR 位数**（0-32），不是点分掩码。`via` 必须与 NPU IP 同网段。`dev` 是 NPU 内部名（机器相关），不是 Linux 系统接口名。
 
 ---
 

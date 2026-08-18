@@ -70,22 +70,22 @@ static char *sb_done(sb_t *s) {
 /* ---- 文案 ---- */
 static const char *op_usage(const char *op) {
     if (strcmp(op, "inject") == 0) return "dcat inject <uid> --<param>=<value> ...";
-    if (strcmp(op, "clean")  == 0) return "dcat clean <uid> [--<param>=<value> ...]  |  dcat clean --all";
-    if (strcmp(op, "query")  == 0) return "dcat query [uid] [--<param>=<value> ...]";
-    if (strcmp(op, "list")   == 0) return "dcat list";
-    if (strcmp(op, "serve")  == 0) return "dcat serve [--port <n>] [--bind <addr>] [--webroot <dir>]";
+    if (strcmp(op, "clean") == 0) return "dcat clean <uid> [--<param>=<value> ...]  |  dcat clean --all";
+    if (strcmp(op, "query") == 0) return "dcat query [uid] [--<param>=<value> ...]";
+    if (strcmp(op, "list") == 0) return "dcat list";
+    if (strcmp(op, "serve") == 0) return "dcat serve [--port <n>] [--bind <addr>] [--webroot <dir>]";
     return "dcat <subcommand> [uid] [--key=value ...]";
 }
 
 static const char *op_desc(const char *op) {
     if (strcmp(op, "inject") == 0) return "注入故障；可恢复故障写 state + 返回 record_id；inject-only 不写 state";
-    if (strcmp(op, "clean")  == 0) return "清除活跃注入：clean <uid> --params 按参数匹配 state 记录逐条清理；"
-                                       "clean <uid> 无参=清该 uid 全部 /tmp 工件(脚本自 glob)；"
-                                       "clean --all=对所有故障 fan-out 无参 clean；均 stateless，state.json 丢失/损坏仍可清";
-    if (strcmp(op, "query")  == 0) return "无 uid 列出全部活跃注入；有 uid 走脚本 query 直通 stdout + confirmed（参数可选，无参=查全部）";
-    if (strcmp(op, "list")   == 0) return "列出故障目录（cnf + 动态插件）";
-    if (strcmp(op, "serve")  == 0) return "启动 HTTP 控制平面(长驻):同端口 serve 静态前端 + /api/*;"
-                                       "经 SSH 隧道访问 localhost:PORT 远程注入/查看;Ctrl+C 优雅退出(state 保存)";
+    if (strcmp(op, "clean") == 0) return "清除活跃注入：clean <uid> --params 按参数匹配 state 记录逐条清理；"
+                                         "clean <uid> 无参=清该 uid 全部 /tmp 工件(脚本自 glob)；"
+                                         "clean --all=对所有故障 fan-out 无参 clean；均 stateless，state.json 丢失/损坏仍可清";
+    if (strcmp(op, "query") == 0) return "无 uid 列出全部活跃注入；有 uid 走脚本 query 直通 stdout + confirmed（参数可选，无参=查全部）";
+    if (strcmp(op, "list") == 0) return "列出故障目录（cnf + 动态插件）";
+    if (strcmp(op, "serve") == 0) return "启动 HTTP 控制平面(长驻):同端口 serve 静态前端 + /api/*;"
+                                         "经 SSH 隧道访问 localhost:PORT 远程注入/查看;Ctrl+C 优雅退出(state 保存)";
     return "";
 }
 
@@ -151,17 +151,17 @@ char *help_render_global(void) {
     sb_t s;
     sb_init(&s);
     sb_addf(&s,
-        "usage: dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--plugins <dir>] [--help]\n"
-        "  subcommand: inject | clean | query | list | serve\n"
-        "  inject <uid> --p1=v1 ...     注入故障\n"
-        "  clean  <uid> [--k=v ...]     清除活跃注入；无参=清该 uid 全部工件；--all=清全部故障(stateless)\n"
-        "  query  [uid] [--k=v ...]     无 uid 列出活跃注入；有 uid 验证故障是否生效（参数可选，无参=查全部）\n"
-        "  list                         列出故障目录\n"
-        "  serve [--port n] [--bind a] [--webroot d] [--allow-write]  HTTP 控制平面(长驻);默认只读,+--allow-write 开注入/清理\n"
-        "  --config <path>              指定 demoncat.conf 路径（默认 <root>/config/demoncat.conf）\n"
-        "  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）\n"
-        "  --all                        仅 clean：无参清理全部故障（state.json 丢失/损坏时仍可清）\n"
-        "  --help                       打印本帮助；置于子命令后可显示该子命令参数\n");
+            "usage: dcat <subcommand> [uid] [--key=value ...] [--config <path>] [--plugins <dir>] [--help]\n"
+            "  subcommand: inject | clean | query | list | serve\n"
+            "  inject <uid> --p1=v1 ...     注入故障\n"
+            "  clean  <uid> [--k=v ...]     清除活跃注入；无参=清该 uid 全部工件；--all=清全部故障(stateless)\n"
+            "  query  [uid] [--k=v ...]     无 uid 列出活跃注入；有 uid 验证故障是否生效（参数可选，无参=查全部）\n"
+            "  list                         列出故障目录\n"
+            "  serve [--port n] [--bind a] [--webroot d] [--allow-write]  HTTP 控制平面(长驻);默认只读,+--allow-write 开注入/清理\n"
+            "  --config <path>              指定 demoncat.conf 路径（默认 <root>/config/demoncat.conf）\n"
+            "  --plugins <dir>              指定动态插件目录（默认 <root>/plugins）\n"
+            "  --all                        仅 clean：无参清理全部故障（state.json 丢失/损坏时仍可清）\n"
+            "  --help                       打印本帮助；置于子命令后可显示该子命令参数\n");
     return sb_done(&s);
 }
 

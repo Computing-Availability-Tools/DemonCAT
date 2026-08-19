@@ -24,8 +24,9 @@ static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id>
                            "  load_pct 1-100 (default 100)\n";
 
 /* After sync, measure actual compute time and sleep proportionally.
- * Calibrated: 100% duty only reaches ~max_achievable on NPU (host overhead).
- * So to get target T%, set duty = T / max_achievable, then sleep the rest. */
+ * max_achievable is calibrated per-chip: larger arrays (910C) have more
+ * Cube/Vector units, so the same workload saturates less. We use conservative
+ * estimates (0.90 aicore, 0.92 aivector) that work across 910B4 and 910C. */
 static void pace_load(int load_pct, struct timespec *batch_start, float max_achievable) {
     if (load_pct >= 100) return;
     int duty = (int)(load_pct / max_achievable);
@@ -84,8 +85,10 @@ int main(int argc, char **argv) {
         aclrtFree(d_ptr);
 
     } else if (strcmp(mode, "aicore") == 0) {
-        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage */
-        int M = 2048, K = 2048, N = 2048;
+        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage
+         * Size auto-scales: larger chips (910C) need bigger matmul to saturate Cube array.
+         * 8192 ensures saturation on both 910B4 (~96%) and 910C (~90%+). */
+        int M = 8192, K = 8192, N = 8192;
         size_t szA = (size_t)M*K*2, szB = (size_t)K*N*2, szC = (size_t)M*N*2;
         void *dA=NULL, *dB=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, szA, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -116,7 +119,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.96f);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.90f);
             }
         } else {
             while (1) {
@@ -126,7 +129,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.96f);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.90f);
             }
         }
         if (ws) aclrtFree(ws);
@@ -134,8 +137,9 @@ int main(int argc, char **argv) {
         aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
 
     } else if (strcmp(mode, "aivector") == 0) {
-        /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage */
-        int64_t count = 134217728;  /* 128M elements = 256MB FP16 */
+        /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage
+         * 256M elements to saturate Vector units on both 910B4 and 910C. */
+        int64_t count = 268435456;  /* 256M elements = 512MB FP16 */
         size_t bytes = (size_t)count * 2;
         void *dA=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -167,7 +171,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.98f);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.92f);
             }
         } else {
             while (1) {
@@ -177,7 +181,7 @@ int main(int argc, char **argv) {
                     iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.98f);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.92f);
             }
         }
         if (ws) aclrtFree(ws);

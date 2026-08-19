@@ -1,0 +1,59 @@
+name: PR Close Cancel Job
+
+# PR 关闭(merge 或直接关闭)→ 自动 force-cancel 该 PR head SHA 上残留的 in-progress
+# workflow run,省 CI 分钟、清理未完成构建。静默(不发评论,PR 已关闭)。
+# 用 pull_request_target(非 pull_request):fork PR 的 pull_request 事件 GITHUB_TOKEN
+# 是只读的,actions:write 被忽略 → force-cancel 必 403;pull_request_target 用默认分支
+# 的可写 token。本 job 只调 API、不 checkout PR 代码 → 无 pwn 风险。
+# 注:pull_request_target 读默认分支上的 workflow 文件,须合并到默认分支才生效。
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: close-cancel-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Force-cancel leftover workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+          SELF_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          RUNS=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO/actions/runs?head_sha=$PR_SHA&per_page=100")
+          echo "$RUNS" | jq -e '.workflow_runs | type == "array"' >/dev/null 2>&1 || {
+            echo "::warning::API error fetching runs for $PR_SHA: $(echo "$RUNS" | jq -r '.message // "unknown"')"
+            exit 0
+          }
+          CANDIDATES=$(echo "$RUNS" | jq -r --arg self "$SELF_RUN_ID" \
+            '[.workflow_runs[]? | select(.status != "completed" and ((.id | tostring) != $self))] | .[].id' 2>/dev/null || true)
+          if [ -z "$CANDIDATES" ]; then
+            echo "no in-progress runs to cancel for PR head $PR_SHA"
+            exit 0
+          fi
+          CANCEL_COUNT=0
+          while IFS= read -r RUN_ID; do
+            [ -z "$RUN_ID" ] && continue
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/$REPO/actions/runs/$RUN_ID/force-cancel" || echo "000")
+            case "$HTTP_CODE" in
+              202) echo "cancelled $RUN_ID"; CANCEL_COUNT=$((CANCEL_COUNT + 1)) ;;
+              409|410) echo "run $RUN_ID already terminal ($HTTP_CODE)" ;;
+              *) echo "::warning::failed to cancel $RUN_ID (HTTP $HTTP_CODE)" ;;
+            esac
+          done <<< "$CANDIDATES"
+          echo "cancelled $CANCEL_COUNT leftover run(s) for PR head $PR_SHA"

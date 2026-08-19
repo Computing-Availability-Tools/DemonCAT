@@ -84,8 +84,9 @@ int main(int argc, char **argv) {
         aclrtFree(d_ptr);
 
     } else if (strcmp(mode, "aicore") == 0) {
-        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage */
-        int M = 2048, K = 2048, N = 2048;
+        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage
+         * 2048³ 只占约一半 AI Core → 5120³ 才能吃满(910B3 实测 98%) */
+        int M = 5120, K = 5120, N = 5120;
         size_t szA = (size_t)M*K*2, szB = (size_t)K*N*2, szC = (size_t)M*N*2;
         void *dA=NULL, *dB=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, szA, ACL_MEM_MALLOC_HUGE_FIRST) ||

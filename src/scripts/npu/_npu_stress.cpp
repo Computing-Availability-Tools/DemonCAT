@@ -5,8 +5,10 @@
  *   aicore:   FP16 Matmul loop (Cube compute unit stress → AICore Usage)
  *   aivector: FP16 Exp loop (Vector compute unit stress → AIVector Usage)
  * duration 0 = run forever (until killed)
- * load_pct 1-100 (default 100): duty-cycle percentage. load_pct=50 → 50% compute, 50% sleep.
- * On 910C/910B3 (64G): load_pct=100 → ~100% utilization. On 910B4 (32G): ~96%.
+ * load_pct 1-100 (default 100): scales workload size (NOT duty-cycle).
+ *   100 = full 8192 matmul (saturates 910C/910B3 to ~100%)
+ *   50  = 4096 matmul (910C: ~50%, 910B4: ~100% since fewer Cube units)
+ *   Continuous compute, no sleeping → npu-smi shows stable utilization.
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"
@@ -22,22 +24,7 @@
 
 static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct]\n"
                            "  duration 0 = run forever (until killed)\n"
-                           "  load_pct 1-100 (default 100)\n";
-
-/* Duty-cycle: after compute batch, sleep proportionally to achieve target load_pct.
- * load_pct=100 → no sleep. load_pct=50 → sleep = compute_time. */
-static void pace_load(int load_pct, struct timespec *batch_start) {
-    if (load_pct >= 100) return;
-    int duty = load_pct;
-    if (duty < 1) duty = 1;
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    long compute_us = (now.tv_sec - batch_start->tv_sec) * 1000000 + (now.tv_nsec - batch_start->tv_nsec) / 1000;
-    if (compute_us <= 0) compute_us = 1;
-    long off_us = compute_us * (100 - duty) / duty;
-    if (off_us > 0) usleep(off_us);
-    clock_gettime(CLOCK_MONOTONIC, batch_start);
-}
+                           "  load_pct 1-100 (default 100): scales workload size\n";
 
 /* helper: create a 2D FP16 tensor backed by device memory */
 static aclTensor* make_tensor(void *dev_ptr, int rows, int cols) {
@@ -69,7 +56,6 @@ int main(int argc, char **argv) {
 
     aclrtStream stream;
     aclrtCreateStream(&stream);
-    struct timespec batch_start;
 
     if (strcmp(mode, "hbm") == 0) {
         size_t bytes = (size_t)size_mb * 1024 * 1024;
@@ -83,8 +69,12 @@ int main(int argc, char **argv) {
 
     } else if (strcmp(mode, "aicore") == 0) {
         /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage
-         * 8192 size saturates Cube array on both 910B4 and 910C. */
-        int M = 8192, K = 8192, N = 8192;
+         * Scale matmul size by load_pct: 100%=8192, 50%=4096, 25%=2048.
+         * Bigger matmul → more Cube units occupied → higher utilization.
+         * 910C: 8192≈100%, 4096≈50%. 910B4: 8192≈100%, 4096≈100% (fewer units). */
+        int M = 8192 * load_pct / 100;
+        if (M < 256) M = 256;
+        int K = M, N = M;
         size_t szA = (size_t)M*K*2, szB = (size_t)K*N*2, szC = (size_t)M*N*2;
         void *dA=NULL, *dB=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, szA, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -105,7 +95,6 @@ int main(int argc, char **argv) {
         if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
         printf("AICore stress: FP16 Matmul %dx%dx%d on dev %d load=%d%% %s\n", M, N, K, dev_id, load_pct, duration > 0 ? "" : "forever");
 
-        clock_gettime(CLOCK_MONOTONIC, &batch_start);
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
@@ -114,7 +103,6 @@ int main(int argc, char **argv) {
                     aclnnMatmul(ws, ws_size, exec, stream);
                 }
                 aclrtSynchronizeStream(stream);
-                pace_load(load_pct, &batch_start);
             }
         } else {
             while (1) {
@@ -123,7 +111,6 @@ int main(int argc, char **argv) {
                     aclnnMatmul(ws, ws_size, exec, stream);
                 }
                 aclrtSynchronizeStream(stream);
-                pace_load(load_pct, &batch_start);
             }
         }
         if (ws) aclrtFree(ws);
@@ -132,8 +119,10 @@ int main(int argc, char **argv) {
 
     } else if (strcmp(mode, "aivector") == 0) {
         /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage
-         * 256M elements to saturate Vector units on both 910B4 and 910C. */
-        int64_t count = 268435456;  /* 256M elements = 512MB FP16 */
+         * Scale element count by load_pct: 100%=256M, 50%=128M.
+         * More elements → more Vector units occupied → higher utilization. */
+        int64_t count = (int64_t)268435456 * load_pct / 100;
+        if (count < 1048576) count = 1048576;  /* min 1M */
         size_t bytes = (size_t)count * 2;
         void *dA=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -155,7 +144,6 @@ int main(int argc, char **argv) {
         printf("AIVector stress: FP16 Exp %ldM elem on dev %d load=%d%% %s\n",
                count / 1048576, dev_id, load_pct, duration > 0 ? "" : "forever");
 
-        clock_gettime(CLOCK_MONOTONIC, &batch_start);
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
@@ -164,7 +152,6 @@ int main(int argc, char **argv) {
                     aclnnExp(ws, ws_size, exec, stream);
                 }
                 aclrtSynchronizeStream(stream);
-                pace_load(load_pct, &batch_start);
             }
         } else {
             while (1) {
@@ -173,7 +160,6 @@ int main(int argc, char **argv) {
                     aclnnExp(ws, ws_size, exec, stream);
                 }
                 aclrtSynchronizeStream(stream);
-                pace_load(load_pct, &batch_start);
             }
         }
         if (ws) aclrtFree(ws);

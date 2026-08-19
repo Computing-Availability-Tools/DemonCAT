@@ -1,16 +1,13 @@
 /*
  * _npu_stress.c — NPU stress tool using aclnn operators (no torch_npu required).
- * Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct] [card_id] [chip_id]
+ * Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct]
  *   hbm:      allocate HBM memory + memset (HBM bandwidth stress)
  *   aicore:   FP16 Matmul loop (Cube compute unit stress → AICore Usage)
  *   aivector: FP16 Exp loop (Vector compute unit stress → AIVector Usage)
  * duration 0 = run forever (until killed)
- * load_pct 1-100 (default 100), duty-cycle: compute for X ms, sleep for Y ms
- * When load_pct < 100 and card_id/chip_id provided, auto-calibrates max_achievable
- * by running at 100% duty for 3 seconds and sampling npu-smi.
+ * load_pct 1-100 (default 100): duty-cycle percentage. load_pct=50 → 50% compute, 50% sleep.
+ * On 910C/910B3 (64G): load_pct=100 → ~100% utilization. On 910B4 (32G): ~96%.
  * Monitor: npu-smi info -t usages -i <card> -c 0
- * Note: load<100 uses duty-cycle, so single npu-smi samples oscillate (96/0).
- * Average multiple samples for accurate load reading.
  */
 #include "acl/acl.h"
 #include "aclnn/aclnn_base.h"
@@ -23,89 +20,16 @@
 #include <unistd.h>
 #include <time.h>
 
-static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct] [card_id] [chip_id]\n"
+static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct]\n"
                            "  duration 0 = run forever (until killed)\n"
-                           "  load_pct 1-100 (default 100)\n"
-                           "  card_id/chip_id: for auto-calibration (npu-smi sampling)\n";
+                           "  load_pct 1-100 (default 100)\n";
 
-/* Sample NPU utilization via npu-smi. Returns 0-100, or -1 on failure. */
-static float sample_npu_usage(int card_id, int chip_id, const char *kw1, const char *kw2) {
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "npu-smi info -t usages -i %d -c %d 2>/dev/null", card_id, chip_id);
-    FILE *fp = popen(cmd, "r");
-    if (!fp) return -1;
-    char line[256];
-    float pct = -1;
-    while (fgets(line, sizeof(line), fp)) {
-        if ((kw1 && strstr(line, kw1)) || (kw2 && strstr(line, kw2))) {
-            char *p = strrchr(line, ':');
-            if (p) { p++; while (*p==' '||*p=='\t') p++; pct=atof(p); }
-            break;
-        }
-    }
-    pclose(fp);
-    return pct;
-}
-
-/* Calibrate peak by running 100% duty batches for 3 seconds while sampling.
- * Must be called AFTER tensors/exec/ws are set up. Returns 0.1-1.0. */
-#define CALIBRATE_SEC 3
-#define CALIBRATE_INTERVAL_US 300000
-
-static float calibrate_aicore(int card_id, int chip_id,
-        aclrtStream stream, aclTensor *tA, aclTensor *tB, aclTensor *tC,
-        uint64_t *ws_size, aclOpExecutor **exec, void *ws, float fallback) {
-    if (card_id < 0 || chip_id < 0) return fallback;
-    float peak = 0; int samples = 0;
-    time_t cal_end = time(NULL) + CALIBRATE_SEC;
-    while (time(NULL) < cal_end) {
-        for (int i = 0; i < 100; i++) {
-            aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, ws_size, exec);
-            aclnnMatmul(ws, *ws_size, *exec, stream);
-        }
-        aclrtSynchronizeStream(stream);
-        usleep(CALIBRATE_INTERVAL_US);
-        float v = sample_npu_usage(card_id, chip_id, "Aicore", "Aicube");
-        if (v > 0) { if (v > peak) peak = v; samples++; }
-    }
-    if (samples == 0 || peak < 1) return fallback;
-    peak /= 100.0f;
-    if (peak > 1.0f) peak = 1.0f;
-    if (peak < 0.1f) peak = fallback;
-    fprintf(stderr, "calibrated aicore max_achievable=%.0f%% (%d samples)\n", peak*100, samples);
-    return peak;
-}
-
-static float calibrate_aivector(int card_id, int chip_id,
-        aclrtStream stream, aclTensor *tA, aclTensor *tC,
-        uint64_t *ws_size, aclOpExecutor **exec, void *ws, float fallback) {
-    if (card_id < 0 || chip_id < 0) return fallback;
-    float peak = 0; int samples = 0;
-    time_t cal_end = time(NULL) + CALIBRATE_SEC;
-    while (time(NULL) < cal_end) {
-        for (int i = 0; i < 100; i++) {
-            aclnnExpGetWorkspaceSize(tA, tC, ws_size, exec);
-            aclnnExp(ws, *ws_size, *exec, stream);
-        }
-        aclrtSynchronizeStream(stream);
-        usleep(CALIBRATE_INTERVAL_US);
-        float v = sample_npu_usage(card_id, chip_id, "Aivector", NULL);
-        if (v > 0) { if (v > peak) peak = v; samples++; }
-    }
-    if (samples == 0 || peak < 1) return fallback;
-    peak /= 100.0f;
-    if (peak > 1.0f) peak = 1.0f;
-    if (peak < 0.1f) peak = fallback;
-    fprintf(stderr, "calibrated aivector max_achievable=%.0f%% (%d samples)\n", peak*100, samples);
-    return peak;
-}
-
-/* After sync, measure actual compute time and sleep proportionally. */
-static void pace_load(int load_pct, struct timespec *batch_start, float max_achievable) {
+/* Duty-cycle: after compute batch, sleep proportionally to achieve target load_pct.
+ * load_pct=100 → no sleep. load_pct=50 → sleep = compute_time. */
+static void pace_load(int load_pct, struct timespec *batch_start) {
     if (load_pct >= 100) return;
-    int duty = (int)(load_pct / max_achievable);
+    int duty = load_pct;
     if (duty < 1) duty = 1;
-    if (duty > 100) duty = 100;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     long compute_us = (now.tv_sec - batch_start->tv_sec) * 1000000 + (now.tv_nsec - batch_start->tv_nsec) / 1000;
@@ -132,9 +56,6 @@ int main(int argc, char **argv) {
     if (argc > 4) size_mb = atoi(argv[4]);
     int load_pct = 100;
     if (argc > 5) load_pct = atoi(argv[5]);
-    int card_id = -1, chip_id = -1;
-    if (argc > 6) card_id = atoi(argv[6]);
-    if (argc > 7) chip_id = atoi(argv[7]);
     if (load_pct < 1) load_pct = 1;
     if (load_pct > 100) load_pct = 100;
     if (size_mb <= 0) size_mb = 512;
@@ -149,7 +70,6 @@ int main(int argc, char **argv) {
     aclrtStream stream;
     aclrtCreateStream(&stream);
     struct timespec batch_start;
-    clock_gettime(CLOCK_MONOTONIC, &batch_start);
 
     if (strcmp(mode, "hbm") == 0) {
         size_t bytes = (size_t)size_mb * 1024 * 1024;
@@ -185,34 +105,25 @@ int main(int argc, char **argv) {
         if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
         printf("AICore stress: FP16 Matmul %dx%dx%d on dev %d load=%d%% %s\n", M, N, K, dev_id, load_pct, duration > 0 ? "" : "forever");
 
-        /* Auto-calibrate: run 100% duty for 3 seconds while sampling npu-smi */
-        float max_achievable = 0.90f;
-        if (load_pct < 100) {
-            max_achievable = calibrate_aicore(card_id, chip_id, stream,
-                tA, tB, tC, &ws_size, &exec, ws, 0.90f);
-        }
-
-        int iter = 0;
+        clock_gettime(CLOCK_MONOTONIC, &batch_start);
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
                 for (int i = 0; i < 100; i++) {
                     aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
                     aclnnMatmul(ws, ws_size, exec, stream);
-                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, max_achievable);
+                pace_load(load_pct, &batch_start);
             }
         } else {
             while (1) {
                 for (int i = 0; i < 100; i++) {
                     aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
                     aclnnMatmul(ws, ws_size, exec, stream);
-                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, max_achievable);
+                pace_load(load_pct, &batch_start);
             }
         }
         if (ws) aclrtFree(ws);
@@ -244,34 +155,25 @@ int main(int argc, char **argv) {
         printf("AIVector stress: FP16 Exp %ldM elem on dev %d load=%d%% %s\n",
                count / 1048576, dev_id, load_pct, duration > 0 ? "" : "forever");
 
-        /* Auto-calibrate: run 100% duty for 3 seconds while sampling npu-smi */
-        float max_achievable = 0.92f;
-        if (load_pct < 100) {
-            max_achievable = calibrate_aivector(card_id, chip_id, stream,
-                tA, tC, &ws_size, &exec, ws, 0.92f);
-        }
-
-        int iter = 0;
+        clock_gettime(CLOCK_MONOTONIC, &batch_start);
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
                 for (int i = 0; i < 100; i++) {
                     aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
                     aclnnExp(ws, ws_size, exec, stream);
-                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, max_achievable);
+                pace_load(load_pct, &batch_start);
             }
         } else {
             while (1) {
                 for (int i = 0; i < 100; i++) {
                     aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
                     aclnnExp(ws, ws_size, exec, stream);
-                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
-                if (load_pct < 100) pace_load(load_pct, &batch_start, max_achievable);
+                pace_load(load_pct, &batch_start);
             }
         }
         if (ws) aclrtFree(ws);

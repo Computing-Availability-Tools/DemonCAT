@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """_npu_stress.py — NPU stress tool using torch_npu (replaces C++ ACL version).
 
-Usage: _npu_stress.py <aicore|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
+Usage: _npu_stress.py <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
   aicore:   torch.matmul (Cube units → AICore Usage)
+  aicpu:    torch.topk (AICpu units → AICpu Usage)
   aivector: torch.add (Vector units → AIVector Usage)
   hbm:      allocate N tensors (HBM memory stress)
   load_pct 1-100 (default 100): scales tensor size, NOT duty-cycle.
-    100 = full 5120 (saturates chip), 50 = 2560 (half the compute)
-    Continuous compute, no sleeping → npu-smi shows stable utilization.
+    100 = full size, 50 = half size. Continuous compute, no sleeping.
   duration 0 = run forever (until killed)
 
 Based on reference implementation at rNPU_OS/bin/stress/static_call_main.py.
@@ -59,6 +59,21 @@ def main():
         else:
             while True:
                 torch.matmul(mat, mat)
+
+    elif mode == "aicpu":
+        base_shape = 2000
+        shape = size if size > 0 else max(256, int(base_shape * load_pct / 100))
+        top_k = min(shape - 1, 1000)
+        mat = torch.randn((shape, shape), dtype=torch.float64).to(device)
+        print(f"AICpu stress: topk {shape}x{shape} FP64 k={top_k} on dev {dev_id} load={load_pct}% {'forever' if duration == 0 else str(duration) + 's'}")
+        sys.stdout.flush()
+        if duration > 0:
+            t0 = time.time()
+            while time.time() - t0 < duration:
+                torch.topk(mat, top_k)
+        else:
+            while True:
+                torch.topk(mat, top_k)
 
     elif mode == "aivector":
         base_shape = 8500

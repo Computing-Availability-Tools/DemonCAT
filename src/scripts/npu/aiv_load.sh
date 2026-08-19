@@ -1,31 +1,29 @@
 #!/bin/sh
-# rNPU_aiv_load: AIVector stress via aclnnExp (no torch_npu required).
-# inject: run _npu_stress aivector in background, write sidecar
+# rNPU_aiv_load: AIVector stress via torch_npu add.
+# inject: run _npu_stress.py aivector in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aivector Usage Rate)
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 SIDECAR="/tmp/dcat-rNPU_aiv_load-$chip.pid"
-STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
+STRESS_PY="$(cd "$(dirname "$0")" && pwd)/_npu_stress.py"
 
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
         npu_check_env
-        if [ ! -x "$STRESS_BIN" ]; then
-            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2
-            exit 1
+        if [ ! -f "$STRESS_PY" ]; then
+            echo "ERROR: _npu_stress.py not found" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
-        load_pct=${DCAT_PARAM_LOAD_PCT:-100}
-        "$STRESS_BIN" aivector "$dev_id" 0 512 "$load_pct" >/dev/null 2>&1 &
+        python3 "$STRESS_PY" aivector "$dev_id" 0 0 >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
-        sleep 1
+        sleep 2
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             rm -f "$SIDECAR"
-            echo "AIVector stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
+            echo "AIVector stress failed: cannot start on chip $chip (torch_npu missing? HBM insufficient?)" >&2
             exit 1
         fi
         echo "AIVector stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"

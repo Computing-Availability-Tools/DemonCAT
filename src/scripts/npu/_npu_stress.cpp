@@ -5,10 +5,7 @@
  *   aicore:   FP16 Matmul loop (Cube compute unit stress → AICore Usage)
  *   aivector: FP16 Exp loop (Vector compute unit stress → AIVector Usage)
  * duration 0 = run forever (until killed)
- * load_pct 1-100 (default 100): scales workload size (NOT duty-cycle).
- *   100 = full 8192 matmul (saturates 910C/910B3 to ~100%)
- *   50  = 4096 matmul (910C: ~50%, 910B4: ~100% since fewer Cube units)
- *   Continuous compute, no sleeping → npu-smi shows stable utilization.
+ * load_pct 1-100 (default 100), duty-cycle: compute for X ms, sleep for Y ms
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"
@@ -24,7 +21,24 @@
 
 static const char *usage = "Usage: _npu_stress <hbm|aicore|aivector> <device_id> <duration_sec> [size_mb] [load_pct]\n"
                            "  duration 0 = run forever (until killed)\n"
-                           "  load_pct 1-100 (default 100): scales workload size\n";
+                           "  load_pct 1-100 (default 100)\n";
+
+/* After sync, measure actual compute time and sleep proportionally.
+ * Calibrated: 100% duty only reaches ~max_achievable on NPU (host overhead).
+ * So to get target T%, set duty = T / max_achievable, then sleep the rest. */
+static void pace_load(int load_pct, struct timespec *batch_start, float max_achievable) {
+    if (load_pct >= 100) return;
+    int duty = (int)(load_pct / max_achievable);
+    if (duty < 1) duty = 1;
+    if (duty > 100) duty = 100;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long compute_us = (now.tv_sec - batch_start->tv_sec) * 1000000 + (now.tv_nsec - batch_start->tv_nsec) / 1000;
+    if (compute_us <= 0) compute_us = 1;
+    long off_us = compute_us * (100 - duty) / duty;
+    if (off_us > 0) usleep(off_us);
+    clock_gettime(CLOCK_MONOTONIC, batch_start);
+}
 
 /* helper: create a 2D FP16 tensor backed by device memory */
 static aclTensor* make_tensor(void *dev_ptr, int rows, int cols) {
@@ -56,6 +70,8 @@ int main(int argc, char **argv) {
 
     aclrtStream stream;
     aclrtCreateStream(&stream);
+    struct timespec batch_start;
+    clock_gettime(CLOCK_MONOTONIC, &batch_start);
 
     if (strcmp(mode, "hbm") == 0) {
         size_t bytes = (size_t)size_mb * 1024 * 1024;
@@ -68,13 +84,8 @@ int main(int argc, char **argv) {
         aclrtFree(d_ptr);
 
     } else if (strcmp(mode, "aicore") == 0) {
-        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage
-         * Scale matmul size by load_pct: 100%=8192, 50%=4096, 25%=2048.
-         * Bigger matmul → more Cube units occupied → higher utilization.
-         * 910C: 8192≈100%, 4096≈50%. 910B4: 8192≈100%, 4096≈100% (fewer units). */
-        int M = 8192 * load_pct / 100;
-        if (M < 256) M = 256;
-        int K = M, N = M;
+        /* FP16 Matmul: C = A(M,K) * B(K,N) → Cube units → AICore Usage */
+        int M = 2048, K = 2048, N = 2048;
         size_t szA = (size_t)M*K*2, szB = (size_t)K*N*2, szC = (size_t)M*N*2;
         void *dA=NULL, *dB=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, szA, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -95,22 +106,27 @@ int main(int argc, char **argv) {
         if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
         printf("AICore stress: FP16 Matmul %dx%dx%d on dev %d load=%d%% %s\n", M, N, K, dev_id, load_pct, duration > 0 ? "" : "forever");
 
+        int iter = 0;
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
                 for (int i = 0; i < 100; i++) {
                     aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
                     aclnnMatmul(ws, ws_size, exec, stream);
+                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.96f);
             }
         } else {
             while (1) {
                 for (int i = 0; i < 100; i++) {
                     aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
                     aclnnMatmul(ws, ws_size, exec, stream);
+                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.96f);
             }
         }
         if (ws) aclrtFree(ws);
@@ -118,11 +134,8 @@ int main(int argc, char **argv) {
         aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
 
     } else if (strcmp(mode, "aivector") == 0) {
-        /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage
-         * Scale element count by load_pct: 100%=256M, 50%=128M.
-         * More elements → more Vector units occupied → higher utilization. */
-        int64_t count = (int64_t)268435456 * load_pct / 100;
-        if (count < 1048576) count = 1048576;  /* min 1M */
+        /* FP16 Exp: out = exp(self) → Vector units → AIVector Usage */
+        int64_t count = 134217728;  /* 128M elements = 256MB FP16 */
         size_t bytes = (size_t)count * 2;
         void *dA=NULL, *dC=NULL;
         if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
@@ -144,22 +157,27 @@ int main(int argc, char **argv) {
         printf("AIVector stress: FP16 Exp %ldM elem on dev %d load=%d%% %s\n",
                count / 1048576, dev_id, load_pct, duration > 0 ? "" : "forever");
 
+        int iter = 0;
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
                 for (int i = 0; i < 100; i++) {
                     aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
                     aclnnExp(ws, ws_size, exec, stream);
+                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.98f);
             }
         } else {
             while (1) {
                 for (int i = 0; i < 100; i++) {
                     aclnnExpGetWorkspaceSize(tA, tC, &ws_size, &exec);
                     aclnnExp(ws, ws_size, exec, stream);
+                    iter++;
                 }
                 aclrtSynchronizeStream(stream);
+                if (load_pct < 100) pace_load(load_pct, &batch_start, 0.98f);
             }
         }
         if (ws) aclrtFree(ws);

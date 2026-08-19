@@ -20,7 +20,8 @@ case "${DCAT_OP:-inject}" in
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
-        "$STRESS_BIN" aivector "$dev_id" 0 512 "$load_pct" >/dev/null 2>&1 &
+        card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
+        "$STRESS_BIN" aivector "$dev_id" 0 512 "$load_pct" "$card_id" "$chip_id" >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
         sleep 1
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then

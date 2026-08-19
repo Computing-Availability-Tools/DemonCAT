@@ -8,12 +8,17 @@ PIDFILE="/tmp/dcat-rMEM_fragment.pid"
 
 case "${DCAT_OP:-inject}" in
     inject)
-        blocks=${DCAT_PARAM_BLOCKS:-200}
         block_kb=${DCAT_PARAM_BLOCK_KB:-1024}
-        case "$blocks" in *[!0-9]*|"") echo "blocks must be a positive integer" >&2; exit 1;; esac
-        [ "$blocks" -lt 1 ] && { echo "blocks must be >= 1" >&2; exit 1; }
         case "$block_kb" in *[!0-9]*|"") echo "block_kb must be a positive integer" >&2; exit 1;; esac
         [ "$block_kb" -lt 1 ] && { echo "block_kb must be >= 1" >&2; exit 1; }
+        if [ -z "${DCAT_PARAM_BLOCKS:-}" ]; then
+            free_mb=$(free -m | awk 'NR==2 {print $7}')
+            blocks=$((free_mb > 1000 ? (free_mb - 1000) * 1024 / block_kb : 1))
+        else
+            blocks="$DCAT_PARAM_BLOCKS"
+            case "$blocks" in *[!0-9]*|"") echo "blocks must be a positive integer" >&2; exit 1;; esac
+            [ "$blocks" -lt 1 ] && { echo "blocks must be >= 1" >&2; exit 1; }
+        fi
 
         if command -v perl >/dev/null 2>&1; then
             perl -e 'my ($n,$kb)=@ARGV; my @a; for(1..$n){ push @a,"x"x($kb*1024) } for(my $i=0;$i<@a;$i+=2){ $a[$i]=undef } select(undef,undef,undef,undef)' "$blocks" "$block_kb" >/dev/null 2>&1 &

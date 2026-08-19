@@ -1,25 +1,25 @@
 #!/bin/sh
 # rNPU_aic_load: AICore stress via torch_npu matmul.
-# inject: run _npu_stress.py aicore in background, write pidfile
+# inject: run _npu_stress aicore in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aicore Usage Rate)
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 SIDECAR="/tmp/dcat-rNPU_aic_load-$chip.pid"
-STRESS_PY="$(cd "$(dirname "$0")" && pwd)/_npu_stress.py"
+STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
 
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
         npu_check_env
         if [ ! -f "$STRESS_PY" ]; then
-            echo "ERROR: _npu_stress.py not found" >&2; exit 1
+            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
-        python3 "$STRESS_PY" aicore "$dev_id" 0 "$load_pct" 0 >/dev/null 2>&1 &
+        "$STRESS_BIN" aicore "$dev_id" 0 "$load_pct" 0 >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
         sleep 2
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then

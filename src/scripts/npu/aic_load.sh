@@ -18,7 +18,8 @@ case "${DCAT_OP:-inject}" in
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
-        python3 "$STRESS_PY" aicore "$dev_id" 0 0 >/dev/null 2>&1 &
+        load_pct=${DCAT_PARAM_LOAD_PCT:-100}
+        python3 "$STRESS_PY" aicore "$dev_id" 0 "$load_pct" 0 >/dev/null 2>&1 &
         echo $! > "$SIDECAR"
         sleep 2
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
@@ -26,7 +27,7 @@ case "${DCAT_OP:-inject}" in
             echo "AICore stress failed: cannot start on chip $chip (torch_npu missing? HBM insufficient?)" >&2
             exit 1
         fi
-        echo "AICore stress started on chip $chip (dev $dev_id, pid $!)"
+        echo "AICore stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then

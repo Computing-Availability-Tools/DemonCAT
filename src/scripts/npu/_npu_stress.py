@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """_npu_stress.py — NPU stress tool using torch_npu (replaces C++ ACL version).
 
-Usage: _npu_stress.py <aicore|aivector|hbm> <dev_id> [size] [duration_sec]
-  aicore:   torch.matmul 5120x5120 FP32 (Cube units → AICore Usage)
-  aivector: torch.add 8500x8500 FP32 (Vector units → AIVector Usage)
-  hbm:      allocate N x 5120x5120 tensors (HBM memory stress)
+Usage: _npu_stress.py <aicore|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
+  aicore:   torch.matmul (Cube units → AICore Usage)
+  aivector: torch.add (Vector units → AIVector Usage)
+  hbm:      allocate N tensors (HBM memory stress)
+  load_pct 1-100 (default 100): scales tensor size, NOT duty-cycle.
+    100 = full 5120 (saturates chip), 50 = 2560 (half the compute)
+    Continuous compute, no sleeping → npu-smi shows stable utilization.
   duration 0 = run forever (until killed)
 
 Based on reference implementation at rNPU_OS/bin/stress/static_call_main.py.
-Uses torch_npu instead of raw ACL API — more robust under resource contention.
 """
 import sys
 import os
@@ -18,7 +20,7 @@ import signal
 
 def main():
     if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} <aicore|aivector|hbm> <dev_id> [size] [duration_sec]", file=sys.stderr)
+        print(f"Usage: {sys.argv[0]} <aicore|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]", file=sys.stderr)
         sys.exit(1)
 
     mode = sys.argv[1]
@@ -26,9 +28,14 @@ def main():
     size = 0
     if len(sys.argv) > 3:
         size = int(sys.argv[3])
-    duration = 0
+    load_pct = 100
     if len(sys.argv) > 4:
-        duration = int(sys.argv[4])
+        load_pct = int(sys.argv[4])
+    duration = 0
+    if len(sys.argv) > 5:
+        duration = int(sys.argv[5])
+    if load_pct < 1: load_pct = 1
+    if load_pct > 100: load_pct = 100
 
     import torch
     import torch_npu
@@ -40,9 +47,10 @@ def main():
     device = torch.device(f"npu:{dev_id}")
 
     if mode == "aicore":
-        shape = size if size > 0 else 5120
+        base_shape = 5120
+        shape = size if size > 0 else max(256, int(base_shape * load_pct / 100))
         mat = torch.randn((shape, shape), dtype=torch.float32).to(device)
-        print(f"AICore stress: matmul {shape}x{shape} FP32 on dev {dev_id} {'forever' if duration == 0 else str(duration) + 's'}")
+        print(f"AICore stress: matmul {shape}x{shape} FP32 on dev {dev_id} load={load_pct}% {'forever' if duration == 0 else str(duration) + 's'}")
         sys.stdout.flush()
         if duration > 0:
             t0 = time.time()
@@ -53,9 +61,10 @@ def main():
                 torch.matmul(mat, mat)
 
     elif mode == "aivector":
-        shape = size if size > 0 else 8500
+        base_shape = 8500
+        shape = size if size > 0 else max(256, int(base_shape * load_pct / 100))
         mat = torch.randn((shape, shape), dtype=torch.float32).to(device)
-        print(f"AIVector stress: add {shape}x{shape} FP32 on dev {dev_id} {'forever' if duration == 0 else str(duration) + 's'}")
+        print(f"AIVector stress: add {shape}x{shape} FP32 on dev {dev_id} load={load_pct}% {'forever' if duration == 0 else str(duration) + 's'}")
         sys.stdout.flush()
         if duration > 0:
             t0 = time.time()
@@ -67,11 +76,11 @@ def main():
 
     elif mode == "hbm":
         shape = 5120
-        unit_mb = shape * shape * 4 // (1024 * 1024)  # ~100MB per tensor
+        unit_mb = shape * shape * 4 // (1024 * 1024)
         if size > 0:
             num_tensors = max(1, size // unit_mb)
         else:
-            num_tensors = 60  # default ~6GB
+            num_tensors = 60
         mat = torch.randn((shape, shape), dtype=torch.float32).to(device)
         data_list = []
         for _ in range(num_tensors):

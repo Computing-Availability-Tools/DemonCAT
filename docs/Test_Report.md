@@ -11,12 +11,12 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1.0 核心框架 + 57 条故障的完整性和正确性：
+验证 DemonCAT v0.1.0 核心框架 + 58 条故障的完整性和正确性：
 
 - 核心框架 9 模块 + 插件架构功能正确
-- 全部 57 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
+- 全部 58 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
 - 全部 58 个脚本无语法错误
-- **57 条故障真机 inject/query/clean 全覆盖**（CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统）
+- **58 条故障真机 inject/query/clean 全覆盖**（CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统）
 - 误操作/边界场景 9 种验证
 - strict C11 可移植性验证
 
@@ -32,7 +32,7 @@
 | E2E PASS | **247** |
 | E2E FAIL（硬件限制） | **3** |
 | E2E 通过率 | **99%** |
-| 手动故障测试 | **57 条全覆盖** |
+| 手动故障测试 | **58 条全覆盖** |
 | 手动 PASS | **57** |
 | 手动 FAIL（硬件限制） | **0** |
 | 发现并修复的 Bug | **8** |
@@ -107,7 +107,7 @@
 | ------ | :----: | :----: |
 | test_plugin_integration | PASS | 0.01s |
 
-### 4.3 Tier 1: Mock 表驱动故障测试 (57 条全覆盖)
+### 4.3 Tier 1: Mock 表驱动故障测试 (58 条全覆盖)
 
 | 测试 | 覆盖故障数 | 模块 | 结果 | 耗时 |
 | ------ | :---: | --- | :----: | :----: |
@@ -135,7 +135,7 @@
 
 ---
 
-## 5. 真机手动测试结果（57 条全覆盖）
+## 5. 真机手动测试结果（58 条全覆盖）
 
 > 每条故障测试流程：inject → 底层工具验证 → query → clean → 恢复验证
 > 测试日期：2026-07-30 | 测试人：root@Atlas910B4
@@ -188,7 +188,7 @@
 | rPROC_fork_bomb | count=100 | ✅ | fork 子进程数↑ | ✅ confirmed:true | ✅ | 子进程清理 | **PASS** |
 | rPROC_fd_exhaust | count=4096 | ✅ | /proc/*/fd 数↑ | ✅ confirmed:true | ✅ | fd 释放 | **PASS** |
 
-### 5.5 NPU 模块（19 条）
+### 5.5 NPU 模块（20 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 | ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
@@ -334,7 +334,7 @@
 | tests/ut/test.h | 共享 | 测试框架宏 |
 | tests/ut/test_faults_common.h | 共享 | mock 设置 + 断言宏 |
 | tests/ut/test_*.c (16个) | Tier 0 | 核心单元测试 |
-| tests/ut/test_faults_*.c (6个) | Tier 1 | 57 条 mock 表驱动 |
+| tests/ut/test_faults_*.c (6个) | Tier 1 | 58 条 mock 表驱动 |
 | tests/check_syntax.sh | Tier 2 | 脚本语法检查 |
 | tests/ut/test_smoke_*.c (4个) | Tier 3 | 真实执行测试 |
 | tests/ut/smoke_root.sh | root | root 级自动化测试 |
@@ -343,9 +343,9 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步骤 / 250 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**57 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步骤 / 250 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**58 条故障真机手动测试全覆盖**：
 
-- **57 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
+- **58 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
 **8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 501 步骤 E2E 用例无回归。
 
@@ -375,7 +375,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 
 ### 11.3 脚本层 no-arg clean 全覆盖
 
-全部 57 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
+全部 58 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
 
 | 模式 | 脚本 | 无参 clean 行为 |
 | --- | --- | --- |
@@ -394,7 +394,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 | test_smoke_process | rPROC_zstate inject→clean→reaped（验证 proc_zstate 单行输出约定，避免 executor 单次 read pipe 后 SIGPIPE 误报） | PASS |
 | **test_smoke_state_lost（新增，5 例端到端）** | **state.json 误删后 stateless clean 仍清除活跃故障**：①`clean <uid> --params` 回退用用户参数调脚本；②`clean <uid>` 无参 glob `/tmp` 工件；③`clean --all` fan-out；④部分损坏（文件有效但记录被抹）带参 clean 不回退（安全不动系统资源），无参 clean 仍可恢复；⑤**state 完好时无参 clean 既清系统又 reconcile state（query 无幽灵）**。用 rPROC_hang 真实 inject→删/不删 state→clean→验证进程恢复+sidecar 消失+state 一致 | PASS |
 | 手动 `dcat clean rCPU_overload`（无参） | inject cores=1,10 → clean 无参 → query 由 2 条→0 条（修复前为 2 条幽灵） | PASS |
-| 手动 `dcat clean --all` | 57 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
+| 手动 `dcat clean --all` | 58 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
 | 手动 `dcat inject <uid>`（无参） | 21 条新改脚本均拒绝并报 "missing required param"（强制未放松） | PASS |
 
 > CTest 当前共 **27** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost + test_serve + test_faults_batch2_ext + test_faults_batch2_newmods）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
@@ -420,7 +420,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 - NPU: Atlas 910B4 device 2 (RoCE link DOWN)
 
-> NPU 在 E2E FUNC 分类中占 79 步（19 条 NPU 故障 inject→verify→clean→query 全链路）。
+> NPU 在 E2E FUNC 分类中占 79 步（20 条 NPU 故障 inject→verify→clean→query 全链路）。
 
 ### 12.1 结果汇总
 

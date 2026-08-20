@@ -39,7 +39,8 @@ case "${DCAT_OP:-inject}" in
             PIDFILE="${PIDFILE_PFX}-${safe}.pid"
             if [ -f "$PIDFILE" ]; then
                 { read -r pids; read -r target; } < "$PIDFILE"
-                for pid in $pids; do kill "$pid" 2>/dev/null; done
+                for pid in $pids; do kill -9 "$pid" 2>/dev/null; done
+                pkill -9 -f "$target/" 2>/dev/null || true
                 rm -rf "$target"
                 rm -f "$PIDFILE"
                 echo "cleaned iowait_high (removed $target)"
@@ -51,7 +52,8 @@ case "${DCAT_OP:-inject}" in
             for pf in ${PIDFILE_PFX}-*.pid; do
                 [ -f "$pf" ] || continue
                 { read -r pids; read -r target; } < "$pf"
-                for pid in $pids; do kill "$pid" 2>/dev/null; done
+                for pid in $pids; do kill -9 "$pid" 2>/dev/null; done
+                pkill -9 -f "$target/" 2>/dev/null || true
                 rm -rf "$target"
                 rm -f "$pf"
                 cleaned=1

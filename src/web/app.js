@@ -20,7 +20,7 @@ const MODULES = [
 
 const MODULE_MAP = Object.fromEntries(MODULES.map(m => [m.key, m]));
 
-/* ----------- 故障目录(57 条, 9 模块, 来自 config/demoncat.conf) ----------- */
+/* ----------- 故障目录(58 条, 9 模块, 来自 config/demoncat.conf) ----------- */
 // 字段: module, uid, required[], optional[{name, default}], desc
 const FAULT_CATALOG = [
   /* CPU 5 */
@@ -121,7 +121,7 @@ const FAULT_CATALOG = [
   { module:"docker", uid:"rDOCKER_mem_overload", required:["container","size"], optional:[],
     desc:"Container memory overload (allocate size inside container; supports M/G)" },
 
-  /* NPU 19 */
+  /* NPU 20 */
   { module:"npu", uid:"rNPU_link_down", required:["chip"], optional:[],
     desc:"RoCE link down (hccn_tool -cfg recovery)" },
   { module:"npu", uid:"rNPU_ip_change", required:["chip","address","netmask"], optional:[],
@@ -543,6 +543,7 @@ async function initRemote() {
     document.querySelectorAll(".modal-exec").forEach(b => b.style.display = remoteWritable ? "" : "none");
     if (cleanAllBtn) { cleanAllBtn.hidden = !remoteWritable; cleanAllBtn.onclick = doCleanAll; }
     await refreshDash();
+    if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(refreshDash, 3000);
   } catch (e) {
     remoteConnected = false;
@@ -746,7 +747,7 @@ async function doCleanAll() {
 
 /* 特性 strip(上下文简介,不抢主视觉) */
 const FEATURES = [
-  { icon: "⚙", name: "9 模块覆盖", desc: "CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统 共 57 条故障" },
+  { icon: "⚙", name: "9 模块覆盖", desc: "CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统 共 58 条故障" },
   { icon: "🔌", name: "插件化故障", desc: "加一个故障 = 加脚本 + 配置一行" },
   { icon: "🛡", name: "预检护栏", desc: "参数校验 + 同资源重注入拒绝" },
   { icon: "📊", name: "状态跟踪", desc: "state.json 持久化,断电不丢" },

@@ -1,7 +1,7 @@
 # DemonCAT 用户手册
 
 > DemonCAT（`dcat`）—— Linux 计算故障注入工具。
-> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统九大模块，共 57 条故障。
+> 覆盖 CPU / 存储 / 网络 / 进程 / 内存 / 文件系统 / Docker / NPU / 系统九大模块，共 58 条故障。
 > 完整规格见 [SPEC.md](SPEC.md)，架构见 [docs/DESIGN.md](docs/DESIGN.md)，故障速查见 [docs/DemonCAT_Error_List.md](docs/DemonCAT_Error_List.md)。
 >
 > **命令约定**：本手册所有示例均以 `dcat` 形式书写。编译后执行一次 `sudo make install` 即可在 `/usr/local/bin` 创建全局入口（符号链接指向 `build/dcat`，后续更新只需 `git pull`，无需重新安装）；若未执行此步，请将 `dcat` 替换为 `./build/dcat`。
@@ -19,7 +19,7 @@
 | 内存 | 4 | 内存泄漏 / OOM / 内存碎片 / Swap 过载 |
 | 文件系统 | 2 | 文件锁 / iowait 飙高 |
 | Docker | 2 | 容器 kill / 容器内存过载 |
-| NPU | 19 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / PCIe 降速 / AICore 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
+| NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / PCIe 降速 / AICore 负载 / AICpu 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
 | 系统 | 2 | 内核 panic / 下电重启 |
 | **合计** | **57** | |
 
@@ -73,7 +73,7 @@
 - [第七章 Docker 模块](#第七章-docker-模块2-条)
     - [7.1 rDOCKER_kill](#71-rdocker_kill) — 容器 kill
     - [7.2 rDOCKER_mem_overload](#72-rdocker_mem_overload) — 容器内存过载
-- [第八章 NPU 模块](#第八章-npu-模块19-条)
+- [第八章 NPU 模块](#第八章-npu-模块20-条)
     - [8.0 前置准备](#80-前置准备实机参数查询与调整)
     - [8.1 rNPU_link_down](#81-rnpu_link_down) — RoCE 链路 down
     - [8.2 rNPU_ip_change](#82-rnpu_ip_change) — RoCE IP 变更
@@ -1324,7 +1324,7 @@ dcat clean rDOCKER_mem_overload --container=myapp
 
 ---
 
-## 第八章 NPU 模块（19 条）
+## 第八章 NPU 模块（20 条）
 
 NPU 模块面向华为 Atlas 系列 NPU 芯片，通过 `hccn_tool`、`npu-smi`、CANN及 PCIe sysfs 对 RoCE 网口、芯片硬件注入连通性、路由、性能与配置类故障。所有脚本共享 `_common.sh`，提供 `npu_check_env`（校验 hccn_tool）、`npu_validate_chip`（校验芯片号）及 sidecar 读写原语（`/tmp/dcat-<uid>-<chip>.bak`）。
 

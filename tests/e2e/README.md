@@ -74,7 +74,7 @@ python3 tests/e2e/run_e2e.py --no-append
 
 生产要求全量跑，**不 skip**：root/NPU/硬件依赖用例在缺资源环境会 **FAIL**（非 SKIP），生产（NPU 硬件 + root + sysfs 可写 + cron 运行）应 **0 FAIL 全绿**。
 
-- **FUNC 中 NPU 19 条**：无 `hccn_tool` → FAIL（需 Atlas NPU 物理机）。
+- **FUNC 中 NPU 20 条**：无 `hccn_tool` → FAIL（需 Atlas NPU 物理机）。
 - **FUNC-rCPU_core_offline**：默认实跑，瞬态下线真实核 `cpu1`（clean+清扫恢复）。
 - **SEC-P 类**：root 框架下用 `runuser -u nobody` 降权验证非 root 被拒绝。
 - **SEC-H 写入边界**：`device=/tmp` 安全路径（不污染 `/etc`）。

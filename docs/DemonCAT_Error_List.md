@@ -73,7 +73,7 @@
 | `rDOCKER_kill` | container | — | Docker container kill |
 | `rDOCKER_mem_overload` | container | size | Docker container memory overload (stress) |
 
-## NPU 模块（19 条）
+## NPU 模块（20 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |

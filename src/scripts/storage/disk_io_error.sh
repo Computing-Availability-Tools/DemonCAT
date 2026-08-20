@@ -11,6 +11,9 @@ case "${DCAT_OP:-inject}" in
     inject)
         dev=${DCAT_PARAM_DEVICE:?missing required param: device}
         [ -b "$dev" ] || { echo "$dev is not a block device" >&2; exit 1; }
+        if findmnt "$dev" >/dev/null 2>&1; then
+            echo "ERROR: $dev is mounted — refusing to create dm-error (would corrupt filesystem)" >&2; exit 1
+        fi
         safe=$(echo "$dev" | tr -c 'a-zA-Z0-9' '_')
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         devname=$(basename "$dev")

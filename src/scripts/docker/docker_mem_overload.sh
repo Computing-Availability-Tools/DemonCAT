@@ -48,8 +48,12 @@ select(undef, undef, undef, undef);
             echo "container $ctr has neither python3 nor perl" >&2; exit 1
         fi
         pid=$!
-        sleep 0.5
-        ctr_pid=$(docker exec "$ctr" cat "$MARKER" 2>/dev/null)
+        ctr_pid=""
+        for _ in 1 2 3 4 5 6; do
+            ctr_pid=$(docker exec "$ctr" cat "$MARKER" 2>/dev/null)
+            [ -n "$ctr_pid" ] && break
+            sleep 0.5
+        done
         echo "$pid" > "$PIDFILE"
         printf '%s\n%s\n' "$ctr" "${ctr_pid:-}" > "$SIDECAR"
         echo "docker mem_overload started in $ctr (size=${size}, host pid=$pid, ctr pid=${ctr_pid:-unknown})"

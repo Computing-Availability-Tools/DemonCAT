@@ -735,13 +735,13 @@ dispatch_route(uid, op, params):
 
 ### 8.2 适用范围（v1）
 
-- **CNF 路径**（config 驱动的 57 条故障，`registry_find` 命中）：适用。
+- **CNF 路径**（config 驱动的 58 条故障，`registry_find` 命中）：适用。
 - **inject-only 故障**（`supported_ops="inject"`，不写 state）：天然 0 overlap → 自然免检，无需特殊处理。
 - **插件路径**（`plugin_dispatch`）、**legacy injector 路径**（`injector_find`）：deferred，本期不接入（§8.10）。
 
 ### 8.3 资源键
 
-- **资源键 = `f->clean_required` 各参数值**（已验 57 条 cnf 故障的 `clean_required` 均为纯资源标识：cores / device / iface / port / service / pid / chip*），零新增 config 字段。
+- **资源键 = `f->clean_required` 各参数值**（已验 58 条 cnf 故障的 `clean_required` 均为纯资源标识：cores / device / iface / port / service / pid / chip*），零新增 config 字段。
 - **`cores` 硬编码为集合语义参数**（唯一集合参数）：走集合交集；其余参数（device / iface / port / service / pid / chip / dev / ip / …）走精确串等；多参键（如 NPU `chip,dev,ip`）取各参精确 AND。
 - 备选方案"新增 conf `resource_key` 字段"按 YAGNI 舍弃（`clean_required` 已等价）。
 
@@ -843,13 +843,13 @@ DemonCAT/
 ├── .gitignore
 ├── README.md
 ├── SPEC.md                     # 技术规格
-├── User_Manual.md              # 用户手册（57 条故障 × 7 字段）
+├── User_Manual.md              # 用户手册（58 条故障 × 7 字段）
 ├── Release_Notes.md           # 版本发布记录
 ├── config/
-│   └── demoncat.conf           # 故障目录配置（57 条故障声明）
+│   └── demoncat.conf           # 故障目录配置（58 条故障声明）
 ├── docs/
 │   ├── DESIGN.md               # 本文件：架构设计
-│   ├── DemonCAT_Error_List.md  # 故障目录（57 条）
+│   ├── DemonCAT_Error_List.md  # 故障目录（58 条）
 │   ├── Dynamic_Plugin_Implement.md # 动态插件开发指南
 │   ├── Manual_Test_Reference.md # 手动测试参考
 │   └── Test_Report.md          # 测试报告
@@ -903,7 +903,7 @@ DemonCAT/
 │   │   │   └── proc_zstate.sh
 │   │   ├── storage/           # 存储模块（5 条）
 │   │   │   └── disk_write_overload.sh
-│   │   └── npu/               # NPU 模块（19 条）+ _common.sh
+│   │   └── npu/               # NPU 模块（20 条）+ _common.sh
 │   │       ├── _common.sh
 │   │       ├── link_down.sh
 │   │       ├── ip_change.sh
@@ -1007,7 +1007,7 @@ DemonCAT/
 | rPROC_zstate | ✓ | ✓ | ✓ | 脚本 spawn 僵尸父进程 + pidfile | 可选 |
 | rCPU_core_offline | ✓ | ✓ | ✓ | 命令串含 `echo 0 > .../online` | 可选（需 root） |
 | rDISK_write_overload | ✓ | ✓ | ✓ | 脚本 spawn dd/fio + pidfile；clean 读 pidfile kill | 可选 |
-| 全部 19 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
+| 全部 20 条 rNPU_* | ✓ | ✓ | ✓ | 命令串含 npu/<script>.sh；env 含 chip + 各故障参数 | 不做（仅 Atlas 物理机有 hccn_tool） |
 | 注入器（builtin_injectors[]） | — | — | — | 本期为空，无覆盖；启用后用 `inj->op` 返回值断言 | — |
 
 ### 11.4 真实环境冒烟
@@ -1110,7 +1110,7 @@ dcat serve --port 8080 --allow-write
 - **决策4（参数传递）**：cnf 故障走环境变量不走 argv（§3.4 + §6）；注入器走 `params_t` 结构体指针（§7.3）。
 - **决策5（必/选参数区分）**：按 op 分 required/optional 字段（`inject_required` / `inject_optional` / `clean_required` / `clean_optional` / `query_required` / `query_optional`）；precheck 按 op 取对应 `*_required` 校验，`*_optional` 缺省走脚本默认（§2 + §3.5 + SPEC §3.3）。
 - **决策6（inject-only 故障）**：`supported_ops=inject` 的一次性故障不建 state、无 clean/query；dispatch 走 inject-only 分支（§3.9 + §5.1 + §4.2.3）。注入器同理（§7.3）。
-- **决策7（发布批次）**：v0.1.0 起步（核心框架 + 33 条故障），batch2 扩展至 57 条（9 模块），后续按需扩充（SPEC §8）。
+- **决策7（发布批次）**：v0.1.0 起步（核心框架 + 33 条故障），batch2 扩展至 58 条（9 模块），后续按需扩充（SPEC §8）。
 - **决策8（配置定位）**：固定相对路径 `<binary_dir>/../config/demoncat.conf`（通过 `/proc/self/exe` 解析）。conf 里的相对脚本路径在 `config_load` 时通过 `derive_project_root` + `resolve_script` 自动补成绝对路径，dcat 可从任意 CWD 运行（SPEC §7.1 + §3.7）。
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。

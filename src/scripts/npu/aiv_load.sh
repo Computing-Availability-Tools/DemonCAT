@@ -13,7 +13,7 @@ case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
         npu_check_env
-        if [ ! -f "$STRESS_PY" ]; then
+        if [ ! -x "$STRESS_BIN" ]; then
             echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")

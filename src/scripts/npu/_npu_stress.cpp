@@ -1,9 +1,9 @@
 /*
  * _npu_stress.cpp — NPU stress tool using aclnn operators (no torch_npu required).
  * Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
- *   aicore:   aclnnMatmul 5120 (Cube units → AICore Usage)
- *   aicpu:    aclnnTopk 2000 (AICpu units → AICpu Usage)
- *   aivector: aclnnAdd 8192 (Vector units → AIVector Usage)
+ *   aicore:   aclnnMatmul 5120 FP16 (Cube units → AICore Usage)
+ *   aicpu:    aclnnTopk 500 FP64 (AICpu units → AICpu Usage)
+ *   aivector: aclnnAdd 8192 FP16 (Vector units → AIVector Usage)
  *   hbm:      aclrtMalloc + memset (HBM memory stress)
  * duration 0 = run forever (until killed)
  * load_pct 1-100 (default 100): fixed 50ms PWM duty-cycle.
@@ -91,11 +91,14 @@ static void run_batch(aclrtStream stream, struct OpCtx *ctx) {
 static void run_loop(int load_pct, int duration, float max_achievable,
                      aclrtStream stream, struct OpCtx *ctx) {
     if (load_pct >= 100) {
-        /* Full speed, no PWM */
+        /* Full speed: batch=100 to amortize sync overhead, check time inside loop */
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
-                for (int i = 0; i < 100; i++) run_batch(stream, ctx);
+                for (int i = 0; i < 100; i++) {
+                    if (time(NULL) >= end) break;
+                    run_batch(stream, ctx);
+                }
                 aclrtSynchronizeStream(stream);
             }
         } else {
@@ -184,7 +187,7 @@ int main(int argc, char **argv) {
         if (strcmp(mode, "aicore") == 0) {
             base_shape = 5120; max_achievable = 0.96f; op_mode = 0;
         } else if (strcmp(mode, "aicpu") == 0) {
-            base_shape = 2000; max_achievable = 0.90f; op_mode = 1;
+            base_shape = 500; max_achievable = 0.94f; op_mode = 1;
         } else if (strcmp(mode, "aivector") == 0) {
             base_shape = 8192; max_achievable = 0.98f; op_mode = 2;
         } else {
@@ -193,7 +196,10 @@ int main(int argc, char **argv) {
         }
 
         int shape = size > 0 ? size : base_shape;
-        size_t sz = (size_t)shape * shape * 2;  /* FP16 input */
+
+        /* Element size: FP16=2 bytes, DOUBLE=8 bytes */
+        int elem_sz = (op_mode == 1) ? 8 : 2;
+        size_t sz = (size_t)shape * shape * elem_sz;
 
         struct OpCtx ctx;
         memset(&ctx, 0, sizeof(ctx));
@@ -209,9 +215,10 @@ int main(int argc, char **argv) {
         aclrtMemset(dA, sz, 0x00, sz);
         aclrtMemset(dB, sz, 0x00, sz);
 
-        ctx.tA = make_tensor(dA, shape, shape, ACL_FLOAT16);
-        ctx.tB = make_tensor(dB, shape, shape, ACL_FLOAT16);
-        ctx.tC = make_tensor(dC, shape, shape, ACL_FLOAT16);
+        aclDataType in_dtype = (op_mode == 1) ? ACL_DOUBLE : ACL_FLOAT16;
+        ctx.tA = make_tensor(dA, shape, shape, in_dtype);
+        ctx.tB = make_tensor(dB, shape, shape, in_dtype);
+        ctx.tC = make_tensor(dC, shape, shape, in_dtype);
 
         aclnnStatus s = -1;
 
@@ -219,17 +226,18 @@ int main(int argc, char **argv) {
             /* matmul: C = A * B */
             s = aclnnMatmulGetWorkspaceSize(ctx.tA, ctx.tB, ctx.tC, 0, &ctx.ws_size, &ctx.exec);
         } else if (op_mode == 1) {
-            /* topk: need values(FP16) + indices(INT64) output */
-            int64_t k = shape / 2;
+            /* topk with FP64 forces AICPU execution (Vector/Cube don't support float64) */
+            int64_t k = shape - 1;
+            if (k > 1000) k = 1000;
             ctx.k = k;
             /* output shape: {shape, k} */
-            size_t out_sz = (size_t)shape * k * 8;  /* INT64 (largest) */
+            size_t out_sz = (size_t)shape * k * 8;  /* DOUBLE or INT64 (both 8 bytes) */
             if (aclrtMalloc(&dD, out_sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
                 fprintf(stderr, "topk out malloc fail\n"); goto fail;
             }
             int64_t out_dims[2] = {shape, k};
             int64_t out_stride[2] = {k, 1};
-            ctx.tC = aclCreateTensor(out_dims, 2, ACL_FLOAT16, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dC);
+            ctx.tC = aclCreateTensor(out_dims, 2, ACL_DOUBLE, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dC);
             ctx.tD = aclCreateTensor(out_dims, 2, ACL_INT64, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dD);
             s = aclnnTopkGetWorkspaceSize(ctx.tA, k, 1, true, true, ctx.tC, ctx.tD, &ctx.ws_size, &ctx.exec);
         } else {
@@ -245,8 +253,9 @@ int main(int argc, char **argv) {
         }
         if (ctx.ws_size > 0) aclrtMalloc(&ctx.ws, ctx.ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
 
+        const char *dtype_str = (op_mode == 1) ? "FP64" : "FP16";
         const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)" : "AIVector(add)";
-        printf("%s: %dx%d FP16 on dev %d load=%d%% %s\n", label, shape, shape, dev_id, load_pct,
+        printf("%s: %dx%d %s on dev %d load=%d%% %s\n", label, shape, shape, dtype_str, dev_id, load_pct,
                duration > 0 ? "" : "forever");
         fflush(stdout);
 

@@ -119,7 +119,7 @@ static void run_loop(int load_pct, int duration, float max_achievable,
             struct timespec win_start;
             clock_gettime(CLOCK_MONOTONIC, &win_start);
             while (elapsed_us(&win_start) < compute_us) {
-                for (int i = 0; i < 10; i++) run_batch(stream, ctx);
+                run_batch(stream, ctx);
                 aclrtSynchronizeStream(stream);
             }
             long sleep_us = (long)PWM_WINDOW_US - elapsed_us(&win_start);
@@ -130,7 +130,7 @@ static void run_loop(int load_pct, int duration, float max_achievable,
             struct timespec win_start;
             clock_gettime(CLOCK_MONOTONIC, &win_start);
             while (elapsed_us(&win_start) < compute_us) {
-                for (int i = 0; i < 10; i++) run_batch(stream, ctx);
+                run_batch(stream, ctx);
                 aclrtSynchronizeStream(stream);
             }
             long sleep_us = (long)PWM_WINDOW_US - elapsed_us(&win_start);

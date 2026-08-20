@@ -1,13 +1,13 @@
 #!/bin/sh
-# rNPU_hbm_load: HBM stress via torch_npu tensor allocation.
-# inject: run _npu_stress.py hbm in background, write pidfile
+# rNPU_hbm_load: HBM stress via aclrtMalloc+memset.
+# inject: run _npu_stress hbm in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check HBM Usage Rate)
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 SIDECAR="/tmp/dcat-rNPU_hbm_load-$chip.pid"
-STRESS_PY="$(cd "$(dirname "$0")" && pwd)/_npu_stress.py"
+STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
 
 # parse size string to MB: 2G=2048, 500M=500, 500=500
 size_to_mb() {
@@ -24,14 +24,14 @@ case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
         npu_check_env
-        if [ ! -f "$STRESS_PY" ]; then
-            echo "ERROR: _npu_stress.py not found" >&2; exit 1
+        if [ ! -x "$STRESS_BIN" ]; then
+            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         size_raw=${DCAT_PARAM_SIZE:?missing required param: size}
         size_mb=$(size_to_mb "$size_raw") || { echo "invalid size: $size_raw (use 500M, 2G, 500)" >&2; exit 1; }
-        python3 "$STRESS_PY" hbm "$dev_id" "$size_mb" 0 >/dev/null 2>&1 &
+        "$STRESS_BIN" hbm "$dev_id" "$size_mb" 0 0 >/dev/null 2>&1 &
         pid=$!
         echo "$pid" > "$SIDECAR"
         sleep 2

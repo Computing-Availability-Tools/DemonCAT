@@ -28,7 +28,6 @@ case "${DCAT_OP:-inject}" in
             exit 1
         fi
         echo "AIVector stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
-        echo "AIVector stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then

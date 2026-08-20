@@ -1,6 +1,6 @@
 # DemonCAT 故障目录
 
-当前共 57 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统九个模块。
+当前共 58 条故障，覆盖 CPU / 内存 / 存储 / 网络 / 进程 / NPU / Docker / 文件系统 / 系统九个模块。
 
 ## CPU 模块（5 条）
 
@@ -91,6 +91,7 @@
 | `rNPU_roce_port_change` | chip,port | — | RoCE UDP port change |
 | `rNPU_pcie_down` | npu_id | gen | PCIe link speed downgrade (Gen4→Gen1, setpci) |
 | `rNPU_aic_load` | chip | load_pct | AICore stress (aclnnMatmul FP16) |
+| `rNPU_aicpu_load` | chip | load_pct | AICpu stress (aclnnTopk FP64) |
 | `rNPU_aiv_load` | chip | load_pct | AIVector stress (aclnnExp FP16) |
 | `rNPU_hbm_load` | chip,size | — | HBM stress (aclrtMalloc+memset) |
 | `rNPU_chip_reset` | npu_id | core | NPU chip reset (npu-smi set -t reset, 多芯片卡可能整卡重启) |

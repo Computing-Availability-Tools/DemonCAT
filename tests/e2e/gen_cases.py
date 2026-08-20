@@ -2,7 +2,7 @@
 """tests/e2e/gen_cases.py — dcat e2e 测试用例自动生成器
 
 8 类分类（混沌工程 + 测试矩阵）：
-  FUNC  : 功能基线 — 57 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
+  FUNC  : 功能基线 — 58 故障 inject→verify→clean→query 全链路 + query<uid> + 插件
   BOUND : 边界值 — 每参数类型系统性覆盖（整数越界/空值/格式错误/枚举非法）
   SEC   : 安全 — 命令注入(inject+clean+query) + 权限边界 + 主机安全(路径穿越/symlink)
   STATE : 状态一致性 — clean×2/--force/reinject 拒绝/query 幂等/并发 inject
@@ -242,6 +242,10 @@ OBS = {
         provision="none", precondition="hccn_tool",
         v_cmd=f"{DCAT} query rNPU_aic_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
         c_cmd=f"{DCAT} query rNPU_aic_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
+    "rNPU_aicpu_load": dict(module="npu", inject_args="--chip={e2e_chip} --load_pct=100", clean_args="--chip={e2e_chip}",
+        provision="none", precondition="hccn_tool",
+        v_cmd=f"{DCAT} query rNPU_aicpu_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
+        c_cmd=f"{DCAT} query rNPU_aicpu_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", c_assert="==0"),
     "rNPU_aiv_load": dict(module="npu", inject_args="--chip={e2e_chip} --load_pct=100", clean_args="--chip={e2e_chip}",
         provision="none", precondition="hccn_tool",
         v_cmd=f"{DCAT} query rNPU_aiv_load --chip={{e2e_chip}} 2>/dev/null | grep -c 'CONFIRMED'", v_assert=">=1",
@@ -494,6 +498,8 @@ def gen():
     # chip (NPU aic/aiv/hbm)
     b_reject("rNPU_aic_load", "--chip=abc", 1, '', "chip: non-numeric")
     b_reject("rNPU_aic_load", "", 3, 'missing required parameter', "chip: missing")
+    b_reject("rNPU_aicpu_load", "--chip=abc", 1, '', "chip: non-numeric")
+    b_reject("rNPU_aicpu_load", "", 3, 'missing required parameter', "chip: missing")
     b_reject("rNPU_aiv_load", "--chip=abc", 1, '', "chip: non-numeric")
     b_reject("rNPU_aiv_load", "", 3, 'missing required parameter', "chip: missing")
     b_reject("rNPU_hbm_load", "--chip=abc --size=2G", 1, '', "chip: non-numeric")

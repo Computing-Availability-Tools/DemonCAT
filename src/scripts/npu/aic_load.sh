@@ -24,7 +24,7 @@ case "${DCAT_OP:-inject}" in
         sleep 2
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             rm -f "$SIDECAR"
-            echo "AICore stress failed: cannot start on chip $chip (torch_npu missing? HBM insufficient?)" >&2
+            echo "AICore stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
             exit 1
         fi
         echo "AICore stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
@@ -49,8 +49,8 @@ case "${DCAT_OP:-inject}" in
                 echo "FAULT CONFIRMED: AICore stress active on chip $c (pid $pid)"
                 card_chip=$(npu_phy_to_card "$c"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
                 usages=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null)
-                ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
-                [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+                ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+                [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
                 echo "  AICore Usage(%): ${ai_pct:-?}"
                 found=1
             done
@@ -59,8 +59,8 @@ case "${DCAT_OP:-inject}" in
             echo "FAULT CONFIRMED: AICore stress active (pid $(cat $SIDECAR))"
             card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
             usages=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null)
-            ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
-            [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+            ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+            [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
             echo "AICore Usage(%): ${ai_pct:-?}"
             exit 0
         else

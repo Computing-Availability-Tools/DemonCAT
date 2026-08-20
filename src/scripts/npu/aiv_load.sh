@@ -1,5 +1,5 @@
 #!/bin/sh
-# rNPU_aiv_load: AIVector stress via torch_npu add.
+# rNPU_aiv_load: AIVector stress via aclnnAdd.
 # inject: run _npu_stress aivector in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aivector Usage Rate)
@@ -24,7 +24,7 @@ case "${DCAT_OP:-inject}" in
         sleep 2
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             rm -f "$SIDECAR"
-            echo "AIVector stress failed: cannot start on chip $chip (torch_npu missing? HBM insufficient?)" >&2
+            echo "AIVector stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
             exit 1
         fi
         echo "AIVector stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"

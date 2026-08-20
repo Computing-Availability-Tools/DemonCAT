@@ -1,5 +1,5 @@
 #!/bin/sh
-# rNPU_aicpu_load: AICpu stress via torch_npu topk.
+# rNPU_aicpu_load: AICpu stress via aclnnTopk.
 # inject: run _npu_stress aicpu in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aicpu Usage Rate)
@@ -24,7 +24,7 @@ case "${DCAT_OP:-inject}" in
         sleep 2
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             rm -f "$SIDECAR"
-            echo "AICpu stress failed: cannot start on chip $chip (torch_npu missing? HBM insufficient?)" >&2
+            echo "AICpu stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
             exit 1
         fi
         echo "AICpu stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"

@@ -1,12 +1,10 @@
 # shellcheck shell=bash
 # _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
-# Always prefer toolkit OPP (has aclnn operators); only fall back if toolkit missing
-_TK_OPP="/usr/local/Ascend/ascend-toolkit/latest/opp"
-if [ -d "$_TK_OPP" ]; then
-    export ASCEND_OPP_PATH="$_TK_OPP"
-elif [ -z "$ASCEND_OPP_PATH" ]; then
-    export ASCEND_OPP_PATH="$_TK_OPP"
+# Prefer user's ASCEND_OPP_PATH (matches runtime CANN); fall back to toolkit default
+if [ -z "${ASCEND_OPP_PATH:-}" ]; then
+    _TK_OPP="/usr/local/Ascend/ascend-toolkit/latest/opp"
+    [ -d "$_TK_OPP" ] && export ASCEND_OPP_PATH="$_TK_OPP"
 fi
 
 DEV_MAP_FILE="/tmp/dcat-npu-dev-map"

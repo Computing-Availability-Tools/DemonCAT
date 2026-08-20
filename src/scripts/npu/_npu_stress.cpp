@@ -1,18 +1,19 @@
 /*
- * _npu_stress.cpp — NPU stress tool using aclnnAdd (no torch_npu required).
+ * _npu_stress.cpp — NPU stress tool using aclnn operators (no torch_npu required).
  * Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
- *   aicore:   aclnnAdd loop (FP16, 8192 base — stress NPU compute)
- *   aicpu:    aclnnAdd loop (FP16, 2000 base — smaller workload)
- *   aivector: aclnnAdd loop (FP16, 8192 base — stress NPU compute)
+ *   aicore:   aclnnMatmul loop (Cube units → AICore Usage)
+ *   aicpu:    aclnnTopk loop (AICpu units → AICpu Usage)
+ *   aivector: aclnnAdd loop (Vector units → AIVector Usage)
  *   hbm:      aclrtMalloc + memset (HBM memory stress)
  * duration 0 = run forever (until killed)
  * load_pct 1-100 (default 100): scales tensor size.
- *   100 = full size, 50 = half size. Continuous compute, no sleeping.
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"
 #include "aclnn/aclnn_base.h"
 #include "aclnn/acl_meta.h"
+#include "aclnnop/aclnn_matmul.h"
+#include "aclnnop/aclnn_topk.h"
 #include "aclnnop/aclnn_add.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,69 +25,10 @@ static const char *usage = "Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_
                            "  duration 0 = run forever (until killed)\n"
                            "  load_pct 1-100 (default 100): scales tensor size\n";
 
-/* helper: create a 2D FP16 tensor backed by device memory */
-static aclTensor* make_tensor(void *dev_ptr, int rows, int cols) {
+static aclTensor* make_tensor(void *dev_ptr, int rows, int cols, aclDataType dtype) {
     int64_t dims[2] = {rows, cols};
     int64_t stride[2] = {cols, 1};
-    return aclCreateTensor(dims, 2, ACL_FLOAT16, stride, 0, ACL_FORMAT_ND, dims, 2, dev_ptr);
-}
-
-/* run aclnnAdd stress loop */
-static void run_add_stress(aclrtStream stream, int shape, int duration) {
-    size_t bytes = (size_t)shape * shape * 2;  /* FP16 */
-    void *dA=NULL, *dB=NULL, *dC=NULL;
-    if (aclrtMalloc(&dA, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
-        aclrtMalloc(&dB, bytes, ACL_MEM_MALLOC_HUGE_FIRST) ||
-        aclrtMalloc(&dC, bytes, ACL_MEM_MALLOC_HUGE_FIRST)) {
-        fprintf(stderr, "add malloc fail (shape=%d)\n", shape);
-        return;
-    }
-    aclrtMemset(dA, bytes, 0x3C, bytes);
-    aclrtMemset(dB, bytes, 0x3C, bytes);
-    aclTensor *tA = make_tensor(dA, shape, shape);
-    aclTensor *tB = make_tensor(dB, shape, shape);
-    aclTensor *tC = make_tensor(dC, shape, shape);
-
-    float alpha_val = 1.0f;
-    aclScalar *alpha = aclCreateScalar(&alpha_val, ACL_FLOAT);
-
-    uint64_t ws_size = 0;
-    aclOpExecutor *exec = NULL;
-    aclnnStatus s = aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
-    if (s != 0 || !exec) {
-        fprintf(stderr, "aclnnAddGetWorkspaceSize fail: %d\n", s);
-        aclDestroyScalar(alpha);
-        aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
-        aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
-        return;
-    }
-    void *ws = NULL;
-    if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
-    printf("Add stress: %dx%d FP16 on stream, duration=%s\n", shape, shape, duration > 0 ? "" : "forever");
-    fflush(stdout);
-
-    if (duration > 0) {
-        time_t end = time(NULL) + duration;
-        while (time(NULL) < end) {
-            for (int i = 0; i < 100; i++) {
-                aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
-                aclnnAdd(ws, ws_size, exec, stream);
-            }
-            aclrtSynchronizeStream(stream);
-        }
-    } else {
-        while (1) {
-            for (int i = 0; i < 100; i++) {
-                aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
-                aclnnAdd(ws, ws_size, exec, stream);
-            }
-            aclrtSynchronizeStream(stream);
-        }
-    }
-    if (ws) aclrtFree(ws);
-    aclDestroyScalar(alpha);
-    aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
-    aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
+    return aclCreateTensor(dims, 2, dtype, stride, 0, ACL_FORMAT_ND, dims, 2, dev_ptr);
 }
 
 int main(int argc, char **argv) {
@@ -124,16 +66,145 @@ int main(int argc, char **argv) {
         if (duration > 0) { sleep(duration); } else { while (1) pause(); }
         aclrtFree(d_ptr);
 
-    } else {
-        int base_shape;
-        if (strcmp(mode, "aicore") == 0)       base_shape = 8192;
-        else if (strcmp(mode, "aicpu") == 0)  base_shape = 2000;
-        else if (strcmp(mode, "aivector") == 0) base_shape = 8192;
-        else { fprintf(stderr, "unknown mode: %s\n%s", mode, usage); goto fail; }
-
-        int shape = size > 0 ? size : (256 > base_shape * load_pct / 100 ? 256 : base_shape * load_pct / 100);
+    } else if (strcmp(mode, "aicore") == 0) {
+        int base = 5120;
+        int shape = size > 0 ? size : (256 > base * load_pct / 100 ? 256 : base * load_pct / 100);
         if (shape < 256) shape = 256;
-        run_add_stress(stream, shape, duration);
+        size_t sz = (size_t)shape * shape * 2;
+        void *dA=NULL, *dB=NULL, *dC=NULL;
+        if (aclrtMalloc(&dA, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dB, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dC, sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
+            fprintf(stderr, "matmul malloc fail (shape=%d)\n", shape); goto fail;
+        }
+        aclrtMemset(dA, sz, 0x00, sz); aclrtMemset(dB, sz, 0x00, sz);
+        aclTensor *tA = make_tensor(dA, shape, shape, ACL_FLOAT16);
+        aclTensor *tB = make_tensor(dB, shape, shape, ACL_FLOAT16);
+        aclTensor *tC = make_tensor(dC, shape, shape, ACL_FLOAT16);
+        uint64_t ws_size = 0; aclOpExecutor *exec = NULL;
+        aclnnStatus s = aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
+        if (s != 0 || !exec) { fprintf(stderr, "aclnnMatmulGetWorkspaceSize fail: %d (shape=%d)\n", s, shape); goto fail; }
+        void *ws = NULL;
+        if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
+        printf("AICore(matmul): %dx%d FP16 on dev %d load=%d%% %s\n", shape, shape, dev_id, load_pct, duration > 0 ? "" : "forever");
+        fflush(stdout);
+        if (duration > 0) {
+            time_t end = time(NULL) + duration;
+            while (time(NULL) < end) {
+                for (int i = 0; i < 100; i++) {
+                    aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
+                    aclnnMatmul(ws, ws_size, exec, stream);
+                }
+                aclrtSynchronizeStream(stream);
+            }
+        } else {
+            while (1) {
+                for (int i = 0; i < 100; i++) {
+                    aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
+                    aclnnMatmul(ws, ws_size, exec, stream);
+                }
+                aclrtSynchronizeStream(stream);
+            }
+        }
+        if (ws) aclrtFree(ws);
+        aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
+        aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
+
+    } else if (strcmp(mode, "aicpu") == 0) {
+        int base = 2000;
+        int shape = size > 0 ? size : (256 > base * load_pct / 100 ? 256 : base * load_pct / 100);
+        if (shape < 256) shape = 256;
+        size_t sz = (size_t)shape * shape * 2;
+        void *dA=NULL, *dVal=NULL, *dIdx=NULL;
+        if (aclrtMalloc(&dA, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dVal, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dIdx, sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
+            fprintf(stderr, "topk malloc fail (shape=%d)\n", shape); goto fail;
+        }
+        aclrtMemset(dA, sz, 0x3C, sz);
+        aclTensor *tA = make_tensor(dA, shape, shape, ACL_FLOAT16);
+        aclTensor *tVal = make_tensor(dVal, shape, shape, ACL_FLOAT16);
+        aclTensor *tIdx = make_tensor(dIdx, shape, shape, ACL_INT64);
+        uint64_t ws_size = 0; aclOpExecutor *exec = NULL;
+        int64_t k = shape / 2;
+        aclnnStatus s = aclnnTopkGetWorkspaceSize(tA, k, 1, true, true, tVal, tIdx, &ws_size, &exec);
+        if (s != 0 || !exec) { fprintf(stderr, "aclnnTopkGetWorkspaceSize fail: %d (shape=%d)\n", s, shape); goto fail; }
+        void *ws = NULL;
+        if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
+        printf("AICpu(topk): %dx%d FP16 k=%ld on dev %d load=%d%% %s\n", shape, shape, k, dev_id, load_pct, duration > 0 ? "" : "forever");
+        fflush(stdout);
+        if (duration > 0) {
+            time_t end = time(NULL) + duration;
+            while (time(NULL) < end) {
+                for (int i = 0; i < 100; i++) {
+                    aclnnTopkGetWorkspaceSize(tA, k, 1, true, true, tVal, tIdx, &ws_size, &exec);
+                    aclnnTopk(ws, ws_size, exec, stream);
+                }
+                aclrtSynchronizeStream(stream);
+            }
+        } else {
+            while (1) {
+                for (int i = 0; i < 100; i++) {
+                    aclnnTopkGetWorkspaceSize(tA, k, 1, true, true, tVal, tIdx, &ws_size, &exec);
+                    aclnnTopk(ws, ws_size, exec, stream);
+                }
+                aclrtSynchronizeStream(stream);
+            }
+        }
+        if (ws) aclrtFree(ws);
+        aclDestroyTensor(tA); aclDestroyTensor(tVal); aclDestroyTensor(tIdx);
+        aclrtFree(dA); aclrtFree(dVal); aclrtFree(dIdx);
+
+    } else if (strcmp(mode, "aivector") == 0) {
+        int base = 8192;
+        int shape = size > 0 ? size : (256 > base * load_pct / 100 ? 256 : base * load_pct / 100);
+        if (shape < 256) shape = 256;
+        size_t sz = (size_t)shape * shape * 2;
+        void *dA=NULL, *dB=NULL, *dC=NULL;
+        if (aclrtMalloc(&dA, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dB, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
+            aclrtMalloc(&dC, sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
+            fprintf(stderr, "add malloc fail (shape=%d)\n", shape); goto fail;
+        }
+        aclrtMemset(dA, sz, 0x3C, sz); aclrtMemset(dB, sz, 0x3C, sz);
+        aclTensor *tA = make_tensor(dA, shape, shape, ACL_FLOAT16);
+        aclTensor *tB = make_tensor(dB, shape, shape, ACL_FLOAT16);
+        aclTensor *tC = make_tensor(dC, shape, shape, ACL_FLOAT16);
+        float alpha_val = 1.0f;
+        aclScalar *alpha = aclCreateScalar(&alpha_val, ACL_FLOAT);
+        uint64_t ws_size = 0; aclOpExecutor *exec = NULL;
+        aclnnStatus s = aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
+        if (s != 0 || !exec) { fprintf(stderr, "aclnnAddGetWorkspaceSize fail: %d (shape=%d)\n", s, shape); goto fail; }
+        void *ws = NULL;
+        if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
+        printf("AIVector(add): %dx%d FP16 on dev %d load=%d%% %s\n", shape, shape, dev_id, load_pct, duration > 0 ? "" : "forever");
+        fflush(stdout);
+        if (duration > 0) {
+            time_t end = time(NULL) + duration;
+            while (time(NULL) < end) {
+                for (int i = 0; i < 100; i++) {
+                    aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
+                    aclnnAdd(ws, ws_size, exec, stream);
+                }
+                aclrtSynchronizeStream(stream);
+            }
+        } else {
+            while (1) {
+                for (int i = 0; i < 100; i++) {
+                    aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
+                    aclnnAdd(ws, ws_size, exec, stream);
+                }
+                aclrtSynchronizeStream(stream);
+            }
+        }
+        if (ws) aclrtFree(ws);
+        aclDestroyScalar(alpha);
+        aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
+        aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
+
+    } else {
+        fprintf(stderr, "unknown mode: %s\n%s", mode, usage);
+        goto fail;
     }
 
     aclrtDestroyStream(stream);

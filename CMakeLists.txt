@@ -132,7 +132,12 @@ if(TARGET sample_plugin AND TARGET test_plugin_integration)
 endif()
 
 # ---- NPU ACL 压力工具 (可选, 检测到 CANN 则编译) ----
-set(ASCEND_TOOLKIT "/usr/local/Ascend/ascend-toolkit/latest")
+# 优先用环境变量 ASCEND_TOOLKIT_HOME (与运行时 source 的 CANN 一致)
+if(DEFINED ENV{ASCEND_TOOLKIT_HOME})
+    set(ASCEND_TOOLKIT "$ENV{ASCEND_TOOLKIT_HOME}")
+else()
+    set(ASCEND_TOOLKIT "/usr/local/Ascend/ascend-toolkit/latest")
+endif()
 if(EXISTS "${ASCEND_TOOLKIT}/aarch64-linux/include/acl/acl.h")
     add_executable(_npu_stress src/scripts/npu/_npu_stress.cpp)
     target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include")

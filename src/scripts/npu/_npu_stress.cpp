@@ -26,6 +26,23 @@ static const char *usage = "Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_
                            "  duration 0 = run forever (until killed)\n"
                            "  load_pct 1-100 (default 100): fixed-period PWM duty-cycle\n";
 
+/* Ensure ASCEND_OPP_PATH is set (needed for operator tiling library loading).
+ * Shell scripts set it via _common.sh; this is a fallback for direct binary execution. */
+static void ensure_opp_path(void) {
+    if (getenv("ASCEND_OPP_PATH")) return;
+    const char *candidates[] = {
+        "/usr/local/Ascend/ascend-toolkit/latest/opp",
+        "/usr/local/Ascend/latest/opp",
+        NULL
+    };
+    for (int i = 0; candidates[i]; i++) {
+        if (access(candidates[i], F_OK) == 0) {
+            setenv("ASCEND_OPP_PATH", candidates[i], 1);
+            return;
+        }
+    }
+}
+
 static aclTensor* make_tensor(void *dev_ptr, int rows, int cols, aclDataType dtype) {
     int64_t dims[2] = {rows, cols};
     int64_t stride[2] = {cols, 1};
@@ -135,6 +152,8 @@ int main(int argc, char **argv) {
     if (argc > 5) duration = atoi(argv[5]);
     if (load_pct < 1) load_pct = 1;
     if (load_pct > 100) load_pct = 100;
+
+    ensure_opp_path();
 
     aclError ret = aclInit(NULL);
     if (ret != ACL_SUCCESS) { fprintf(stderr, "aclInit fail: %d\n", ret); return 1; }

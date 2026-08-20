@@ -6,10 +6,8 @@
  *   aivector: aclnnAdd 8192 (Vector units → AIVector Usage)
  *   hbm:      aclrtMalloc + memset (HBM memory stress)
  * duration 0 = run forever (until killed)
- * load_pct 1-100 (default 100): fixed-period PWM duty-cycle.
- *   100 = full speed. 50 = 50% duty within 50ms window (compute 25ms, sleep 25ms).
- *   Calibration: aicore 0.96, aicpu 0.90, aivector 0.98 (满负荷也到不了100%).
- *   Fixed 50ms window → npu-smi 采样窗口内看到多个周期, 平均值平滑稳定.
+ * load_pct 1-100 (default 100): fixed 50ms PWM duty-cycle.
+ *   duty = load_pct / max_achievable (aicore 0.96, aicpu 0.90, aivector 0.98)
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"
@@ -40,24 +38,52 @@ static long elapsed_us(struct timespec *start) {
     return (now.tv_sec - start->tv_sec) * 1000000 + (now.tv_nsec - start->tv_nsec) / 1000;
 }
 
+/* Operator context: holds all params needed for two-stage ACL call */
+struct OpCtx {
+    int mode;  /* 0=matmul, 1=topk, 2=add */
+    aclTensor *tA, *tB, *tC, *tD;  /* tD only for topk indices */
+    aclScalar *alpha;  /* only for add */
+    int64_t k;  /* only for topk */
+    uint64_t ws_size;
+    aclOpExecutor *exec;
+    void *ws;
+};
+
+/* Run one batch: GetWorkspaceSize + Execute (two-stage API, executor must be re-fetched each call) */
+static void run_batch(aclrtStream stream, struct OpCtx *ctx) {
+    aclnnStatus s;
+    switch (ctx->mode) {
+    case 0: /* matmul */
+        s = aclnnMatmulGetWorkspaceSize(ctx->tA, ctx->tB, ctx->tC, 0, &ctx->ws_size, &ctx->exec);
+        if (s == 0 && ctx->exec) aclnnMatmul(ctx->ws, ctx->ws_size, ctx->exec, stream);
+        break;
+    case 1: /* topk */
+        s = aclnnTopkGetWorkspaceSize(ctx->tA, ctx->k, 1, true, true, ctx->tC, ctx->tD, &ctx->ws_size, &ctx->exec);
+        if (s == 0 && ctx->exec) aclnnTopk(ctx->ws, ctx->ws_size, ctx->exec, stream);
+        break;
+    case 2: /* add */
+        s = aclnnAddGetWorkspaceSize(ctx->tA, ctx->tB, ctx->alpha, ctx->tC, &ctx->ws_size, &ctx->exec);
+        if (s == 0 && ctx->exec) aclnnAdd(ctx->ws, ctx->ws_size, ctx->exec, stream);
+        break;
+    }
+}
+
 #define PWM_WINDOW_US 50000  /* 50ms fixed window */
 
-/* Run PWM loop: compute for window*duty, sleep for window*(1-duty).
- * batch_fn is called repeatedly during the compute phase. */
-static void run_pwm_loop(int load_pct, int duration, float max_achievable,
-                         void (*batch_fn)(aclrtStream, void*, uint64_t, aclOpExecutor*),
-                         aclrtStream stream, void *ws, uint64_t ws_size, aclOpExecutor *exec) {
+/* Run stress loop with optional PWM duty-cycle */
+static void run_loop(int load_pct, int duration, float max_achievable,
+                     aclrtStream stream, struct OpCtx *ctx) {
     if (load_pct >= 100) {
         /* Full speed, no PWM */
         if (duration > 0) {
             time_t end = time(NULL) + duration;
             while (time(NULL) < end) {
-                for (int i = 0; i < 100; i++) batch_fn(stream, ws, ws_size, exec);
+                for (int i = 0; i < 100; i++) run_batch(stream, ctx);
                 aclrtSynchronizeStream(stream);
             }
         } else {
             while (1) {
-                for (int i = 0; i < 100; i++) batch_fn(stream, ws, ws_size, exec);
+                for (int i = 0; i < 100; i++) run_batch(stream, ctx);
                 aclrtSynchronizeStream(stream);
             }
         }
@@ -73,39 +99,27 @@ static void run_pwm_loop(int load_pct, int duration, float max_achievable,
     if (duration > 0) {
         time_t end = time(NULL) + duration;
         while (time(NULL) < end) {
-            struct timespec ws_start;
-            clock_gettime(CLOCK_MONOTONIC, &ws_start);
-            /* compute phase */
-            while (elapsed_us(&ws_start) < compute_us) {
-                for (int i = 0; i < 10; i++) batch_fn(stream, ws, ws_size, exec);
+            struct timespec win_start;
+            clock_gettime(CLOCK_MONOTONIC, &win_start);
+            while (elapsed_us(&win_start) < compute_us) {
+                for (int i = 0; i < 10; i++) run_batch(stream, ctx);
                 aclrtSynchronizeStream(stream);
             }
-            /* sleep phase */
-            long sleep_us = (long)PWM_WINDOW_US - elapsed_us(&ws_start);
+            long sleep_us = (long)PWM_WINDOW_US - elapsed_us(&win_start);
             if (sleep_us > 0) usleep(sleep_us);
         }
     } else {
         while (1) {
-            struct timespec ws_start;
-            clock_gettime(CLOCK_MONOTONIC, &ws_start);
-            while (elapsed_us(&ws_start) < compute_us) {
-                for (int i = 0; i < 10; i++) batch_fn(stream, ws, ws_size, exec);
+            struct timespec win_start;
+            clock_gettime(CLOCK_MONOTONIC, &win_start);
+            while (elapsed_us(&win_start) < compute_us) {
+                for (int i = 0; i < 10; i++) run_batch(stream, ctx);
                 aclrtSynchronizeStream(stream);
             }
-            long sleep_us = (long)PWM_WINDOW_US - elapsed_us(&ws_start);
+            long sleep_us = (long)PWM_WINDOW_US - elapsed_us(&win_start);
             if (sleep_us > 0) usleep(sleep_us);
         }
     }
-}
-
-static void batch_matmul(aclrtStream s, void *ws, uint64_t sz, aclOpExecutor *ex) {
-    aclnnMatmul(ws, sz, ex, s);
-}
-static void batch_topk(aclrtStream s, void *ws, uint64_t sz, aclOpExecutor *ex) {
-    aclnnTopk(ws, sz, ex, s);
-}
-static void batch_add(aclrtStream s, void *ws, uint64_t sz, aclOpExecutor *ex) {
-    aclnnAdd(ws, sz, ex, s);
 }
 
 int main(int argc, char **argv) {
@@ -146,66 +160,84 @@ int main(int argc, char **argv) {
     } else {
         int base_shape;
         float max_achievable;
-        if (strcmp(mode, "aicore") == 0)         { base_shape = 5120; max_achievable = 0.96f; }
-        else if (strcmp(mode, "aicpu") == 0)    { base_shape = 2000; max_achievable = 0.90f; }
-        else if (strcmp(mode, "aivector") == 0) { base_shape = 8192; max_achievable = 0.98f; }
-        else { fprintf(stderr, "unknown mode: %s\n%s", mode, usage); goto fail; }
+        int op_mode;
+
+        if (strcmp(mode, "aicore") == 0) {
+            base_shape = 5120; max_achievable = 0.96f; op_mode = 0;
+        } else if (strcmp(mode, "aicpu") == 0) {
+            base_shape = 2000; max_achievable = 0.90f; op_mode = 1;
+        } else if (strcmp(mode, "aivector") == 0) {
+            base_shape = 8192; max_achievable = 0.98f; op_mode = 2;
+        } else {
+            fprintf(stderr, "unknown mode: %s\n%s", mode, usage);
+            goto fail;
+        }
 
         int shape = size > 0 ? size : base_shape;
-        size_t sz = (size_t)shape * shape * 2;
+        size_t sz = (size_t)shape * shape * 2;  /* FP16 input */
+
+        struct OpCtx ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.mode = op_mode;
+
         void *dA=NULL, *dB=NULL, *dC=NULL, *dD=NULL;
+
         if (aclrtMalloc(&dA, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
             aclrtMalloc(&dB, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
             aclrtMalloc(&dC, sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
             fprintf(stderr, "malloc fail (shape=%d)\n", shape); goto fail;
         }
-        aclrtMemset(dA, sz, 0x00, sz); aclrtMemset(dB, sz, 0x00, sz);
-        aclTensor *tA = make_tensor(dA, shape, shape, ACL_FLOAT16);
-        aclTensor *tB = make_tensor(dB, shape, shape, ACL_FLOAT16);
-        aclTensor *tC = make_tensor(dC, shape, shape, ACL_FLOAT16);
+        aclrtMemset(dA, sz, 0x00, sz);
+        aclrtMemset(dB, sz, 0x00, sz);
 
-        uint64_t ws_size = 0;
-        aclOpExecutor *exec = NULL;
+        ctx.tA = make_tensor(dA, shape, shape, ACL_FLOAT16);
+        ctx.tB = make_tensor(dB, shape, shape, ACL_FLOAT16);
+        ctx.tC = make_tensor(dC, shape, shape, ACL_FLOAT16);
+
         aclnnStatus s = -1;
-        void *ws = NULL;
-        void (*batch_fn)(aclrtStream, void*, uint64_t, aclOpExecutor*) = NULL;
 
-        if (strcmp(mode, "aicore") == 0) {
-            s = aclnnMatmulGetWorkspaceSize(tA, tB, tC, 0, &ws_size, &exec);
-            batch_fn = batch_matmul;
-        } else if (strcmp(mode, "aicpu") == 0) {
-            if (aclrtMalloc(&dD, sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
+        if (op_mode == 0) {
+            /* matmul: C = A * B */
+            s = aclnnMatmulGetWorkspaceSize(ctx.tA, ctx.tB, ctx.tC, 0, &ctx.ws_size, &ctx.exec);
+        } else if (op_mode == 1) {
+            /* topk: need values(FP16) + indices(INT64) output */
+            int64_t k = shape / 2;
+            ctx.k = k;
+            /* output shape: {shape, k} */
+            size_t out_sz = (size_t)shape * k * 8;  /* INT64 (largest) */
+            if (aclrtMalloc(&dD, out_sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
                 fprintf(stderr, "topk out malloc fail\n"); goto fail;
             }
-            aclTensor *tD = make_tensor(dD, shape, shape, ACL_INT64);
-            int64_t k = shape / 2;
-            s = aclnnTopkGetWorkspaceSize(tA, k, 1, true, true, tC, tD, &ws_size, &exec);
-            batch_fn = batch_topk;
-            aclDestroyTensor(tD);
+            int64_t out_dims[2] = {shape, k};
+            int64_t out_stride[2] = {k, 1};
+            ctx.tC = aclCreateTensor(out_dims, 2, ACL_FLOAT16, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dC);
+            ctx.tD = aclCreateTensor(out_dims, 2, ACL_INT64, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dD);
+            s = aclnnTopkGetWorkspaceSize(ctx.tA, k, 1, true, true, ctx.tC, ctx.tD, &ctx.ws_size, &ctx.exec);
         } else {
+            /* add: C = A + B */
             float alpha_val = 1.0f;
-            aclScalar *alpha = aclCreateScalar(&alpha_val, ACL_FLOAT);
-            s = aclnnAddGetWorkspaceSize(tA, tB, alpha, tC, &ws_size, &exec);
-            batch_fn = batch_add;
-            aclDestroyScalar(alpha);
+            ctx.alpha = aclCreateScalar(&alpha_val, ACL_FLOAT);
+            s = aclnnAddGetWorkspaceSize(ctx.tA, ctx.tB, ctx.alpha, ctx.tC, &ctx.ws_size, &ctx.exec);
         }
 
-        if (s != 0 || !exec) {
+        if (s != 0 || !ctx.exec) {
             fprintf(stderr, "GetWorkspaceSize fail: %d (mode=%s, shape=%d)\n", s, mode, shape);
             goto fail;
         }
-        if (ws_size > 0) aclrtMalloc(&ws, ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
+        if (ctx.ws_size > 0) aclrtMalloc(&ctx.ws, ctx.ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
 
-        const char *label = strcmp(mode, "aicore") == 0 ? "AICore(matmul)" :
-                            strcmp(mode, "aicpu") == 0 ? "AICpu(topk)" : "AIVector(add)";
+        const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)" : "AIVector(add)";
         printf("%s: %dx%d FP16 on dev %d load=%d%% %s\n", label, shape, shape, dev_id, load_pct,
                duration > 0 ? "" : "forever");
         fflush(stdout);
 
-        run_pwm_loop(load_pct, duration, max_achievable, batch_fn, stream, ws, ws_size, exec);
+        run_loop(load_pct, duration, max_achievable, stream, &ctx);
 
-        if (ws) aclrtFree(ws);
-        aclDestroyTensor(tA); aclDestroyTensor(tB); aclDestroyTensor(tC);
+        if (ctx.ws) aclrtFree(ctx.ws);
+        if (ctx.alpha) aclDestroyScalar(ctx.alpha);
+        aclDestroyTensor(ctx.tA); aclDestroyTensor(ctx.tB);
+        if (ctx.tC) aclDestroyTensor(ctx.tC);
+        if (ctx.tD) aclDestroyTensor(ctx.tD);
         aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
         if (dD) aclrtFree(dD);
     }

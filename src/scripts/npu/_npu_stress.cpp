@@ -3,7 +3,7 @@
  * Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
  *   aicore:   aclnnMatmul 5120 FP16 (Cube units → AICore Usage)
  *   aicpu:    aclnnTopk 500 FP64 (AICpu units → AICpu Usage)
- *   aivector: aclnnAdd 8192 FP16 (Vector units → AIVector Usage)
+ *   aivector: aclnnExp 8192 FP16 (Vector units → AIVector Usage)
  *   hbm:      aclrtMalloc + memset (HBM memory stress)
  * duration 0 = run forever (until killed)
  * load_pct 1-100 (default 100): fixed 50ms PWM duty-cycle.
@@ -15,7 +15,7 @@
 #include "aclnn/acl_meta.h"
 #include "aclnnop/aclnn_matmul.h"
 #include "aclnnop/aclnn_topk.h"
-#include "aclnnop/aclnn_add.h"
+#include "aclnnop/aclnn_exp.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -78,9 +78,9 @@ static void run_batch(aclrtStream stream, struct OpCtx *ctx) {
         s = aclnnTopkGetWorkspaceSize(ctx->tA, ctx->k, 1, true, true, ctx->tC, ctx->tD, &ctx->ws_size, &ctx->exec);
         if (s == 0 && ctx->exec) aclnnTopk(ctx->ws, ctx->ws_size, ctx->exec, stream);
         break;
-    case 2: /* add */
-        s = aclnnAddGetWorkspaceSize(ctx->tA, ctx->tB, ctx->alpha, ctx->tC, &ctx->ws_size, &ctx->exec);
-        if (s == 0 && ctx->exec) aclnnAdd(ctx->ws, ctx->ws_size, ctx->exec, stream);
+    case 2: /* exp */
+        s = aclnnExpGetWorkspaceSize(ctx->tA, ctx->tC, &ctx->ws_size, &ctx->exec);
+        if (s == 0 && ctx->exec) aclnnExp(ctx->ws, ctx->ws_size, ctx->exec, stream);
         break;
     }
 }
@@ -189,7 +189,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(mode, "aicpu") == 0) {
             base_shape = 500; max_achievable = 0.94f; op_mode = 1;
         } else if (strcmp(mode, "aivector") == 0) {
-            base_shape = 8192; max_achievable = 0.98f; op_mode = 2;
+            base_shape = 8192; max_achievable = 0.84f; op_mode = 2;
         } else {
             fprintf(stderr, "unknown mode: %s\n%s", mode, usage);
             goto fail;
@@ -241,10 +241,8 @@ int main(int argc, char **argv) {
             ctx.tD = aclCreateTensor(out_dims, 2, ACL_INT64, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dD);
             s = aclnnTopkGetWorkspaceSize(ctx.tA, k, 1, true, true, ctx.tC, ctx.tD, &ctx.ws_size, &ctx.exec);
         } else {
-            /* add: C = A + B */
-            float alpha_val = 1.0f;
-            ctx.alpha = aclCreateScalar(&alpha_val, ACL_FLOAT);
-            s = aclnnAddGetWorkspaceSize(ctx.tA, ctx.tB, ctx.alpha, ctx.tC, &ctx.ws_size, &ctx.exec);
+            /* exp: C = exp(A), input=0.0 → exp(0)=1.0, no overflow */
+            s = aclnnExpGetWorkspaceSize(ctx.tA, ctx.tC, &ctx.ws_size, &ctx.exec);
         }
 
         if (s != 0 || !ctx.exec) {
@@ -254,7 +252,7 @@ int main(int argc, char **argv) {
         if (ctx.ws_size > 0) aclrtMalloc(&ctx.ws, ctx.ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
 
         const char *dtype_str = (op_mode == 1) ? "FP64" : "FP16";
-        const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)" : "AIVector(add)";
+        const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)" : "AIVector(exp)";
         printf("%s: %dx%d %s on dev %d load=%d%% %s\n", label, shape, shape, dtype_str, dev_id, load_pct,
                duration > 0 ? "" : "forever");
         fflush(stdout);

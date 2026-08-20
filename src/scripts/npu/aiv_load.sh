@@ -1,5 +1,5 @@
 #!/bin/sh
-# rNPU_aiv_load: AIVector stress via aclnnAdd.
+# rNPU_aiv_load: AIVector stress via aclnnExp (compute-bound, ~84% peak).
 # inject: run _npu_stress aivector in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aivector Usage Rate)

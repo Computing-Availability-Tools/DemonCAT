@@ -1901,7 +1901,7 @@ dcat clean rNPU_aicpu_load --chip=2
 
 **UID**: `rNPU_aiv_load`
 
-**描述**: 通过 CANN 算子 API `aclnnAdd` 对指定芯片执行 FP16 元素级加法（8192×8192 = 128MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。
+**描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（8192×8192 = 128MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。exp 是计算型算子（多项式逼近），算术强度高于带宽型算子（如 add），能更充分地压满 Vector 单元。
 
 **实现原理**:
 

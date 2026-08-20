@@ -1827,15 +1827,17 @@ dcat clean rNPU_pcie_down --npu_id=2
 
 **UID**: `rNPU_aic_load`
 
-**描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（2048×2048×2048），持续施压 Cube 计算单元，拉高 AICore 使用率。
+**描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（5120×5120），持续施压 Cube 计算单元，拉高 AICore 使用率。
 
 **实现原理**:
 
-- **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次矩阵乘法算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
+- **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.96），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
 - **clean**: kill stress 进程。
-- **query**: `npu-smi info -t usages` 检查 Cube 单元利用率。自适应：优先查 `Aicube` 列（910C/npu-smi 26+），无此列则查 `Aicore`（910B4/npu-smi 25，该列即 Cube）。
+- **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。优先查 `Aicore`，无则查 `Aicube`。
 
-> **Aicore vs Aicube 指标差异**：910B4（npu-smi 25.x）的 `Aicore Usage Rate` 即 Cube 单元；910C（npu-smi 26+）的 `Aicore` 是整个 AI Core 流水线的聚合占用率（跑 Vector 也会抬升到 ~80%），Cube 专用指标改名为 `Aicube`。query 自适应两个平台，无需手动区分。
+> **Aicore vs Aicube 指标差异**：910B4（npu-smi 25.x）的 `Aicore Usage Rate` 即 Cube 单元；910C（npu-smi 26+）的 `Aicore` 是整个 AI Core 流水线的聚合占用率，Cube 专用指标改名为 `Aicube`。query 优先查 `Aicore`，无则查 `Aicube`，适配两个平台。
+
+**负载率原理**：固定 50ms PWM 窗口占空比。`duty = load_pct / 0.96`（满负荷上限约 96%）。每 50ms 窗口内满负荷跑 `duty%` 时间，休眠剩余时间。npu-smi 采样窗口（~1s）内看到 20 个周期，平均值平滑且贴近目标值。
 
 **使用示例**:
 
@@ -1861,15 +1863,49 @@ dcat clean rNPU_aic_load --chip=2
 
 ---
 
-### 8.15 rNPU_aiv_load — AIVector 负载
+### 8.15 rNPU_aicpu_load — AICpu 负载
 
-**UID**: `rNPU_aiv_load`
+**UID**: `rNPU_aicpu_load`
 
-**描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（128M 元素 = 256MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。
+**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP16 Top-K 排序（2000×2000），持续施压 AICpu 计算单元，拉高 AICpu 使用率。
 
 **实现原理**:
 
-- **inject**: 运行 `build/_npu_stress aivector <dev_id> 0 512 <load_pct>` 后台进程。每批次提交 100 次 exp 算子并同步等待完成，按 `load_pct` 校准后休眠剩余时间。PID 写入 sidecar。
+- **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.90），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
+- **clean**: kill stress 进程。
+- **query**: `npu-smi info -t usages` 检查 Aicpu Usage Rate。
+
+**使用示例**:
+
+```bash
+dcat inject rNPU_aicpu_load --chip=2
+dcat inject rNPU_aicpu_load --chip=2 --load_pct=50   # 50% 负载
+dcat query rNPU_aicpu_load --chip=2
+dcat clean rNPU_aicpu_load --chip=2
+```
+
+**参数可选范围**:
+
+| 参数 | 是否必填 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
+| load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
+
+**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AICpu 满载上限约 90%（Topk 算子特性）。
+
+**危险等级**: 中 — AICpu 持续高负载，影响同芯片上其他任务的 AICpu 计算性能。持续运行直到 clean。
+
+---
+
+### 8.16 rNPU_aiv_load — AIVector 负载
+
+**UID**: `rNPU_aiv_load`
+
+**描述**: 通过 CANN 算子 API `aclnnAdd` 对指定芯片执行 FP16 元素级加法（8192×8192 = 128MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。
+
+**实现原理**:
+
+- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.98），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
 
@@ -1889,13 +1925,13 @@ dcat clean rNPU_aiv_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_load`，自适应占空比 + 校准。AIVector 满载上限约 98%（256MB 缓冲，Exp 算子带宽受限，小缓冲无法饱和）。
+**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AIVector 满载上限约 98%（Add 算子带宽受限）。
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 
 ---
 
-### 8.16 rNPU_hbm_load — HBM 负载
+### 8.17 rNPU_hbm_load — HBM 负载
 
 **UID**: `rNPU_hbm_load`
 

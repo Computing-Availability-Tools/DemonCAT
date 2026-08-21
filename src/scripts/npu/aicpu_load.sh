@@ -47,6 +47,7 @@ case "${DCAT_OP:-inject}" in
             # 910B: single process fills AICPU. Keep probe, adjust load_pct if needed.
             if [ "$load_pct" != "100" ]; then
                 kill -9 "$probe_pid" 2>/dev/null
+                wait "$probe_pid" 2>/dev/null
                 rm -f "$SIDECAR"
                 "$STRESS_BIN" aicpu "$dev_id" 0 "$load_pct" 0 > /dev/null 2>&1 &
                 echo $! > "$SIDECAR"
@@ -56,6 +57,7 @@ case "${DCAT_OP:-inject}" in
         else
             # 910C: need parallel processes. Kill probe, relaunch with N procs.
             kill -9 "$probe_pid" 2>/dev/null
+            wait "$probe_pid" 2>/dev/null
             rm -f "$SIDECAR"
 
             if [ "$load_pct" -ge 100 ]; then

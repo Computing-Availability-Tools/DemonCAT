@@ -18,6 +18,10 @@ on:
         description: "Git ref to checkout; empty = event default"
         type: string
         default: ""
+      artifact-name:
+        description: "Artifact name suffix; empty = auto by arch (arm64/x86)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -138,7 +142,7 @@ jobs:
           # arch 标签避免 matrix(x86/arm 两腿)同名冲突；
           # 仅上传本次运行相关产物：report.md(含逐用例测试目的) + results_*.csv(含 expected_behavior 列) + 日志
           # 不含 cases.csv(全量用例库 355 行，非本次运行特有，避免 artifact 冗余)
-          name: e2e-${{ (contains(inputs.runner, 'arm') || contains(inputs.runner, 'ARM')) && 'arm64' || 'x86' }}
+          name: e2e-${{ inputs.artifact-name || ((contains(inputs.runner, 'arm') || contains(inputs.runner, 'ARM')) && 'arm64' || 'x86') }}
           path: |
             tests/e2e/e2e_run.log
             tests/e2e/failures_*.log

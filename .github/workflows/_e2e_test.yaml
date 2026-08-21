@@ -106,10 +106,12 @@ jobs:
           if [ -f tests/e2e/report.md ]; then
             cat tests/e2e/report.md >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "## E2E 摘要" >> "$GITHUB_STEP_SUMMARY"
-            echo "_(report.md 未生成: pytest 可能未运行或异常退出)_" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**日志见 artifact e2e-run.log**" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## E2E 摘要"
+              echo "_(report.md 未生成: pytest 可能未运行或异常退出)_"
+              echo ""
+              echo "**日志见 artifact e2e-run.log**"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Print failure summary (on failure)

@@ -86,7 +86,6 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
             if ! kill -0 "$pid" 2>/dev/null; then
                 echo "WARNING: core $n inject failed (core not available? cpuset restricted?)" >&2
                 rm -f "/tmp/dcat-rCPU_overload-c${n}.pid"
-                pids="${pids/ $pid / }"
             fi
         done
         echo "injected CPU overload on cores [$spec] load=${load_pct}% (pids:$pids)"

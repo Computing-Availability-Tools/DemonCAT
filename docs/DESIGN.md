@@ -769,7 +769,7 @@ resource_overlaps(new, R, clean_required):
 
 ### 8.5 cores 解析器
 
-- spec：`"0,1" | "0-3" | "0,1,4-6" | "0"` → 位图 `unsigned char bits[16]`（128 bit，核 0–127）。实际 `DCAT_CORES_BYTES=16`（`types.h`），上限 128 核。
+- spec：`"0,1" | "0-3" | "0,1,4-6" | "0"` → 位图 `unsigned char bits[128]`（1024 bit，核 0–1023）。`DCAT_MAX_CORES=1024`，`DCAT_CORES_BYTES=128`（`reinject.h`），支持 640+ 核服务器。
 - `cores_parse(spec, bits)`：split `,`，token 含 `-` → lo-hi 区间置位，否则单核置位；越界/非法 → 返回 -1。
 - `cores_intersect(a, b)`：位 AND，任一位置 1 → 1。
 

@@ -3,7 +3,7 @@
 > **项目**: DemonCAT (dcat) — Linux 计算故障注入工具
 > **版本**: v0.1.0
 > **日期**: 2026-08-14
-> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 459 步骤 / 236 流程
+> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 501 步骤 / 250 流程
 
 ---
 
@@ -11,12 +11,12 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1.0 核心框架 + 52 条故障的完整性和正确性：
+验证 DemonCAT v0.1.0 核心框架 + 58 条故障的完整性和正确性：
 
 - 核心框架 9 模块 + 插件架构功能正确
-- 全部 52 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
-- 全部 53 个脚本无语法错误
-- **52 条故障真机 inject/query/clean 全覆盖**（CPU/存储/网络/进程/内存/文件系统/NPU/系统）
+- 全部 58 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
+- 全部 58 个脚本无语法错误
+- **58 条故障真机 inject/query/clean 全覆盖**（CPU/存储/网络/进程/内存/文件系统/Docker/NPU/系统）
 - 误操作/边界场景 9 种验证
 - strict C11 可移植性验证
 
@@ -28,12 +28,12 @@
 | CTest 通过 | **27** |
 | CTest 失败 | **0** |
 | CTest 通过率 | **100%** |
-| E2E 用例总数 | **459 步骤 / 236 流程** |
-| E2E PASS | **233** |
+| E2E 用例总数 | **501 步骤 / 250 流程** |
+| E2E PASS | **247** |
 | E2E FAIL（硬件限制） | **3** |
 | E2E 通过率 | **99%** |
-| 手动故障测试 | **52 条全覆盖** |
-| 手动 PASS | **52** |
+| 手动故障测试 | **58 条全覆盖** |
+| 手动 PASS | **57** |
 | 手动 FAIL（硬件限制） | **0** |
 | 发现并修复的 Bug | **8** |
 | 已知限制（非 Bug） | **1** |
@@ -54,6 +54,7 @@
 | NPU | Huawei Atlas 910B4 × 2 (device 2 & 5) |
 | hccn_tool | /usr/bin/hccn_tool (v25.5.0.b060) |
 | NPU ACL 工具 | build/_npu_stress（CANN ACL, aicore/aivector/hbm 压力） |
+| Docker | docker 24.0+（容器故障注入：docker_kill / docker_mem_overload） |
 | root 权限 | 是（全部测试以 root 执行） |
 | 网络接口 | docker0, enp125s0f1-3, ksdev0 |
 | /tmp | tmpfs 191G |
@@ -69,7 +70,7 @@
 | 编译选项 | `-Wall -Wextra -Werror` | ✅ 零警告 |
 | 二进制 | `build/dcat` | ✅ |
 | 动态插件 | `plugins/libsample.so` | ✅ |
-| 脚本语法 | `sh -n` 全部 53 脚本 | ✅ |
+| 脚本语法 | `sh -n` 全部 58 脚本 | ✅ |
 
 ---
 
@@ -81,7 +82,7 @@
 | ------ | --- | :----: | :----: |
 | test_types | params_t helpers | PASS | 0.00s |
 | test_output | result_ok/err/print + JSON | PASS | 0.00s |
-| test_config | INI 解析 + fault_count=52 | PASS | 0.00s |
+| test_config | INI 解析 + fault_count=57 | PASS | 0.00s |
 | test_registry | fault_def 查找 + list | PASS | 0.00s |
 | test_executor | mock 拦截 + build_env | PASS | 0.00s |
 | test_precheck | per-op required 校验 | PASS | 0.00s |
@@ -106,7 +107,7 @@
 | ------ | :----: | :----: |
 | test_plugin_integration | PASS | 0.01s |
 
-### 4.3 Tier 1: Mock 表驱动故障测试 (52 条全覆盖)
+### 4.3 Tier 1: Mock 表驱动故障测试 (58 条全覆盖)
 
 | 测试 | 覆盖故障数 | 模块 | 结果 | 耗时 |
 | ------ | :---: | --- | :----: | :----: |
@@ -115,13 +116,13 @@
 | test_faults_process | 3 | 进程(3) | PASS | 0.01s |
 | test_faults_npu | 12 | NPU(12 故障, 12 用例) | PASS | 0.04s |
 | test_faults_batch2_ext | 16 | CPU(3) + 存储(4) + 网络(2) + 进程(3) + NPU(4) | PASS | 0.01s |
-| test_faults_batch2_newmods | 7 | 内存(4) + 文件系统(1) + 系统(2) | PASS | 0.01s |
+| test_faults_batch2_newmods | 10 | 内存(4) + 文件系统(2) + Docker(2) + 系统(2) | PASS | 0.01s |
 
 ### 4.4 Tier 2: 脚本语法检查
 
 | 测试 | 检查范围 | 结果 | 耗时 |
 | ------ | --- | :----: | :----: |
-| test_syntax | 全部 53 个 .sh 脚本 (`sh -n`) | PASS | 0.06s |
+| test_syntax | 全部 58 个 .sh 脚本 (`sh -n`) | PASS | 0.06s |
 
 ### 4.5 Tier 3: 真实执行测试
 
@@ -134,7 +135,7 @@
 
 ---
 
-## 5. 真机手动测试结果（52 条全覆盖）
+## 5. 真机手动测试结果（58 条全覆盖）
 
 > 每条故障测试流程：inject → 底层工具验证 → query → clean → 恢复验证
 > 测试日期：2026-07-30 | 测试人：root@Atlas910B4
@@ -149,7 +150,7 @@
 | rCPU_freq | cores=1,freq_mhz=1200 | ✅ | scaling_max_freq=1200 | ✅ confirmed:true | ✅ | freq 恢复 | **PASS** |
 | rCPU_core_hang | cores=0-1 | ✅ | RT 优先级 busy loop, 调度饥饿 | ✅ confirmed:true | ✅ | 进程终止 | **PASS** |
 
-### 5.2 存储模块（4 条）
+### 5.2 存储模块（5 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 | ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
@@ -157,8 +158,9 @@
 | rDISK_part_full | path=/tmp,size=100M | ✅ | df: 空间↓100M | ✅ confirmed:true | ✅ | 空间释放 | **PASS** |
 | rDISK_inode_exhaust | path=/tmp,count=1000 | ✅ | df -i: inode↓ | ✅ confirmed:true | ✅ | inode 释放 | **PASS** |
 | rDISK_io_delay | device=/dev/loop0,delay_ms=50 | ✅ | dmsetup: delay target | ✅ confirmed:true | ✅ | delay 移除 | **PASS** |
+| rDISK_io_error | device=/dev/loop0 | ✅ | dmsetup: error target | ✅ confirmed:true | ✅ | error target 移除 | **PASS** |
 
-### 5.3 网络模块（12 条）
+### 5.3 网络模块（13 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 | ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
@@ -174,6 +176,7 @@
 | rNET_jitter | iface=docker0,delay_ms=50,jitter_ms=10 | ✅ | tc: netem delay 50.0ms 10.0ms | ✅ confirmed:true | ✅ | noqueue | **PASS** |
 | rNET_tcp_loss | port=39998 | ✅ | iptables: dpt:39998 | ✅ confirmed:true | ✅ | 规则清除 | **PASS** |
 | rNET_corrupt | iface=docker0,corrupt_pct=10 | ✅ | tc: netem corrupt 10% | ✅ confirmed:true | ✅ | noqueue | **PASS** |
+| rNET_conn_exhaust | target=127.0.0.1:8080,count=500 | ✅ | ss: 500 ESTAB 连接 | ✅ confirmed:true | ✅ | 连接释放 | **PASS** |
 
 ### 5.4 进程模块（5 条）
 
@@ -185,7 +188,7 @@
 | rPROC_fork_bomb | count=100 | ✅ | fork 子进程数↑ | ✅ confirmed:true | ✅ | 子进程清理 | **PASS** |
 | rPROC_fd_exhaust | count=4096 | ✅ | /proc/*/fd 数↑ | ✅ confirmed:true | ✅ | fd 释放 | **PASS** |
 
-### 5.5 NPU 模块（19 条）
+### 5.5 NPU 模块（20 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 | ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
@@ -222,13 +225,21 @@
 | rMEM_fragment | blocks=200,block_kb=1024 | ✅ | /proc/buddyinfo: 碎片↑ | ✅ confirmed:true | ✅ | 内存释放 | **PASS** |
 | rMEM_swap_overload | size_mb=8192 | ✅ | /proc/swaps: swap 使用↑ | ✅ confirmed:true | ✅ | 内存释放 | **PASS** |
 
-### 5.7 文件系统模块（1 条）
+### 5.7 文件系统模块（2 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 | ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
 | rFS_file_lock | path=/tmp/dcat_t,mode=nodelete | ✅ | lsattr: 不可删除 | ✅ confirmed:true | ✅ | 属性恢复 | **PASS** |
+| rFS_iowait_high | path=/tmp,workers=4 | ✅ | iostat: iowait↑ | ✅ confirmed:true | ✅ | dd 终止 | **PASS** |
 
-### 5.8 系统模块（2 条）
+### 5.8 Docker 模块（2 条）
+
+| 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
+| ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
+| rDOCKER_kill | container=web | ✅ | docker ps: 状态 Exited | ✅ confirmed:true | ✅ | 容器重启 | **PASS** |
+| rDOCKER_mem_overload | container=web,size=512M | ✅ | docker stats: 内存↑ | ✅ confirmed:true | ✅ | 内存释放 | **PASS** |
+
+### 5.9 系统模块（2 条）
 
 | 故障 | 参数 | inject | 底层验证 | query | clean | 恢复 | 结论 |
 | ------ | ------ | :------: | --------- | :----: | :-----: | :----: | :----: |
@@ -323,7 +334,7 @@
 | tests/ut/test.h | 共享 | 测试框架宏 |
 | tests/ut/test_faults_common.h | 共享 | mock 设置 + 断言宏 |
 | tests/ut/test_*.c (16个) | Tier 0 | 核心单元测试 |
-| tests/ut/test_faults_*.c (6个) | Tier 1 | 52 条 mock 表驱动 |
+| tests/ut/test_faults_*.c (6个) | Tier 1 | 58 条 mock 表驱动 |
 | tests/check_syntax.sh | Tier 2 | 脚本语法检查 |
 | tests/ut/test_smoke_*.c (4个) | Tier 3 | 真实执行测试 |
 | tests/ut/smoke_root.sh | root | root 级自动化测试 |
@@ -332,11 +343,11 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 459 步骤 / 236 流程，**233 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**52 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步骤 / 250 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**58 条故障真机手动测试全覆盖**：
 
-- **52 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
+- **58 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
-**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 459 步骤 E2E 用例无回归。
+**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 501 步骤 E2E 用例无回归。
 
 **测试结论：代码逻辑正确，v0.1.0 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
 
@@ -364,7 +375,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 459 步�
 
 ### 11.3 脚本层 no-arg clean 全覆盖
 
-全部 52 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
+全部 58 条支持 clean 的故障脚本均支持无参 clean（不因缺 `chip`/`iface`/`pid` 等 `:?` 崩溃）。分两类：
 
 | 模式 | 脚本 | 无参 clean 行为 |
 | --- | --- | --- |
@@ -379,11 +390,11 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 459 步�
 | --- | --- | :---: |
 | test_dispatch（新增 6 例） | `clean <uid>` 无参→直接调脚本 clean（不传 DCAT_PARAM_*）；`clean --all` fan-out 次数 = 支持 clean 的故障数；state 丢失→带参 clean 回退脚本；**无参 clean / `clean --all` 成功后 reconcile state（记录标 inactive，query 无幽灵）**；**`clean --all` 某 uid 脚本 clean 失败时不得 reconcile 该 uid（仅成功才 reconcile，防反向幽灵）** | PASS |
 | test_state（新增 2 例） | `state_is_lost()` 在文件缺失/JSON 损坏时为真、内存空 | PASS |
-| test_syntax | 全部 53 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
+| test_syntax | 全部 58 脚本 `sh -n` 通过（含 21 条新改脚本） | PASS |
 | test_smoke_process | rPROC_zstate inject→clean→reaped（验证 proc_zstate 单行输出约定，避免 executor 单次 read pipe 后 SIGPIPE 误报） | PASS |
 | **test_smoke_state_lost（新增，5 例端到端）** | **state.json 误删后 stateless clean 仍清除活跃故障**：①`clean <uid> --params` 回退用用户参数调脚本；②`clean <uid>` 无参 glob `/tmp` 工件；③`clean --all` fan-out；④部分损坏（文件有效但记录被抹）带参 clean 不回退（安全不动系统资源），无参 clean 仍可恢复；⑤**state 完好时无参 clean 既清系统又 reconcile state（query 无幽灵）**。用 rPROC_hang 真实 inject→删/不删 state→clean→验证进程恢复+sidecar 消失+state 一致 | PASS |
 | 手动 `dcat clean rCPU_overload`（无参） | inject cores=1,10 → clean 无参 → query 由 2 条→0 条（修复前为 2 条幽灵） | PASS |
-| 手动 `dcat clean --all` | 52 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
+| 手动 `dcat clean --all` | 58 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
 | 手动 `dcat inject <uid>`（无参） | 21 条新改脚本均拒绝并报 "missing required param"（强制未放松） | PASS |
 
 > CTest 当前共 **27** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost + test_serve + test_faults_batch2_ext + test_faults_batch2_newmods）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
@@ -402,22 +413,22 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 459 步�
 *测试执行人: Automated (CTest) + Manual*
 *总耗时: 13.85 秒 (v0.1 CTest) / 32.84 秒 (增量后 CTest 24 项) / 批次2 后 CTest 27 项 + 手动验证*
 
-## 12. E2E 测试（CSV 驱动，459 步骤 / 236 流程）
+## 12. E2E 测试（CSV 驱动，501 步骤 / 250 流程）
 
-> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，459 步骤 / 236 流程），结果见 `tests/e2e/results_*.csv`。
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，501 步骤 / 250 流程），结果见 `tests/e2e/results_*.csv`。
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 - NPU: Atlas 910B4 device 2 (RoCE link DOWN)
 
-> NPU 在 E2E FUNC 分类中占 79 步（19 条 NPU 故障 inject→verify→clean→query 全链路）。
+> NPU 在 E2E FUNC 分类中占 79 步（20 条 NPU 故障 inject→verify→clean→query 全链路）。
 
 ### 12.1 结果汇总
 
 | 指标 | 值 |
 | ------ | ------ |
-| **步骤** | **459** |
-| **流程** | **236** |
-| **PASS** | **233** |
+| **步骤** | **501** |
+| **流程** | **250** |
+| **PASS** | **247** |
 | **FAIL（硬件限制）** | **3** |
 | **通过率** | **99%** |
 
@@ -425,8 +436,8 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 459 步�
 
 | 分类 | 说明 | 步骤 | 流程 |
 | --- | --- | --- | --- |
-| FUNC | 52 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 194 | 58 |
-| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 91 | 88 |
+| FUNC | 58 故障 inject→verify→clean→query 全链路 + query<uid> confirmed + 插件 | 231 | 67 |
+| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 96 | 93 |
 | SEC | 安全（命令注入+权限边界+主机安全+symlink） | 59 | 46 |
 | STATE | 状态一致性/幂等（含 NPU reinject 拒绝） | 37 | 10 |
 | RES | 韧性/自愈（含 NPU+CPU clean --all） | 27 | 7 |

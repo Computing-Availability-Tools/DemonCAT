@@ -82,8 +82,8 @@ int test_plugin_clean_no_active(void) {
     params_init(&p);
     result_t *r = dispatch_route("rSAMPLE_test", "clean", &p);
     ASSERT_TRUE(r != NULL);
-    ASSERT_INT_EQ(r->code, 1);
-    ASSERT_STR_CONTAINS(r->json, "no active injection");
+    ASSERT_INT_EQ(r->code, 0); /* idempotent: already clean */
+    ASSERT_STR_CONTAINS(r->json, "already clean");
     result_free(r);
     return 0;
 }

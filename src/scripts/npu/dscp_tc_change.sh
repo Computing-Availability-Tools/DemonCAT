@@ -5,7 +5,7 @@ chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 dscp=${DCAT_PARAM_DSCP:-}
 tc=${DCAT_PARAM_TC:-}
-HCCN="hccn_tool -i $chip"
+HCCN="$HCCN_TO hccn_tool -i $chip"
 
 fault_present() {
     [ -n "${dscp:-}" ] || { [ -f "/tmp/dcat-rNPU_dscp_tc_change-$chip.bak" ]; return $?; }

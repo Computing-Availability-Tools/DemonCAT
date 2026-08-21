@@ -4,7 +4,7 @@
 
 #define DCAT_MAX_PARAMS 16
 #define DCAT_KEY_LEN 32
-#define DCAT_VAL_LEN 64
+#define DCAT_VAL_LEN 256
 typedef struct {
     char key[DCAT_KEY_LEN];
     char value[DCAT_VAL_LEN];

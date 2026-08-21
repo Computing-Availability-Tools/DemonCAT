@@ -3,12 +3,10 @@
 
 # _npu_stress binary is linked against ascend-toolkit/lib64 (RPATH),
 # so ASCEND_OPP_PATH must be from the same toolkit — not nnae or other CANN.
-# Priority: ASCEND_TOOLKIT_HOME > existing ASCEND_OPP_PATH (if has op_api) > default toolkit path
+# Only set if ASCEND_TOOLKIT_HOME is explicitly provided; otherwise let the
+# binary's ensure_opp_path() handle validation (it checks op_api existence).
 if [ -n "${ASCEND_TOOLKIT_HOME:-}" ] && [ -d "${ASCEND_TOOLKIT_HOME}/opp" ]; then
     export ASCEND_OPP_PATH="${ASCEND_TOOLKIT_HOME}/opp"
-elif [ -z "${ASCEND_OPP_PATH:-}" ] || [ ! -d "${ASCEND_OPP_PATH}/op_api" ]; then
-    _TK_OPP="/usr/local/Ascend/ascend-toolkit/latest/opp"
-    [ -d "$_TK_OPP" ] && export ASCEND_OPP_PATH="$_TK_OPP"
 fi
 
 DEV_MAP_FILE="/tmp/dcat-npu-dev-map"

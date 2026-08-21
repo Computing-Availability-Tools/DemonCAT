@@ -436,7 +436,7 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 
 | 分类 | 说明 | 步骤 | 流程 |
 | --- | --- | --- | --- |
-| FUNC | 57 故障 inject→verify→clean→query 全链路 + query\<uid\> confirmed + 插件 | 231 | 67 |
+| FUNC | 58 故障 inject→verify→clean→query 全链路 + query<uid> confirmed + 插件 | 231 | 67 |
 | BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 96 | 93 |
 | SEC | 安全（命令注入+权限边界+主机安全+symlink） | 59 | 46 |
 | STATE | 状态一致性/幂等（含 NPU reinject 拒绝） | 37 | 10 |

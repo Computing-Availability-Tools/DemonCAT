@@ -192,8 +192,12 @@ def _marks_for(case):
     if case.priority in ("P0", "P1", "P2"):
         marks.append(getattr(pytest.mark, case.priority))
     mod = case.module.lower()
+    setup_uid = ""
+    if case.setup_argv and len(case.setup_argv) > 2 and case.setup_argv[1] == "inject":
+        setup_uid = case.setup_argv[2].lower()
     uids = {a[2].lower() for a in case.cmds
             if len(a) > 2 and a[0] == "dcat" and a[1] in ("inject", "clean", "query")}
+    uids.add(setup_uid)
     if mod.startswith("rnpu") or any(u.startswith("rnpu") for u in uids):
         marks.append(pytest.mark.hardware)
     if mod.startswith("rnet") or any(u.startswith("rnet") for u in uids):

@@ -68,8 +68,11 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
     else:
         if _is_runnable_vcmd(case.vcmd):
             time.sleep(0.6)
+            vcmd = substitute(case.vcmd, ctx)
+            if vcmd.startswith("dcat "):
+                vcmd = f"{dcat} {vcmd[5:]}"
             recorder.verify_cmd = case.vcmd
-            verify_out = sh(substitute(case.vcmd, ctx), env=env, timeout=30)[1]
+            verify_out = sh(vcmd, env=env, timeout=30)[1]
             recorder.verify_out = verify_out
         else:
             recorder.verify_cmd = case.vcmd or "(N/A)"
@@ -112,6 +115,11 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
                         argv[i] = f"--pid={ctx['pid']}"
             if setup_argv and not any("--pid=" in a for a in setup_argv):
                 setup_argv.append(f"--pid={ctx['pid']}")
+    # rNET setup 缺 --iface 时补测试网卡
+    if setup_argv and len(setup_argv) > 2 and setup_argv[1] == "inject" \
+            and setup_argv[2].lower().startswith("rnet") \
+            and not any(a.startswith("--iface=") for a in setup_argv):
+        setup_argv.append(f"--iface={ctx['iface']}")
 
     # 4. 前序注入 setup
     if setup_argv:

@@ -249,8 +249,10 @@ void state_load(void) {
     pthread_mutex_lock(&g_lock);
     g_dirty = 0;
     memset(g_records, 0, sizeof(g_records)); /* clear stale records before loading */
-    g_next_id = 0;
-    FILE *fp = fopen(g_file, "r");
+    g_next_id = 1; /* 0 is the empty-slot sentinel; start at 1 */
+    char path[256];
+    expand_home_path(g_file, path, sizeof(path));
+    FILE *fp = fopen(path, "r");
     if (!fp) {
         g_state_lost = 1;
         pthread_mutex_unlock(&g_lock);

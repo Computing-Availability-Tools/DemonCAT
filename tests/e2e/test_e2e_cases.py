@@ -1,9 +1,12 @@
 """tests/e2e/test_e2e_cases.py — testcases.xlsx 驱动的参数化 e2e 测试。
 
 每个 xlsx 用例 = 一个 pytest item（id=TC-xxx_模块）。
-执行流：skip_reason→skip → 前序 setup（「已注入」）→ 按序跑解析出的 dcat 命令
-→ 验证观测命令（N/A 则作用于 dcat stdout/exitcode）→ e2e_assert.eval_assert。
+执行流：skip→物理前置→provision(pid)→前序 setup→按序跑 dcat 命令
+→每条命令后验证观测命令→eval_assert（任一通过即 PASS）。
 """
+import copy
+import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -21,11 +24,56 @@ from e2e_helpers import run_step_cmd, sh, substitute, check_precondition
 
 _NA_MARKERS = ("注入未执行", "无系统断言", "或非故障", "clean后观测")
 _RUNKW = ("dcat", "tc ", "pgrep", "ip ", "ls ", "cat ", "grep", "wc",
-          "ss ", "for ", "iptables", "hccn_tool", "systemctl", "echo ")
+          "ss ", "for ", "iptables", "hccn_tool", "systemctl", "echo ", "awk ")
+_PID_RE = re.compile(r'--pid=\d+$')
 
 
 def _is_runnable_vcmd(vcmd):
     return bool(vcmd) and any(k in vcmd for k in _RUNKW) and not any(m in vcmd for m in _NA_MARKERS)
+
+
+def _provision_pid(tracked):
+    """Provision a sleep process as inject target; return its pid string.
+
+    bash watcher spawns sleep child (target) then execs another sleep;
+    watcher 不会 wait → target 被 kill 后变僵尸（Z），供 rPROC_zstate 验证。
+    """
+    p = subprocess.Popen(["bash", "-c", "sleep 600 & echo $!; exec sleep 600"],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    tracked.append(p.pid)
+    try:
+        line = p.stdout.readline() or b""
+        pid = line.decode(errors="replace").strip()
+        if pid.isdigit():
+            tracked.append(int(pid))
+        return pid
+    except Exception:
+        return ""
+
+
+def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
+    """评估单步断言。返回 (result, detail)。需要时跑 verify 观测命令。"""
+    state_data = []
+    confirmed = None
+    verify_out = ""
+    if vassert and vassert.startswith("state_"):
+        if verb == "query":
+            state_data = state_data_of(cmd_out)
+            confirmed = confirmed_of(cmd_out)
+        else:
+            state_data, _rc, qout = query_state(case.module, env=env, dcat_bin=dcat)
+            confirmed = confirmed_of(qout)
+            recorder.verify_cmd = "(state query)"
+            recorder.verify_out = qout
+    else:
+        if _is_runnable_vcmd(case.vcmd):
+            time.sleep(0.6)
+            recorder.verify_cmd = case.vcmd
+            verify_out = sh(substitute(case.vcmd, ctx), env=env, timeout=30)[1]
+            recorder.verify_out = verify_out
+        else:
+            recorder.verify_cmd = case.vcmd or "(N/A)"
+    return eval_assert(vassert, cmd_rc, cmd_out, verify_out, state_data, confirmed)
 
 
 @pytest.mark.parametrize("case", parametrized_cases())
@@ -49,59 +97,51 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
 
     t0 = time.time()
 
-    # 3. 前序注入 setup（前置条件「已注入 <module> <args>」且步骤无 inject）
-    if case.setup_argv:
-        setup_str = shlex_join_dcat(dcat, case.setup_argv)
+    # 3. Provision: rPROC 测试需目标 pid（xlsx 用 --pid=12345 占位）
+    needs_pid = (case.module.lower().startswith("rproc")
+                 or "{pid}" in (case.vcmd or "")
+                 or any(_PID_RE.search(" ".join(a)) for a in case.cmds))
+    cmds = [list(a) for a in case.cmds]
+    setup_argv = list(case.setup_argv) if case.setup_argv else None
+    if needs_pid:
+        ctx["pid"] = _provision_pid(tracked)
+        if ctx["pid"]:
+            for argv in cmds:
+                for i, arg in enumerate(argv):
+                    if _PID_RE.match(arg):
+                        argv[i] = f"--pid={ctx['pid']}"
+            if setup_argv and not any("--pid=" in a for a in setup_argv):
+                setup_argv.append(f"--pid={ctx['pid']}")
+
+    # 4. 前序注入 setup
+    if setup_argv:
+        setup_str = shlex_join_dcat(dcat, setup_argv)
         run_step_cmd(setup_str, env=env, dcat_bin=dcat, timeout=120)
 
-    # 4. 按序跑解析出的 dcat 命令；末条输出作为断言对象
-    last_rc, last_out, last_verb = 0, "", ""
-    for argv in case.cmds:
-        cmd_str = shlex_join_dcat(dcat, argv)
-        rc, so, se = run_step_cmd(cmd_str, env=env, dcat_bin=dcat, timeout=120)
-        last_rc = rc
-        last_out = (so or "") + (se or "")
-        last_verb = argv[1] if len(argv) > 1 else ""
-        recorder.cmd_str = cmd_str
-        recorder.rc = rc
-        recorder.out = last_out
-        recorder.phase = last_verb
-    recorder.duration_ms = int((time.time() - t0) * 1000)
-
+    # 5. 按序跑 dcat 命令；每条后评估断言，任一通过即 PASS
     vassert = case.vassert
     recorder.vassert = vassert
-    cmd_rc, cmd_out = last_rc, last_out
+    result, detail = "skip", "no commands"
+    for argv in cmds:
+        cmd_str = shlex_join_dcat(dcat, argv)
+        rc, so, se = run_step_cmd(cmd_str, env=env, dcat_bin=dcat, timeout=120)
+        cmd_out = (so or "") + (se or "")
+        verb = argv[1] if len(argv) > 1 else ""
+        recorder.cmd_str = cmd_str
+        recorder.rc = rc
+        recorder.out = cmd_out
+        recorder.phase = verb
 
-    # 5. 断言所需输入：state_* 需 query 输出；其余用 verify 观测命令
-    state_data = []
-    confirmed = None
-    if vassert and vassert.startswith("state_"):
-        if last_verb == "query":
-            state_data = state_data_of(last_out)
-            confirmed = confirmed_of(last_out)
-        else:
-            state_data, _rc, qout = query_state(case.module, env=env, dcat_bin=dcat)
-            confirmed = confirmed_of(qout)
-            recorder.verify_cmd = "(state query)"
-            recorder.verify_out = qout
-    else:
-        if _is_runnable_vcmd(case.vcmd):
-            time.sleep(0.6)
-            recorder.verify_cmd = case.vcmd
-            verify_out = sh(substitute(case.vcmd, ctx), env=env, timeout=30)[1]
-            recorder.verify_out = verify_out
-        else:
-            recorder.verify_cmd = case.vcmd or "(N/A)"
+        result, detail = _eval_step(vassert, rc, cmd_out, case, verb, ctx, env, dcat, recorder)
+        recorder.detail = detail
+        if result == "pass":
+            break
 
-    # 6. 评估
-    result, detail = eval_assert(vassert, cmd_rc, cmd_out,
-                                 getattr(recorder, "verify_out", ""), state_data, confirmed)
-    recorder.detail = detail
+    recorder.duration_ms = int((time.time() - t0) * 1000)
     if result == "skip":
         pytest.skip(detail)
     if result == "fail":
         assert False, f"{case.id}: {detail}"
-    # pass
 
 
 def shlex_join_dcat(dcat_bin, argv):

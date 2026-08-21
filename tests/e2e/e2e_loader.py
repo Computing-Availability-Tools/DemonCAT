@@ -181,10 +181,14 @@ def _marks_for(case):
     if case.priority in ("P0", "P1", "P2"):
         marks.append(getattr(pytest.mark, case.priority))
     mod = case.module.lower()
-    if mod.startswith("rnpu"):
+    uids = {a[2].lower() for a in case.cmds
+            if len(a) > 2 and a[0] == "dcat" and a[1] in ("inject", "clean", "query")}
+    if mod.startswith("rnpu") or any(u.startswith("rnpu") for u in uids):
         marks.append(pytest.mark.hardware)
-    if mod.startswith("rnet") or mod == "rcpu_core_offline" \
-            or mod.startswith("rmem") or mod.startswith("rsys") or mod.startswith("rfs"):
+    if (mod.startswith("rnet") or mod == "rcpu_core_offline"
+            or mod.startswith("rmem") or mod.startswith("rsys") or mod.startswith("rfs")
+            or any(u.startswith("rnet") for u in uids)
+            or any(u == "rcpu_core_offline" for u in uids)):
         marks.append(pytest.mark.root)
     marks.append(getattr(pytest.mark, case.module_slug))
     marks.append(getattr(pytest.mark, _req_slug(case.req)))

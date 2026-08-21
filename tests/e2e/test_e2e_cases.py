@@ -86,6 +86,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
             recorder.verify_out = qout
     else:
         if _is_runnable_vcmd(case.vcmd):
+            time.sleep(0.6)
             recorder.verify_cmd = case.vcmd
             verify_out = sh(substitute(case.vcmd, ctx), env=env, timeout=30)[1]
             recorder.verify_out = verify_out

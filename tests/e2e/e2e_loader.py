@@ -38,7 +38,7 @@ H_VASSERT = "验证断言"
 _DCMD_RE = re.compile(r'dcat\s+(?:inject|clean|query|list|serve)\b[\x20-\x7e]+')
 # dcat 动词（用于判断步骤是否含 inject）
 _INJECT_RE = re.compile(r'dcat\s+inject\b')
-_SETUP_KW = "已注入"
+_SETUP_KEYWORDS = ("已注入", "成功注入", "已执行")
 _MODULE_RE = re.compile(r'r\w+')
 _FLAG_RE = re.compile(r'--[\w=,./\-]+')
 
@@ -92,10 +92,22 @@ def _parse_cmds(steps):
     return cmds
 
 
+def _indicates_prior_inject(pre):
+    """前置条件是否指示需前序注入 setup（已注入/成功注入/已执行...注入）。"""
+    if not pre or "注入" not in pre:
+        return False
+    return any(kw in pre for kw in _SETUP_KEYWORDS)
+
+
 def _parse_setup(precondition):
-    """前置条件含「已注入」→ 解析 setup inject argv。无/解析不出 → None。"""
-    if not precondition or _SETUP_KW not in precondition:
+    """前置条件指示需前序注入 → 解析 setup inject argv。无/解析不出 → None。"""
+    if not _indicates_prior_inject(precondition):
         return None
+    m = re.search(r'dcat\s+inject\s+(\S+)', precondition)
+    if m:
+        module = m.group(1)
+        flags = _FLAG_RE.findall(precondition)
+        return ["dcat", "inject", module, *flags]
     mm = _MODULE_RE.search(precondition)
     if not mm:
         return None
@@ -133,9 +145,7 @@ def load_cases():
         cmds = _parse_cmds(steps)
         pre = row.get(H_PRE, "")
         setup_argv = _parse_setup(pre)
-        needs_setup = (_SETUP_KW in pre) and not any(
-            len(a) > 1 and a[1] == "inject" for a in cmds
-        )
+        needs_setup = _indicates_prior_inject(pre)
 
         skip_reason = ""
         if not cmds:
@@ -170,6 +180,12 @@ def _marks_for(case):
     marks = []
     if case.priority in ("P0", "P1", "P2"):
         marks.append(getattr(pytest.mark, case.priority))
+    mod = case.module.lower()
+    if mod.startswith("rnpu"):
+        marks.append(pytest.mark.hardware)
+    if mod.startswith("rnet") or mod == "rcpu_core_offline" \
+            or mod.startswith("rmem") or mod.startswith("rsys") or mod.startswith("rfs"):
+        marks.append(pytest.mark.root)
     marks.append(getattr(pytest.mark, case.module_slug))
     marks.append(getattr(pytest.mark, _req_slug(case.req)))
     return marks

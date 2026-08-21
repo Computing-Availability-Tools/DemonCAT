@@ -95,12 +95,12 @@ jobs:
           set -o pipefail
           # TODO: flows/exclude → pytest markers 精确映射（e2e-light 精选子集）后续补。
           # 当前：空 flows=全量；非空（e2e-light 冒烟）按 -m P0 限定，避免 ubuntu 非 root 跑全量硬件用例。
-          MARK=""
-          if [ -n "$FLOWS" ]; then MARK="-m P0"; fi
+          MARK=()
+          if [ -n "$FLOWS" ]; then MARK=(-m P0); fi
           if [ "$AS_ROOT" = "true" ]; then
-            sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml $MARK 2>&1 | tee tests/e2e/e2e_run.log
+            sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
           else
-            GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml $MARK 2>&1 | tee tests/e2e/e2e_run.log
+            GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
           fi
 
       - name: Print failure summary (on failure)

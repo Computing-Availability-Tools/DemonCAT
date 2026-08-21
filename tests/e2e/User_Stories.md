@@ -36,12 +36,13 @@
 
 - **Summary**: 注入指定核纯用户态满载以验证算力隔离韧性，靠核集交集语义防止重叠抢核
 
-### Use Case:
+### Use Case
+
 - **As a** 验证 CPU 隔离与调度韧性的测试工程师
 - **I want to** 向指定 CPU 核注入纯用户态 100% 满载（perl 优先、无 perl 回退 yes），对重叠核集重注入默认拒绝、需 `--force` 原子替换，并支持无参 query 查全部在线核
 - **so that** 我能可重复地制造可控算力抢占场景，同时避免两次满载抢同一核导致故障叠加失真
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 不同核段并发注入互不影响
 - **Given**: rCPU_overload 已在 demoncat.conf 声明 `supported_ops=inject,clean,query`、`inject_required=cores`
@@ -86,12 +87,13 @@
 
 - **Summary**: 多路 dd 写压目标盘以验证存储 IO 韧性，可选参数缺省走脚本默认值
 
-### Use Case:
+### Use Case
+
 - **As a** 验证存储 IO 过载韧性的测试工程师
 - **I want to** 向目标设备/目录注入多路 dd 并发写压（workers/size_mb 可选，缺省走默认），clean 按注入时的 device 匹配 pidfile 清理，无参时走 stateless 清该 uid 全部工件
 - **so that** 我能可控地制造磁盘写 IO 饱和，且不因可选参数缺失而注入失败、不因 state.json 损坏而无法清理
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 可选参数缺省走默认值成功注入
 - **Given**: rDISK_write_overload 已声明 `inject_required=device`、`inject_optional=workers,size_mb`
@@ -119,12 +121,13 @@
 
 - **Summary**: 注入网卡随机丢包以验证应用容错，同网卡已有 root qdisc 时注入失败提示先 clean
 
-### Use Case:
+### Use Case
+
 - **As a** 验证网络丢包容错的测试工程师
 - **I want to** 在指定网卡出向注入 tc netem 随机丢包，同网卡已有 root qdisc 时注入失败，同 iface 重注入默认拒绝
 - **so that** 我能精确模拟单网卡丢包场景，且不因 qdisc 叠加或同资源重注入导致故障失真
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 正常注入写 sidecar 与 state 记录
 - **Given**: rNET_loss 已声明 `inject_required=iface,loss_pct`
@@ -153,12 +156,13 @@
 
 - **Summary**: 注入 iptables 端口级 TCP 丢包以验证连接韧性，direction=both 双向原子注入
 
-### Use Case:
+### Use Case
+
 - **As a** 验证 TCP 连接韧性的测试工程师
 - **I want to** 在指定端口注入 iptables DROP 规则（direction 默认 both），in/out/both 各方向规则独立、任一方向插入失败即整体报错，sidecar 后缀为 `.rule`
 - **so that** 我能精确控制丢包方向并确保不留孤立规则
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: direction=both 双向注入原子性
 - **Given**: rNET_tcp_loss 已声明 `inject_required=port`、`inject_optional=direction`（默认 both）
@@ -181,12 +185,13 @@
 
 - **Summary**: 强杀目标进程以验证进程级故障韧性，inject-only 不支持 clean/query
 
-### Use Case:
+### Use Case
+
 - **As a** 验证进程崩溃韧性的测试工程师
 - **I want to** 用 `kill -9` 强制终止目标进程，该故障为 inject-only 不写 state、不支持 clean/query，可对同 pid 重复注入
 - **so that** 我能模拟进程不可恢复退出，且不被误提供无法回滚的 clean 操作
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: inject 成功不写 state、不返回 record_id
 - **Given**: rPROC_exit 已声明 `supported_ops=inject`、`inject_required=pid`
@@ -215,12 +220,13 @@
 
 - **Summary**: 制造僵尸进程以验证父进程回收逻辑，clean 杀父进程强制 reparent 回收
 
-### Use Case:
+### Use Case
+
 - **As a** 验证僵尸进程处理与回收逻辑的测试工程师
 - **I want to** kill 目标进程使其在父进程未 wait 时残留为 Z 状态，clean 通过杀父进程 reparent 到 init 强制回收
 - **so that** 我能可控地复现僵尸场景并验证系统回收行为
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 父进程未回收时僵尸持续存在
 - **Given**: rPROC_zstate 已声明 `inject_required=pid`，目标 pid 的父进程不主动 wait
@@ -248,12 +254,13 @@
 
 - **Summary**: 向 NPU 注入伪造 ARP 表项以误导 RoCE 流量，dev 用 hccn_tool 查出的 NPU 内部网口名
 
-### Use Case:
+### Use Case
+
 - **As a** 验证华为 Atlas NPU RoCE 流量韧性的测试工程师
 - **I want to** 向指定芯片 RoCE 网口注入伪造 ARP（poison），dev 用 `hccn_tool` 查出的 NPU 内部网口名而非系统接口名，mac 为伪造地址
 - **so that** 我能可控误导 RoCE 流量到错误 MAC，且不因照抄示例参数而注入失败
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: poison 注入伪造 ARP 并可 query 验证
 - **Given**: 已用 `hccn_tool -i 2 -status -g` 查出目标芯片真实 dev（示例机 chip2=eth2，勿照抄）
@@ -274,12 +281,13 @@
 
 - **Summary**: 删除指定芯片已有 ARP 表项以中断对应 IP 流量，clean 从 sidecar 恢复原 MAC
 
-### Use Case:
+### Use Case
+
 - **As a** 验证华为 Atlas NPU RoCE 流量韧性的测试工程师
 - **I want to** 删除指定芯片已有 ARP 表项（前提：该 ARP 必须已存在），clean 从 sidecar 取原 MAC 重新添加恢复
 - **so that** 我能可控地制造 ARP 缺失导致的流量停滞，且不因删除不存在的条目而误判、不因 dev 配错而恢复失败
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 前提满足时删除已存在 ARP 并 sidecar 存原 MAC
 - **Given**: 目标 ARP 条目已存在（已用 `-arp -g` 确认或先 inject rNPU_arp_poison 创建）
@@ -308,12 +316,13 @@
 
 - **Summary**: 修改 NPU RoCE 网关以验证跨网段路由韧性，网关须同网段且避免 no-op
 
-### Use Case:
+### Use Case
+
 - **As a** 验证跨网段 RoCE 路由韧性的测试工程师
 - **I want to** 修改指定芯片 RoCE 网关，gateway 必须与 NPU 当前 IP 同网段，原网关为 none 时 clean 跳过恢复
 - **so that** 我能可控地制造跨网段路由失效，且不因网段不匹配或 no-op 导致注入无效
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 网关同网段匹配成功注入
 - **Given**: 已用 `hccn_tool -i 2 -ip -g` 查出 NPU IP=10.30.12.9/24，当前网关=10.30.12.254
@@ -341,12 +350,13 @@
 
 - **Summary**: 无 uid 查询由 dcat 自身 state 回答全部活跃注入，不调用脚本
 
-### Use Case:
+### Use Case
+
 - **As a** 跟踪当前故障注入全貌的测试工程师
 - **I want to** 不带 uid 执行 `dcat query`，由 dcat 遍历 state.json 活跃记录返回全部注入摘要，不调用任何脚本
 - **so that** 我能快速盘点当前环境所有活跃故障，无需逐个调脚本验证
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 无 uid 返回全部活跃记录数组
 - **Given**: state.json 有多条活跃记录（rCPU_overload record_id=3、rNET_loss record_id=4）
@@ -374,12 +384,13 @@
 
 - **Summary**: 新增故障只需加可执行脚本+配置段，不动 dcat 二进制
 
-### Use Case:
+### Use Case
+
 - **As a** 扩展故障目录的测试工程师
 - **I want to** 在 `src/scripts/<module>/` 加可执行脚本 + `demoncat.conf` 加 `[fault.<uid>]` 段接入新故障，不修改 C 代码、不重新编译
 - **so that** 我能快速扩充故障能力而不触发框架回归风险
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 加脚本+配置段后 list 与 inject 立即生效
 - **Given**: dcat 二进制已编译部署，未修改任何 C 代码
@@ -403,12 +414,13 @@
 
 - **Summary**: 单个故障 inject/clean 失败仅返回该次操作错误，不拖垮主流程与其他故障
 
-### Use Case:
+### Use Case
+
 - **As a** 批量故障演练中关注稳定性的测试工程师
 - **I want to** 单个故障脚本非 0 退出时 dcat 仅返回该次操作错误，不影响主流程与其他故障的独立操作
 - **so that** 一个故障脚本崩溃不会拖垮整个演练批次
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 单故障 inject 失败仅返回错误不崩溃
 - **Given**: rNET_loss 脚本因缺 CAP_NET_ADMIN 非 0 退出
@@ -431,12 +443,13 @@
 
 - **Summary**: dcat 经 `/proc/self/exe` 推导固定相对配置路径，`--config` 可覆盖、`--help` 输出用法
 
-### Use Case:
+### Use Case
+
 - **As a** 在不同部署路径下使用 dcat 的测试工程师
 - **I want to** dcat 自动经 `/proc/self/exe` 解析自身路径推导 `<binary_dir>/../config/demoncat.conf`，无需环境变量；`--config` 可覆盖默认值，`--help` 输出统一命令用法
 - **so that** 我能随二进制一同部署配置而无需设环境变量，测试场景可指定自定义配置、可随时查看用法
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 默认推导二进制同级 config 目录
 - **Given**: dcat 位于 `/opt/dcat/build/dcat`，配置部署在 `/opt/dcat/config/demoncat.conf`
@@ -464,12 +477,13 @@
 
 - **Summary**: inject 请求按固定 4 步校验，任一失败即中止返回对应退出码
 
-### Use Case:
+### Use Case
+
 - **As a** 验证预检护栏有效性的测试工程师
 - **I want to** inject 请求按 uid 存在→op 合法→required 齐全→脚本可执行 4 步顺序校验，任一失败即中止返回错误 JSON 与对应退出码
 - **so that** 非法请求在调用脚本前被拦截，避免无效注入副作用
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: uid 不存在返回退出码 4
 - **Given**: `demoncat.conf` 未声明 rFAKE_fault
@@ -507,12 +521,13 @@
 
 - **Summary**: list 列出配置中声明的全部故障目录，输出 JSON 数组，不依赖 state
 
-### Use Case:
+### Use Case
+
 - **As a** 发现可注入故障能力的测试工程师
 - **I want to** 执行 `dcat list` 列出 demoncat.conf 声明的全部故障目录（uid/module/supported_ops/desc），不读 state、不调脚本
 - **so that** 我能快速了解当前环境可注入哪些故障及其支持的操作，无需翻配置文件
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: list 输出全部故障目录 JSON 数组
 - **Given**: demoncat.conf 声明了 rCPU_overload、rNET_loss、rPROC_exit 等故障
@@ -535,12 +550,13 @@
 
 - **Summary**: inject/clean/query 同步阻塞，长驻故障由脚本自行 spawn 子进程+pidfile 后返回
 
-### Use Case:
+### Use Case
+
 - **As a** 关注注入时序与可观测性的测试工程师
 - **I want to** inject/clean/query 同步阻塞（dcat fork/exec+waitpid 等脚本执行完才返回），需要长驻的故障由脚本自行 spawn 子进程并写 pidfile 后立即返回
 - **so that** 我能明确知道注入何时生效，且 dcat 不被长驻故障阻塞挂起
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 一次性 inject 同步执行完返回
 - **Given**: rPROC_exit（inject-only，脚本 kill 后立即退出）
@@ -563,12 +579,13 @@
 
 - **Summary**: dcat 日志走 stderr，log_level 控制 debug/info/warn/error，生产默认 warn
 
-### Use Case:
+### Use Case
+
 - **As a** 排查注入异常的测试工程师
 - **I want to** 通过 `log_level` 控制 dcat stderr 日志级别（debug/info/warn/error），生产默认 warn，调试时设 debug 看详细分发过程
 - **so that** 我能在调试时获得详细信息，生产时不被噪音淹没
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: 默认 warn 级别只输出告警以上
 - **Given**: demoncat.conf `log_level=warn`（默认）
@@ -591,12 +608,13 @@
 
 - **Summary**: 通过 mock_executor 捕获下发命令串+env 做表驱动断言，无硬件可测全部故障
 
-### Use Case:
+### Use Case
+
 - **As a** 无硬件环境下编写故障测试的测试工程师
 - **I want to** 用 `executor_set_mock(fn)` 捕获 dcat 实际下发的命令串与环境变量（不真 fork），按表驱动断言每个故障 inject/clean/query 的命令串与 env
 - **so that** 我能无硬件依赖地验证全部故障的下发命令正确性
 
-### Acceptance Criteria:
+### Acceptance Criteria
 
 - **Scenario**: mock 捕获命令串与环境变量不真 fork
 - **Given**: 测试注册 mock_executor，`fn` 捕获 `(cmd, env)` 返回伪造 `result_t`

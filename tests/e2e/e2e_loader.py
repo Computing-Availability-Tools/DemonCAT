@@ -141,7 +141,7 @@ def load_cases():
         if not cmds:
             skip_reason = "no dcat command in steps"
         elif needs_setup and not setup_argv:
-            skip_reason = f"setup unparseable from precondition: {pre!r}"
+            skip_reason = f"setup unparsable from precondition: {pre!r}"
 
         title = row.get(H_TITLE, "")
         module_raw = title.split("-")[0] if title else ""

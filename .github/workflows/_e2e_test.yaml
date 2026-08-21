@@ -80,7 +80,7 @@ jobs:
 
       - name: Install pytest deps
         run: |
-          python3 -m pip install -q -r tests/e2e/requirements.txt
+          sudo python3 -m pip install -q --break-system-packages -r tests/e2e/requirements.txt
 
       - name: Run E2E (pytest)
         env:

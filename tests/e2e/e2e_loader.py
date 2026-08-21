@@ -43,24 +43,15 @@ _MODULE_RE = re.compile(r'r\w+')
 _FLAG_RE = re.compile(r'--[\w=,./\-]+')
 
 
-# 精选轻量冒烟 P1（核心功能/状态不变量，非 NPU）。
-# 用户态 22：状态机幂等/韧性/退出码/各模块 happy-path
-# rNET 32：每模块 --force 原子替换 / clean 后无幽灵 / 重复 clean 幂等
+# 精选轻量冒烟 P1（核心功能/状态不变量；非 NPU、非 root，可在 GHA ubuntu 跑）。
+# rNET 注入硬编码 eth0 会打断 GHA runner → 暂留全量，不进轻量。
+# 原选 22 条中 TC-530/569/590/591 因命令操作 rnet 被标 root，剔除 → 18 条。
 _SMOKE_USERSPACE = frozenset({
     "TC-001", "TC-010", "TC-044", "TC-224", "TC-228", "TC-233",
-    "TC-240", "TC-242", "TC-250", "TC-258", "TC-530", "TC-533",
-    "TC-534", "TC-552", "TC-554", "TC-555", "TC-569", "TC-575",
-    "TC-580", "TC-585", "TC-590", "TC-591",
+    "TC-240", "TC-242", "TC-250", "TC-258", "TC-533", "TC-534",
+    "TC-552", "TC-554", "TC-555", "TC-575", "TC-580", "TC-585",
 })
-_SMOKE_RNET = frozenset({
-    "TC-046", "TC-047", "TC-064", "TC-065", "TC-066", "TC-083",
-    "TC-084", "TC-085", "TC-097", "TC-098", "TC-099", "TC-110",
-    "TC-111", "TC-112", "TC-128", "TC-129", "TC-130", "TC-144",
-    "TC-146", "TC-610", "TC-611", "TC-160", "TC-161", "TC-174",
-    "TC-175", "TC-176", "TC-192", "TC-193", "TC-194", "TC-204",
-    "TC-205", "TC-216",
-})
-SMOKE_IDS = _SMOKE_USERSPACE | _SMOKE_RNET
+SMOKE_IDS = _SMOKE_USERSPACE
 
 
 @dataclass

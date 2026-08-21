@@ -64,10 +64,10 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["${{ matrix.runner }}"]'
-      # 轻量冒烟(marker 选择, 125 条): P0 非硬件(用户态+rNET) + 精选 P1 smoke(54)。
-      # NPU/边界/core_offline/P2 留 full。rNET 需 sudo+dummy 网卡 → run-as-root: true。
-      mark: "(P0 and not hardware and (not root or net)) or (P1 and smoke and not hardware and (not root or net))"
-      run-as-root: true
+      # 轻量冒烟(marker 选择, 53 条): P0 非硬件非 root(用户态) + 精选 P1 smoke(22)。
+      # NPU/rNET(eth0 硬编码会打断 GHA)/core_offline/边界/P2 留 full。非 root, ubuntu 安全。
+      mark: "(P0 and not hardware and not root) or (P1 and smoke and not hardware and not root)"
+      run-as-root: false
 
   # ───────── Full 层（仅源仓库 + push 或 PR+ready 标签）─────────
   e2e-full:

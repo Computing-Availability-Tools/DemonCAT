@@ -79,7 +79,7 @@ def pytest_configure(config):
     使 --strict-markers 通过且无 PytestUnknownMarkWarning。"""
     from e2e_loader import load_cases, _req_slug
     registered = set()
-    for m in ("P0", "P1", "P2", "smoke", "hardware", "root"):
+    for m in ("P0", "P1", "P2", "smoke", "hardware", "root", "net"):
         config.addinivalue_line("markers", f"{m}: e2e priority/scope marker")
         registered.add(m)
     try:

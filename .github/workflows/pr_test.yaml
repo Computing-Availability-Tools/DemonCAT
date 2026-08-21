@@ -64,13 +64,10 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["${{ matrix.runner }}"]'
-      # 冒烟核心用例（非 root，覆盖 PR 易引入严重回归的核心不变量）：
-      # [功能 happy-path] 各非硬件模块 inject→clean→query 全链路
-      # [状态引擎一致性] STATE-1..6 / [状态韧性] RES-1..5 / [并发安全] CONC-1..3
-      # 排除 STATE-7(NPU)/RES-6(rNET_port_occupy 压测)/RES-7(NPU)；网络/NPU/core_offline 留给 full/nightly
-      flows: "CLI,FUNC-rCPU_overload,FUNC-rDISK_write_overload,FUNC-rPROC_hang,FUNC-rPROC_zstate,FUNC-PLG,FUNC-Q1,STATE,RES,CONC"
-      exclude: "STATE-7,RES-6,RES-7"
-      run-as-root: false
+      # 轻量冒烟(marker 选择, 125 条): P0 非硬件(用户态+rNET) + 精选 P1 smoke(54)。
+      # NPU/边界/core_offline/P2 留 full。rNET 需 sudo+dummy 网卡 → run-as-root: true。
+      mark: "(P0 and not hardware and (not root or net)) or (P1 and smoke and not hardware and (not root or net))"
+      run-as-root: true
 
   # ───────── Full 层（仅源仓库 + push 或 PR+ready 标签）─────────
   e2e-full:
@@ -87,8 +84,7 @@ jobs:
     with:
       # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
       runner: '["self-hosted", "npu-server", "ARM64"]'
-      flows: ""
-      exclude: ""
+      mark: ""
       run-as-root: true
 
   clang-tidy:

@@ -111,7 +111,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: opencode/deepseek-v4-flash-free
+          model: opencode/big-pickle
           use_github_token: true
           # 不设 prompt:opencode 用 /opencode 评论内容作任务。
           # DemonCAT 审视规则全在仓库根 AGENTS.md(opencode 自动读取)。

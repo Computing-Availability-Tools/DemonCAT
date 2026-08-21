@@ -126,6 +126,20 @@ npu_foreach_chip() {
     fi
 }
 
+# Kill a stress process by PID, verifying it's actually our _npu_stress
+# (prevents PID reuse killing unrelated processes)
+npu_kill_stress() {
+    pid="$1"
+    [ -z "$pid" ] && return 0
+    if [ -f "/proc/$pid/cmdline" ] && grep -qa '_npu_stress' "/proc/$pid/cmdline" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    else
+        # PID doesn't exist or isn't ours — safe to ignore
+        :
+    fi
+}
+
 # sidecar_save <uid> <chip> <value>
 sidecar_save() {
     printf '%s\n' "$3" > "/tmp/dcat-$1-$2.bak"

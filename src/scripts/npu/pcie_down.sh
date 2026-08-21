@@ -136,7 +136,7 @@ case "${DCAT_OP:-inject}" in
             for f in /tmp/dcat-rNPU_pcie_down-*.bak; do
                 [ -f "$f" ] || continue
                 state=$(cat "$f")
-                bdf=${state%%:*}
+                bdf=${state%%|*}
                 cur_speed=$(get_link_speed "$bdf")
                 sid=$(basename "$f" | sed 's/.*-//;s/\.bak//')
                 echo "FAULT ACTIVE: PCIe link downgraded on npu $sid"
@@ -146,7 +146,7 @@ case "${DCAT_OP:-inject}" in
             [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE"; exit 1; }
         elif [ -f "$SIDECAR" ]; then
             state=$(cat "$SIDECAR")
-            npu_bdf=${state%%:*}
+            npu_bdf=${state%%|*}
             cur_speed=$(get_link_speed "$npu_bdf")
             echo "FAULT ACTIVE: PCIe link downgraded"
             echo "current: $cur_speed"

@@ -17,7 +17,7 @@ case "${DCAT_OP:-inject}" in
         : ${chip:?missing required param: chip}
         # Kill existing stress on same chip (prevent orphan)
         if [ -f "$SIDECAR" ]; then
-            for _old in $(cat "$SIDECAR" 2>/dev/null); do kill -9 "$_old" 2>/dev/null; done
+            for _old in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_old"; done
             rm -f "$SIDECAR"
         fi
         npu_check_env
@@ -56,7 +56,7 @@ case "${DCAT_OP:-inject}" in
         if [ "$probe_pct" -ge 50 ]; then
             # 910B: single process fills AICPU. Keep probe, adjust load_pct if needed.
             if [ "$load_pct" != "100" ]; then
-                kill -9 "$probe_pid" 2>/dev/null
+                npu_kill_stress "$probe_pid"
                 wait "$probe_pid" 2>/dev/null
                 rm -f "$SIDECAR"
                 "$STRESS_BIN" aicpu "$dev_id" 0 "$load_pct" 0 > /dev/null 2>&1 &
@@ -66,7 +66,7 @@ case "${DCAT_OP:-inject}" in
             echo "AICpu stress started on chip $chip (dev $dev_id, pid $(cat "$SIDECAR"), load=${load_pct}%, 1 proc)"
         else
             # 910C: need parallel processes. Kill probe, relaunch with N procs.
-            kill -9 "$probe_pid" 2>/dev/null
+            npu_kill_stress "$probe_pid"
             wait "$probe_pid" 2>/dev/null
             rm -f "$SIDECAR"
 
@@ -102,7 +102,7 @@ case "${DCAT_OP:-inject}" in
     clean)
         if [ -f "$SIDECAR" ]; then
             for pid in $(cat "$SIDECAR"); do
-                kill -9 "$pid" 2>/dev/null
+                npu_kill_stress "$pid"
             done
             rm -f "$SIDECAR"
             echo "AICpu stress stopped on chip $chip"

@@ -17,7 +17,7 @@ SIDECAR="/tmp/dcat-rNPU_chip_reset-$npu_id-$core.bak"
 case "${DCAT_OP:-inject}" in
     inject)
         : ${npu_id:?missing required param: npu_id}
-        printf 'y\n' | npu-smi set -t reset -i "$npu_id" -c "$core" 2>/dev/null \
+        yes y 2>/dev/null | npu-smi set -t reset -i "$npu_id" -c "$core" 2>/dev/null \
             || { echo "chip reset failed (need root / npu-smi)" >&2; exit 1; }
         printf 'reset\n' > "$SIDECAR"
         echo "reset NPU card $npu_id chip $core via npu-smi"

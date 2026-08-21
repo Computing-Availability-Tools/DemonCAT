@@ -17,7 +17,7 @@ static const char **build_env(const fault_def_t *f, const char *op, const params
     int cap = p->count + 4;
     const char **env = calloc((size_t)cap, sizeof(char *));
     int n = 0;
-    char buf[160];
+    char buf[320];
     snprintf(buf, sizeof(buf), "DCAT_OP=%s", op);
     env[n++] = strdup(buf);
     snprintf(buf, sizeof(buf), "DCAT_UID=%s", f->uid);

@@ -2,7 +2,7 @@
 # rNPU_driver_unbind: unbind NPU from devdrv driver (simulate driver abnormality).
 # chip = Phy-ID (0-15). Uses npu_phy_to_bdf for PCIe address lookup.
 # inject: echo <pcie_addr> > /sys/bus/pci/drivers/devdrv_device_driver/unbind
-# clean:  echo <pcie_addr> > /sys/bus/pci/drivers/devdrv_device_driver/bind + FLR reset
+# clean:  not supported (inject-only, needs hardware reset)
 # query:  check if device is bound to driver
 # NOTE:   On 910B4, driver rebind restores the driver binding but the NPU firmware
 #         may not fully recover. A warm reboot (reboot) restores the NPU.
@@ -27,21 +27,6 @@ case "${DCAT_OP:-inject}" in
             echo "unbind failed for $addr (already unbound?)" >&2
             rm -f "$SIDECAR"
             exit 1
-        fi
-        ;;
-    clean)
-        if [ -f "$SIDECAR" ]; then
-            addr=$(cat "$SIDECAR")
-            echo "$addr" > "$DRIVER/bind" 2>/dev/null || true
-            sleep 1
-            if [ -w "/sys/bus/pci/devices/$addr/reset" ]; then
-                echo 1 > "/sys/bus/pci/devices/$addr/reset" 2>/dev/null || true
-                sleep 2
-            fi
-            rm -f "$SIDECAR"
-            echo "driver rebind on chip $chip (pcie $addr)"
-        else
-            echo "no active driver unbind on chip $chip"
         fi
         ;;
     query)

@@ -245,7 +245,9 @@ void state_save(void) {
 
 void state_load(void) {
     pthread_mutex_lock(&g_lock);
-    g_dirty = 0; /* 从文件加载 → 内存与磁盘一致 → 无需 save（query/list 不重写） */
+    g_dirty = 0;
+    memset(g_records, 0, sizeof(g_records));  /* clear stale records before loading */
+    g_next_id = 0;
     FILE *fp = fopen(g_file, "r");
     if (!fp) {
         g_state_lost = 1;

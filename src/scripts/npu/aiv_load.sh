@@ -14,7 +14,7 @@ case "${DCAT_OP:-inject}" in
         :         : ${chip:?missing required param: chip}
         # Kill existing stress on same chip (prevent orphan)
         if [ -f "$SIDECAR" ]; then
-            for _old in $(cat "$SIDECAR" 2>/dev/null); do kill -9 "$_old" 2>/dev/null; done
+            for _old in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_old"; done
             rm -f "$SIDECAR"
         fi
         npu_check_env
@@ -40,7 +40,7 @@ case "${DCAT_OP:-inject}" in
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
-            kill -9 $(cat "$SIDECAR") 2>/dev/null
+            for _p in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_p"; done
             rm -f "$SIDECAR"
             echo "AIVector stress stopped on chip $chip"
         else

@@ -230,6 +230,7 @@ def provision(provs, ctx, iface):
         ctx["svc"] = svc
     if "loop_device" in provs:
         if os.geteuid() == 0:
+            sh("dmsetup remove dcat-error-* 2>/dev/null; dmsetup remove dcat-delay-* 2>/dev/null; true")
             sh("truncate -s 64M /tmp/dcat-e2e-loop.img 2>/dev/null")
             ok, out = sh("losetup -f --show /tmp/dcat-e2e-loop.img 2>/dev/null")
             ctx["loop_dev"] = out.strip() if (ok == 0 and out.strip()) else ""

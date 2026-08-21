@@ -206,7 +206,7 @@ OBS = {
         v_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", v_assert=">=1",
         c_cmd="tc qdisc show dev {iface} 2>/dev/null | grep -c netem", c_assert="==0"),
     "rNET_conn_exhaust": dict(module="network", inject_args="--target=127.0.0.1:{port} --count=20", clean_args="",
-        provision="none", precondition="none",
+        provision="free_port", precondition="none",
         v_cmd="ls /tmp/dcat-rNET_conn_exhaust-*.pid 2>/dev/null | wc -l", v_assert=">=1",
         c_cmd="ls /tmp/dcat-rNET_conn_exhaust-*.pid 2>/dev/null | wc -l", c_assert="==0"),
     "rPROC_fork_bomb": dict(module="process", inject_args="--count=20", clean_args="",

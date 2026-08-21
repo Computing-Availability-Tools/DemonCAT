@@ -32,7 +32,7 @@ case "${DCAT_OP:-inject}" in
             if [ -f "$SIDECAR" ]; then
                 dir=$(cat "$SIDECAR")
                 _safe=0; case "$dir" in *dcat.*) _safe=1;; esac
-                if [ "$_safe" = 0 ]; then echo "refusing rm -rf: unexpected path '$dir'" >&2; rm -f "$SIDECAR"; continue; fi
+                if [ "$_safe" = 0 ]; then echo "refusing rm -rf: unexpected path '$dir'" >&2; rm -f "$SIDECAR"; exit 0; fi
                 rm -rf "$dir"
                 rm -f "$SIDECAR"
                 echo "cleaned inode_exhaust (removed $dir)"

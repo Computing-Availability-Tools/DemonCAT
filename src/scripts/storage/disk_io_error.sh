@@ -18,7 +18,10 @@ case "${DCAT_OP:-inject}" in
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         devname=$(basename "$dev")
         dm="dcat-error-${devname}"
-        dmsetup info "$dm" >/dev/null 2>&1 && { echo "$dm already exists" >&2; exit 1; }
+        if dmsetup info "$dm" >/dev/null 2>&1; then
+            dmsetup remove -f "$dm" 2>/dev/null
+            echo "removed stale $dm before inject" >&2
+        fi
         size=$(blockdev --getsize "$dev" 2>/dev/null) || { echo "blockdev --getsize failed" >&2; exit 1; }
         echo "0 $size error" | dmsetup create "$dm" 2>/dev/null || { echo "dmsetup create failed (need root?)" >&2; exit 1; }
         dmsetup mknodes "$dm" 2>/dev/null || true

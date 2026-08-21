@@ -604,11 +604,11 @@ def gen():
     # STATE: 状态一致性与幂等性
     # ================================================================
     s_s = 1
-    # S1: clean --params ×2 → 第二次 code1
+    # S1: clean --params ×2 → 第二次幂等 code0
     flow = f"STATE-{s_s}"
     add(flow, 0, "cpu", "rCPU_overload", "inject", "none", f"{DCAT} inject rCPU_overload --cores=0", 0, '"status":"ok"', "", "", "", "inject")
     add(flow, 1, "cpu", "rCPU_overload", "clean1", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "pgrep -x perl | wc -l", "==0", "", "first clean ok")
-    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 1, "", "", "", "", "second clean: no active (dispatch returns 1)")
+    add(flow, 2, "cpu", "rCPU_overload", "clean2", "none", f"{DCAT} clean rCPU_overload --cores=0", 0, "", "", "", "", "second clean: idempotent (already clean)")
     s_s += 1
     # S2: 无参 clean ×2
     flow = f"STATE-{s_s}"

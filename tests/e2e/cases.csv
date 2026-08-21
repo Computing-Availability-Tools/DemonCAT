@@ -365,7 +365,7 @@ E2E-363,SEC-S1,0,storage,rDISK_write_overload,inject,ln -sf /etc /tmp/dcat_symte
 E2E-364,SEC-S1,1,storage,rDISK_write_overload,clean,./build/dcat clean rDISK_write_overload --device=/tmp/dcat_symtest; rm -f /tmp/dcat_symtest,0,,,,,none,cleanup symlink
 E2E-365,STATE-1,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
 E2E-366,STATE-1,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload --cores=0,0,,pgrep -x perl | wc -l,==0,,none,first clean ok
-E2E-367,STATE-1,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload --cores=0,1,,,,,none,second clean: no active (dispatch returns 1)
+E2E-367,STATE-1,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload --cores=0,0,,,,,none,second clean: idempotent (already clean)
 E2E-368,STATE-2,0,cpu,rCPU_overload,inject,./build/dcat inject rCPU_overload --cores=0,0,"""status"":""ok""",,,,none,inject
 E2E-369,STATE-2,1,cpu,rCPU_overload,clean1,./build/dcat clean rCPU_overload,0,,pgrep -x perl | wc -l,==0,,none,no-arg clean ok
 E2E-370,STATE-2,2,cpu,rCPU_overload,clean2,./build/dcat clean rCPU_overload,0,,,,,none,no-arg clean idempotent

@@ -26,10 +26,28 @@ static const char *usage = "Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_
                            "  duration 0 = run forever (until killed)\n"
                            "  load_pct 1-100 (default 100): fixed-period PWM duty-cycle\n";
 
-/* Ensure ASCEND_OPP_PATH is set (needed for operator tiling library loading).
- * Shell scripts set it via _common.sh; this is a fallback for direct binary execution. */
+/* Ensure ASCEND_OPP_PATH matches the toolkit we're linked against.
+ * _npu_stress RPATH = ascend-toolkit/lib64, so OPP must be from the same toolkit.
+ * If shell set ASCEND_OPP_PATH to nnae/other CANN package, it won't match → 561103. */
 static void ensure_opp_path(void) {
-    if (getenv("ASCEND_OPP_PATH")) return;
+    /* 1. ASCEND_TOOLKIT_HOME set → always prefer it (matches linked libs) */
+    const char *tk = getenv("ASCEND_TOOLKIT_HOME");
+    if (tk && tk[0]) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/opp", tk);
+        if (access(path, F_OK) == 0) {
+            setenv("ASCEND_OPP_PATH", path, 1);
+            return;
+        }
+    }
+    /* 2. ASCEND_OPP_PATH already set → keep only if it has tiling config */
+    const char *opp = getenv("ASCEND_OPP_PATH");
+    if (opp && opp[0]) {
+        char check[512];
+        snprintf(check, sizeof(check), "%s/op_api", opp);
+        if (access(check, F_OK) == 0) return;  /* looks valid */
+    }
+    /* 3. Fallback: try known toolkit paths */
     const char *candidates[] = {
         "/usr/local/Ascend/ascend-toolkit/latest/opp",
         "/usr/local/Ascend/latest/opp",

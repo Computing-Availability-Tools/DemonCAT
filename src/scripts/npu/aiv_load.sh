@@ -19,14 +19,18 @@ case "${DCAT_OP:-inject}" in
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
-        "$STRESS_BIN" aivector "$dev_id" 0 "$load_pct" 0 >/dev/null 2>&1 &
+        LOG="/tmp/dcat-rNPU_aiv_load-$chip.log"
+        "$STRESS_BIN" aivector "$dev_id" 0 "$load_pct" 0 > "$LOG" 2>&1 &
         echo $! > "$SIDECAR"
-        sleep 2
+        sleep 5
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             rm -f "$SIDECAR"
-            echo "AIVector stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
+            echo "AIVector stress failed on chip $chip:" >&2
+            tail -3 "$LOG" >&2
+            rm -f "$LOG"
             exit 1
         fi
+        rm -f "$LOG"
         echo "AIVector stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
         ;;
     clean)

@@ -1,8 +1,12 @@
 # shellcheck shell=bash
 # _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
-# Prefer user's ASCEND_OPP_PATH (matches runtime CANN); fall back to toolkit default
-if [ -z "${ASCEND_OPP_PATH:-}" ]; then
+# _npu_stress binary is linked against ascend-toolkit/lib64 (RPATH),
+# so ASCEND_OPP_PATH must be from the same toolkit — not nnae or other CANN.
+# Priority: ASCEND_TOOLKIT_HOME > existing ASCEND_OPP_PATH (if has op_api) > default toolkit path
+if [ -n "${ASCEND_TOOLKIT_HOME:-}" ] && [ -d "${ASCEND_TOOLKIT_HOME}/opp" ]; then
+    export ASCEND_OPP_PATH="${ASCEND_TOOLKIT_HOME}/opp"
+elif [ -z "${ASCEND_OPP_PATH:-}" ] || [ ! -d "${ASCEND_OPP_PATH}/op_api" ]; then
     _TK_OPP="/usr/local/Ascend/ascend-toolkit/latest/opp"
     [ -d "$_TK_OPP" ] && export ASCEND_OPP_PATH="$_TK_OPP"
 fi

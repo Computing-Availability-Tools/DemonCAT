@@ -13,6 +13,8 @@ case "${DCAT_OP:-inject}" in
         delay=${DCAT_PARAM_DELAY_MS:?missing required param: delay_ms}
         case "$delay" in *[!0-9]*|"") echo "delay_ms must be an integer" >&2; exit 1;; esac
         [ -b "$dev" ] || { echo "$dev is not a block device" >&2; exit 1; }
+        # Load dm-delay kernel module if not already loaded
+        modprobe dm_delay 2>/dev/null || true
         safe=$(echo "$dev" | tr -c 'a-zA-Z0-9' '_')
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
         devname=$(basename "$dev")

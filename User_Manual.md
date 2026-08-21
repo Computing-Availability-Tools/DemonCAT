@@ -702,7 +702,7 @@ dcat clean rNET_service_stop --service=nginx
 
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
-| service | 必填 | 字符串 | 服务名称（systemd unit 名或进程名） |
+| service | 必填 | 字符串 | 服务名称（**不带 `.service` 后缀**，如 `nginx` 而非 `nginx.service`） |
 
 **危险等级**: 高 — 停止关键网络服务（如 sshd、nginx、kubelet）会导致远程管理中断、Web 服务不可用、集群节点异常等。
 
@@ -1546,7 +1546,7 @@ dcat clean rNPU_arp --chip=2 --dev=eth2 --ip=10.30.12.200
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | chip | inject 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
-| dev | 必填 | 字符串 | NPU 内部网卡名（用 `hccn_tool -i <chip> -status -g` 确认，勿照抄示例的 eth2） |
+| dev | 必填 | 字符串 | NPU 网卡名（eth 设备名，如 `eth2`，**非** RoCE 子接口名 `end5v0`。用 `hccn_tool -i <chip> -status -g` 确认） |
 | ip | 必填 | IPv4 | ARP 条目的 IP |
 | mac | inject 必填 | MAC | 伪造的 MAC 地址 |
 
@@ -1747,7 +1747,7 @@ dcat clean rNPU_dscp_tc_change --chip=0 --dscp=46
 | --- | --- | --- | --- |
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | dscp | 必填 | 0-63 | DSCP 差分服务代码点 |
-| tc | 必填 | 整数 | 流量类编号，通常 0-7 |
+| tc | 必填 | 整数 0-3 | 流量类编号（hccn_tool 硬限制 0-3，传 4+ 报 `value out of valid range`） |
 
 **危险等级**: 中 — 映射错误使高优先级流量被降级调度，QoS 失效。
 

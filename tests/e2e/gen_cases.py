@@ -288,16 +288,22 @@ def gen():
     # ================================================================
     # FUNC: 功能基线 (inject→verify→clean→query + query<uid> + plugin)
     # Dangerous faults are skipped (require cold boot to recover)
-    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_chip_reset", "rNPU_link_down", "rDOCKER_kill", "rDOCKER_mem_overload", "rSYS_panic", "rSYS_poweroff"}
+    SKIP_FLOWS = {"rNPU_driver_unbind", "rNPU_pcie_remove", "rNPU_chip_reset", "rNPU_link_down", "rDOCKER_kill", "rDOCKER_mem_overload", "rSYS_panic", "rSYS_poweroff",
+                  "rNPU_gw_change", "rNPU_ip_change", "rNPU_iproute", "rNPU_iprule", "rNPU_route"}
+    SKIP_NET = {"rNPU_gw_change", "rNPU_ip_change", "rNPU_iproute", "rNPU_iprule", "rNPU_route"}
     # ================================================================
     for uid in sorted(OBS):
         o = OBS[uid]
         real_uid = o.get("real_uid", uid)
         flow = f"FUNC-{uid}"
         if uid in SKIP_FLOWS:
+            if uid in SKIP_NET:
+                skip_msg = "skipped: requires physical switch network topology"
+            else:
+                skip_msg = "skipped: dangerous fault (requires cold boot to recover)"
             add(flow, 0, o["module"], real_uid, "skip", "none",
-                "echo 'SKIP: dangerous fault (requires cold boot to recover)'", 0, "",
-                "", "", "", "skipped: dangerous fault"); continue
+                f"echo 'SKIP: {skip_msg}'", 0, "",
+                "", "", "", skip_msg); continue
         s = 0
         if o.get("provision", "none") != "none" or o.get("setup_cmd"):
             add(flow, s, o["module"], real_uid, "setup", o["precondition"], o.get("setup_cmd", ""), 0, "",

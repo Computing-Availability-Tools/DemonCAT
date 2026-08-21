@@ -112,7 +112,7 @@ CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 /
 - `disk_write_overload.sh`：trap 杀 dd 子进程防孤儿
 - STATE-7 `rNPU_mtu_mismatch`：`--size=1500` 在 MTU=1500 机器上是 no-op → 改为 1280
 
-#### E2E 测试框架（501 步骤 / 250 流程）
+#### E2E 测试框架（479 步骤 / 249 流程）
 
 - 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
 - NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
@@ -149,7 +149,7 @@ CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 /
     - Tier 2 脚本语法检查（sh -n 全部 58 脚本 + _common.sh）
     - Tier 3 真实执行测试（非 root 故障）
     - root 冒烟测试（smoke_root.sh）
-- **E2E**：501 步骤 / 250 流程，8 类混沌工程测试矩阵
+- **E2E**：479 步骤 / 249 流程，8 类混沌工程测试矩阵
 
 ### 已知限制
 

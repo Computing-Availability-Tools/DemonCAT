@@ -12,8 +12,8 @@ int main(void) {
         result_t *r = dispatch_route("rCPU_quota", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("cpu_quota.sh");
-        check_param_env("cores", "0");
-        check_param_env("quota_pct", "50");
+        CK(check_param_env("cores", "0") == 0);
+        CK(check_param_env("quota_pct", "50") == 0);
         result_free(r);
     }
     SUBTEST("rCPU_quota clean") {
@@ -28,8 +28,8 @@ int main(void) {
         result_t *r = dispatch_route("rCPU_freq", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("cpu_freq.sh");
-        check_param_env("cores", "0");
-        check_param_env("freq_mhz", "1200");
+        CK(check_param_env("cores", "0") == 0);
+        CK(check_param_env("freq_mhz", "1200") == 0);
         result_free(r);
     }
     SUBTEST("rCPU_freq clean") {
@@ -44,7 +44,7 @@ int main(void) {
         result_t *r = dispatch_route("rCPU_core_hang", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("cpu_core_hang.sh");
-        check_param_env("cores", "0-1");
+        CK(check_param_env("cores", "0-1") == 0);
         result_free(r);
     }
     SUBTEST("rCPU_core_hang clean") {
@@ -61,8 +61,8 @@ int main(void) {
         result_t *r = dispatch_route("rDISK_part_full", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("disk_part_full.sh");
-        check_param_env("path", "/tmp");
-        check_param_env("size", "100M");
+        CK(check_param_env("path", "/tmp") == 0);
+        CK(check_param_env("size", "100M") == 0);
         result_free(r);
     }
     SUBTEST("rDISK_part_full clean") {
@@ -77,8 +77,8 @@ int main(void) {
         result_t *r = dispatch_route("rDISK_inode_exhaust", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("disk_inode_exhaust.sh");
-        check_param_env("path", "/tmp");
-        check_param_env("count", "1000");
+        CK(check_param_env("path", "/tmp") == 0);
+        CK(check_param_env("count", "1000") == 0);
         result_free(r);
     }
     SUBTEST("rDISK_inode_exhaust clean") {
@@ -93,8 +93,8 @@ int main(void) {
         result_t *r = dispatch_route("rDISK_io_delay", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("disk_io_delay.sh");
-        check_param_env("device", "/dev/loop0");
-        check_param_env("delay_ms", "50");
+        CK(check_param_env("device", "/dev/loop0") == 0);
+        CK(check_param_env("delay_ms", "50") == 0);
         result_free(r);
     }
     SUBTEST("rDISK_io_delay clean") {
@@ -109,7 +109,7 @@ int main(void) {
         result_t *r = dispatch_route("rDISK_io_error", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("disk_io_error.sh");
-        check_param_env("device", "/dev/loop0");
+        CK(check_param_env("device", "/dev/loop0") == 0);
         result_free(r);
     }
     SUBTEST("rDISK_io_error clean") {
@@ -126,8 +126,8 @@ int main(void) {
         result_t *r = dispatch_route("rNET_corrupt", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("net_corrupt.sh");
-        check_param_env("iface", "eth0");
-        check_param_env("corrupt_pct", "10");
+        CK(check_param_env("iface", "eth0") == 0);
+        CK(check_param_env("corrupt_pct", "10") == 0);
         result_free(r);
     }
     SUBTEST("rNET_corrupt clean") {
@@ -142,8 +142,8 @@ int main(void) {
         result_t *r = dispatch_route("rNET_conn_exhaust", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("net_conn_exhaust.sh");
-        check_param_env("target", "127.0.0.1:8080");
-        check_param_env("count", "500");
+        CK(check_param_env("target", "127.0.0.1:8080") == 0);
+        CK(check_param_env("count", "500") == 0);
         result_free(r);
     }
     SUBTEST("rNET_conn_exhaust clean") {
@@ -160,7 +160,7 @@ int main(void) {
         result_t *r = dispatch_route("rPROC_fork_bomb", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("proc_fork_bomb.sh");
-        check_param_env("count", "100");
+        CK(check_param_env("count", "100") == 0);
         result_free(r);
     }
     SUBTEST("rPROC_fork_bomb clean") {
@@ -175,7 +175,7 @@ int main(void) {
         result_t *r = dispatch_route("rPROC_fd_exhaust", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("proc_fd_exhaust.sh");
-        check_param_env("count", "0");
+        CK(check_param_env("count", "0") == 0);
         result_free(r);
     }
     SUBTEST("rPROC_fd_exhaust clean") {
@@ -192,8 +192,8 @@ int main(void) {
         result_t *r = dispatch_route("rNPU_pcie_down", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("pcie_down.sh");
-        check_param_env("npu_id", "0");
-        check_param_env("gen", "1");
+        CK(check_param_env("npu_id", "0") == 0);
+        CK(check_param_env("gen", "1") == 0);
         result_free(r);
     }
     SUBTEST("rNPU_pcie_down clean") {
@@ -208,7 +208,7 @@ int main(void) {
         result_t *r = dispatch_route("rNPU_aic_load", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("aic_load.sh");
-        check_param_env("chip", "0");
+        CK(check_param_env("chip", "0") == 0);
         result_free(r);
     }
     SUBTEST("rNPU_aic_load clean") {
@@ -223,7 +223,7 @@ int main(void) {
         result_t *r = dispatch_route("rNPU_aiv_load", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("aiv_load.sh");
-        check_param_env("chip", "0");
+        CK(check_param_env("chip", "0") == 0);
         result_free(r);
     }
     SUBTEST("rNPU_aiv_load clean") {
@@ -238,8 +238,8 @@ int main(void) {
         result_t *r = dispatch_route("rNPU_hbm_load", "inject", &p);
         CK(r && r->code == 0);
         CMD_CONTAINS("hbm_load.sh");
-        check_param_env("chip", "0");
-        check_param_env("size", "2G");
+        CK(check_param_env("chip", "0") == 0);
+        CK(check_param_env("size", "2G") == 0);
         result_free(r);
     }
     SUBTEST("rNPU_hbm_load clean") {

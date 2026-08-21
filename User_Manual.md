@@ -89,11 +89,12 @@
     - [8.12 rNPU_roce_port_change](#812-rnpu_roce_port_change) — RoCE UDP 端口变更
     - [8.13 rNPU_pcie_down](#813-rnpu_pcie_down) — NPU PCIe 降速
     - [8.14 rNPU_aic_load](#814-rnpu_aic_load) — AICore 负载
-    - [8.15 rNPU_aiv_load](#815-rnpu_aiv_load) — AIVector 负载
-    - [8.16 rNPU_hbm_load](#816-rnpu_hbm_load) — HBM 负载
-    - [8.17 rNPU_chip_reset](#817-rnpu_chip_reset) — 芯片复位
-    - [8.18 rNPU_driver_unbind](#818-rnpu_driver_unbind) — 驱动解绑
-    - [8.19 rNPU_pcie_remove](#819-rnpu_pcie_remove) — PCIe 拔卡
+    - [8.15 rNPU_aicpu_load](#815-rnpu_aicpu_load) — AICpu 负载
+    - [8.16 rNPU_aiv_load](#816-rnpu_aiv_load) — AIVector 负载
+    - [8.17 rNPU_hbm_load](#817-rnpu_hbm_load) — HBM 负载
+    - [8.18 rNPU_chip_reset](#818-rnpu_chip_reset) — 芯片复位
+    - [8.19 rNPU_driver_unbind](#819-rnpu_driver_unbind) — 驱动解绑
+    - [8.20 rNPU_pcie_remove](#820-rnpu_pcie_remove) — PCIe 拔卡
 - [第九章 系统模块](#第九章-系统模块2-条)
     - [9.1 rSYS_panic](#91-rsys_panic) — 内核 panic
     - [9.2 rSYS_poweroff](#92-rsys_poweroff) — 下电重启
@@ -1962,7 +1963,7 @@ dcat clean rNPU_hbm_load --chip=2
 
 ---
 
-### 8.17 rNPU_chip_reset — 芯片复位
+### 8.18 rNPU_chip_reset — 芯片复位
 
 **UID**: `rNPU_chip_reset`
 
@@ -1999,7 +2000,7 @@ dcat query rNPU_chip_reset --npu_id=2
 
 ---
 
-### 8.18 rNPU_driver_unbind — 驱动解绑
+### 8.19 rNPU_driver_unbind — 驱动解绑
 
 **UID**: `rNPU_driver_unbind`
 
@@ -2032,7 +2033,7 @@ dcat query rNPU_driver_unbind --chip=2
 
 ---
 
-### 8.19 rNPU_pcie_remove — PCIe 拔卡
+### 8.20 rNPU_pcie_remove — PCIe 拔卡
 
 **UID**: `rNPU_pcie_remove`
 

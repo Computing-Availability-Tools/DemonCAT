@@ -1,6 +1,7 @@
 #include "state.h"
 #include <cJSON.h>
 #include <pthread.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -222,10 +223,14 @@ void state_save(void) {
         char path[256];
         expand_home_path(g_file, path, sizeof(path));
         ensure_parent_dir(path);
-        FILE *fp = fopen(path, "w");
+        /* Atomic write: temp file + rename to prevent truncated JSON on crash */
+        char tmp[256];
+        snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+        FILE *fp = fopen(tmp, "w");
         if (fp) {
             int rc = fputs(s, fp);
-            if (fclose(fp) == 0 && rc != EOF) saved = 1;
+            if (fclose(fp) == 0 && rc != EOF && rename(tmp, path) == 0) saved = 1;
+            else unlink(tmp);
         }
         free(s);
     }

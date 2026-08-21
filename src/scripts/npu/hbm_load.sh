@@ -23,6 +23,11 @@ size_to_mb() {
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
+        # Kill existing stress on same chip (prevent orphan)
+        if [ -f "$SIDECAR" ]; then
+            for _old in $(cat "$SIDECAR" 2>/dev/null); do kill -9 "$_old" 2>/dev/null; done
+            rm -f "$SIDECAR"
+        fi
         npu_check_env
         if [ ! -x "$STRESS_BIN" ]; then
             echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1

@@ -39,6 +39,7 @@ case "${DCAT_OP:-inject}" in
             PIDFILE="${PIDFILE_PFX}-${safe}.pid"
             if [ -f "$PIDFILE" ]; then
                 { read -r pids; read -r target; } < "$PIDFILE"
+                case "$target" in *dcat.iowait.*) ;; *) echo "refusing rm -rf: unexpected path '$target'" >&2; rm -f "$PIDFILE"; continue;; esac
                 for pid in $pids; do kill -9 "$pid" 2>/dev/null; done
                 pkill -9 -f "$target/" 2>/dev/null || true
                 rm -rf "$target"

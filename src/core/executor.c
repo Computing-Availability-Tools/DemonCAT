@@ -76,6 +76,7 @@ static void on_timeout(union sigval sv) {
 }
 
 result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_t *p, int timeout_ms) {
+    if (timeout_ms <= 0) timeout_ms = 60000;  /* default 60s; 0 = hang forever */
     int nenv = 0;
     const char **env = build_env(f, op, p, &nenv);
     if (g_mock) {

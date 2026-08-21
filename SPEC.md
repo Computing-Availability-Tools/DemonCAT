@@ -432,7 +432,7 @@ DemonCAT 故障按需求增量推进，**不按模块预设先后顺序**。新�
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | **v0.1** | 核心框架 + 33 条故障（cpu 2 / network 11 / process 3 / storage 1 / npu 16）+ 测试 | ✅ 已完成 |
-| **v0.1.0** | 扩展至 58 条故障（9 模块：cpu 5 / storage 5 / network 13 / process 5 / memory 4 / filesystem 2 / docker 2 / npu 20 / system 2）+ 27 ctest / 58 scripts / 501 e2e steps / 250 flows | ✅ 已完成 |
+| **v0.1.0** | 扩展至 58 条故障（9 模块：cpu 5 / storage 5 / network 13 / process 5 / memory 4 / filesystem 2 / docker 2 / npu 20 / system 2）+ 27 ctest / 58 scripts / 479 e2e steps / 249 flows | ✅ 已完成 |
 
 每批次的实现内容 = `src/scripts/` 加脚本 + `demoncat.conf` 加段 + `tests/ut/test_faults_*.c` 加表驱动用例；**不修改二进制核心**（开闭原则）。
 

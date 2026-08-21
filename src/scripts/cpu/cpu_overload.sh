@@ -54,6 +54,7 @@ case "${DCAT_OP:-inject}" in
         fi
 
         pids=""
+        core_list=""
         for n in $(parse_cores "$spec"); do
             CORE_PF="/tmp/dcat-rCPU_overload-c${n}.pid"
             if [ -f "$CORE_PF" ]; then
@@ -75,13 +76,17 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
                 taskset -c "$n" yes >/dev/null 2>&1 &
             fi
             pid=$!
-            sleep 0.05
-            if kill -0 "$pid" 2>/dev/null; then
-                echo "$pid" > "$CORE_PF"
-                pids="$pids $pid"
-            else
+            echo "$pid" > "$CORE_PF"
+            pids="$pids $pid"
+            core_list="$core_list $n:$pid"
+        done
+        sleep 0.1
+        for entry in $core_list; do
+            n=${entry%%:*}; pid=${entry##*:}
+            if ! kill -0 "$pid" 2>/dev/null; then
                 echo "WARNING: core $n inject failed (core not available? cpuset restricted?)" >&2
-                rm -f "$CORE_PF"
+                rm -f "/tmp/dcat-rCPU_overload-c${n}.pid"
+                pids="${pids/ $pid / }"
             fi
         done
         echo "injected CPU overload on cores [$spec] load=${load_pct}% (pids:$pids)"

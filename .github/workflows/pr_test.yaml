@@ -70,8 +70,9 @@ jobs:
       run-as-root: false
 
   # ───────── Full 层（仅源仓库 + push 或 PR+ready 标签）─────────
-  e2e-full:
-    name: E2E full (NPU runner)
+  # 拆分非 NPU / NPU 并行：非 NPU 跑 ubuntu-24.04-arm（快），NPU 跑 self-hosted（需硬件）。
+  e2e-full-ubuntu:
+    name: E2E full non-NPU (ubuntu-arm)
     needs: lint
     if: >-
       ${{ always() && needs.lint.result == 'success'
@@ -82,10 +83,28 @@ jobs:
                       || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
-      runner: '["self-hosted", "npu-server", "ARM64"]'
-      mark: ""
+      runner: '["ubuntu-24.04-arm"]'
+      mark: "not hardware"
       run-as-root: true
+      artifact-name: full-ubuntu
+
+  e2e-full-npu:
+    name: E2E full NPU (self-hosted)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），仅跑 NPU 用例
+      runner: '["self-hosted", "npu-server", "ARM64"]'
+      mark: "hardware"
+      run-as-root: true
+      artifact-name: full-npu
 
   clang-tidy:
     name: clang-tidy (advisory)
@@ -117,7 +136,7 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [lint, unit-test, e2e-light, e2e-full, clang-tidy, coverage]
+    needs: [lint, unit-test, e2e-light, e2e-full-ubuntu, e2e-full-npu, clang-tidy, coverage]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -127,18 +146,20 @@ jobs:
           LINT: ${{ needs.lint.result }}
           UNIT: ${{ needs.unit-test.result }}
           E2EL: ${{ needs.e2e-light.result }}
-          E2EF: ${{ needs.e2e-full.result }}
+          E2EU: ${{ needs.e2e-full-ubuntu.result }}
+          E2EN: ${{ needs.e2e-full-npu.result }}
           CLANG: ${{ needs.clang-tidy.result }}
           COV: ${{ needs.coverage.result }}
         run: |
           set -eu
           echo "=== PR CI Gate Summary ==="
-          echo "lint:        ${LINT}"
-          echo "unit-test:   ${UNIT}"
-          echo "e2e-light:   ${E2EL}"
-          echo "e2e-full:    ${E2EF}"
-          echo "clang-tidy: ${CLANG} (advisory)"
-          echo "coverage:   ${COV} (advisory)"
+          echo "lint:           ${LINT}"
+          echo "unit-test:      ${UNIT}"
+          echo "e2e-light:      ${E2EL}"
+          echo "e2e-full-ubuntu: ${E2EU}"
+          echo "e2e-full-npu:   ${E2EN}"
+          echo "clang-tidy:     ${CLANG} (advisory)"
+          echo "coverage:       ${COV} (advisory)"
           # lint/unit/e2e-light：必须成功或跳过（labeled 非 ready 时全跳过）
           for r in "${LINT}" "${UNIT}" "${E2EL}"; do
             case "$r" in
@@ -146,10 +167,12 @@ jobs:
               *) echo "::error::Required light job did not succeed: ${r}"; exit 1 ;;
             esac
           done
-          # e2e-full：跑了须成功；未触发则 skipped（放行）
-          case "${E2EF}" in
-            success|skipped) ;;
-            *) echo "::error::e2e-full did not succeed: ${E2EF}"; exit 1 ;;
-          esac
+          # e2e-full-ubuntu / e2e-full-npu：跑了须成功；未触发则 skipped（放行）
+          for r in "${E2EU}" "${E2EN}"; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "::error::E2E full job did not succeed: ${r}"; exit 1 ;;
+            esac
+          done
           # clang-tidy / coverage 为建议性，仅报告不阻断
           echo "=== CI Gate: PASSED ==="

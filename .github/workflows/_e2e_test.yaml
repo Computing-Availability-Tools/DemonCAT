@@ -18,6 +18,10 @@ on:
         description: "Git ref to checkout; empty = event default"
         type: string
         default: ""
+      artifact-name:
+        description: "Artifact name suffix; empty = auto by arch (arm64/x86)"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -88,6 +92,10 @@ jobs:
           AS_ROOT: ${{ inputs.run-as-root }}
         run: |
           set -o pipefail
+          # 清除 self-hosted runner 残留 __pycache__（避免 stale .pyc 加载旧代码）
+          find tests/e2e -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+          PYTHONDONTWRITEBYTECODE=1
+          export PYTHONDONTWRITEBYTECODE
           # mark 空=全量(nightly/PR-full on NPU runner)；非空=按 marker 表达式筛选。
           # 调用方决定表达式：轻量=P0/P1+smoke 排除 hardware(含 NPU)；全量=空。
           MARK=()
@@ -98,6 +106,20 @@ jobs:
             sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
           else
             GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
+          fi
+
+      - name: E2E summary
+        if: always()
+        run: |
+          if [ -f tests/e2e/report.md ]; then
+            cat tests/e2e/report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## E2E 摘要"
+              echo "_(report.md 未生成: pytest 可能未运行或异常退出)_"
+              echo ""
+              echo "**日志见 artifact e2e-run.log**"
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Print failure summary (on failure)
@@ -120,7 +142,7 @@ jobs:
           # arch 标签避免 matrix(x86/arm 两腿)同名冲突；
           # 仅上传本次运行相关产物：report.md(含逐用例测试目的) + results_*.csv(含 expected_behavior 列) + 日志
           # 不含 cases.csv(全量用例库 355 行，非本次运行特有，避免 artifact 冗余)
-          name: e2e-${{ (contains(inputs.runner, 'arm') || contains(inputs.runner, 'ARM')) && 'arm64' || 'x86' }}
+          name: e2e-${{ inputs.artifact-name || ((contains(inputs.runner, 'arm') || contains(inputs.runner, 'ARM')) && 'arm64' || 'x86') }}
           path: |
             tests/e2e/e2e_run.log
             tests/e2e/failures_*.log

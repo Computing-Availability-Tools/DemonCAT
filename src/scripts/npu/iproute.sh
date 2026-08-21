@@ -8,7 +8,7 @@ mask=${DCAT_PARAM_IP_MASK:-}
 via=${DCAT_PARAM_VIA:-}
 dev=${DCAT_PARAM_DEV:-}
 table=${DCAT_PARAM_TABLE:-}
-HCCN="hccn_tool -i $chip"
+HCCN="$HCCN_TO hccn_tool -i $chip"
 SIDECAR="/tmp/dcat-rNPU_iproute-$chip.bak"
 
 fault_present() {

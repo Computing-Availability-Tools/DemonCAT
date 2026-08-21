@@ -15,6 +15,9 @@ npu_check_env() {
     command -v hccn_tool >/dev/null 2>&1 || { echo "hccn_tool not found in PATH" >&2; exit 1; }
 }
 
+# hccn_tool command prefix with timeout (prevents hang on offline/unbound chips)
+HCCN_TO="timeout 5"
+
 npu_validate_chip() {
     case "$1" in
         ''|*[!0-9]*) return 1 ;;
@@ -86,13 +89,13 @@ npu_list_chips() {
                     case "$start" in *[!0-9]*|"") continue;; esac
                     case "$end"   in *[!0-9]*|"") continue;; esac
                     n=$start; while [ "$n" -le "$end" ]; do
-                        hccn_tool -i "$n" -link -g 2>/dev/null | grep -q 'link' && echo "$n"
+                        $HCCN_TO hccn_tool -i "$n" -link -g 2>/dev/null | grep -q 'link' && echo "$n"
                         n=$((n + 1))
                     done
                     ;;
                 *)
                     case "$c" in *[!0-9]*|"") continue;; esac
-                    hccn_tool -i "$c" -link -g 2>/dev/null | grep -q 'link' && echo "$c"
+                    $HCCN_TO hccn_tool -i "$c" -link -g 2>/dev/null | grep -q 'link' && echo "$c"
                     ;;
             esac
         done
@@ -116,7 +119,7 @@ npu_foreach_chip() {
         for c in $(npu_list_chips); do
             echo "=== chip $c ==="
             _oc=$chip; _oh=$HCCN
-            chip=$c; HCCN="hccn_tool -i $c"
+            chip=$c; HCCN="$HCCN_TO hccn_tool -i $c"
             eval "$1" && _rc=0
             chip=$_oc; HCCN=$_oh
         done

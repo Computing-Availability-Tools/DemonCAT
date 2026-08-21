@@ -4,7 +4,7 @@
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 bw=${DCAT_PARAM_BW_LIMIT:-}
-HCCN="hccn_tool -i $chip"
+HCCN="$HCCN_TO hccn_tool -i $chip"
 
 # Parse hccn_tool -shaping -g output: "bw_limit[200000 Mbps], bw_max[200000 Mbps], ..."
 bw_cur() { $HCCN -shaping -g 2>/dev/null | grep -oE 'bw_limit\[[0-9]+' | grep -oE '[0-9]+'; }

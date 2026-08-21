@@ -224,7 +224,7 @@ void state_save(void) {
         expand_home_path(g_file, path, sizeof(path));
         ensure_parent_dir(path);
         /* Atomic write: temp file + rename to prevent truncated JSON on crash */
-        char tmp[256];
+        char tmp[300];
         snprintf(tmp, sizeof(tmp), "%s.tmp", path);
         FILE *fp = fopen(tmp, "w");
         if (fp) {

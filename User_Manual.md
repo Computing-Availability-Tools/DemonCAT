@@ -21,7 +21,7 @@
 | Docker | 2 | 容器 kill / 容器内存过载 |
 | NPU | 20 | RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / ip route / 带宽 / MTU / DSCP / RoCE 端口 / PCIe 降速 / AICore 负载 / AICpu 负载 / AIVector 负载 / HBM 负载 / 芯片复位 / 驱动解绑 / PCIe 拔卡 / Netdetect |
 | 系统 | 2 | 内核 panic / 下电重启 |
-| **合计** | **57** | |
+| **合计** | **58** | |
 
 ---
 

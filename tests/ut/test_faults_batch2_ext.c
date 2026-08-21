@@ -232,6 +232,21 @@ int main(void) {
         CK(r && r->code == 0);
         result_free(r);
     }
+    /* rNPU_aicpu_load (chip) */
+    SUBTEST("rNPU_aicpu_load inject") {
+        params_t p = mkparams("chip", "0", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rNPU_aicpu_load", "inject", &p);
+        CK(r && r->code == 0);
+        CMD_CONTAINS("aicpu_load.sh");
+        CK(check_param_env("chip", "0") == 0);
+        result_free(r);
+    }
+    SUBTEST("rNPU_aicpu_load clean") {
+        params_t p = mkparams("chip", "0", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rNPU_aicpu_load", "clean", &p);
+        CK(r && r->code == 0);
+        result_free(r);
+    }
     /* rNPU_hbm_load (chip, size) */
     SUBTEST("rNPU_hbm_load inject") {
         params_t p = mkparams("chip", "0", "size", "2G", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);

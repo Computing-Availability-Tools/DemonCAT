@@ -556,7 +556,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (strcmp(op, "clean") == 0) {
             long long ids[DCAT_MAX_RECORDS];
             int n = state_find_by_params(uid, params, ids, DCAT_MAX_RECORDS);
-            if (n == 0) return result_err("clean", uid, 1, "no active injection");
+            if (n == 0) return result_ok("clean", uid, 0, "already clean");
             for (int i = 0; i < n; i++) {
                 const injection_record_t *rec = state_find_by_id(ids[i]);
                 if (!rec) continue;

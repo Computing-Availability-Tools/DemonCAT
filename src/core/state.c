@@ -229,8 +229,10 @@ void state_save(void) {
         FILE *fp = fopen(tmp, "w");
         if (fp) {
             int rc = fputs(s, fp);
-            if (fclose(fp) == 0 && rc != EOF && rename(tmp, path) == 0) saved = 1;
-            else unlink(tmp);
+            if (fclose(fp) == 0 && rc != EOF && rename(tmp, path) == 0)
+                saved = 1;
+            else
+                unlink(tmp);
         }
         free(s);
     }
@@ -246,7 +248,7 @@ void state_save(void) {
 void state_load(void) {
     pthread_mutex_lock(&g_lock);
     g_dirty = 0;
-    memset(g_records, 0, sizeof(g_records));  /* clear stale records before loading */
+    memset(g_records, 0, sizeof(g_records)); /* clear stale records before loading */
     g_next_id = 0;
     FILE *fp = fopen(g_file, "r");
     if (!fp) {

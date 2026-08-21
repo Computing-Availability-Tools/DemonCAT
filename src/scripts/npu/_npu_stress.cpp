@@ -45,14 +45,13 @@ static void ensure_opp_path(void) {
     if (opp && opp[0]) {
         char check[512];
         snprintf(check, sizeof(check), "%s/op_api", opp);
-        if (access(check, F_OK) == 0) return;  /* looks valid */
+        if (access(check, F_OK) == 0) return; /* looks valid */
     }
     /* 3. Fallback: try known toolkit paths */
     const char *candidates[] = {
         "/usr/local/Ascend/ascend-toolkit/latest/opp",
         "/usr/local/Ascend/latest/opp",
-        NULL
-    };
+        NULL};
     for (int i = 0; candidates[i]; i++) {
         if (access(candidates[i], F_OK) == 0) {
             setenv("ASCEND_OPP_PATH", candidates[i], 1);
@@ -61,7 +60,7 @@ static void ensure_opp_path(void) {
     }
 }
 
-static aclTensor* make_tensor(void *dev_ptr, int rows, int cols, aclDataType dtype) {
+static aclTensor *make_tensor(void *dev_ptr, int rows, int cols, aclDataType dtype) {
     int64_t dims[2] = {rows, cols};
     int64_t stride[2] = {cols, 1};
     return aclCreateTensor(dims, 2, dtype, stride, 0, ACL_FORMAT_ND, dims, 2, dev_ptr);
@@ -75,10 +74,10 @@ static long elapsed_us(struct timespec *start) {
 
 /* Operator context: holds all params needed for two-stage ACL call */
 struct OpCtx {
-    int mode;  /* 0=matmul, 1=topk, 2=add */
-    aclTensor *tA, *tB, *tC, *tD;  /* tD only for topk indices */
-    aclScalar *alpha;  /* only for add */
-    int64_t k;  /* only for topk */
+    int mode;                     /* 0=matmul, 1=topk, 2=add */
+    aclTensor *tA, *tB, *tC, *tD; /* tD only for topk indices */
+    aclScalar *alpha;             /* only for add */
+    int64_t k;                    /* only for topk */
     uint64_t ws_size;
     aclOpExecutor *exec;
     void *ws;
@@ -103,7 +102,7 @@ static void run_batch(aclrtStream stream, struct OpCtx *ctx) {
     }
 }
 
-#define PWM_WINDOW_US 50000  /* 50ms fixed window */
+#define PWM_WINDOW_US 50000 /* 50ms fixed window */
 
 /* Run stress loop with optional PWM duty-cycle */
 static void run_loop(int load_pct, int duration, float max_achievable,
@@ -161,7 +160,10 @@ static void run_loop(int load_pct, int duration, float max_achievable,
 }
 
 int main(int argc, char **argv) {
-    if (argc < 3) { fprintf(stderr, "%s", usage); return 1; }
+    if (argc < 3) {
+        fprintf(stderr, "%s", usage);
+        return 1;
+    }
 
     const char *mode = argv[1];
     int dev_id = atoi(argv[2]);
@@ -177,9 +179,16 @@ int main(int argc, char **argv) {
     ensure_opp_path();
 
     aclError ret = aclInit(NULL);
-    if (ret != ACL_SUCCESS) { fprintf(stderr, "aclInit fail: %d\n", ret); return 1; }
+    if (ret != ACL_SUCCESS) {
+        fprintf(stderr, "aclInit fail: %d\n", ret);
+        return 1;
+    }
     ret = aclrtSetDevice(dev_id);
-    if (ret != ACL_SUCCESS) { fprintf(stderr, "aclrtSetDevice(%d) fail: %d\n", dev_id, ret); aclFinalize(); return 1; }
+    if (ret != ACL_SUCCESS) {
+        fprintf(stderr, "aclrtSetDevice(%d) fail: %d\n", dev_id, ret);
+        aclFinalize();
+        return 1;
+    }
     aclnnInit(NULL);
 
     aclrtStream stream;
@@ -190,11 +199,18 @@ int main(int argc, char **argv) {
         size_t bytes = (size_t)size_mb * 1024 * 1024;
         void *d_ptr = NULL;
         ret = aclrtMalloc(&d_ptr, bytes, ACL_MEM_MALLOC_HUGE_FIRST);
-        if (ret != ACL_SUCCESS) { fprintf(stderr, "aclrtMalloc %dMB fail: %d\n", size_mb, ret); goto fail; }
+        if (ret != ACL_SUCCESS) {
+            fprintf(stderr, "aclrtMalloc %dMB fail: %d\n", size_mb, ret);
+            goto fail;
+        }
         aclrtMemset(d_ptr, bytes, 0xAA, bytes);
         printf("HBM stress: %dMB on dev %d %s\n", size_mb, dev_id, duration > 0 ? "" : "forever");
         fflush(stdout);
-        if (duration > 0) { sleep(duration); } else { while (1) pause(); }
+        if (duration > 0) {
+            sleep(duration);
+        } else {
+            while (1) pause();
+        }
         aclrtFree(d_ptr);
 
     } else {
@@ -203,11 +219,17 @@ int main(int argc, char **argv) {
         int op_mode;
 
         if (strcmp(mode, "aicore") == 0) {
-            base_shape = 5120; max_achievable = 0.96f; op_mode = 0;
+            base_shape = 5120;
+            max_achievable = 0.96f;
+            op_mode = 0;
         } else if (strcmp(mode, "aicpu") == 0) {
-            base_shape = 500; max_achievable = 0.94f; op_mode = 1;
+            base_shape = 500;
+            max_achievable = 0.94f;
+            op_mode = 1;
         } else if (strcmp(mode, "aivector") == 0) {
-            base_shape = 8192; max_achievable = 0.84f; op_mode = 2;
+            base_shape = 8192;
+            max_achievable = 0.84f;
+            op_mode = 2;
         } else {
             fprintf(stderr, "unknown mode: %s\n%s", mode, usage);
             goto fail;
@@ -223,12 +245,13 @@ int main(int argc, char **argv) {
         memset(&ctx, 0, sizeof(ctx));
         ctx.mode = op_mode;
 
-        void *dA=NULL, *dB=NULL, *dC=NULL, *dD=NULL;
+        void *dA = NULL, *dB = NULL, *dC = NULL, *dD = NULL;
 
         if (aclrtMalloc(&dA, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
             aclrtMalloc(&dB, sz, ACL_MEM_MALLOC_HUGE_FIRST) ||
             aclrtMalloc(&dC, sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
-            fprintf(stderr, "malloc fail (shape=%d)\n", shape); goto fail;
+            fprintf(stderr, "malloc fail (shape=%d)\n", shape);
+            goto fail;
         }
         aclrtMemset(dA, sz, 0x00, sz);
         aclrtMemset(dB, sz, 0x00, sz);
@@ -249,9 +272,10 @@ int main(int argc, char **argv) {
             if (k > 1000) k = 1000;
             ctx.k = k;
             /* output shape: {shape, k} */
-            size_t out_sz = (size_t)shape * k * 8;  /* DOUBLE or INT64 (both 8 bytes) */
+            size_t out_sz = (size_t)shape * k * 8; /* DOUBLE or INT64 (both 8 bytes) */
             if (aclrtMalloc(&dD, out_sz, ACL_MEM_MALLOC_HUGE_FIRST)) {
-                fprintf(stderr, "topk out malloc fail\n"); goto fail;
+                fprintf(stderr, "topk out malloc fail\n");
+                goto fail;
             }
             int64_t out_dims[2] = {shape, k};
             int64_t out_stride[2] = {k, 1};
@@ -270,7 +294,8 @@ int main(int argc, char **argv) {
         if (ctx.ws_size > 0) aclrtMalloc(&ctx.ws, ctx.ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
 
         const char *dtype_str = (op_mode == 1) ? "FP64" : "FP16";
-        const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)" : "AIVector(exp)";
+        const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)"
+                                                                           : "AIVector(exp)";
         printf("%s: %dx%d %s on dev %d load=%d%% %s\n", label, shape, shape, dtype_str, dev_id, load_pct,
                duration > 0 ? "" : "forever");
         fflush(stdout);
@@ -279,10 +304,13 @@ int main(int argc, char **argv) {
 
         if (ctx.ws) aclrtFree(ctx.ws);
         if (ctx.alpha) aclDestroyScalar(ctx.alpha);
-        aclDestroyTensor(ctx.tA); aclDestroyTensor(ctx.tB);
+        aclDestroyTensor(ctx.tA);
+        aclDestroyTensor(ctx.tB);
         if (ctx.tC) aclDestroyTensor(ctx.tC);
         if (ctx.tD) aclDestroyTensor(ctx.tD);
-        aclrtFree(dA); aclrtFree(dB); aclrtFree(dC);
+        aclrtFree(dA);
+        aclrtFree(dB);
+        aclrtFree(dC);
         if (dD) aclrtFree(dD);
     }
 

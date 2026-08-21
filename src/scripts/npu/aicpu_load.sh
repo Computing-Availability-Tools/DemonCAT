@@ -3,7 +3,7 @@
 # inject: run _npu_stress aicpu in background, write pidfile
 # clean:  kill stress process(es)
 # query:  npu-smi info -t usages (check Aicpu Usage Rate)
-# 
+#
 # Adaptive: 910B single topk fills AICPU (~94%); 910C needs 6 parallel.
 # Probe with 1 process at 100%, check npu-smi; if <50% → 910C mode (6 procs).
 . "$(dirname "$0")/_common.sh"

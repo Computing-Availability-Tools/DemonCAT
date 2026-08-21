@@ -1982,8 +1982,9 @@ dcat clean rNPU_hbm_load --chip=2
 dcat inject rNPU_chip_reset --npu_id=2               # 复位卡 2 的 chip 0（默认）
 dcat inject rNPU_chip_reset --npu_id=2 --core=1      # 复位卡 2 的 chip 1
 dcat query rNPU_chip_reset --npu_id=2
-dcat clean rNPU_chip_reset --npu_id=2
 ```
+
+> **注**: chip_reset 是一次性故障，不支持 clean。芯片复位后约 5-10 秒自动恢复（Health 回到 OK），无需重启 OS。但多芯片卡（如 910C）上复位一个 chip 可能导致整卡所有 chip 重置。
 
 **参数可选范围**:
 

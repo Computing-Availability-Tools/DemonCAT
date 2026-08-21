@@ -69,7 +69,10 @@ case "${DCAT_OP:-inject}" in
                 echo "FAULT CONFIRMED: HBM stress active on chip $c (pid $pid)"
                 card_chip=$(npu_phy_to_card "$c"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
                 hbm_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
-                echo "  HBM Usage(%): ${hbm_pct:-?}"
+                hbm_total=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Capacity/{print $NF}')
+                hbm_used=0
+                [ -n "$hbm_total" ] && [ -n "$hbm_pct" ] && hbm_used=$((hbm_total * hbm_pct / 100))
+                echo "  HBM Usage: ${hbm_used}MB / ${hbm_total:-?}MB (${hbm_pct:-?}%)"
                 found=1
             done
             [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE: no HBM stress"; exit 1; }
@@ -77,7 +80,10 @@ case "${DCAT_OP:-inject}" in
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
             card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
             hbm_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
-            echo "HBM Usage(%): ${hbm_pct:-?}"
+            hbm_total=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Capacity/{print $NF}')
+            hbm_used=0
+            [ -n "$hbm_total" ] && [ -n "$hbm_pct" ] && hbm_used=$((hbm_total * hbm_pct / 100))
+            echo "HBM Usage: ${hbm_used}MB / ${hbm_total:-?}MB (${hbm_pct:-?}%)"
             exit 0
         else
             rm -f "$SIDECAR" 2>/dev/null

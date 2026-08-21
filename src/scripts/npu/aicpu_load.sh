@@ -38,10 +38,15 @@ case "${DCAT_OP:-inject}" in
         fi
         rm -f "$LOG"
 
-        # Phase 2: check AICPU utilization to determine mode
+        # Phase 2: check AICPU utilization to determine mode (3 samples, take max)
         card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
-        probe_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/Aicpu/{print $NF}')
-        probe_pct=${probe_pct:-0}
+        probe_pct=0
+        for _ in 1 2 3; do
+            v=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/Aicpu/{print $NF}')
+            v=${v:-0}
+            [ "$v" -gt "$probe_pct" ] && probe_pct=$v
+            sleep 1
+        done
 
         if [ "$probe_pct" -ge 50 ]; then
             # 910B: single process fills AICPU. Keep probe, adjust load_pct if needed.

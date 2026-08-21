@@ -7,7 +7,6 @@
 # Use with caution in production environments.
 #
 # inject: npu-smi set -t reset -i <npu_id> -c <core>
-# clean:  no-op (chip auto-recovers after reset)
 # query:  npu-smi info (check Health column)
 . "$(dirname "$0")/_common.sh"
 npu_id=${DCAT_PARAM_NPU_ID:-}
@@ -22,10 +21,6 @@ case "${DCAT_OP:-inject}" in
             || { echo "chip reset failed (need root / npu-smi)" >&2; exit 1; }
         printf 'reset\n' > "$SIDECAR"
         echo "reset NPU card $npu_id chip $core via npu-smi"
-        ;;
-    clean)
-        rm -f "$SIDECAR" 2>/dev/null
-        echo "chip reset state cleared on card $npu_id chip $core"
         ;;
     query)
         if [ -z "$npu_id" ]; then

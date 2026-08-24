@@ -8,7 +8,7 @@
 
 | 项目 | 说明 |
 | ------ | ------ |
-| 版本号 | v0.1.0 |
+| 版本号 | v0.1.1 |
 | 发布时间 | 2026-08-11 |
 | 许可证 | Apache-2.0 |
 
@@ -76,7 +76,7 @@ dcat inject rCPU_overload --help
 
 > **提示**：本文档所有命令均以 `dcat` 形式书写。若未执行上方安装（或无 sudo 权限），请将 `dcat` 替换为 `./build/dcat`。
 
-E2E 测试（CSV 驱动，8 类分类，501 步骤 / 250 流程）详见 [tests/e2e/README.md](tests/e2e/README.md) 与 [docs/DESIGN.md](docs/DESIGN.md)。
+E2E 测试（CSV 驱动，8 类分类，468 步骤 / 249 流程）详见 [tests/e2e/README.md](tests/e2e/README.md) 与 [docs/DESIGN.md](docs/DESIGN.md)。
 
 ## 命令格式
 

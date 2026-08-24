@@ -1,9 +1,9 @@
 # DemonCAT 测试报告
 
 > **项目**: DemonCAT (dcat) — Linux 计算故障注入工具
-> **版本**: v0.1.0
+> **版本**: v0.1.1
 > **日期**: 2026-08-14
-> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 501 步骤 / 250 流程
+> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 468 步骤 / 249 流程
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### 1.1 测试目标
 
-验证 DemonCAT v0.1.0 核心框架 + 58 条故障的完整性和正确性：
+验证 DemonCAT v0.1.1 核心框架 + 58 条故障的完整性和正确性：
 
 - 核心框架 9 模块 + 插件架构功能正确
 - 全部 58 条故障的 inject/clean/query 下发路径正确（mock 表驱动）
@@ -28,7 +28,7 @@
 | CTest 通过 | **27** |
 | CTest 失败 | **0** |
 | CTest 通过率 | **100%** |
-| E2E 用例总数 | **501 步骤 / 250 流程** |
+| E2E 用例总数 | **468 步骤 / 249 流程** |
 | E2E PASS | **247** |
 | E2E FAIL（硬件限制） | **3** |
 | E2E 通过率 | **99%** |
@@ -82,7 +82,7 @@
 | ------ | --- | :----: | :----: |
 | test_types | params_t helpers | PASS | 0.00s |
 | test_output | result_ok/err/print + JSON | PASS | 0.00s |
-| test_config | INI 解析 + fault_count=57 | PASS | 0.00s |
+| test_config | INI 解析 + fault_count=58 | PASS | 0.00s |
 | test_registry | fault_def 查找 + list | PASS | 0.00s |
 | test_executor | mock 拦截 + build_env | PASS | 0.00s |
 | test_precheck | per-op required 校验 | PASS | 0.00s |
@@ -115,7 +115,7 @@
 | test_faults_network | 11 | 网络(11) | PASS | 0.03s |
 | test_faults_process | 3 | 进程(3) | PASS | 0.01s |
 | test_faults_npu | 12 | NPU(12 故障, 12 用例) | PASS | 0.04s |
-| test_faults_batch2_ext | 16 | CPU(3) + 存储(4) + 网络(2) + 进程(3) + NPU(4) | PASS | 0.01s |
+| test_faults_batch2_ext | 19 | CPU(3) + 存储(4) + 网络(2) + 进程(2) + NPU(8) | PASS | 0.01s |
 | test_faults_batch2_newmods | 10 | 内存(4) + 文件系统(2) + Docker(2) + 系统(2) | PASS | 0.01s |
 
 ### 4.4 Tier 2: 脚本语法检查
@@ -206,6 +206,7 @@
 | rNPU_roce_port_change | chip=2,port=45000 | ✅ | udp_port=45000 | — | ✅ | port=4791 | **PASS** |
 | rNPU_pcie_down | npu_id=2,gen=1 | ✅ | setpci: PCIe Gen1 | ✅ confirmed:true | ✅ | Gen 恢复 | **PASS** |
 | rNPU_aic_load | chip=2,load_pct=100 | ✅ | _npu_stress aicore, npu-smi AICore 100% | ✅ CONFIRMED | ✅ | 进程终止 | **PASS** |
+| rNPU_aicpu_load | chip=2 | ✅ | _npu_stress aicpu (aclnnTopk FP64), 自适应 1→6 进程 | ✅ CONFIRMED | ✅ | 进程终止 | **PASS** |
 | rNPU_aiv_load | chip=2,load_pct=100 | ✅ | _npu_stress aivector, npu-smi AIVector 100% | ✅ CONFIRMED | ✅ | 进程终止 | **PASS** |
 | rNPU_hbm_load | chip=2,size=2G | ✅ | _npu_stress hbm, npu-smi HBM 占用↑ | ✅ CONFIRMED | ✅ | 内存释放 | **PASS** |
 | rNPU_chip_reset | npu_id=2 | ✅ | npu-smi: chip 复位 | ✅ confirmed:true | ✅ | 芯片恢复 | **PASS** |
@@ -343,13 +344,13 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步骤 / 250 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**58 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 468 步骤 / 249 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**58 条故障真机手动测试全覆盖**：
 
 - **58 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
-**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 501 步骤 E2E 用例无回归。
+**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 468 步骤 E2E 用例无回归。
 
-**测试结论：代码逻辑正确，v0.1.0 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
+**测试结论：代码逻辑正确，v0.1.1 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
 
 ---
 
@@ -413,9 +414,9 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 *测试执行人: Automated (CTest) + Manual*
 *总耗时: 13.85 秒 (v0.1 CTest) / 32.84 秒 (增量后 CTest 24 项) / 批次2 后 CTest 27 项 + 手动验证*
 
-## 12. E2E 测试（CSV 驱动，501 步骤 / 250 流程）
+## 12. E2E 测试（CSV 驱动，468 步骤 / 249 流程）
 
-> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，501 步骤 / 250 流程），结果见 `tests/e2e/results_*.csv`。
+> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，468 步骤 / 249 流程），结果见 `tests/e2e/results_*.csv`。
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
 - NPU: Atlas 910B4 device 2 (RoCE link DOWN)
@@ -426,8 +427,8 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 
 | 指标 | 值 |
 | ------ | ------ |
-| **步骤** | **501** |
-| **流程** | **250** |
+| **步骤** | **468** |
+| **流程** | **249** |
 | **PASS** | **247** |
 | **FAIL（硬件限制）** | **3** |
 | **通过率** | **99%** |
@@ -436,8 +437,8 @@ DemonCAT v0.1.0 全部 **27** 个 CTest 测试通过，零失败。E2E 501 步�
 
 | 分类 | 说明 | 步骤 | 流程 |
 | --- | --- | --- | --- |
-| FUNC | 58 故障 inject→verify→clean→query 全链路 + query<uid> confirmed + 插件 | 231 | 67 |
-| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 96 | 93 |
+| FUNC | 58 故障 inject→verify→clean→query 全链路 + query<uid> confirmed + 插件 | 196 | 64 |
+| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 98 | 95 |
 | SEC | 安全（命令注入+权限边界+主机安全+symlink） | 59 | 46 |
 | STATE | 状态一致性/幂等（含 NPU reinject 拒绝） | 37 | 10 |
 | RES | 韧性/自愈（含 NPU+CPU clean --all） | 27 | 7 |

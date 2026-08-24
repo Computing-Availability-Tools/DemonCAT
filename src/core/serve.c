@@ -24,7 +24,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define SERVE_VERSION "0.1.0"
+#define SERVE_VERSION "0.1.1"
 #define READ_BUF_CAP (256 * 1024)
 
 static volatile sig_atomic_t g_stop = 0;

@@ -48,15 +48,15 @@
 | `rPROC_hang` | pid | — | Process hang (SIGSTOP) |
 | `rPROC_zstate` | pid | — | Zombie process (kill target → zombie) |
 | `rPROC_fork_bomb` | count | — | Fork bomb (controlled process explosion) |
-| `rPROC_fd_exhaust` | count | — | File descriptor exhaustion |
+| `rPROC_fd_exhaust` | — | count | File descriptor exhaustion |
 
 ## 内存模块（4 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |
 | `rMEM_leak` | size_mb | — | Memory leak (progressive allocation) |
-| `rMEM_oom` | rate_mb | — | OOM pressure (rapid allocation) |
-| `rMEM_fragment` | blocks | — | Memory fragmentation (scatter allocation) |
+| `rMEM_oom` | — | rate_mb | OOM pressure (rapid allocation) |
+| `rMEM_fragment` | blocks | block_kb | Memory fragmentation (scatter allocation) |
 | `rMEM_swap_overload` | size_mb | — | Swap overload (force swapping) |
 
 ## 文件系统模块（2 条）
@@ -71,7 +71,7 @@
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |
 | `rDOCKER_kill` | container | — | Docker container kill |
-| `rDOCKER_mem_overload` | container | size | Docker container memory overload (stress) |
+| `rDOCKER_mem_overload` | container,size | — | Docker container memory overload (stress) |
 
 ## NPU 模块（20 条）
 
@@ -95,12 +95,12 @@
 | `rNPU_aiv_load` | chip | load_pct | AIVector stress (aclnnExp FP16) |
 | `rNPU_hbm_load` | chip,size | — | HBM stress (aclrtMalloc+memset) |
 | `rNPU_chip_reset` | npu_id | core | NPU chip reset (npu-smi set -t reset, 多芯片卡可能整卡重启) |
-| `rNPU_driver_unbind` | chip | — | 驱动解绑 (PCIe unbind, 需重启恢复) |
-| `rNPU_pcie_remove` | chip | — | PCIe 拔卡 (PCIe remove, 需冷启动恢复) |
+| `rNPU_driver_unbind` | chip | — | NPU driver unbind (PCIe unbind, inject-only, needs reboot to recover) |
+| `rNPU_pcie_remove` | chip | — | NPU PCIe remove (simulate card loss, inject-only, needs cold boot) |
 
 ## 系统模块（2 条）
 
 | UID | 必填参数 | 可选参数 | 说明 |
 | --- | --- | --- | --- |
-| `rSYS_panic` | — | — | 系统崩溃 (kernel panic, 导致系统宕机) |
-| `rSYS_poweroff` | mode | — | 系统关机 (直接断电关机) |
+| `rSYS_panic` | — | — | Kernel panic via sysrq 'c' (inject-only, irreversible) |
+| `rSYS_poweroff` | mode | — | Machine power off / reboot (inject-only, irreversible; mode=0 reboot, 1 poweroff) |

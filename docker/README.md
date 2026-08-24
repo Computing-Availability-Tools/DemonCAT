@@ -91,7 +91,7 @@ docker run -d --name demoncat --privileged --network host --pid host \
 | dmidecode | 硬件信息查询 |
 | pciutils | `setpci`、`lspci`（NPU PCIe 降速/拔卡/驱动解绑） |
 | sysstat | `mpstat`（文件系统 iowait 查询） |
-| dmsetup | device-mapper（磁盘 io_delay） |
+| dmsetup | device-mapper（磁盘 io_error / io_delay） |
 | e2fsprogs | `chattr`、`lsattr`（文件系统 immutable 锁） |
 
 ## 5. 关键设计

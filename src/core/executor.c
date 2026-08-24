@@ -17,7 +17,7 @@ static const char **build_env(const fault_def_t *f, const char *op, const params
     int cap = p->count + 4;
     const char **env = calloc((size_t)cap, sizeof(char *));
     int n = 0;
-    char buf[160];
+    char buf[320];
     snprintf(buf, sizeof(buf), "DCAT_OP=%s", op);
     env[n++] = strdup(buf);
     snprintf(buf, sizeof(buf), "DCAT_UID=%s", f->uid);
@@ -76,6 +76,7 @@ static void on_timeout(union sigval sv) {
 }
 
 result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_t *p, int timeout_ms) {
+    if (timeout_ms <= 0) timeout_ms = 60000; /* default 60s; 0 = hang forever */
     int nenv = 0;
     const char **env = build_env(f, op, p, &nenv);
     if (g_mock) {

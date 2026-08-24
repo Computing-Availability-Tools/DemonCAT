@@ -203,7 +203,7 @@ static int t_clean_partial_state_safe_no_fallback(void) {
     strcpy(p.items[0].value, pidstr);
     p.count = 1;
     result_t *r = dispatch_route("rPROC_hang", "clean", &p);
-    CK(r && r->code != 0); /* "no active injection"，不触碰进程 */
+    CK(r && r->code == 1); /* no active record, no script fallback */
     result_free(r);
     sleep(1);
     CK(is_stopped(pid) == 1); /* 仍处于 STOP（clean 未动它） */

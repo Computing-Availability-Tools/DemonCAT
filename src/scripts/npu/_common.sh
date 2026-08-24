@@ -1,12 +1,12 @@
 # shellcheck shell=bash
 # _common.sh — npu module shared helpers. Sourced by rNPU_*.sh scripts.
 
-# Always prefer toolkit OPP (has aclnn operators); only fall back if toolkit missing
-_TK_OPP="/usr/local/Ascend/ascend-toolkit/latest/opp"
-if [ -d "$_TK_OPP" ]; then
-    export ASCEND_OPP_PATH="$_TK_OPP"
-elif [ -z "$ASCEND_OPP_PATH" ]; then
-    export ASCEND_OPP_PATH="$_TK_OPP"
+# _npu_stress binary is linked against ascend-toolkit/lib64 (RPATH),
+# so ASCEND_OPP_PATH must be from the same toolkit — not nnae or other CANN.
+# Only set if ASCEND_TOOLKIT_HOME is explicitly provided; otherwise let the
+# binary's ensure_opp_path() handle validation (it checks op_api existence).
+if [ -n "${ASCEND_TOOLKIT_HOME:-}" ] && [ -d "${ASCEND_TOOLKIT_HOME}/opp" ]; then
+    export ASCEND_OPP_PATH="${ASCEND_TOOLKIT_HOME}/opp"
 fi
 
 DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
@@ -14,6 +14,9 @@ DEV_MAP_FILE="/tmp/dcat-npu-dev-map"
 npu_check_env() {
     command -v hccn_tool >/dev/null 2>&1 || { echo "hccn_tool not found in PATH" >&2; exit 1; }
 }
+
+# hccn_tool command prefix with timeout (prevents hang on offline/unbound chips)
+HCCN_TO="timeout 5"
 
 npu_validate_chip() {
     case "$1" in
@@ -86,13 +89,13 @@ npu_list_chips() {
                     case "$start" in *[!0-9]*|"") continue;; esac
                     case "$end"   in *[!0-9]*|"") continue;; esac
                     n=$start; while [ "$n" -le "$end" ]; do
-                        hccn_tool -i "$n" -link -g 2>/dev/null | grep -q 'link' && echo "$n"
+                        $HCCN_TO hccn_tool -i "$n" -link -g 2>/dev/null | grep -q 'link' && echo "$n"
                         n=$((n + 1))
                     done
                     ;;
                 *)
                     case "$c" in *[!0-9]*|"") continue;; esac
-                    hccn_tool -i "$c" -link -g 2>/dev/null | grep -q 'link' && echo "$c"
+                    $HCCN_TO hccn_tool -i "$c" -link -g 2>/dev/null | grep -q 'link' && echo "$c"
                     ;;
             esac
         done
@@ -116,11 +119,25 @@ npu_foreach_chip() {
         for c in $(npu_list_chips); do
             echo "=== chip $c ==="
             _oc=$chip; _oh=$HCCN
-            chip=$c; HCCN="hccn_tool -i $c"
+            chip=$c; HCCN="$HCCN_TO hccn_tool -i $c"
             eval "$1" && _rc=0
             chip=$_oc; HCCN=$_oh
         done
         return $_rc
+    fi
+}
+
+# Kill a stress process by PID, verifying it's actually our _npu_stress
+# (prevents PID reuse killing unrelated processes)
+npu_kill_stress() {
+    pid="$1"
+    [ -z "$pid" ] && return 0
+    if [ -f "/proc/$pid/cmdline" ] && grep -qa '_npu_stress' "/proc/$pid/cmdline" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null
+        wait "$pid" 2>/dev/null
+    else
+        # PID doesn't exist or isn't ours — safe to ignore
+        :
     fi
 }
 

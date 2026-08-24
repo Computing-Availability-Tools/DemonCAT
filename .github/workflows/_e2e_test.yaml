@@ -68,7 +68,7 @@ jobs:
           bash scripts/install_deps.sh --runtime
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+        run: rm -rf build && cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build -j"$(nproc)"

@@ -1,6 +1,6 @@
 #!/bin/sh
-# rNPU_hbm_load: HBM stress via ACL malloc+memset (no torch_npu required).
-# inject: run _npu_stress hbm in background, write sidecar
+# rNPU_hbm_load: HBM stress via aclrtMalloc+memset.
+# inject: run _npu_stress hbm in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check HBM Usage Rate)
 . "$(dirname "$0")/_common.sh"
@@ -23,16 +23,20 @@ size_to_mb() {
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
+        # Kill existing stress on same chip (prevent orphan)
+        if [ -f "$SIDECAR" ]; then
+            for _old in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_old"; done
+            rm -f "$SIDECAR"
+        fi
         npu_check_env
         if [ ! -x "$STRESS_BIN" ]; then
-            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2
-            exit 1
+            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         size_raw=${DCAT_PARAM_SIZE:?missing required param: size}
         size_mb=$(size_to_mb "$size_raw") || { echo "invalid size: $size_raw (use 500M, 2G, 500)" >&2; exit 1; }
-        "$STRESS_BIN" hbm "$dev_id" 0 "$size_mb" >/dev/null 2>&1 &
+        "$STRESS_BIN" hbm "$dev_id" "$size_mb" 0 0 >/dev/null 2>&1 &
         pid=$!
         echo "$pid" > "$SIDECAR"
         sleep 2
@@ -43,7 +47,7 @@ case "${DCAT_OP:-inject}" in
         fi
         proc_mem=$(npu-smi info 2>/dev/null | grep '_npu_stress' | awk -F'|' '{gsub(/^ +| +$/,"",$5); print $5}')
         if [ -n "$proc_mem" ] && [ "$proc_mem" -lt $((size_mb / 2)) ] 2>/dev/null; then
-            kill -9 "$pid" 2>/dev/null
+            npu_kill_stress "$pid"
             rm -f "$SIDECAR"
             echo "HBM stress failed: only ${proc_mem}MB allocated (requested ${size_mb}MB), HBM insufficient" >&2
             exit 1
@@ -52,7 +56,7 @@ case "${DCAT_OP:-inject}" in
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
-            kill -9 $(cat "$SIDECAR") 2>/dev/null
+            for _p in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_p"; done
             rm -f "$SIDECAR"
             echo "HBM stress stopped on chip $chip"
         else
@@ -70,7 +74,10 @@ case "${DCAT_OP:-inject}" in
                 echo "FAULT CONFIRMED: HBM stress active on chip $c (pid $pid)"
                 card_chip=$(npu_phy_to_card "$c"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
                 hbm_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
-                echo "  HBM Usage(%): ${hbm_pct:-?}"
+                hbm_total=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Capacity/{print $NF}')
+                hbm_used=0
+                [ -n "$hbm_total" ] && [ -n "$hbm_pct" ] && hbm_used=$((hbm_total * hbm_pct / 100))
+                echo "  HBM Usage: ${hbm_used}MB / ${hbm_total:-?}MB (${hbm_pct:-?}%)"
                 found=1
             done
             [ "$found" = 1 ] && exit 0 || { echo "FAULT NOT ACTIVE: no HBM stress"; exit 1; }
@@ -78,7 +85,10 @@ case "${DCAT_OP:-inject}" in
             echo "FAULT CONFIRMED: HBM stress active (pid $(cat $SIDECAR))"
             card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
             hbm_pct=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Usage Rate/{print $NF}')
-            echo "HBM Usage(%): ${hbm_pct:-?}"
+            hbm_total=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null | awk '/HBM Capacity/{print $NF}')
+            hbm_used=0
+            [ -n "$hbm_total" ] && [ -n "$hbm_pct" ] && hbm_used=$((hbm_total * hbm_pct / 100))
+            echo "HBM Usage: ${hbm_used}MB / ${hbm_total:-?}MB (${hbm_pct:-?}%)"
             exit 0
         else
             rm -f "$SIDECAR" 2>/dev/null

@@ -90,7 +90,7 @@ int test_dispatch_clean_no_match(void) {
     params_init(&c);
     params_set(&c, "iface", "eth9");
     result_t *r = dispatch_route("rNET_delay", "clean", &c);
-    ASSERT_INT_EQ(r->code, 1);
+    ASSERT_INT_EQ(r->code, 1); /* no active record = exit 1 */
     result_free(r);
     return 0;
 }

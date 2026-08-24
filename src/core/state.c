@@ -1,6 +1,7 @@
 #include "state.h"
 #include <cJSON.h>
 #include <pthread.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -222,10 +223,16 @@ void state_save(void) {
         char path[256];
         expand_home_path(g_file, path, sizeof(path));
         ensure_parent_dir(path);
-        FILE *fp = fopen(path, "w");
+        /* Atomic write: temp file + rename to prevent truncated JSON on crash */
+        char tmp[300];
+        snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+        FILE *fp = fopen(tmp, "w");
         if (fp) {
             int rc = fputs(s, fp);
-            if (fclose(fp) == 0 && rc != EOF) saved = 1;
+            if (fclose(fp) == 0 && rc != EOF && rename(tmp, path) == 0)
+                saved = 1;
+            else
+                unlink(tmp);
         }
         free(s);
     }
@@ -240,8 +247,12 @@ void state_save(void) {
 
 void state_load(void) {
     pthread_mutex_lock(&g_lock);
-    g_dirty = 0; /* 从文件加载 → 内存与磁盘一致 → 无需 save（query/list 不重写） */
-    FILE *fp = fopen(g_file, "r");
+    g_dirty = 0;
+    memset(g_records, 0, sizeof(g_records)); /* clear stale records before loading */
+    g_next_id = 1;                           /* 0 is the empty-slot sentinel; start at 1 */
+    char path[256];
+    expand_home_path(g_file, path, sizeof(path));
+    FILE *fp = fopen(path, "r");
     if (!fp) {
         g_state_lost = 1;
         pthread_mutex_unlock(&g_lock);

@@ -126,6 +126,9 @@ pkill -f 'ip link set.*up' 2>/dev/null
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f "{home}/.demoncat/state.json" 2>/dev/null
+dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
+dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
+losetup -D 2>/dev/null
 tc qdisc del dev {iface} root 2>/dev/null
 ip link set {iface} up 2>/dev/null
 for port in 19998 19999; do

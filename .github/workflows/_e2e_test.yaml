@@ -7,12 +7,8 @@ on:
         description: "JSON array of runs-on labels, e.g. [\"ubuntu-latest\"] or [\"self-hosted\",\"linux-arm64-npu-static-8\"]"
         type: string
         default: '["ubuntu-latest"]'
-      flows:
-        description: "Comma-separated flow_id prefixes; empty string = all flows"
-        type: string
-        default: CLI
-      exclude:
-        description: "Comma-separated flow_id prefixes to exclude (e.g. NPU/hardware flows on ubuntu)"
+      mark:
+        description: "pytest marker expression; empty string = all (no -m filter)"
         type: string
         default: ""
       run-as-root:
@@ -28,7 +24,7 @@ permissions:
 
 jobs:
   e2e:
-    name: E2E (${{ inputs.flows || 'ALL' }}${{ inputs.exclude != '' && ' excl' || '' }})
+    name: E2E (${{ inputs.mark || 'ALL' }})
     runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 30
     steps:
@@ -82,17 +78,26 @@ jobs:
           command -v python3 >/dev/null 2>&1 || sudo apt-get install -y -qq python3 || bash scripts/install_deps.sh --runtime
           command -v curl >/dev/null 2>&1 || sudo apt-get install -y -qq curl || bash scripts/install_deps.sh --runtime
 
-      - name: Run E2E
+      - name: Install pytest deps
+        run: |
+          sudo python3 -m pip install -q --break-system-packages -r tests/e2e/requirements.txt
+
+      - name: Run E2E (pytest)
         env:
-          FLOWS: ${{ inputs.flows }}
-          EXCLUDE: ${{ inputs.exclude }}
+          MARK_EXPR: ${{ inputs.mark }}
           AS_ROOT: ${{ inputs.run-as-root }}
         run: |
           set -o pipefail
+          # mark 空=全量(nightly/PR-full on NPU runner)；非空=按 marker 表达式筛选。
+          # 调用方决定表达式：轻量=P0/P1+smoke 排除 hardware(含 NPU)；全量=空。
+          MARK=()
+          if [ -n "$MARK_EXPR" ]; then
+            MARK=(-m "$MARK_EXPR")
+          fi
           if [ "$AS_ROOT" = "true" ]; then
-            sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append 2>&1 | tee tests/e2e/e2e_run.log
+            sudo GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
           else
-            python3 tests/e2e/run_e2e.py --flows "$FLOWS" --exclude "$EXCLUDE" --no-append 2>&1 | tee tests/e2e/e2e_run.log
+            GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
           fi
 
       - name: Print failure summary (on failure)
@@ -121,5 +126,6 @@ jobs:
             tests/e2e/failures_*.log
             tests/e2e/results_*.csv
             tests/e2e/report.md
+            tests/e2e/e2e_junit.xml
           if-no-files-found: ignore
           retention-days: 7

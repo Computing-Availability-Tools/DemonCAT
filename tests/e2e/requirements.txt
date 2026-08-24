@@ -1,0 +1,2 @@
+pytest>=7.0
+openpyxl>=3.1

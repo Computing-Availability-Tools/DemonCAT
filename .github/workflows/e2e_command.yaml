@@ -98,7 +98,6 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["self-hosted", "npu-server", "ARM64"]'
-      flows: ""
-      exclude: ""
+      mark: ""
       run-as-root: true
       ref: ${{ needs.resolve.outputs.head_sha }}

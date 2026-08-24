@@ -1,8 +1,8 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/deepseek-v4-flash-free",
-  "small_model": "opencode/deepseek-v4-flash-free",
-  "enabled_providers": ["opencode"],
+  "model": "opencode/nemotron-3-ultra-free",
+  "small_model": "opencode/nemotron-3-ultra-free",
+  "enabled_providers": ["opencode", "Bailian"],
   "share": "auto",
   "permission": {
     "edit": "deny",

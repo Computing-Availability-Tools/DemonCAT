@@ -53,8 +53,7 @@ jobs:
     with:
       # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
       runner: '["self-hosted", "npu-server", "ARM64"]'
-      flows: ""
-      exclude: ""
+      mark: ""
       run-as-root: true
       ref: ${{ matrix.branch }}
 

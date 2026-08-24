@@ -59,8 +59,8 @@ repos:
           - --exclude=SC3045
 
       - id: e2e-cases-sync
-        name: E2E cases in sync with fault catalog
-        entry: bash -c 'python3 tests/e2e/gen_cases.py && git diff --exit-code --stat -- tests/e2e/cases.csv'
-        language: system
+        name: E2E cases integrity (xlsx + fault catalog)
+        entry: python tests/e2e/check_cases_sync.py
+        language: python
         pass_filenames: false
         always_run: true

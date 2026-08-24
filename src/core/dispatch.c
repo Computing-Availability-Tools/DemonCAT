@@ -181,12 +181,9 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) {
-        /* Idempotent clean: no active matching record.
-         * - state lost: run script clean (stateless fallback to sweep /tmp artifacts)
-         * - state ok: return success without running script (safe — avoids PID reuse risk) */
         if (state_is_lost())
             return executor_run_fault(f, "clean", user_params, 0);
-        return result_ok("clean", f->uid, 0, "already clean");
+        return result_err("clean", f->uid, 1, "no active injection found");
     }
     for (int i = 0; i < n; i++) {
         result_t *r = clean_one_record(f, ids[i]);
@@ -397,7 +394,7 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
         if (!p->clean) return result_err("clean", p->uid, 3, "clean declared in supported_ops but clean() not implemented");
         long long ids[DCAT_MAX_RECORDS];
         int n = state_find_by_params(p->uid, params, ids, DCAT_MAX_RECORDS);
-        if (n == 0) return result_ok("clean", p->uid, 0, "already clean");
+        if (n == 0) return result_err("clean", p->uid, 1, "no active injection found");
         for (int i = 0; i < n; i++) {
             const injection_record_t *rec = state_find_by_id(ids[i]);
             if (!rec) continue;
@@ -556,7 +553,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (strcmp(op, "clean") == 0) {
             long long ids[DCAT_MAX_RECORDS];
             int n = state_find_by_params(uid, params, ids, DCAT_MAX_RECORDS);
-            if (n == 0) return result_ok("clean", uid, 0, "already clean");
+            if (n == 0) return result_err("clean", uid, 1, "no active injection found");
             for (int i = 0; i < n; i++) {
                 const injection_record_t *rec = state_find_by_id(ids[i]);
                 if (!rec) continue;

@@ -120,6 +120,17 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
             and setup_argv[2].lower().startswith("rnet") \
             and not any(a.startswith("--iface=") for a in setup_argv):
         setup_argv.append(f"--iface={ctx['iface']}")
+    # NPU/其他 setup 缺 --flags 时从首个 inject/clean cmd 补全（--force 排除）
+    if setup_argv and len(setup_argv) > 2 and setup_argv[1] == "inject":
+        setup_keys = {a.split("=")[0] for a in setup_argv if a.startswith("--")}
+        for argv in cmds:
+            if len(argv) > 2 and argv[0] == "dcat" and argv[1] in ("inject", "clean"):
+                for arg in argv[2:]:
+                    key = arg.split("=")[0]
+                    if arg.startswith("--") and key not in setup_keys and key != "--force":
+                        setup_argv.append(arg)
+                        setup_keys.add(key)
+                break
 
     # 4. 前序注入 setup
     if setup_argv:

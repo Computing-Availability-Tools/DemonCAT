@@ -1,6 +1,6 @@
 #!/bin/sh
-# rNPU_aic_load: AICore stress via aclnnMatmul (no torch_npu required).
-# inject: run _npu_stress aicore in background, write sidecar
+# rNPU_aic_load: AICore stress via torch_npu matmul.
+# inject: run _npu_stress aicore in background, write pidfile
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aicore Usage Rate)
 . "$(dirname "$0")/_common.sh"
@@ -12,27 +12,35 @@ STRESS_BIN="$(cd "$(dirname "$0")/../../.." && pwd)/build/_npu_stress"
 case "${DCAT_OP:-inject}" in
     inject)
         : ${chip:?missing required param: chip}
+        # Kill existing stress on same chip (prevent orphan)
+        if [ -f "$SIDECAR" ]; then
+            for _old in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_old"; done
+            rm -f "$SIDECAR"
+        fi
         npu_check_env
         if [ ! -x "$STRESS_BIN" ]; then
-            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2
-            exit 1
+            echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
         [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
-        "$STRESS_BIN" aicore "$dev_id" 0 512 "$load_pct" >/dev/null 2>&1 &
+        LOG="/tmp/dcat-rNPU_aic_load-$chip.log"
+        "$STRESS_BIN" aicore "$dev_id" 0 "$load_pct" 0 > "$LOG" 2>&1 &
         echo $! > "$SIDECAR"
-        sleep 1
+        sleep 5
         if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
             rm -f "$SIDECAR"
-            echo "AICore stress failed: cannot start on chip $chip (HBM insufficient?)" >&2
+            echo "AICore stress failed on chip $chip:" >&2
+            tail -3 "$LOG" >&2
+            rm -f "$LOG"
             exit 1
         fi
+        rm -f "$LOG"
         echo "AICore stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
         ;;
     clean)
         if [ -f "$SIDECAR" ]; then
-            kill -9 $(cat "$SIDECAR") 2>/dev/null
+            for _p in $(cat "$SIDECAR" 2>/dev/null); do npu_kill_stress "$_p"; done
             rm -f "$SIDECAR"
             echo "AICore stress stopped on chip $chip"
         else
@@ -50,8 +58,8 @@ case "${DCAT_OP:-inject}" in
                 echo "FAULT CONFIRMED: AICore stress active on chip $c (pid $pid)"
                 card_chip=$(npu_phy_to_card "$c"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
                 usages=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null)
-                ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
-                [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+                ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+                [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
                 echo "  AICore Usage(%): ${ai_pct:-?}"
                 found=1
             done
@@ -60,8 +68,8 @@ case "${DCAT_OP:-inject}" in
             echo "FAULT CONFIRMED: AICore stress active (pid $(cat $SIDECAR))"
             card_chip=$(npu_phy_to_card "$chip"); card_id=${card_chip%% *}; chip_id=${card_chip##* }
             usages=$(npu-smi info -t usages -i "$card_id" -c "$chip_id" 2>/dev/null)
-            ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
-            [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+            ai_pct=$(echo "$usages" | awk '/Aicore/{print $NF}')
+            [ -z "$ai_pct" ] && ai_pct=$(echo "$usages" | awk '/Aicube/{print $NF}')
             echo "AICore Usage(%): ${ai_pct:-?}"
             exit 0
         else

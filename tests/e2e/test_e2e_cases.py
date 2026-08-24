@@ -27,6 +27,13 @@ _RUNKW = ("dcat", "tc ", "pgrep", "ip ", "ls ", "cat ", "grep", "wc",
           "ss ", "for ", "iptables", "hccn_tool", "systemctl", "echo ", "awk ")
 _PID_RE = re.compile(r'--pid=\d+$')
 
+SKIP_MODULES = {
+    "rNPU_gw_change", "rNPU_ip_change",
+    "rNPU_iproute_add", "rNPU_iproute_del",
+    "rNPU_iprule_add", "rNPU_iprule_del",
+    "rNPU_route_add", "rNPU_route_del",
+}
+
 
 def _is_runnable_vcmd(vcmd):
     return bool(vcmd) and any(k in vcmd for k in _RUNKW) and not any(m in vcmd for m in _NA_MARKERS)
@@ -87,6 +94,11 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
     if case.skip_reason:
         recorder.detail = case.skip_reason
         pytest.skip(case.skip_reason)
+
+    # 1b. SKIP NPU 网络故障（需物理交换机拓扑，NPU runner 未接交换机）
+    if case.module in SKIP_MODULES:
+        recorder.detail = "requires physical switch network topology"
+        pytest.skip("requires physical switch network topology")
 
     # 2. 物理前置（仅 coded 值 roce_link_up 触发；xlsx 多为描述性 = no-op）
     coded_pre = case.precondition if case.precondition in ("none", "roce_link_up") else "none"
@@ -165,4 +177,4 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
 
 def shlex_join_dcat(dcat_bin, argv):
     import shlex
-    return shlex.join([dcat_bin] + list(argv[1:]))
+    return ' '.join(shlex.quote(a) for a in [dcat_bin] + list(argv[1:]))

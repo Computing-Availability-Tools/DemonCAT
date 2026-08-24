@@ -4,7 +4,7 @@
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 addr=${DCAT_PARAM_ADDRESS:-}
-HCCN="hccn_tool -i $chip"
+HCCN="$HCCN_TO hccn_tool -i $chip"
 
 fault_present() {
     cur=$($HCCN -netdetect -g 2>/dev/null | grep -oE 'address:[[:space:]]*[0-9.]+' | awk '{print $NF}')

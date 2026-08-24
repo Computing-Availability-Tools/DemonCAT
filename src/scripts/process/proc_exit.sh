@@ -3,6 +3,8 @@
 case "${DCAT_OP:-inject}" in
     inject)
         pid=${DCAT_PARAM_PID:?missing required param: pid}
+        case "$pid" in *[!0-9]*|'') echo "pid must be a positive integer (got: $pid)" >&2; exit 1;; esac
+        [ "$pid" -gt 0 ] 2>/dev/null || { echo "pid must be > 0 (got: $pid)" >&2; exit 1; }
         kill -9 "$pid" || { echo "kill -9 $pid failed (no such process or no permission?)" >&2; exit 1; }
         echo "killed pid $pid"
         ;;
@@ -12,6 +14,7 @@ case "${DCAT_OP:-inject}" in
         ;;
     query)
         pid=${DCAT_PARAM_PID:?missing required param: pid}
+        case "$pid" in *[!0-9]*|'') echo "pid must be a positive integer (got: $pid)" >&2; exit 1;; esac
         kill -0 "$pid" 2>/dev/null && { echo "pid $pid still running"; exit 1; } || { echo "pid $pid not running"; exit 0; }
         ;;
 esac

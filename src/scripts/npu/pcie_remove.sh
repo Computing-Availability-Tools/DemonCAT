@@ -2,7 +2,7 @@
 # rNPU_pcie_remove: remove NPU from PCIe bus (simulate NPU card loss).
 # chip = Phy-ID (0-15). Uses npu_phy_to_bdf for PCIe address lookup.
 # inject: echo 1 > /sys/bus/pci/devices/<pcie_addr>/remove
-# clean:  echo 1 > /sys/bus/pci/rescan + FLR reset
+# clean:  not supported (inject-only, needs hardware reset)
 # query:  check if NPU device still exists
 # NOTE:   On 910B4, PCIe rescan restores the device entry but the NPU firmware
 #         does not reinitialize. A cold boot (power off + power on) is required.
@@ -27,25 +27,6 @@ case "${DCAT_OP:-inject}" in
             echo "PCIe remove failed for $addr" >&2
             rm -f "$SIDECAR"
             exit 1
-        fi
-        ;;
-    clean)
-        if [ -f "$SIDECAR" ]; then
-            addr=$(cat "$SIDECAR")
-            echo 1 > "$RESCAN" 2>/dev/null || true
-            sleep 5
-            if [ -d "/sys/bus/pci/devices/$addr" ]; then
-                if [ -w "/sys/bus/pci/devices/$addr/reset" ]; then
-                    echo 1 > "/sys/bus/pci/devices/$addr/reset" 2>/dev/null || true
-                    sleep 2
-                fi
-                echo "PCIe rescan restored chip $chip (pcie $addr)"
-            else
-                echo "WARNING: device $addr not found after rescan — may need manual replug or reboot"
-            fi
-            rm -f "$SIDECAR"
-        else
-            echo "no active PCIe remove on chip $chip"
         fi
         ;;
     query)

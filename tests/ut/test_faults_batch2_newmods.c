@@ -86,7 +86,56 @@ int main(void) {
         CK(r && r->code == 0);
         result_free(r);
     }
+    /* rFS_iowait_high (path + workers) */
+    SUBTEST("rFS_iowait_high inject") {
+        params_t p = mkparams("path", "/tmp", "workers", "4", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rFS_iowait_high", "inject", &p);
+        CK(r && r->code == 0);
+        CMD_CONTAINS("fs_iowait_high.sh");
+        check_param_env("path", "/tmp");
+        check_param_env("workers", "4");
+        result_free(r);
+    }
+    SUBTEST("rFS_iowait_high clean") {
+        params_t p = mkparams("path", "/tmp", "workers", "4", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rFS_iowait_high", "clean", &p);
+        CK(r && r->code == 0);
+        result_free(r);
+    }
+
     /* ---- docker ---- */
+    /* rDOCKER_kill */
+    SUBTEST("rDOCKER_kill inject") {
+        params_t p = mkparams("container", "web", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rDOCKER_kill", "inject", &p);
+        CK(r && r->code == 0);
+        CMD_CONTAINS("docker_kill.sh");
+        check_param_env("container", "web");
+        result_free(r);
+    }
+    SUBTEST("rDOCKER_kill clean") {
+        params_t p = mkparams("container", "web", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rDOCKER_kill", "clean", &p);
+        CK(r && r->code == 0);
+        result_free(r);
+    }
+    /* rDOCKER_mem_overload (container,size) */
+    SUBTEST("rDOCKER_mem_overload inject") {
+        params_t p = mkparams("container", "web", "size", "512M", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rDOCKER_mem_overload", "inject", &p);
+        CK(r && r->code == 0);
+        CMD_CONTAINS("docker_mem_overload.sh");
+        check_param_env("container", "web");
+        check_param_env("size", "512M");
+        result_free(r);
+    }
+    SUBTEST("rDOCKER_mem_overload clean") {
+        params_t p = mkparams("container", "web", "size", "512M", NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+        result_t *r = dispatch_route("rDOCKER_mem_overload", "clean", &p);
+        CK(r && r->code == 0);
+        result_free(r);
+    }
+
     /* ---- system (inject-only) ---- */
     /* rSYS_panic */
     SUBTEST("rSYS_panic inject") {
@@ -139,6 +188,6 @@ int main(void) {
     }
 
     faults_teardown();
-    printf("test_faults_batch2_newmods: all 7 faults passed\n");
+    printf("test_faults_batch2_newmods: all 10 faults passed\n");
     return FAULTS_MAIN_RETURN();
 }

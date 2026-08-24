@@ -166,4 +166,4 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
 
 def shlex_join_dcat(dcat_bin, argv):
     import shlex
-    return shlex.join([dcat_bin] + list(argv[1:]))
+    return ' '.join(shlex.quote(a) for a in [dcat_bin] + list(argv[1:]))

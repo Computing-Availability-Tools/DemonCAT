@@ -102,12 +102,11 @@ jobs:
             MARK=(-m "$MARK_EXPR")
           fi
           if [ "$AS_ROOT" = "true" ]; then
-            sudo PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
-            exit "${PIPESTATUS[0]}"
+            sudo PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
           else
-            PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
-            exit "${PIPESTATUS[0]}"
+            PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
           fi
+          cat tests/e2e/e2e_run.log
 
       - name: E2E summary
         if: always()

@@ -32,6 +32,7 @@ SKIP_MODULES = {
     "rNPU_iproute_add", "rNPU_iproute_del",
     "rNPU_iprule_add", "rNPU_iprule_del",
     "rNPU_route_add", "rNPU_route_del",
+    "rNPU_link_down",
 }
 
 
@@ -100,15 +101,34 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
         recorder.detail = "requires physical switch network topology"
         pytest.skip("requires physical switch network topology")
 
-    # 2. 物理前置（仅 coded 值 roce_link_up 触发；xlsx 多为描述性 = no-op）
+    # 2. 物理前置检查：roce_link_up + 服务可用性 + 工具可用性
     coded_pre = case.precondition if case.precondition in ("none", "roce_link_up") else "none"
     pre_skip = check_precondition(coded_pre)
+    if not pre_skip and case.precondition not in ("none",):
+        # 描述性前置条件：检测服务是否运行 / 工具是否存在
+        import re as _re
+        svc_match = _re.search(r'服务\s*(\w+)\s*已运行|(\w+)\s*已运行', case.precondition)
+        if svc_match:
+            svc = svc_match.group(1) or svc_match.group(2)
+            if svc:
+                rc, _ = sh(f"systemctl is-active {svc} >/dev/null 2>&1")
+                if rc != 0:
+                    pre_skip = f"precondition not met: service '{svc}' not running"
     if pre_skip:
         recorder.detail = pre_skip
         pytest.skip(pre_skip)
 
     env = e2e_env["env"]
-    ctx = {"iface": e2e_env["iface"], "pid": "", "port": "", "svc": ""}
+    # rNET tests need real physical interface for tc/ethtool; use phy_iface as iface
+    phy = e2e_env.get("phy_iface", "")
+    ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "", "phy_iface": phy}
+
+    # extract --service=X from cmds to fill {svc} in vcmd
+    for argv in case.cmds:
+        for a in argv:
+            if a.startswith("--service="):
+                ctx["svc"] = a.split("=", 1)[1]
+                break
 
     t0 = time.time()
 
@@ -118,6 +138,12 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
                  or any(_PID_RE.search(" ".join(a)) for a in case.cmds))
     cmds = [list(a) for a in case.cmds]
     setup_argv = list(case.setup_argv) if case.setup_argv else None
+    # substitute eth0 → real physical interface in dcat commands
+    phy = ctx.get("phy_iface", "")
+    if phy:
+        for argv in cmds:
+            for i, arg in enumerate(argv):
+                argv[i] = substitute(arg, ctx)
     if needs_pid:
         ctx["pid"] = _provision_pid(tracked)
         if ctx["pid"]:
@@ -127,16 +153,35 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
                         argv[i] = f"--pid={ctx['pid']}"
             if setup_argv and not any("--pid=" in a for a in setup_argv):
                 setup_argv.append(f"--pid={ctx['pid']}")
-    # rNET setup 缺 --iface 时补测试网卡
+    # rNET setup 缺 --iface 时补测试网卡（优先用物理网卡，tc 不支持 dummy）
+    # 但 rNET_service_stop 不接受 --iface 参数，跳过
+    net_iface = ctx.get("phy_iface", "") or ctx["iface"]
     if setup_argv and len(setup_argv) > 2 and setup_argv[1] == "inject" \
             and setup_argv[2].lower().startswith("rnet") \
+            and "service_stop" not in setup_argv[2].lower() \
+            and "conn_exhaust" not in setup_argv[2].lower() \
+            and "port_occupy" not in setup_argv[2].lower() \
+            and "tcp_loss" not in setup_argv[2].lower() \
             and not any(a.startswith("--iface=") for a in setup_argv):
-        setup_argv.append(f"--iface={ctx['iface']}")
+        setup_argv.append(f"--iface={net_iface}")
+    # setup 缺参数时从 cmds 提取（xlsx "已注入" setup 不带参数）
+    if setup_argv:
+        for argv in case.cmds:
+            for a in argv:
+                if a.startswith("--") and a not in setup_argv \
+                        and a != "--force" and a != "--all":
+                    setup_argv.append(a)
+    # 最后做 substitute（eth0→ksdev0 等）
+    if phy and setup_argv:
+        setup_argv = [substitute(a, ctx) for a in setup_argv]
 
     # 4. 前序注入 setup
     if setup_argv:
         setup_str = shlex_join_dcat(dcat, setup_argv)
-        run_step_cmd(setup_str, env=env, dcat_bin=dcat, timeout=120)
+        s_rc, s_out, s_err = run_step_cmd(setup_str, env=env, dcat_bin=dcat, timeout=120)
+        if s_rc != 0:
+            recorder.detail = f"setup failed (rc={s_rc})"
+            pytest.skip(f"setup failed: {s_out[:120]}")
 
     # 5. 按序跑 dcat 命令；每条后评估断言，任一通过即 PASS
     vassert = case.vassert

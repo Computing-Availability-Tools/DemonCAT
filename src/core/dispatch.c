@@ -181,8 +181,10 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     long long ids[DCAT_MAX_RECORDS];
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) {
-        if (state_is_lost())
-            return executor_run_fault(f, "clean", user_params, 0);
+        if (state_is_lost()) {
+            result_t *r = executor_run_fault(f, "clean", user_params, 0);
+            if (r) result_free(r);
+        }
         return result_err("clean", f->uid, 1, "no active injection found");
     }
     for (int i = 0; i < n; i++) {

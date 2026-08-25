@@ -180,7 +180,7 @@ int test_dispatch_clean_all_fans_out(void) {
     return 0;
 }
 
-/* state 丢失(文件缺失)下 clean <uid> --params 应回退用用户参数调脚本 clean */
+/* state 丢失(文件缺失)下 clean <uid> --params best-effort 跑脚本清理, exit 1 */
 int test_dispatch_clean_state_lost_fallback(void) {
     setup();
     executor_set_mock(mock_cap);
@@ -194,7 +194,7 @@ int test_dispatch_clean_state_lost_fallback(void) {
     params_set(&p, "cores", "0");
     result_t *r = dispatch_route("rCPU_overload", "clean", &p);
     ASSERT_TRUE(r != NULL);
-    ASSERT_INT_EQ(r->code, 0);
+    ASSERT_INT_EQ(r->code, 1); /* no active injection, but script ran best-effort */
     ASSERT_INT_EQ(g_cap_calls, 1);
     ASSERT_STREQ(g_cap_op, "clean");
     ASSERT_STREQ(g_cap_cores, "0");

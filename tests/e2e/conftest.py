@@ -111,7 +111,16 @@ def e2e_env():
     if is_root:
         e2e_helpers.sh(f"ip link add {TEST_IFACE} type dummy 2>/dev/null")
         e2e_helpers.sh(f"ip link set {TEST_IFACE} up 2>/dev/null")
-    yield {"env": env, "iface": TEST_IFACE, "is_root": is_root}
+    # detect real physical interface for rNET tests (xlsx hardcodes eth0)
+    phy_iface = ""
+    ok, out = e2e_helpers.sh(
+        "for i in $(ls /sys/class/net 2>/dev/null); do "
+        "case $i in lo|dummy*|veth*|br*|docker*|dcat*|virbr*) continue;; esac; "
+        "s=$(ethtool $i 2>/dev/null | grep -oE 'Speed: [0-9]+'); "
+        "[ -n \"$s\" ] && echo $i && exit 0; done; exit 1")
+    if ok == 0 and out.strip():
+        phy_iface = out.strip().splitlines()[0]
+    yield {"env": env, "iface": TEST_IFACE, "is_root": is_root, "phy_iface": phy_iface}
     if is_root:
         e2e_helpers.sh(f"ip link del {TEST_IFACE} 2>/dev/null", timeout=15)
 

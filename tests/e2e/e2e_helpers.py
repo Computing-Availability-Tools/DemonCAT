@@ -125,6 +125,7 @@ pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
+rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
 rm -f "{home}/.demoncat/state.json" 2>/dev/null
 dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
@@ -234,6 +235,9 @@ def substitute(s, ctx):
         return s
     for k in ("pid", "port", "iface", "svc"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
+    phy = ctx.get("phy_iface", "")
+    if phy:
+        s = s.replace("--iface=eth0", f"--iface={phy}")
     return s
 
 

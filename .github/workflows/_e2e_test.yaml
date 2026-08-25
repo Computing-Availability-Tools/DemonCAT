@@ -22,6 +22,10 @@ on:
         description: "Artifact name suffix; empty = auto by arch (arm64/x86)"
         type: string
         default: ""
+      timeout-minutes:
+        description: "Job timeout in minutes; smoke=15, full=60"
+        type: number
+        default: 30
 
 permissions:
   contents: read
@@ -30,7 +34,7 @@ jobs:
   e2e:
     name: E2E (${{ inputs.mark || 'ALL' }})
     runs-on: ${{ fromJSON(inputs.runner) }}
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout
         id: co1

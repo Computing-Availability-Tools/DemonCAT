@@ -88,7 +88,7 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
 
 
 @pytest.mark.parametrize("case", parametrized_cases())
-def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
+def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     recorder.case = case
 
     # 1. 预置 skip（无 dcat 命令 / setup 不可解析）
@@ -101,8 +101,14 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
         recorder.detail = "requires physical switch network topology"
         pytest.skip("requires physical switch network topology")
 
-    # 2. 物理前置检查：roce_link_up + 服务可用性 + 工具可用性
-    coded_pre = case.precondition if case.precondition in ("none", "roce_link_up") else "none"
+    # 2. 物理前置（coded 值 + 关键词匹配触发；xlsx 多为描述性 = no-op）
+    pre = case.precondition or ""
+    if pre in ("none", "roce_link_up"):
+        coded_pre = pre
+    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware")):
+        coded_pre = pre
+    else:
+        coded_pre = "none"
     pre_skip = check_precondition(coded_pre)
     if not pre_skip and case.precondition not in ("none",):
         # 描述性前置条件：检测服务是否运行 / 工具是否存在 / 工具缺失环境
@@ -123,6 +129,11 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
                 pre_skip = f"precondition not met: {tool} is available (test expects it missing)"
     if pre_skip:
         recorder.detail = pre_skip
+        # hardware marker 用例在 NPU server 上预检失败应 FAIL（快速暴露环境问题）
+        # 非 hardware 用例预检失败仍 SKIP（非目标环境）
+        has_hw_marker = bool(list(request.node.iter_markers("hardware")))
+        if has_hw_marker:
+            assert False, f"{case.id}: 环境预检失败: {pre_skip}"
         pytest.skip(pre_skip)
 
     env = e2e_env["env"]

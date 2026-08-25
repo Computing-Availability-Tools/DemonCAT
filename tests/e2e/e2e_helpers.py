@@ -367,4 +367,13 @@ def check_precondition(precond):
         rc, out = sh("modprobe sch_tbf 2>/dev/null; lsmod | grep -q sch_tbf && echo ok || echo missing")
         if "missing" in out.lower():
             return "sch_tbf 模块不可用（内核不支持）"
+    if "npu_hardware" in precond:
+        # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
+        rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "hccn_tool 不可用（非 Atlas NPU 机器）"
+        # 检测 /dev/davinci* 设备文件（NPU 硬件存在的标志）
+        rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
+        if not out.strip():
+            return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
     return ""

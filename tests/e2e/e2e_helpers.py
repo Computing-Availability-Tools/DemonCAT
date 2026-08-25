@@ -393,6 +393,12 @@ def check_precondition(precond):
             return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
     if "mock" in precond.lower() and "可用" in precond:
         return "mock 环境不可用（需要 mock dcat 二进制）"
+    if "serve" in precond and "长超时" in precond:
+        return "serve 模式需长超时（>120s），当前测试超时不足"
+    if "非 tmpfs" in precond:
+        rc, out = sh("df -t tmpfs /tmp 2>/dev/null | grep -q tmpfs && echo yes || echo no")
+        if "yes" in out.lower():
+            return "/tmp 是 tmpfs（dd 写入导致 OOM，需真实磁盘目录如 /data）"
     if "non-root" in precond:
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             return "当前为 root，非 root 权限测试需降权运行"

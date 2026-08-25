@@ -17,6 +17,7 @@ case "${DCAT_OP:-inject}" in
         delay=${DCAT_PARAM_DELAY_MS:?missing required param: delay_ms}
         validate_iface "$iface" || exit 1
         case "$delay" in ''|*[!0-9]*) echo "delay_ms must be a positive integer, got: '$delay'" >&2; exit 1 ;; esac
+        [ "$delay" -ge 1 ] 2>/dev/null || { echo "delay_ms must be >= 1, got: $delay" >&2; exit 1; }
         SIDECAR="/tmp/dcat-rNET_delay-${iface}.sidecar"
         tc qdisc add dev "$iface" root netem delay "${delay}ms" || { echo "$iface 已有 root qdisc ($(tc qdisc show dev "$iface" 2>/dev/null | grep root | head -1))" >&2; echo "请先清理: dcat clean --all 或 tc qdisc del dev $iface root" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

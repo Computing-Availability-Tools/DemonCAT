@@ -134,8 +134,13 @@ def tracked():
 @pytest.fixture(autouse=True)
 def autouse_sweep(e2e_env, tracked):
     sweep(E2E_HOME, TEST_IFACE, tracked)
+    phy = e2e_env.get("phy_iface", "")
+    if phy:
+        sweep(E2E_HOME, phy, tracked)
     yield
     sweep(E2E_HOME, TEST_IFACE, tracked)
+    if phy:
+        sweep(E2E_HOME, phy, tracked)
 
 
 @pytest.fixture

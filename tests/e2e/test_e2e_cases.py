@@ -105,7 +105,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
     coded_pre = case.precondition if case.precondition in ("none", "roce_link_up") else "none"
     pre_skip = check_precondition(coded_pre)
     if not pre_skip and case.precondition not in ("none",):
-        # 描述性前置条件：检测服务是否运行 / 工具是否存在
+        # 描述性前置条件：检测服务是否运行 / 工具是否存在 / 工具缺失环境
         import re as _re
         svc_match = _re.search(r'服务\s*(\w+)\s*已运行|(\w+)\s*已运行', case.precondition)
         if svc_match:
@@ -114,6 +114,13 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
                 rc, _ = sh(f"systemctl is-active {svc} >/dev/null 2>&1")
                 if rc != 0:
                     pre_skip = f"precondition not met: service '{svc}' not running"
+        # "X 缺失环境" → X 存在则 skip（测的是 X 不存在的场景）
+        missing_match = _re.search(r'(\w+)\s*缺失环境', case.precondition)
+        if missing_match:
+            tool = missing_match.group(1)
+            rc, _ = sh(f"command -v {tool} >/dev/null 2>&1")
+            if rc == 0:
+                pre_skip = f"precondition not met: {tool} is available (test expects it missing)"
     if pre_skip:
         recorder.detail = pre_skip
         pytest.skip(pre_skip)

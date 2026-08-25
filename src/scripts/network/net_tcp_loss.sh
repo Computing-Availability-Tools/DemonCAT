@@ -17,6 +17,7 @@ case "${DCAT_OP:-inject}" in
         port=${DCAT_PARAM_PORT:?missing required param: port}
         dir=${DCAT_PARAM_DIRECTION:-both}
         validate_port "$port" || exit 1
+        case "$dir" in in|out|both) ;; *) echo "direction must be in/out/both, got: $dir" >&2; exit 1;; esac
         SIDECAR="/tmp/dcat-rNET_tcp_loss-${port}.rule"
         rc=0
         if [ "$dir" = "in" ] || [ "$dir" = "both" ]; then

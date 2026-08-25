@@ -85,7 +85,7 @@ jobs:
     with:
       runner: '["ubuntu-24.04-arm"]'
       mark: "not hardware"
-      run-as-root: false
+      run-as-root: true
       artifact-name: full-ubuntu
       timeout-minutes: 60
 

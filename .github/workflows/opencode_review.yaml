@@ -77,7 +77,7 @@ jobs:
           fi
       - id: claim
         if: steps.check.outputs.proceed == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           # GITHUB_TOKEN(GitHub Actions app 签发)能 create check-run;classic PAT 不能(checks 写权限仅 GitHub App,REST 文档明确)。
           # fork PR 的 issue_comment 下 GITHUB_TOKEN 仍得 checks:write(read-only 仅限 pull_request 事件)。
@@ -122,7 +122,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

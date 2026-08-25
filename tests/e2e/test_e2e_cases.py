@@ -138,8 +138,17 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
 
     env = e2e_env["env"]
     # rNET tests need real physical interface for tc/ethtool; use phy_iface as iface
+    # 但 rNET_down/rNET_link_flap 只能用 dummy 接口——down 物理网卡会断 SSH
     phy = e2e_env.get("phy_iface", "")
-    ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "", "phy_iface": phy}
+    mod_lower = case.module.lower()
+    is_link_down = mod_lower in ("rnet_down", "rnet_link_flap")
+    if is_link_down:
+        # down/flap 测试：eth1 → dummy 接口，eth0 不替换（留给安全防护测试 TC-105）
+        ctx = {"iface": e2e_env["iface"], "pid": "", "port": "", "svc": "",
+               "phy_iface": "", "down_safe": True}
+    else:
+        ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "",
+               "phy_iface": phy}
 
     # extract --service=X from cmds to fill {svc} in vcmd
     for argv in case.cmds:
@@ -156,9 +165,9 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                  or any(_PID_RE.search(" ".join(a)) for a in case.cmds))
     cmds = [list(a) for a in case.cmds]
     setup_argv = list(case.setup_argv) if case.setup_argv else None
-    # substitute eth0 → real physical interface in dcat commands
+    # substitute eth0→物理网卡 / eth1→dummy（down/flap 安全） in dcat commands
     phy = ctx.get("phy_iface", "")
-    if phy:
+    if phy or ctx.get("down_safe"):
         for argv in cmds:
             for i, arg in enumerate(argv):
                 argv[i] = substitute(arg, ctx)

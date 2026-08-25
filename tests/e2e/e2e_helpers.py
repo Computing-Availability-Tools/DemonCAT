@@ -127,6 +127,12 @@ pkill -f 'python3 -c.*socket.*bind.*listen' 2>/dev/null
 pkill -f 'python3 -c.*create_connection' 2>/dev/null
 # rNET_service_stop: pkill fallback
 pkill -f 'dcat-rNET_port_occupy' 2>/dev/null
+# rNET_link_flap: kill background subshell from PIDFILEs
+for pf in /tmp/dcat-rNET_link_flap-*.pid; do
+    [ -f "$pf" ] || continue
+    kill "$(cat "$pf" 2>/dev/null)" 2>/dev/null
+    rm -f "$pf"
+done
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
@@ -244,6 +250,11 @@ def substitute(s, ctx):
     phy = ctx.get("phy_iface", "")
     if phy:
         s = s.replace("--iface=eth0", f"--iface={phy}")
+    # rNET_down/rNET_link_flap: eth1 → dummy 接口（不能 down 物理网卡）
+    dummy = ctx.get("iface", "")
+    if ctx.get("down_safe") and dummy:
+        s = s.replace("--iface=eth1", f"--iface={dummy}")
+        # eth0 不替换——留给安全防护测试，脚本应拒绝 down 管理网卡
     return s
 
 

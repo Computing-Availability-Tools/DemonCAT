@@ -87,7 +87,7 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
 
 
 @pytest.mark.parametrize("case", parametrized_cases())
-def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
+def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     recorder.case = case
 
     # 1. 预置 skip（无 dcat 命令 / setup 不可解析）
@@ -111,6 +111,11 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
     pre_skip = check_precondition(coded_pre)
     if pre_skip:
         recorder.detail = pre_skip
+        # hardware marker 用例在 NPU server 上预检失败应 FAIL（快速暴露环境问题）
+        # 非 hardware 用例预检失败仍 SKIP（非目标环境）
+        has_hw_marker = bool(list(request.node.iter_markers("hardware")))
+        if has_hw_marker:
+            assert False, f"{case.id}: 环境预检失败: {pre_skip}"
         pytest.skip(pre_skip)
 
     env = e2e_env["env"]

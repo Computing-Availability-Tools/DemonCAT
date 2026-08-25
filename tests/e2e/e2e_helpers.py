@@ -387,4 +387,21 @@ def check_precondition(precond):
         rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
         if not out.strip():
             return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
+        # 检测 NPU RoCE 接口（eth2 等），rNPU_arp/rNPU_bw_limit 等需要
+        rc, out = sh("ip link show eth2 2>/dev/null && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
+    if "mock" in precond.lower() and "可用" in precond:
+        return "mock 环境不可用（需要 mock dcat 二进制）"
+    if "non-root" in precond:
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            return "当前为 root，非 root 权限测试需降权运行"
+    if "配置文件" in precond and "存在" in precond:
+        import re as _re
+        m = _re.search(r'(/[\S]+\.conf)', precond)
+        if m:
+            path = m.group(1)
+            rc, _ = sh(f"test -f {path}")
+            if rc != 0:
+                return f"配置文件 {path} 不存在"
     return ""

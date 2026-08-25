@@ -25,7 +25,7 @@ from e2e_helpers import run_step_cmd, sh, substitute, check_precondition
 _NA_MARKERS = ("注入未执行", "无系统断言", "或非故障", "clean后观测")
 _RUNKW = ("dcat", "tc ", "pgrep", "ip ", "ls ", "cat ", "grep", "wc",
           "ss ", "for ", "iptables", "hccn_tool", "systemctl", "echo ", "awk ")
-_PID_RE = re.compile(r'--pid=\d+$')
+_PID_RE = re.compile(r'--pid=[1-9]\d*$')  # 不匹配 --pid=0 (测试值)
 
 SKIP_MODULES = {
     "rNPU_gw_change", "rNPU_ip_change",
@@ -105,7 +105,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     pre = case.precondition or ""
     if pre in ("none", "roce_link_up"):
         coded_pre = pre
-    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware")):
+    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock")):
         coded_pre = pre
     else:
         coded_pre = "none"
@@ -129,10 +129,10 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                 pre_skip = f"precondition not met: {tool} is available (test expects it missing)"
     if pre_skip:
         recorder.detail = pre_skip
-        # hardware marker 用例在 NPU server 上预检失败应 FAIL（快速暴露环境问题）
-        # 非 hardware 用例预检失败仍 SKIP（非目标环境）
+        # hardware marker + npu_hardware: eth2 不存在等环境缺失 → SKIP（非 NPU CI server）
+        # hardware marker + sysfs/tc_qdisc: 在 root 机器上应有 → FAIL（快速暴露问题）
         has_hw_marker = bool(list(request.node.iter_markers("hardware")))
-        if has_hw_marker:
+        if has_hw_marker and "npu_hardware" not in (case.precondition or ""):
             assert False, f"{case.id}: 环境预检失败: {pre_skip}"
         pytest.skip(pre_skip)
 

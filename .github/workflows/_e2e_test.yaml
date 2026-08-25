@@ -95,7 +95,6 @@ jobs:
           MARK_EXPR: ${{ inputs.mark }}
           AS_ROOT: ${{ inputs.run-as-root }}
         run: |
-          set -o pipefail
           # 清除 self-hosted runner 残留 __pycache__（sudo find 确保删 root 拥有的 stale .pyc）
           sudo find tests/e2e -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
           MARK=()
@@ -104,8 +103,10 @@ jobs:
           fi
           if [ "$AS_ROOT" = "true" ]; then
             sudo PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
+            exit ${PIPESTATUS[0]}
           else
             PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" 2>&1 | tee tests/e2e/e2e_run.log
+            exit ${PIPESTATUS[0]}
           fi
 
       - name: E2E summary

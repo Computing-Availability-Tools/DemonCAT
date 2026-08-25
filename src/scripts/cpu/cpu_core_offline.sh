@@ -12,10 +12,17 @@ parse_cores() {
             *-*)
                 start=${r%%-*}
                 end=${r##*-}
+                case "$start" in ''|*[!0-9]*) echo "invalid core spec '$r': non-numeric start" >&2; return 1 ;; esac
+                case "$end" in ''|*[!0-9]*) echo "invalid core spec '$r': non-numeric end" >&2; return 1 ;; esac
+                if [ "$start" -gt "$end" ]; then
+                    echo "invalid core range '$r': start ($start) > end ($end)" >&2
+                    return 1
+                fi
                 n=$start
                 while [ "$n" -le "$end" ]; do echo "$n"; n=$((n + 1)); done
                 ;;
             *)
+                case "$r" in ''|*[!0-9]*) echo "invalid core spec '$r': non-numeric" >&2; return 1 ;; esac
                 echo "$r"
                 ;;
         esac
@@ -25,10 +32,21 @@ parse_cores() {
 case "${DCAT_OP:-inject}" in
     inject)
         spec=${DCAT_PARAM_CORES:?missing required param: cores}
+        parsed=$(parse_cores "$spec") || exit 1
+        if [ -z "$parsed" ]; then
+            echo "no valid cores specified: '$spec'" >&2
+            exit 1
+        fi
         offlist=""
         faillist=""
-        for n in $(parse_cores "$spec"); do
+        invalidlist=""
+        for n in $parsed; do
             path="/sys/devices/system/cpu/cpu$n/online"
+            if [ ! -e "$path" ]; then
+                echo "cpu$n does not exist" >&2
+                invalidlist="$invalidlist $n"
+                continue
+            fi
             [ -w "$path" ] || { echo "cpu$n not offlinable (skipping)" >&2; continue; }
             echo 0 > "$path" 2>/dev/null
             actual=$(cat "$path" 2>/dev/null)
@@ -41,6 +59,7 @@ case "${DCAT_OP:-inject}" in
             fi
         done
         echo "offlined cores:$offlist"
+        [ -z "$invalidlist" ] || { echo "invalid cores:$invalidlist" >&2; exit 1; }
         [ -z "$faillist" ] || { echo "failed cores:$faillist" >&2; exit 1; }
         ;;
 

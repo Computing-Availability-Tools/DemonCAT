@@ -172,12 +172,16 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
             and not any(a.startswith("--iface=") for a in setup_argv):
         setup_argv.append(f"--iface={net_iface}")
     # setup 缺参数时从 cmds 提取（xlsx "已注入" setup 不带参数）
-    if setup_argv:
+    if setup_argv and len(setup_argv) > 2 and setup_argv[1] == "inject":
+        setup_keys = {a.split("=")[0] for a in setup_argv if a.startswith("--")}
         for argv in case.cmds:
-            for a in argv:
-                if a.startswith("--") and a not in setup_argv \
-                        and a != "--force" and a != "--all":
-                    setup_argv.append(a)
+            if len(argv) > 2 and argv[0] == "dcat" and argv[1] in ("inject", "clean", "query"):
+                for arg in argv[2:]:
+                    key = arg.split("=")[0]
+                    if arg.startswith("--") and key not in setup_keys and key != "--force":
+                        setup_argv.append(arg)
+                        setup_keys.add(key)
+                break
     # 最后做 substitute（eth0→ksdev0 等）
     if phy and setup_argv:
         setup_argv = [substitute(a, ctx) for a in setup_argv]

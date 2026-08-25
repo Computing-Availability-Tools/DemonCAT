@@ -42,8 +42,8 @@ jobs:
       ref: ${{ matrix.branch }}
       mode: full
 
-  e2e-full:
-    name: E2E full (${{ matrix.branch }})
+  e2e-full-ubuntu:
+    name: E2E full non-NPU (${{ matrix.branch }})
     needs: lint
     strategy:
       fail-fast: false
@@ -51,11 +51,27 @@ jobs:
         branch: [main, develop]
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），跑全量含 NPU 用例
-      runner: '["self-hosted", "npu-server", "ARM64"]'
-      mark: ""
+      runner: '["ubuntu-24.04-arm"]'
+      mark: "not hardware"
       run-as-root: true
       ref: ${{ matrix.branch }}
+      artifact-name: full-ubuntu-${{ matrix.branch }}
+
+  e2e-full-npu:
+    name: E2E full NPU (${{ matrix.branch }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, develop]
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），仅跑 NPU 用例
+      runner: '["self-hosted", "npu-server", "ARM64"]'
+      mark: "hardware"
+      run-as-root: true
+      ref: ${{ matrix.branch }}
+      artifact-name: full-npu-${{ matrix.branch }}
 
   clang-tidy:
     name: clang-tidy (${{ matrix.branch }})
@@ -84,7 +100,7 @@ jobs:
 
   ci-gate:
     name: Nightly Gate
-    needs: [lint, unit-test, e2e-full, clang-tidy, coverage]
+    needs: [lint, unit-test, e2e-full-ubuntu, e2e-full-npu, clang-tidy, coverage]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -93,19 +109,21 @@ jobs:
         env:
           LINT: ${{ needs.lint.result }}
           UNIT: ${{ needs.unit-test.result }}
-          E2E: ${{ needs.e2e-full.result }}
+          E2EU: ${{ needs.e2e-full-ubuntu.result }}
+          E2EN: ${{ needs.e2e-full-npu.result }}
           CLANG: ${{ needs.clang-tidy.result }}
           COV: ${{ needs.coverage.result }}
         run: |
           set -eu
           echo "=== Nightly Gate Summary ==="
-          echo "lint:        ${LINT}"
-          echo "unit-test:   ${UNIT}"
-          echo "e2e-full:   ${E2E}"
-          echo "clang-tidy: ${CLANG} (advisory)"
-          echo "coverage:   ${COV} (advisory)"
-          # lint/unit/e2e-full 必须成功（matrix 各腿汇总）
-          for r in "${LINT}" "${UNIT}" "${E2E}"; do
+          echo "lint:             ${LINT}"
+          echo "unit-test:        ${UNIT}"
+          echo "e2e-full-ubuntu:  ${E2EU}"
+          echo "e2e-full-npu:     ${E2EN}"
+          echo "clang-tidy:       ${CLANG} (advisory)"
+          echo "coverage:         ${COV} (advisory)"
+          # lint/unit/e2e-full-* 必须成功（matrix 各腿汇总）
+          for r in "${LINT}" "${UNIT}" "${E2EU}" "${E2EN}"; do
             case "$r" in
               success) ;;
               *) echo "::error::Required job did not succeed: ${r}"; exit 1 ;;

@@ -5,17 +5,17 @@
   "enabled_providers": ["opencode", "Bailian"],
   "share": "auto",
   "permission": {
-    "edit": "deny",
-    "write": "deny",
-    "patch": "deny",
-    "bash": "deny",
-    "task": "deny",
-    "webfetch": "deny",
-    "websearch": "deny",
-    "external_directory": "deny",
+    "edit": "allow",
+    "write": "allow",
+    "patch": "allow",
+    "bash": "allow",
+    "task": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
     "read": "allow",
     "glob": "allow",
     "grep": "allow",
-    "lsp": "allow"
+    "lsp": "allow",
+    "external_directory": "deny"
   }
 }

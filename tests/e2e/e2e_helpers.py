@@ -115,11 +115,17 @@ def cmd_exists(c):
 # ---------------- 环境清扫（dcat 命名空间内，对宿主安全） ----------------
 SWEEP_SCRIPT = r'''
 set +e
+# Kill dcat-spawned processes (child processes survive parent shell kill)
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null
 pkill -9 -f 'dd if=/dev/zero of=.*dcat' 2>/dev/null
 sleep 0.5
 pkill -9 -f 'dd if=/dev/zero of=.*dcat' 2>/dev/null
+# rNET_port_occupy: python3 socket bind listen (survives parent shell)
+pkill -f 'python3 -c.*socket.*bind.*listen' 2>/dev/null
+# rNET_conn_exhaust: python3 create_connection
+pkill -f 'python3 -c.*create_connection' 2>/dev/null
+# rNET_service_stop: pkill fallback
 pkill -f 'dcat-rNET_port_occupy' 2>/dev/null
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null

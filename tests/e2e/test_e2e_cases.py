@@ -100,8 +100,14 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked):
         recorder.detail = "requires physical switch network topology"
         pytest.skip("requires physical switch network topology")
 
-    # 2. 物理前置（仅 coded 值 roce_link_up 触发；xlsx 多为描述性 = no-op）
-    coded_pre = case.precondition if case.precondition in ("none", "roce_link_up") else "none"
+    # 2. 物理前置（coded 值 + 关键词匹配触发；xlsx 多为描述性 = no-op）
+    pre = case.precondition or ""
+    if pre in ("none", "roce_link_up"):
+        coded_pre = pre
+    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware")):
+        coded_pre = pre
+    else:
+        coded_pre = "none"
     pre_skip = check_precondition(coded_pre)
     if pre_skip:
         recorder.detail = pre_skip

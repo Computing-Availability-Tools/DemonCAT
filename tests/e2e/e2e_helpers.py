@@ -341,4 +341,20 @@ def check_precondition(precond):
         rc, out = sh("hccn_tool -i 2 -link -g 2>/dev/null")
         if rc != 0 or "up" not in (out or "").lower():
             return "RoCE 链路物理 DOWN（无网线/对端），RoCE 配置类用例无法生效"
+    if "sysfs_writable" in precond:
+        # rCPU_core_offline 专用：需 sysfs 可写（WSL2 不支持 cpu offline）
+        rc, out = sh("cat /sys/devices/system/cpu/cpu1/online 2>/dev/null")
+        if rc != 0:
+            return "sysfs 不可读或 cpu1 不存在（WSL2 不支持 cpu offline）"
+        rc, out = sh("test -w /sys/devices/system/cpu/cpu1/online && echo writable || echo readonly")
+        if "readonly" in out.lower():
+            return "sysfs 只读（WSL2 不支持 cpu offline）"
+    if "tc_qdisc" in precond or "sch_tbf" in precond:
+        # rNET_bw_limit 专用：需 tc 命令和 sch_tbf 模块
+        rc, out = sh("command -v tc >/dev/null 2>&1 && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "tc 命令不可用（iproute2 未安装）"
+        rc, out = sh("modprobe sch_tbf 2>/dev/null; lsmod | grep -q sch_tbf && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "sch_tbf 模块不可用（内核不支持）"
     return ""

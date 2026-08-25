@@ -58,7 +58,7 @@ jobs:
         run: |
           set -o pipefail
           if [ "${{ inputs.mode }}" = "full" ]; then FILTER=(); else FILTER=(-LE smoke); fi
-          ctest --test-dir build --verbose "${FILTER[@]}" --timeout 60 --output-junit ctest-junit.xml 2>&1 | tee build/ctest_run.log
+          ctest --test-dir build --verbose "${FILTER[@]}" --timeout 60 --output-junit "$GITHUB_WORKSPACE/build/ctest-junit.xml" 2>&1 | tee build/ctest_run.log
 
       - name: Unit test summary
         if: always()
@@ -100,18 +100,20 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Remove raw coverage data
-        if: ${{ !cancelled() && inputs.coverage }}
-        run: rm -f coverage.info coverage.xml
-
-      - name: Upload coverage HTML report
+      - name: Upload coverage results
         if: ${{ !cancelled() && inputs.coverage }}
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-html
-          path: coverage-html/
+          name: coverage
+          path: |
+            coverage.xml
+            coverage-html/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Remove raw coverage data
+        if: ${{ !cancelled() && inputs.coverage }}
+        run: rm -f coverage.xml
 
       - name: Upload ctest logs on failure
         if: failure()

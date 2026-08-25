@@ -90,14 +90,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUM: ${{ steps.pr.outputs.pr_number }}
         run: |
-          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 已触发：Full 套件即将在 NPU runner 启动(直接调 _e2e_test,ref=PR head,无需 PAT/标签)。"
+          gh pr comment "$PR_NUM" --repo "${{ github.repository }}" --body "/e2e 已触发：Full 套件即将并行启动(非 NPU → ubuntu-arm, NPU → self-hosted, ref=PR head)。"
 
-  e2e-full:
+  e2e-full-ubuntu:
+    needs: resolve
+    if: always() && needs.resolve.outputs.authorized == 'true'
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: '["ubuntu-24.04-arm"]'
+      mark: "not hardware"
+      run-as-root: true
+      ref: ${{ needs.resolve.outputs.head_sha }}
+      artifact-name: full-ubuntu
+
+  e2e-full-npu:
     needs: resolve
     if: always() && needs.resolve.outputs.authorized == 'true'
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["self-hosted", "npu-server", "ARM64"]'
-      mark: ""
+      mark: "hardware"
       run-as-root: true
       ref: ${{ needs.resolve.outputs.head_sha }}
+      artifact-name: full-npu

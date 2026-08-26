@@ -101,7 +101,7 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
                     return 1, "", "[runuser 未安装，无法降权验证非 root 拒绝]"
                 argv = ["runuser", "-u", priv_user, "--"] + argv
             elif auto_sudo:
-                argv = ["sudo"] + argv
+                argv = ["sudo", "-n", "-E"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
             return p.returncode, (p.stdout or ""), (p.stderr or "")
@@ -193,7 +193,7 @@ def sweep(home, iface, tracked_pids):
         os.close(fd)
         is_nonroot = hasattr(os, "geteuid") and os.geteuid() != 0
         auto_sudo = is_nonroot and os.environ.get("DCAT_AUTO_SUDO") == "1"
-        sh(f"{'sudo ' if auto_sudo else ''}sh {shlex.quote(path)}", timeout=30)
+        sh(f"{'sudo -n -E ' if auto_sudo else ''}sh {shlex.quote(path)}", timeout=30)
     finally:
         try:
             os.unlink(path)

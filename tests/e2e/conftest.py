@@ -109,7 +109,7 @@ def e2e_env():
     env["E2E_HOME"] = E2E_HOME
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
     auto_sudo = (not is_root) and os.environ.get("DCAT_AUTO_SUDO") == "1"
-    sudo = "sudo " if auto_sudo else ""
+    sudo = "sudo -n -E " if auto_sudo else ""
     if is_root or auto_sudo:
         e2e_helpers.sh(f"{sudo}ip link add {TEST_IFACE} type dummy 2>/dev/null")
         e2e_helpers.sh(f"{sudo}ip link set {TEST_IFACE} up 2>/dev/null")

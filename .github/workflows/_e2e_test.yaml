@@ -115,7 +115,7 @@ jobs:
         run: |
           if [ -f tests/e2e/report.md ]; then
             cat tests/e2e/report.md >> "$GITHUB_STEP_SUMMARY"
-          elif ls tests/e2e/report_gw*.md 2>/dev/null | head -1 | grep -q .; then
+          elif compgen -G "tests/e2e/report_gw*.md" > /dev/null 2>&1; then
             echo "## E2E 摘要 (pytest-xdist 并行)" >> "$GITHUB_STEP_SUMMARY"
             for f in tests/e2e/report_gw*.md; do
               [ -e "$f" ] || continue

@@ -87,8 +87,8 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
     if dcat_bin != default_rel:
         cs = cs.replace(default_rel, dcat_bin)
     dcat_rel = dcat_bin
-    # 非 root 时给 dcat 命令加 sudo（dcat 脚本需要 root: tc/ethtool/ip link）
     is_nonroot = hasattr(os, "geteuid") and os.geteuid() != 0
+    auto_sudo = is_nonroot and os.environ.get("DCAT_AUTO_SUDO") == "1"
     # CONC 测试含 & wait、SEC-S1 clean 含 ; rm 需要 shell；
     # SEC-I 注入含 ;touch（无空格）必须用 argv 防止载荷执行
     needs_shell = ('&' in cs and 'wait' in cs) or ('; ' in cs)
@@ -100,7 +100,7 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
                 if sh(f"command -v runuser >/dev/null 2>&1")[0] != 0:
                     return 1, "", "[runuser 未安装，无法降权验证非 root 拒绝]"
                 argv = ["runuser", "-u", priv_user, "--"] + argv
-            elif is_nonroot:
+            elif auto_sudo:
                 argv = ["sudo"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
@@ -192,7 +192,8 @@ def sweep(home, iface, tracked_pids):
         os.write(fd, script.encode())
         os.close(fd)
         is_nonroot = hasattr(os, "geteuid") and os.geteuid() != 0
-        sh(f"{'sudo ' if is_nonroot else ''}sh {shlex.quote(path)}", timeout=30)
+        auto_sudo = is_nonroot and os.environ.get("DCAT_AUTO_SUDO") == "1"
+        sh(f"{'sudo ' if auto_sudo else ''}sh {shlex.quote(path)}", timeout=30)
     finally:
         try:
             os.unlink(path)

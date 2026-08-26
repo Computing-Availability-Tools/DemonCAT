@@ -108,8 +108,9 @@ def e2e_env():
     env["HOME"] = E2E_HOME
     env["E2E_HOME"] = E2E_HOME
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
-    sudo = "sudo " if not is_root else ""
-    if is_root or sudo:
+    auto_sudo = (not is_root) and os.environ.get("DCAT_AUTO_SUDO") == "1"
+    sudo = "sudo " if auto_sudo else ""
+    if is_root or auto_sudo:
         e2e_helpers.sh(f"{sudo}ip link add {TEST_IFACE} type dummy 2>/dev/null")
         e2e_helpers.sh(f"{sudo}ip link set {TEST_IFACE} up 2>/dev/null")
     # detect real physical interface for rNET tests (xlsx hardcodes eth0)
@@ -122,7 +123,7 @@ def e2e_env():
     if ok == 0 and out.strip():
         phy_iface = out.strip().splitlines()[0]
     yield {"env": env, "iface": TEST_IFACE, "is_root": is_root, "phy_iface": phy_iface}
-    if is_root or sudo:
+    if is_root or auto_sudo:
         e2e_helpers.sh(f"{sudo}ip link del {TEST_IFACE} 2>/dev/null", timeout=15)
 
 

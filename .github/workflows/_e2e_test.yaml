@@ -104,7 +104,7 @@ jobs:
           fi
           XDIST_FLAG=""
           if [ "$XDIST" = "true" ]; then
-            XDIST_FLAG="-n auto"
+            XDIST_FLAG="-n auto --dist loadgroup"
           fi
           set +e
           if [ "$AS_ROOT" = "true" ]; then

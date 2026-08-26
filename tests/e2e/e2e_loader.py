@@ -212,6 +212,25 @@ def _marks_for(case):
         marks.append(pytest.mark.smoke)
     marks.append(getattr(pytest.mark, case.module_slug))
     marks.append(getattr(pytest.mark, _req_slug(case.req)))
+    # xdist_group: 同故障模块的测试在同一 worker 串行, 避免网络/进程状态冲突
+    mod_lower = case.module.lower()
+    if mod_lower.startswith("rnet"):
+        grp = "rnet"
+    elif mod_lower.startswith("rproc") or mod_lower.startswith("rproc"):
+        grp = "rproc"
+    elif mod_lower.startswith("rcpu"):
+        grp = "rcpu"
+    elif mod_lower.startswith("rmem"):
+        grp = "rmem"
+    elif mod_lower.startswith("rsys"):
+        grp = "rsys"
+    elif mod_lower.startswith("rfs"):
+        grp = "rfs"
+    elif mod_lower.startswith("rnpu"):
+        grp = "rnpu"
+    else:
+        grp = "misc"
+    marks.append(pytest.mark.xdist_group(grp))
     return marks
 
 

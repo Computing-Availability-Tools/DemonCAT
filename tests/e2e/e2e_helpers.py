@@ -25,8 +25,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))   # tests/e2e
 ROOT = os.path.dirname(os.path.dirname(HERE))        # project root
 DCAT = os.path.join(ROOT, "build", "dcat")
 CASES = os.path.join(HERE, "cases.csv")
-TEST_IFACE = "dcat-e2e0"
-E2E_HOME = "/tmp/dcat_e2e_home"
+_worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
+if _worker_id:
+    _wn = _worker_id.replace("gw", "")
+    TEST_IFACE = f"dcat-e2e{_wn}"
+    E2E_HOME = f"/tmp/dcat_e2e_home_{_worker_id}"
+else:
+    TEST_IFACE = "dcat-e2e0"
+    E2E_HOME = "/tmp/dcat_e2e_home"
 PWN = "/tmp/dcat_pwned"
 
 # 测试分类说明（分类→测试目的概述），供 report.md / test_report.md 复用

@@ -24,10 +24,12 @@ from e2e_helpers import (
 )
 
 ROOT = HERE.parent.parent
+_wid = os.environ.get("PYTEST_XDIST_WORKER", "")
+_suffix = f"_{_wid}" if _wid else ""
 _TS = datetime.now().strftime("%Y%m%d_%H%M%S")
-_FAIL_LOG = HERE / f"failures_{_TS}.log"
-_RESULTS_CSV = HERE / f"results_{_TS}.csv"
-_REPORT_MD = HERE / "report.md"
+_FAIL_LOG = HERE / f"failures_{_TS}{_suffix}.log"
+_RESULTS_CSV = HERE / f"results_{_TS}{_suffix}.csv"
+_REPORT_MD = HERE / f"report{_suffix}.md"
 _RESULTS = []
 _NA_MARKERS = ("注入未执行", "无系统断言", "或非故障", "clean后观测")
 
@@ -206,9 +208,11 @@ def _write_failure(rec, report):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    _is_worker = hasattr(session.config, "workerinput")
     _write_results_csv()
     _write_report_md(session)
-    _emit_gha_summary(session)
+    if not _is_worker:
+        _emit_gha_summary(session)
 
 
 def _write_results_csv():

@@ -87,7 +87,6 @@ jobs:
       mark: "not hardware"
       run-as-root: false
       artifact-name: full-ubuntu
-      timeout-minutes: 60
 
   e2e-full-npu:
     name: E2E full NPU (self-hosted)
@@ -106,7 +105,6 @@ jobs:
       mark: "hardware"
       run-as-root: true
       artifact-name: full-npu
-      timeout-minutes: 60
 
   clang-tidy:
     name: clang-tidy (advisory)

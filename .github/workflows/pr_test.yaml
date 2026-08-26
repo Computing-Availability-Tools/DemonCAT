@@ -144,6 +144,7 @@ jobs:
       - name: Download e2e-full-ubuntu artifact (to check actual test results)
         if: ${{ needs.e2e-full-ubuntu.result == 'failure' }}
         uses: actions/download-artifact@v5
+        continue-on-error: true
         with:
           name: e2e-full-ubuntu
           if-no-files-found: ignore

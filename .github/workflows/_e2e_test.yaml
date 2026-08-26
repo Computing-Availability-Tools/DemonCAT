@@ -102,6 +102,7 @@ jobs:
             MARK=(-m "$MARK_EXPR")
           fi
           if [ "$AS_ROOT" = "true" ]; then
+            # shellcheck disable=SC2024
             sudo -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
             sudo chown "$(id -un):$(id -gn)" tests/e2e/e2e_run.log tests/e2e/report.md tests/e2e/results_*.csv tests/e2e/e2e_junit.xml 2>/dev/null || true
           else

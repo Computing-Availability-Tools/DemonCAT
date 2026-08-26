@@ -87,6 +87,7 @@ jobs:
       mark: "not hardware"
       run-as-root: false
       artifact-name: full-ubuntu
+      xdist: true
 
   e2e-full-npu:
     name: E2E full NPU (self-hosted)

@@ -55,7 +55,7 @@
 | hccn_tool | /usr/bin/hccn_tool (v25.5.0.b060) |
 | NPU ACL 工具 | build/_npu_stress（CANN ACL, aicore/aivector/hbm 压力） |
 | Docker | docker 24.0+（容器故障注入：docker_kill / docker_mem_overload） |
-| root 权限 | 是（全部测试以 root 执行） |
+| root 权限 | 本地: root；CI non-NPU: 非 root (DCAT_AUTO_SUDO=1) |
 | 网络接口 | docker0, enp125s0f1-3, ksdev0 |
 | /tmp | tmpfs 191G |
 | systemctl | degraded（可用） |

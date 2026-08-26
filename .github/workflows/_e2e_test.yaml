@@ -97,6 +97,7 @@ jobs:
           if [ -n "$MARK_EXPR" ]; then
             MARK=(-m "$MARK_EXPR")
           fi
+          set +e
           if [ "$AS_ROOT" = "true" ]; then
             # shellcheck disable=SC2024
             sudo -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
@@ -104,7 +105,10 @@ jobs:
           else
             DCAT_AUTO_SUDO=1 PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
           fi
+          TEST_RC=$?
+          set -e
           cat tests/e2e/e2e_run.log
+          exit "$TEST_RC"
 
       - name: E2E summary
         if: always()

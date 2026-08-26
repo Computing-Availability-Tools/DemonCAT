@@ -10,6 +10,8 @@ case "${DCAT_OP:-inject}" in
         case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         cycle=${DCAT_PARAM_CYCLE_SEC:-2}
         count=${DCAT_PARAM_COUNT:-10}
+        [ "$count" -ge 1 ] 2>/dev/null || { echo "count must be >= 1" >&2; exit 1; }
+        [ "$cycle" -ge 1 ] 2>/dev/null || { echo "cycle_sec must be >= 1" >&2; exit 1; }
         PIDFILE="/tmp/dcat-rNET_link_flap-${iface}.pid"
         if [ -f "$PIDFILE" ]; then
             for pid in $(cat "$PIDFILE" 2>/dev/null); do kill "$pid" 2>/dev/null; done

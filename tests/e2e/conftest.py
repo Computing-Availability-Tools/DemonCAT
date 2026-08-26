@@ -108,12 +108,23 @@ def e2e_env():
     env["HOME"] = E2E_HOME
     env["E2E_HOME"] = E2E_HOME
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
-    if is_root:
-        e2e_helpers.sh(f"ip link add {TEST_IFACE} type dummy 2>/dev/null")
-        e2e_helpers.sh(f"ip link set {TEST_IFACE} up 2>/dev/null")
-    yield {"env": env, "iface": TEST_IFACE, "is_root": is_root}
-    if is_root:
-        e2e_helpers.sh(f"ip link del {TEST_IFACE} 2>/dev/null", timeout=15)
+    auto_sudo = (not is_root) and os.environ.get("DCAT_AUTO_SUDO") == "1"
+    sudo = "sudo -n -E " if auto_sudo else ""
+    if is_root or auto_sudo:
+        e2e_helpers.sh(f"{sudo}ip link add {TEST_IFACE} type dummy 2>/dev/null")
+        e2e_helpers.sh(f"{sudo}ip link set {TEST_IFACE} up 2>/dev/null")
+    # detect real physical interface for rNET tests (xlsx hardcodes eth0)
+    phy_iface = ""
+    ok, out = e2e_helpers.sh(
+        "for i in $(ls /sys/class/net 2>/dev/null); do "
+        "case $i in lo|dummy*|veth*|br*|docker*|dcat*|virbr*) continue;; esac; "
+        "s=$(ethtool $i 2>/dev/null | grep -oE 'Speed: [0-9]+'); "
+        "[ -n \"$s\" ] && echo $i && exit 0; done; exit 1")
+    if ok == 0 and out.strip():
+        phy_iface = out.strip().splitlines()[0]
+    yield {"env": env, "iface": TEST_IFACE, "is_root": is_root, "phy_iface": phy_iface}
+    if is_root or auto_sudo:
+        e2e_helpers.sh(f"{sudo}ip link del {TEST_IFACE} 2>/dev/null", timeout=15)
 
 
 @pytest.fixture
@@ -125,8 +136,13 @@ def tracked():
 @pytest.fixture(autouse=True)
 def autouse_sweep(e2e_env, tracked):
     sweep(E2E_HOME, TEST_IFACE, tracked)
+    phy = e2e_env.get("phy_iface", "")
+    if phy:
+        sweep(E2E_HOME, phy, tracked)
     yield
     sweep(E2E_HOME, TEST_IFACE, tracked)
+    if phy:
+        sweep(E2E_HOME, phy, tracked)
 
 
 @pytest.fixture

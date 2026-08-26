@@ -88,6 +88,15 @@ while(1){ my $s=gettimeofday(); while((gettimeofday()-$s)*1e6<$work){1} usleep($
                 rm -f "/tmp/dcat-rCPU_overload-c${n}.pid"
             fi
         done
+        ok=0
+        for entry in $core_list; do
+            pid=${entry##*:}
+            kill -0 "$pid" 2>/dev/null && ok=1
+        done
+        if [ "$ok" = 0 ]; then
+            echo "ERROR: no core inject succeeded (cores not available?)" >&2
+            exit 1
+        fi
         echo "injected CPU overload on cores [$spec] load=${load_pct}% (pids:$pids)"
         ;;
 

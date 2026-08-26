@@ -104,7 +104,7 @@ static void reap(pid_t pid) {
     waitpid(pid, NULL, 0);
 }
 
-/* ---- Test 1: clean <uid> --params（state 丢失 → 回退用用户参数调脚本） ---- */
+/* ---- Test 1: clean <uid> --params（state 丢失 → best-effort 脚本清理, exit 1） ---- */
 static int t_clean_with_params_after_state_lost(void) {
     setup();
     pid_t pid = inject_hang();
@@ -115,7 +115,7 @@ static int t_clean_with_params_after_state_lost(void) {
 
     lose_state();        /* 误删 state.json */
     CK(state_is_lost()); /* 标记为丢失 */
-    /* state 无记录 → 带参 clean 必须回退到脚本（用用户 pid） */
+    /* state 无记录 → 带参 clean best-effort 跑脚本清理 /tmp 工件, 但 exit 1 */
     char pidstr[16];
     snprintf(pidstr, sizeof pidstr, "%d", pid);
     params_t p;
@@ -124,10 +124,10 @@ static int t_clean_with_params_after_state_lost(void) {
     strcpy(p.items[0].value, pidstr);
     p.count = 1;
     result_t *r = dispatch_route("rPROC_hang", "clean", &p);
-    CK(r && r->code == 0);
+    CK(r && r->code == 1); /* no active injection, but script ran for cleanup */
     result_free(r);
     sleep(1);
-    CK(is_stopped(pid) == 0); /* SIGCONT 恢复运行 */
+    CK(is_stopped(pid) == 0); /* SIGCONT 恢复运行 (best-effort 脚本生效) */
     CK(!sidecar_exists(pid)); /* sidecar 已清 */
     reap(pid);
     teardown();

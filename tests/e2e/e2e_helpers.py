@@ -87,6 +87,8 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
     if dcat_bin != default_rel:
         cs = cs.replace(default_rel, dcat_bin)
     dcat_rel = dcat_bin
+    is_nonroot = hasattr(os, "geteuid") and os.geteuid() != 0
+    auto_sudo = is_nonroot and os.environ.get("DCAT_AUTO_SUDO") == "1"
     # CONC 测试含 & wait、SEC-S1 clean 含 ; rm 需要 shell；
     # SEC-I 注入含 ;touch（无空格）必须用 argv 防止载荷执行
     needs_shell = ('&' in cs and 'wait' in cs) or ('; ' in cs)
@@ -98,6 +100,8 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
                 if sh(f"command -v runuser >/dev/null 2>&1")[0] != 0:
                     return 1, "", "[runuser 未安装，无法降权验证非 root 拒绝]"
                 argv = ["runuser", "-u", priv_user, "--"] + argv
+            elif auto_sudo:
+                argv = ["sudo", "-n", "-E"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
             return p.returncode, (p.stdout or ""), (p.stderr or "")
@@ -115,16 +119,29 @@ def cmd_exists(c):
 # ---------------- 环境清扫（dcat 命名空间内，对宿主安全） ----------------
 SWEEP_SCRIPT = r'''
 set +e
+# Kill dcat-spawned processes (child processes survive parent shell kill)
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null
 pkill -9 -f 'dd if=/dev/zero of=.*dcat' 2>/dev/null
 sleep 0.5
 pkill -9 -f 'dd if=/dev/zero of=.*dcat' 2>/dev/null
+# rNET_port_occupy: python3 socket bind listen (survives parent shell)
+pkill -f 'python3 -c.*socket.*bind.*listen' 2>/dev/null
+# rNET_conn_exhaust: python3 create_connection
+pkill -f 'python3 -c.*create_connection' 2>/dev/null
+# rNET_service_stop: pkill fallback
 pkill -f 'dcat-rNET_port_occupy' 2>/dev/null
+# rNET_link_flap: kill background subshell from PIDFILEs
+for pf in /tmp/dcat-rNET_link_flap-*.pid; do
+    [ -f "$pf" ] || continue
+    kill "$(cat "$pf" 2>/dev/null)" 2>/dev/null
+    rm -f "$pf"
+done
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
+rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
 rm -f "{home}/.demoncat/state.json" 2>/dev/null
 dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
@@ -174,7 +191,9 @@ def sweep(home, iface, tracked_pids):
     try:
         os.write(fd, script.encode())
         os.close(fd)
-        sh(f"sh {shlex.quote(path)}", timeout=30)
+        is_nonroot = hasattr(os, "geteuid") and os.geteuid() != 0
+        auto_sudo = is_nonroot and os.environ.get("DCAT_AUTO_SUDO") == "1"
+        sh(f"{'sudo -n -E ' if auto_sudo else ''}sh {shlex.quote(path)}", timeout=30)
     finally:
         try:
             os.unlink(path)
@@ -234,6 +253,14 @@ def substitute(s, ctx):
         return s
     for k in ("pid", "port", "iface", "svc"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
+    phy = ctx.get("phy_iface", "")
+    if phy:
+        s = s.replace("--iface=eth0", f"--iface={phy}")
+    # rNET_down/rNET_link_flap: eth1 → dummy 接口（不能 down 物理网卡）
+    dummy = ctx.get("iface", "")
+    if ctx.get("down_safe") and dummy:
+        s = s.replace("--iface=eth1", f"--iface={dummy}")
+        # eth0 不替换——留给安全防护测试，脚本应拒绝 down 管理网卡
     return s
 
 
@@ -357,4 +384,36 @@ def check_precondition(precond):
         rc, out = sh("modprobe sch_tbf 2>/dev/null; lsmod | grep -q sch_tbf && echo ok || echo missing")
         if "missing" in out.lower():
             return "sch_tbf 模块不可用（内核不支持）"
+    if "npu_hardware" in precond:
+        # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
+        rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "hccn_tool 不可用（非 Atlas NPU 机器）"
+        # 检测 /dev/davinci* 设备文件（NPU 硬件存在的标志）
+        rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
+        if not out.strip():
+            return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
+        # 检测 NPU RoCE 接口（eth2 等），rNPU_arp/rNPU_bw_limit 等需要
+        rc, out = sh("ip link show eth2 2>/dev/null && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
+    if "mock" in precond.lower() and "可用" in precond:
+        return "mock 环境不可用（需要 mock dcat 二进制）"
+    if "serve" in precond and "长超时" in precond:
+        return "serve 模式需长超时（>120s），当前测试超时不足"
+    if "非 tmpfs" in precond:
+        rc, out = sh("df -t tmpfs /tmp 2>/dev/null | grep -q tmpfs && echo yes || echo no")
+        if "yes" in out.lower():
+            return "/tmp 是 tmpfs（dd 写入导致 OOM，需真实磁盘目录如 /data）"
+    if "non-root" in precond:
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            return "当前为 root，非 root 权限测试需降权运行"
+    if "配置文件" in precond and "存在" in precond:
+        import re as _re
+        m = _re.search(r'(/[\S]+\.conf)', precond)
+        if m:
+            path = m.group(1)
+            rc, _ = sh(f"test -f {path}")
+            if rc != 0:
+                return f"配置文件 {path} 不存在"
     return ""

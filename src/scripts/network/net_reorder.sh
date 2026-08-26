@@ -10,7 +10,7 @@ case "${DCAT_OP:-inject}" in
         case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
         pct=${DCAT_PARAM_REORDER_PCT:?missing required param: reorder_pct}
         case "$pct" in ''|*[!0-9]*) echo "reorder_pct must be a number 0-100, got: '$pct'" >&2; exit 1 ;; esac
-        [ "$pct" -ge 0 ] 2>/dev/null && [ "$pct" -le 100 ] 2>/dev/null || { echo "reorder_pct must be 0-100, got: $pct" >&2; exit 1; }
+        [ "$pct" -ge 1 ] 2>/dev/null && [ "$pct" -le 100 ] 2>/dev/null || { echo "reorder_pct must be 1-100, got: $pct" >&2; exit 1; }
         SIDECAR="/tmp/dcat-rNET_reorder-${iface}.sidecar"
         tc qdisc add dev "$iface" root netem delay 10ms reorder "${pct}%" 50% || { echo "$iface 已有 root qdisc ($(tc qdisc show dev "$iface" 2>/dev/null | grep root | head -1))" >&2; echo "请先清理: dcat clean --all 或 tc qdisc del dev $iface root" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

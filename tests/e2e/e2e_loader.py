@@ -202,10 +202,11 @@ def _marks_for(case):
         marks.append(pytest.mark.hardware)
     if mod.startswith("rnet") or any(u.startswith("rnet") for u in uids):
         marks.append(pytest.mark.net)
-    if (mod.startswith("rnet") or mod == "rcpu_core_offline"
+    if (mod.startswith("rnet") or mod == "rcpu_core_offline" or mod == "rcpu_overload"
             or mod.startswith("rmem") or mod.startswith("rsys") or mod.startswith("rfs")
             or any(u.startswith("rnet") for u in uids)
-            or any(u == "rcpu_core_offline" for u in uids)):
+            or any(u == "rcpu_core_offline" for u in uids)
+            or any(u == "rcpu_overload" for u in uids)):
         marks.append(pytest.mark.root)
     if case.id in SMOKE_IDS:
         marks.append(pytest.mark.smoke)

@@ -115,6 +115,10 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
             return 124, "", "[timeout]"
         except Exception as e:
             return 1, "", f"[exception {e}]"
+    # 非 dcat 命令（verify 等）：auto_sudo 时加 sudo 前缀
+    # iptables -L / cat /sys/... 等 verify 命令需要 root 权限
+    if auto_sudo and not (cs.startswith(DCAT) or cs.startswith(dcat_rel)):
+        cs = f"sudo -n -E {cs}"
     return sh_sep(cs, env=env, timeout=timeout)
 
 

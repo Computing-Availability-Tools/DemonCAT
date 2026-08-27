@@ -146,22 +146,51 @@ def session_init_sweep(e2e_env):
     yield
 
 
+_prev_module = None
+
 @pytest.fixture(autouse=True)
 def autouse_sweep(e2e_env, tracked, request):
-    # 测试前 sweep：清除上个测试可能残留的 state/tc 规则/进程
-    # 上个测试的 dcat clean 应该已经清理了，sweep 是安全网兜底
-    sweep(E2E_HOME, TEST_IFACE, tracked)
-    phy = e2e_env.get("phy_iface", "")
-    if phy:
-        sweep(E2E_HOME, phy, tracked)
+    global _prev_module
+    callspec = getattr(request.node, "callspec", None)
+    case = callspec.params.get("case") if callspec else None
+    cur_mod = case.module if case else ""
+
+    # 判断是否 inject-only（有 inject 无 clean，会残留故障状态）
+    has_inject = has_clean = False
+    if case:
+        for cmd in case.cmds:
+            if len(cmd) > 1 and cmd[1] == "inject":
+                has_inject = True
+            if len(cmd) > 1 and cmd[1] == "clean":
+                has_clean = True
+        if case.setup_argv and len(case.setup_argv) > 1 and case.setup_argv[1] == "inject":
+            has_inject = True
+
+    # 切换模块时 sweep（清除上个模块残留）
+    if _prev_module is None or _prev_module != cur_mod:
+        sweep(E2E_HOME, TEST_IFACE, tracked)
+        phy = e2e_env.get("phy_iface", "")
+        if phy:
+            sweep(E2E_HOME, phy, tracked)
+    _prev_module = cur_mod
+
     yield
-    # 测试后：只 kill tracked PIDs（快速），不再全量 sweep
-    # dcat clean 应已清理故障状态；如果 clean 有 bug 会在下个测试的 sweep 兜底
+
+    # kill tracked PIDs（快速）
     for p in tracked:
         try:
             os.kill(p, 9)
         except OSError:
             pass
+
+    # inject-only 测试会残留 → 必须 sweep 清理
+    # 测试失败也必须 sweep（clean 可能未执行）
+    rep = getattr(request.node, "rep_call", None)
+    if (has_inject and not has_clean) or (rep is not None and rep.failed):
+        sweep(E2E_HOME, TEST_IFACE, tracked)
+        phy = e2e_env.get("phy_iface", "")
+        if phy:
+            sweep(E2E_HOME, phy, tracked)
 
 
 @pytest.fixture

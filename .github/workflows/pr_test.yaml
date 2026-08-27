@@ -233,7 +233,7 @@ jobs:
                   if [ -z "${FAIL_CNT:-}" ]; then
                     # XML 存在但解析失败（runner 断连打断写入 = 截断/损坏的半文件）=
                     # 最不可信的输入，绝不可按 0 放行
-                    echo "::error::e2e-full-ubuntu-${label}: JUnit exists but unparseable (truncated/corrupt)"
+                    echo "::error::e2e-full-ubuntu-${label}: JUnit exists but unparsable (truncated/corrupt)"
                     exit 1
                   fi
                   if [ "${FAIL_CNT:-0}" -gt 0 ]; then

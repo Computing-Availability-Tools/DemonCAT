@@ -88,8 +88,8 @@ jobs:
       run-as-root: false
       artifact-name: full-ubuntu-nonnet
 
-  e2e-full-ubuntu-net:
-    name: E2E full non-NPU net (ubuntu-arm)
+  e2e-full-ubuntu-qdisc:
+    name: E2E full non-NPU net-qdisc (ubuntu-arm)
     needs: lint
     if: >-
       ${{ always() && needs.lint.result == 'success'
@@ -101,9 +101,26 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["ubuntu-24.04-arm"]'
-      mark: "not hardware and net"
+      mark: "not hardware and (rnet_bw_limit or rnet_degrade or rnet_jitter or rnet_reorder or rnet_delay or rnet_loss)"
       run-as-root: false
-      artifact-name: full-ubuntu-net
+      artifact-name: full-ubuntu-qdisc
+
+  e2e-full-ubuntu-netother:
+    name: E2E full non-NPU net-other (ubuntu-arm)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: '["ubuntu-24.04-arm"]'
+      mark: "not hardware and net and not (rnet_bw_limit or rnet_degrade or rnet_jitter or rnet_reorder or rnet_delay or rnet_loss)"
+      run-as-root: false
+      artifact-name: full-ubuntu-netother
 
   e2e-full-npu:
     name: E2E full NPU (self-hosted)
@@ -153,13 +170,13 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [lint, unit-test, e2e-light, e2e-full-ubuntu-nonnet, e2e-full-ubuntu-net, e2e-full-npu, clang-tidy, coverage]
+    needs: [lint, unit-test, e2e-light, e2e-full-ubuntu-nonnet, e2e-full-ubuntu-qdisc, e2e-full-ubuntu-netother, e2e-full-npu, clang-tidy, coverage]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Download e2e artifacts (to check actual test results)
-        if: ${{ needs.e2e-full-ubuntu-nonnet.result == 'failure' || needs.e2e-full-ubuntu-net.result == 'failure' }}
+        if: ${{ needs.e2e-full-ubuntu-nonnet.result == 'failure' || needs.e2e-full-ubuntu-qdisc.result == 'failure' || needs.e2e-full-ubuntu-netother.result == 'failure' }}
         uses: actions/download-artifact@v5
         continue-on-error: true
         with:
@@ -171,7 +188,8 @@ jobs:
           UNIT: ${{ needs.unit-test.result }}
           E2EL: ${{ needs.e2e-light.result }}
           E2UNN: ${{ needs.e2e-full-ubuntu-nonnet.result }}
-          E2UN: ${{ needs.e2e-full-ubuntu-net.result }}
+          E2UQ: ${{ needs.e2e-full-ubuntu-qdisc.result }}
+          E2UO: ${{ needs.e2e-full-ubuntu-netother.result }}
           E2EN: ${{ needs.e2e-full-npu.result }}
           CLANG: ${{ needs.clang-tidy.result }}
           COV: ${{ needs.coverage.result }}
@@ -182,7 +200,8 @@ jobs:
           echo "unit-test:          ${UNIT}"
           echo "e2e-light:          ${E2EL}"
           echo "e2e-full-nonnet:    ${E2UNN}"
-          echo "e2e-full-net:      ${E2UN}"
+          echo "e2e-full-qdisc:     ${E2UQ}"
+          echo "e2e-full-netother:  ${E2UO}"
           echo "e2e-full-npu:      ${E2EN}"
           echo "clang-tidy:        ${CLANG} (advisory)"
           echo "coverage:          ${COV} (advisory)"
@@ -198,23 +217,23 @@ jobs:
             success|skipped) ;;
             *) echo "::error::E2E full NPU did not succeed: ${E2EN}"; exit 1 ;;
           esac
-          # e2e-full-ubuntu-nonnet/net：ARM runner 有 step conclusion 丢失 bug
+          # e2e-full-ubuntu-*：ARM runner 有 step conclusion 丢失 bug
           # 但如果 JUnit XML 显示真实 FAIL > 0, 则阻断
-          for pair in "nonnet:${E2UNN}" "net:${E2UN}"; do
+          for pair in "nonnet:${E2UNN}" "qdisc:${E2UQ}" "netother:${E2UO}"; do
             label="${pair%%:*}"
             r="${pair#*:}"
             case "$r" in
               success|skipped) ;;
               failure)
-                xml="tests/e2e/e2e_junit.xml"
-                # find the matching artifact's junit
-                for d in e2e-full-ubuntu-nonnet e2e-full-ubuntu-net; do
+                # find matching artifact's junit
+                xml=""
+                for d in e2e-full-ubuntu-nonnet e2e-full-ubuntu-qdisc e2e-full-ubuntu-netother; do
                   if [ -f "$d/tests/e2e/e2e_junit.xml" ]; then
                     xml="$d/tests/e2e/e2e_junit.xml"
                     break
                   fi
                 done
-                if [ -f "$xml" ]; then
+                if [ -n "$xml" ] && [ -f "$xml" ]; then
                   FAIL_CNT=$(grep -c '<failure\|<error' "$xml" 2>/dev/null || echo 0)
                   if [ "$FAIL_CNT" -gt 0 ]; then
                     echo "::error::e2e-full-ubuntu-${label}: ${FAIL_CNT} actual test failures in JUnit XML"

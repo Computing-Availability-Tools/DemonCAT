@@ -135,16 +135,33 @@ def tracked():
     yield pids
 
 
-@pytest.fixture(autouse=True)
-def autouse_sweep(e2e_env, tracked):
+@pytest.fixture(scope="session", autouse=True)
+def session_init_sweep(e2e_env):
+    """session 开始时 sweep 一次，清除上次运行/崩溃残留。"""
+    tracked = []
     sweep(E2E_HOME, TEST_IFACE, tracked)
     phy = e2e_env.get("phy_iface", "")
     if phy:
         sweep(E2E_HOME, phy, tracked)
     yield
+
+
+@pytest.fixture(autouse=True)
+def autouse_sweep(e2e_env, tracked, request):
+    # 测试前 sweep：清除上个测试可能残留的 state/tc 规则/进程
+    # 上个测试的 dcat clean 应该已经清理了，sweep 是安全网兜底
     sweep(E2E_HOME, TEST_IFACE, tracked)
+    phy = e2e_env.get("phy_iface", "")
     if phy:
         sweep(E2E_HOME, phy, tracked)
+    yield
+    # 测试后：只 kill tracked PIDs（快速），不再全量 sweep
+    # dcat clean 应已清理故障状态；如果 clean 有 bug 会在下个测试的 sweep 兜底
+    for p in tracked:
+        try:
+            os.kill(p, 9)
+        except OSError:
+            pass
 
 
 @pytest.fixture
@@ -159,6 +176,8 @@ def recorder(request):
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
+    if report.when == "call":
+        item.rep_call = report
     if report.when != "call":
         return
     rec = getattr(item, "_e2e_rec", None)

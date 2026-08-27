@@ -374,14 +374,16 @@ def check_precondition(precond):
         rc, out = sh("hccn_tool -i 2 -link -g 2>/dev/null")
         if rc != 0 or "up" not in (out or "").lower():
             return "RoCE 链路物理 DOWN（无网线/对端），RoCE 配置类用例无法生效"
-    if "sysfs_writable" in precond:
-        # rCPU_core_offline 专用：需 sysfs 可写（WSL2 不支持 cpu offline）
+    if "sysfs_writable" in precond or ("sysfs" in precond and ("写" in precond or "writable" in precond.lower())):
+        # rCPU_core_offline 专用：需 sysfs 可写 + CPU hotplug 支持
         rc, out = sh("cat /sys/devices/system/cpu/cpu1/online 2>/dev/null")
         if rc != 0:
-            return "sysfs 不可读或 cpu1 不存在（WSL2 不支持 cpu offline）"
-        rc, out = sh("test -w /sys/devices/system/cpu/cpu1/online && echo writable || echo readonly")
-        if "readonly" in out.lower():
-            return "sysfs 只读（WSL2 不支持 cpu offline）"
+            return "sysfs 不可读或 cpu1 不存在（VM/WSL2 不支持 cpu offline）"
+        sudo_pfx = "sudo -n -E " if os.environ.get("DCAT_AUTO_SUDO") == "1" else ""
+        rc2, out2 = sh(f"{sudo_pfx}sh -c 'echo 0 > /sys/devices/system/cpu/cpu1/online' 2>/dev/null && echo ok || echo fail")
+        sh(f"{sudo_pfx}sh -c 'echo 1 > /sys/devices/system/cpu/cpu1/online' 2>/dev/null")
+        if "fail" in (out2 or "").lower():
+            return "CPU hotplug 不可用（VM 不支持 cpu offline）"
     if "tc_qdisc" in precond or "sch_tbf" in precond:
         # rNET_bw_limit 专用：需 tc 命令和 sch_tbf 模块
         rc, out = sh("command -v tc >/dev/null 2>&1 && echo ok || echo missing")
@@ -390,6 +392,23 @@ def check_precondition(precond):
         rc, out = sh("modprobe sch_tbf 2>/dev/null; lsmod | grep -q sch_tbf && echo ok || echo missing")
         if "missing" in out.lower():
             return "sch_tbf 模块不可用（内核不支持）"
+    if "iptables" in precond.lower() or "tcp_loss" in precond.lower():
+        # rNET_tcp_loss 专用：需 iptables 可用
+        rc, out = sh("command -v iptables >/dev/null 2>&1 && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "iptables 不可用"
+        # 验证 iptables 真的可操作（需要 root 或 sudo）
+        sudo_pfx = "sudo -n -E " if os.environ.get("DCAT_AUTO_SUDO") == "1" else ""
+        rc, out = sh(f"{sudo_pfx}iptables -C INPUT -p tcp --dport 1 -j DROP 2>/dev/null && echo ok || {sudo_pfx}iptables -A INPUT -p tcp --dport 1 -j DROP 2>/dev/null && {sudo_pfx}iptables -D INPUT -p tcp --dport 1 -j DROP 2>/dev/null && echo ok || echo fail")
+        if "fail" in (out or "").lower():
+            return "iptables 规则操作失败（权限或内核模块问题）"
+    if "SSH" in precond and "管理" in precond:
+        # rNET_down 安全检查：eth0 需为 SSH 管理网卡
+        # 验证 eth0 是否为 SSH 路由出口
+        rc, out = sh("ip route get 8.8.8.8 2>/dev/null | grep -oE 'dev [^ ]+' | awk '{print $2}'")
+        ssh_iface = (out or "").strip()
+        if ssh_iface and ssh_iface != "eth0":
+            return f"eth0 非 SSH 管理网卡（SSH 走 {ssh_iface}），安全检查不会触发"
     if "npu_hardware" in precond:
         # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
         rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
@@ -411,9 +430,23 @@ def check_precondition(precond):
         rc, out = sh("df -t tmpfs /tmp 2>/dev/null | grep -q tmpfs && echo yes || echo no")
         if "yes" in out.lower():
             return "/tmp 是 tmpfs（dd 写入导致 OOM，需真实磁盘目录如 /data）"
+    if "service_stop" in precond.lower() or ("service" in precond.lower() and "stop" in precond.lower()):
+        # rNET_service_stop 专用：需目标 service 存在
+        import re as _re2
+        m2 = _re2.search(r'--service=(\S+)', precond)
+        if not m2:
+            # 从 cmds 里找 service 名
+            pass
+        # 默认检查 nginx
+        svc = "nginx"
+        rc, out = sh(f"command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q '^{svc}\\.' && echo ok || echo missing")
+        if "missing" in out.lower():
+            return f"{svc} 服务未安装"
     if "non-root" in precond:
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             return "当前为 root，非 root 权限测试需降权运行"
+        if os.environ.get("DCAT_AUTO_SUDO") == "1":
+            return "DCAT_AUTO_SUDO=1（CI 非 root + sudo），非 root 拒绝测试无法验证"
     if "配置文件" in precond and "存在" in precond:
         import re as _re
         m = _re.search(r'(/[\S]+\.conf)', precond)

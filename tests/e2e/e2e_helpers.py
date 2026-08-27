@@ -384,10 +384,15 @@ def check_precondition(precond):
         if rc != 0:
             return "sysfs 不可读或 cpu1 不存在（VM/WSL2 不支持 cpu offline）"
         sudo_pfx = "sudo -n -E " if os.environ.get("DCAT_AUTO_SUDO") == "1" else ""
-        rc2, out2 = sh(f"{sudo_pfx}sh -c 'echo 0 > /sys/devices/system/cpu/cpu1/online' 2>/dev/null && echo ok || echo fail")
-        sh(f"{sudo_pfx}sh -c 'echo 1 > /sys/devices/system/cpu/cpu1/online' 2>/dev/null")
-        if "fail" in (out2 or "").lower():
-            return "CPU hotplug 不可用（VM 不支持 cpu offline）"
+        # 先检查 cpu1（存在性+可写）
+        rc, out = sh("cat /sys/devices/system/cpu/cpu1/online 2>/dev/null")
+        if rc != 0:
+            return "sysfs 不可读或 cpu1 不存在（VM/WSL2 不支持 cpu offline）"
+        # 再试 cpu0（boot CPU，很多 VM 不允许 offline cpu0）
+        rc0, out0 = sh(f"{sudo_pfx}sh -c 'echo 0 > /sys/devices/system/cpu/cpu0/online' 2>/dev/null && echo ok || echo fail")
+        sh(f"{sudo_pfx}sh -c 'echo 1 > /sys/devices/system/cpu/cpu0/online' 2>/dev/null")
+        if "fail" in (out0 or "").lower():
+            return "CPU0 不可 offline（VM boot CPU 限制）"
     if "tc_qdisc" in precond or "sch_tbf" in precond:
         # rNET_bw_limit 专用：需 tc 命令和 sch_tbf 模块
         rc, out = sh("command -v tc >/dev/null 2>&1 && echo ok || echo missing")
@@ -411,8 +416,8 @@ def check_precondition(precond):
         # 验证 eth0 是否为 SSH 路由出口
         rc, out = sh("ip route get 8.8.8.8 2>/dev/null | grep -oE 'dev [^ ]+' | awk '{print $2}'")
         ssh_iface = (out or "").strip()
-        if ssh_iface and ssh_iface != "eth0":
-            return f"eth0 非 SSH 管理网卡（SSH 走 {ssh_iface}），安全检查不会触发"
+        if not ssh_iface or ssh_iface != "eth0":
+            return f"eth0 非 SSH 管理网卡（SSH 走 {ssh_iface or 'unknown'}），安全检查不会触发"
     if "npu_hardware" in precond:
         # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
         rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")

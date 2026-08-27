@@ -110,21 +110,30 @@ def _indicates_prior_inject(pre):
     return any(kw in pre for kw in _SETUP_KEYWORDS)
 
 
-def _parse_setup(precondition):
-    """前置条件指示需前序注入 → 解析 setup inject argv。无/解析不出 → None。"""
+def _parse_setup(precondition, cmds=None, fallback_uid=None):
+    """前置条件指示需前序注入 → 解析 setup inject argv。无/解析不出 → None。
+
+    uid 优先取 steps 中第一条 dcat inject 命令的真实 uid 与参数（precondition 常为
+    描述性文本，用 r\w+ 乱抓会得到 'res' 之类残词 → 注入 'res' 不存在 → setup 失败
+    → 整条用例 SKIP。例 TC-597 前置 '已注入 --cores=0,1' 无 uid，但步骤里有
+    'dcat clean rCPU_overload ...'，可从标题 module 兜底注入该 uid）。
+    """
     if not _indicates_prior_inject(precondition):
         return None
-    m = re.search(r'dcat\s+inject\s+(\S+)', precondition)
+    for argv in cmds or []:
+        if len(argv) >= 3 and argv[0] == "dcat" and argv[1] == "inject":
+            return ["dcat", "inject", argv[2]] + list(argv[3:])
+    # 无步骤 inject 命令时回退 precondition 文本解析（限 r[P][A-Z]\w+ 形态的真实 uid）
+    m = re.search(r'\br(?:CPU|MEM|NET|PROC|DISK|FS|SYS|DOCKER|NPU)_[A-Za-z0-9_]+', precondition)
     if m:
-        module = m.group(1)
+        module = m.group(0)
         flags = _FLAG_RE.findall(precondition)
         return ["dcat", "inject", module, *flags]
-    mm = _MODULE_RE.search(precondition)
-    if not mm:
-        return None
-    module = mm.group(0)
-    flags = _FLAG_RE.findall(precondition)
-    return ["dcat", "inject", module, *flags]
+    # precondition 无显式 uid（如 '已注入 --cores=0,1'）→ 用标题 module 兜底
+    if fallback_uid:
+        flags = _FLAG_RE.findall(precondition)
+        return ["dcat", "inject", fallback_uid, *flags]
+    return None
 
 
 def _load_rows():
@@ -155,7 +164,9 @@ def load_cases():
         steps = row.get(H_STEPS, "")
         cmds = _parse_cmds(steps)
         pre = row.get(H_PRE, "")
-        setup_argv = _parse_setup(pre)
+        title = row.get(H_TITLE, "")
+        module_raw = title.split("-")[0] if title else ""
+        setup_argv = _parse_setup(pre, cmds, fallback_uid=module_raw)
         needs_setup = _indicates_prior_inject(pre)
 
         skip_reason = ""
@@ -164,8 +175,6 @@ def load_cases():
         elif needs_setup and not setup_argv:
             skip_reason = f"setup unparsable from precondition: {pre!r}"
 
-        title = row.get(H_TITLE, "")
-        module_raw = title.split("-")[0] if title else ""
         cases.append(Case(
             id=str(row.get(H_ID, "")).strip(),
             title=title,
@@ -204,6 +213,7 @@ def _marks_for(case):
         marks.append(pytest.mark.net)
     if (mod.startswith("rnet") or mod == "rcpu_core_offline" or mod == "rcpu_overload"
             or mod.startswith("rmem") or mod.startswith("rsys") or mod.startswith("rfs")
+            or mod.startswith("rdis")
             or any(u.startswith("rnet") for u in uids)
             or any(u == "rcpu_core_offline" for u in uids)
             or any(u == "rcpu_overload" for u in uids)):

@@ -28,6 +28,24 @@ _RUNKW = ("dcat", "tc ", "pgrep", "ip ", "ls ", "cat ", "grep", "wc",
           "ss ", "for ", "iptables", "hccn_tool", "systemctl", "echo ", "awk ")
 _PID_RE = re.compile(r'--pid=[1-9]\d*$')  # 不匹配 --pid=0 (测试值)
 
+
+def _path_from_vcmd(vcmd):
+    """从 verify 观测命令中提取目标路径（用于裸 notexists 断言）。
+
+    仅支持 `ls <path>` 形态（可带尾部 2>&1/2>/dev/null 重定向）。
+    裸 notexists 语义 = '该路径文件不存在'。无法提取 → 返回 None。
+    """
+    v = (vcmd or "").strip()
+    # 去掉尾部 shell 重定向（2>&1 / 2>/dev/null）
+    v = re.sub(r'\s*2>\S+.*$', '', v).strip()
+    for kw in ("ls ", "cat "):
+        if v.startswith(kw) and " " in v:
+            path = v[len(kw):].strip()
+            # 禁止含通配符、管道、内嵌空格（分离路径与命令）的复合形态 → 无法判路径
+            if path and "*" not in path and "?" not in path and "|" not in path and " " not in path:
+                return path
+    return None
+
 SKIP_MODULES = {
     "rNPU_gw_change", "rNPU_ip_change",
     "rNPU_iproute_add", "rNPU_iproute_del",
@@ -65,12 +83,28 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
     state_data = []
     confirmed = None
     verify_out = ""
+    # 裸 notexists：转成可判定断言（否则被 e2e_assert._is_skip_value 判为 skip →
+    # "clean 后工件删除"类断言全部空转）。
+    #   - ls <path> 纯路径 → notexists:<path>（按文件系统判）
+    #   - 含通配符/管道无法定位路径 → notexists_rc:（按 verify 输出判是否"文件不存在"）
+    if (vassert or "").strip() == "notexists":
+        vctx = substitute(case.vcmd, ctx)
+        p = _path_from_vcmd(vctx)
+        vassert = f"notexists:{p}" if p else "notexists_rc:"
     if vassert and vassert.startswith("state_"):
+        # state_* 断言对比的 uid 取断言目标（clean 后 "rNPU_arp 无幽灵记录" 查询
+        # 的就是 rNPU_arp，而非标题拆出的伪 uid 后缀 rNPU_arp_del）。标题模块用于
+        # marker/sweep 归类；状态查询必须用真实 fault uid，否则恒空 → 假阳性。
+        q_uid = case.module
+        if ":" in vassert:
+            _su = vassert.split(":", 1)[1].strip()
+            if _su and _su != "<uid>":
+                q_uid = _su
         if verb == "query":
             state_data = state_data_of(cmd_out)
             confirmed = confirmed_of(cmd_out)
         else:
-            state_data, _rc, qout = query_state(case.module, env=env, dcat_bin=dcat)
+            state_data, _rc, qout = query_state(q_uid, env=env, dcat_bin=dcat)
             confirmed = confirmed_of(qout)
             recorder.verify_cmd = "(state query)"
             recorder.verify_out = qout
@@ -78,14 +112,26 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
         if _is_runnable_vcmd(case.vcmd):
             time.sleep(0.6)
             vcmd = substitute(case.vcmd, ctx)
+            # verify 的 dcat 命令也要走 run_step_cmd（argv 防注入 + auto_sudo 时
+            # 注入 env HOME=E2E_HOME）。否则 sudo env_reset/always_set_home 把 HOME
+            # 重置为 /root 时，verify 的 dcat query 会读 /root/.demoncat/state.json，
+            # 与 run_step_cmd 注入（E2E_HOME）写的 state 对不上 → 系统性假 FAIL（
+            # 与 d2503b0 修的 exit-5 残留 bug 同根因）。
             if vcmd.startswith("dcat "):
-                vcmd = f"{dcat} {vcmd[5:]}"
-            # verify 命令需 root 权限时（iptables/cat /sys 等），auto_sudo 加 sudo
-            _auto_sudo = hasattr(os, "geteuid") and os.geteuid() != 0 and os.environ.get("DCAT_AUTO_SUDO") == "1"
-            if _auto_sudo and not vcmd.startswith("sudo"):
-                vcmd = f"sudo -n -E {vcmd}"
+                # 先换成绝对二进制路径：run_step_cmd 的 argv 分支只认绝对路径前缀，
+                # 裸 'dcat' 会落入 shell 执行并依赖 PATH（本机/CI 均不在 PATH → command
+                # not found → ~99 条 confirmed:true 断言全 FAIL、confirmed:true→false
+                # 假 PASS）。换绝对路径后仍走 argv + HOME 注入。
+                vcmd_abs = f"{dcat} {vcmd[5:]}"
+                _rc, so, se = run_step_cmd(vcmd_abs, env=env, dcat_bin=dcat, timeout=30)
+                verify_out = (so or "") + (se or "")
+            else:
+                # 非 dcat verify 命令（iptables -L / cat /sys 等）：auto_sudo 加 sudo
+                _auto_sudo = hasattr(os, "geteuid") and os.geteuid() != 0 and os.environ.get("DCAT_AUTO_SUDO") == "1"
+                if _auto_sudo and not vcmd.startswith("sudo"):
+                    vcmd = f"sudo -n -E {vcmd}"
+                verify_out = sh(vcmd, env=env, timeout=30)[1]
             recorder.verify_cmd = case.vcmd
-            verify_out = sh(vcmd, env=env, timeout=30)[1]
             recorder.verify_out = verify_out
         else:
             recorder.verify_cmd = case.vcmd or "(N/A)"
@@ -108,6 +154,14 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
 
     # 2. 物理前置（coded 值 + 关键词匹配触发；xlsx 多为描述性 = no-op）
     pre = case.precondition or ""
+    # 管理网卡安全防护(TC-105)：改用结构判定——只有 inject/clean 目标是 eth0
+    # (管理网卡)的用例才受 eth0 存在性 SKIP 保护；down_safe 用例(eth1→dummy)即使
+    # 措辞含"SSH/管理网卡"也不触发，避免 TC-109/137/145 误 SKIP。
+    targets_eth0 = any(
+        len(a) > 2 and a[0] == "dcat" and a[1] in ("inject", "clean") and "--iface=eth0" in a
+        for a in case.cmds)
+    if not targets_eth0:
+        pre = pre.replace("SSH", "").replace("管理网卡", "")
     if pre in ("none", "roce_link_up"):
         coded_pre = pre
     elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock", "serve", "非 tmpfs", "SSH", "管理网卡", "iptables", "service_stop")):
@@ -184,8 +238,16 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                 for i, arg in enumerate(argv):
                     if _PID_RE.match(arg):
                         argv[i] = f"--pid={ctx['pid']}"
-            if setup_argv and not any("--pid=" in a for a in setup_argv):
-                setup_argv.append(f"--pid={ctx['pid']}")
+            # setup_argv 来自 steps 首条 inject 时可能已含占位 --pid=12345，
+            # 必须替换为真实 pid，否则 inject --pid=12345（不存在）→ setup 失败 → SKIP
+            if setup_argv:
+                replaced = False
+                for i, a in enumerate(setup_argv):
+                    if _PID_RE.match(a) or _PID_RE.search(a):
+                        setup_argv[i] = f"--pid={ctx['pid']}"
+                        replaced = True
+                if not any("--pid=" in a for a in setup_argv):
+                    setup_argv.append(f"--pid={ctx['pid']}")
     # rNET setup 缺 --iface 时补测试网卡（优先用物理网卡，tc 不支持 dummy）
     # 但 rNET_service_stop 不接受 --iface 参数，跳过
     net_iface = ctx.get("phy_iface", "") or ctx["iface"]

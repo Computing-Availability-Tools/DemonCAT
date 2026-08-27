@@ -81,7 +81,7 @@ def pytest_configure(config):
     使 --strict-markers 通过且无 PytestUnknownMarkWarning。"""
     from e2e_loader import load_cases, _req_slug
     registered = set()
-    for m in ("P0", "P1", "P2", "smoke", "hardware", "root", "net"):
+    for m in ("P0", "P1", "P2", "smoke", "hardware", "root", "net", "xdist_group"):
         config.addinivalue_line("markers", f"{m}: e2e priority/scope marker")
         registered.add(m)
     try:
@@ -270,8 +270,8 @@ def _write_results_csv():
             w.writeheader()
             for r in _RESULTS:
                 w.writerow({k: r.get(k, "") for k in RESULT_COLS})
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[warn] write results csv failed: {e}")
 
 
 def _stats():
@@ -306,9 +306,10 @@ def _write_report_md(session):
         for r in skips[:50]:
             lines.append(f"- {r['id']}: {r.get('verify_actual','')[:80]}")
     try:
-        open(_REPORT_MD, "w", encoding="utf-8").write("\n".join(lines) + "\n")
-    except Exception:
-        pass
+        with open(_REPORT_MD, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except Exception as e:
+        print(f"[warn] write report.md failed: {e}")
 
 
 def _emit_gha_summary(session):

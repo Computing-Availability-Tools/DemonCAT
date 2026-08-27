@@ -27,7 +27,7 @@ def _is_skip_value(v):
     # 含 < > 占位符但非 state_*（state_*:<uid> 另行处理）
     if "<" in v and ">" in v and not v.startswith("state_"):
         return True
-    # 裸 notexists（无路径，无法判定）
+    # 裸 notexists（无路径，无法判定）→ skip（由 _eval_step 转成 notexists:<path> 或 notexists_rc:）
     if v == "notexists":
         return True
     return False
@@ -84,6 +84,12 @@ def eval_assert(vassert, cmd_rc, cmd_out, verify_out, state_data, confirmed=None
                     f"state not_contains <uid>(inactive)? len={len(state_data)} confirmed={confirmed}")
         ok = not any(r.get("uid") == uid for r in state_data)
         return (("pass" if ok else "fail"), f"state not_contains {uid}? {ok}")
+
+    # 裸 notexists 且无法定位路径（含通配符/管道）：verify 输出含文件不存在标记即 PASS。
+    # （ls <glob> 无匹配 → stderr "ls: cannot access ...  No such file or directory"，退出非 0）
+    if v == "notexists_rc:":
+        missing = any(k in _norm(verify_out) for k in ("cannotaccess", "nosuchfile", "无法访问", "没有那个文件"))
+        return (("pass" if missing else "fail"), f"notexists by ls-error marker: {missing!r}")
 
     # ---- 委托基础算子 ----
     ok, detail = apply_assert(v, verify_out, cmd_rc, cmd_out)

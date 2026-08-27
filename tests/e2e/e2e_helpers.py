@@ -123,6 +123,10 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
     # iptables -L / cat /sys/... 等 verify 命令需要 root 权限
     if auto_sudo and not (cs.startswith(DCAT) or cs.startswith(dcat_rel)):
         cs = f"sudo -n -E {cs}"
+    # needs_shell 的 dcat 命令（含 & wait / ; 的 CONC 测试）也是 dcat 进程：
+    # auto_sudo 下必须同样加 sudo + HOME 注入，否则非 root 裸跑注入失败且难排查
+    if auto_sudo and needs_shell and (cs.startswith(DCAT) or cs.startswith(dcat_rel)):
+        cs = f"sudo -n -E env HOME={E2E_HOME} {cs}"
     return sh_sep(cs, env=env, timeout=timeout)
 
 
@@ -162,12 +166,26 @@ rm -f "{home}/.demoncat/state.json" 2>/dev/null
 rm -f /root/.demoncat/state.json 2>/dev/null
 dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
-losetup -D 2>/dev/null
+# losetup: 只清理 dcat 命名空间的 loop（-D 全清会动到 snap/squashfs 等宿主挂载）, 对
+# rDISK 类没有难清理的 loop 挂载, 故仅按 dcat- 前缀精确 detach
+for lp in $(losetup -a 2>/dev/null | awk -F: '{print $1}' | grep -E '/dcat-'); do
+  losetup -d "$lp" 2>/dev/null
+done
 tc qdisc del dev {iface} root 2>/dev/null
 ip link set {iface} up 2>/dev/null
 for port in 19998 19999; do
   iptables -D INPUT -p tcp --dport $port -j DROP 2>/dev/null
   iptables -D OUTPUT -p tcp --sport $port -j DROP 2>/dev/null
+done
+# rNET_tcp_loss: sidecar 记录真实端口（默认测试用 8080），逐条 -D 清, 防残留 DROP 规则
+for rule in /tmp/dcat-rNET_tcp_loss-*.rule; do
+  [ -f "$rule" ] || continue
+  p=${rule##*/dcat-rNET_tcp_loss-}; p=${p%.rule}
+  [ "$p" = "19998" ] || [ "$p" = "19999" ] && continue
+  case "$p" in *[!0-9]*) continue ;; esac
+  iptables -D INPUT -p tcp --dport "$p" -j DROP 2>/dev/null
+  iptables -D OUTPUT -p tcp --sport "$p" -j DROP 2>/dev/null
+  rm -f "$rule"
 done
 for f in /tmp/dcat-rCPU_core_offline-c*; do
   [ -f "$f" ] || continue
@@ -444,23 +462,28 @@ def check_precondition(precond):
     if "mock" in precond.lower() and "可用" in precond:
         return "mock 环境不可用（需要 mock dcat 二进制）"
     if "serve" in precond and "长超时" in precond:
-        return "serve 模式需长超时（>120s），当前测试超时不足"
+        # serve 默认为长时阻塞进程：run_step_cmd 120s 超时会得到 rc=124，
+        # TC-555(exitcode:124) 正是利用该超时语义验证 serve 阻塞行为。不再无条件 SKIP。
+        return ""
     if "非 tmpfs" in precond:
         rc, out = sh("df -t tmpfs /tmp 2>/dev/null | grep -q tmpfs && echo yes || echo no")
         if "yes" in out.lower():
             return "/tmp 是 tmpfs（dd 写入导致 OOM，需真实磁盘目录如 /data）"
     if "service_stop" in precond.lower() or ("service" in precond.lower() and "stop" in precond.lower()):
-        # rNET_service_stop 专用：需目标 service 存在
+        # rNET_service_stop 专用：需目标 service 存在。
+        # 服务名优先取前置文本中的 --service=X；无则回退尝试常见候选
+        # （cron/chronyd/ntpd，对应 provisionnoncritical_svc），最后回退 nginx。
         import re as _re2
         m2 = _re2.search(r'--service=(\S+)', precond)
-        if not m2:
-            # 从 cmds 里找 service 名
-            pass
-        # 默认检查 nginx
-        svc = "nginx"
-        rc, out = sh(f"command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q '^{svc}\\.' && echo ok || echo missing")
-        if "missing" in out.lower():
-            return f"{svc} 服务未安装"
+        svc = m2.group(1) if m2 else ""
+        # 前置文本可能形如 "cron 服务存在" / "已注入 rNET_service_stop"，无 service 名
+        for candidate in (svc, "cron", "chronyd", "ntpd", "nginx"):
+            if not candidate:
+                continue
+            rc, out = sh(f"command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q '^{candidate}\\.' && echo ok || echo missing")
+            if "ok" in out.lower():
+                return ""
+        return "无可用目标 service（cron/chronyd/ntpd/nginx 均未安装）"
     if "non-root" in precond:
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             return "当前为 root，非 root 权限测试需降权运行"

@@ -960,7 +960,7 @@ DemonCAT/
     │   └── smoke_root.sh          # root 级自动化测试
     ├── check_syntax.sh            # sh -n 全脚本语法检查
     ├── ctest_summary.py           # CI 单测摘要解析
-    └── e2e/                       # E2E (CSV 驱动, run_e2e.py + cases.csv)
+    └── e2e/                       # E2E (pytest + testcases.xlsx 驱动)
 ```
 
 > `src/injectors/` 目录含 `injector.h`（接口定义，§7.2）与 `injectors.c`（注册表 + 查找，§7.4）。本期 `builtin_injectors[]` 为空数组。

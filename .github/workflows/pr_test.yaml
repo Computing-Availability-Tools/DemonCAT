@@ -29,6 +29,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+  actions: read   # download-artifact v5 走 actions artifacts 端点，需该 scope（否则 403 被吞→Gate 永远 PASS）
 
 # 源仓库全名（Full 仅在此 repo 跑：NPU runner + secrets 在此）
 # fork 仓库 push 时 github.repository != 此值 → Full 跳过（fork 无 NPU runner）。
@@ -64,7 +65,7 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["${{ matrix.runner }}"]'
-      # 轻量冒烟(marker 选择, 53 条): P0 非硬件非 root(用户态) + 精选 P1 smoke(22)。
+      # 轻量冒烟(marker 选择, 实际 39 条): P0 非硬件非 root(用户态) + 精选 P1 smoke。
       # NPU/rNET(eth0 硬编码会打断 GHA)/core_offline/边界/P2 留 full。非 root, ubuntu 安全。
       mark: "(P0 and not hardware and not root) or (P1 and smoke and not hardware and not root)"
       run-as-root: false
@@ -178,7 +179,6 @@ jobs:
       - name: Download e2e artifacts (to check actual test results)
         if: ${{ needs.e2e-full-ubuntu-nonnet.result == 'failure' || needs.e2e-full-ubuntu-qdisc.result == 'failure' || needs.e2e-full-ubuntu-netother.result == 'failure' }}
         uses: actions/download-artifact@v5
-        continue-on-error: true
         with:
           pattern: e2e-full-ubuntu-*
           path: e2e-artifacts
@@ -229,14 +229,23 @@ jobs:
                 xml="e2e-artifacts/e2e-full-ubuntu-${label}/tests/e2e/e2e_junit.xml"
                 if [ -f "$xml" ]; then
                   # JUnit 的 <failure>/<error> 元素计数才是真实失败数（grep 行数会漏/误）
-                  FAIL_CNT=$(python3 -c "import sys,xml.etree.ElementTree as ET; root=ET.parse('$xml').getroot(); print(len(root.findall('.//failure'))+len(root.findall('.//error')))" 2>/dev/null || echo 0)
+                  FAIL_CNT=$(python3 -c "import sys,xml.etree.ElementTree as ET; root=ET.parse('$xml').getroot(); print(len(root.findall('.//failure'))+len(root.findall('.//error')))" 2>/dev/null)
+                  if [ -z "${FAIL_CNT:-}" ]; then
+                    # XML 存在但解析失败（runner 断连打断写入 = 截断/损坏的半文件）=
+                    # 最不可信的输入，绝不可按 0 放行
+                    echo "::error::e2e-full-ubuntu-${label}: JUnit exists but unparseable (truncated/corrupt)"
+                    exit 1
+                  fi
                   if [ "${FAIL_CNT:-0}" -gt 0 ]; then
                     echo "::error::e2e-full-ubuntu-${label}: ${FAIL_CNT} actual test failures in JUnit XML"
                     exit 1
                   fi
                   echo "e2e-full-ubuntu-${label}: failure but 0 actual FAIL (ARM runner disconnect bug)"
                 else
-                  echo "e2e-full-ubuntu-${label}: failure, no JUnit artifact (runner never reached pytest)"
+                  # job failure 却无 JUnit 产物 = pytest 根本未跑到（编译/依赖/checkout/runner 崩溃）。
+                  # 这类 infra 失败正是必须阻断的，不能当作"伪失败"放行。
+                  echo "::error::e2e-full-ubuntu-${label}: job failed with no JUnit artifact (never reached pytest)"
+                  exit 1
                 fi
                 ;;
               *) echo "::error::E2E full ubuntu-${label} unexpected: ${r}"; exit 1 ;;

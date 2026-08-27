@@ -109,7 +109,8 @@ jobs:
           set +e
           if [ "$AS_ROOT" = "true" ]; then
             # shellcheck disable=SC2024
-            sudo -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
+            # sudo -n: 自托管 runner 未配 passwordless sudo 时立即失败, 而非卡死拖到 60min 超时
+            sudo -n -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
             sudo chown "$(id -un):$(id -gn)" tests/e2e/report*.md tests/e2e/results_*.csv tests/e2e/e2e_junit.xml 2>/dev/null || true
           else
             DCAT_AUTO_SUDO=1 PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
@@ -117,6 +118,9 @@ jobs:
           TEST_RC=$?
           set -e
           cat tests/e2e/e2e_run.log
+          # GHA 只解析 step 实时 stdout 中的 ::error:: 注解；pytest 输出进了 log，
+          # 此处 re-echo 才算数，保证失败用例在 PR Checks 界面直接可见（红点）
+          grep -hE '^::error::' tests/e2e/e2e_run.log 2>/dev/null || true
           exit "$TEST_RC"
 
       - name: E2E summary

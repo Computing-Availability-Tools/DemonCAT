@@ -114,6 +114,8 @@ CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 /
 
 #### E2E 测试框架（468 步骤 / 249 流程）
 
+> 更新（2026-08）：E2E 框架已由 CSV 迁移至 pytest + `testcases.xlsx`（633 用例，618 条含 dcat 命令），入口 `python3 -m pytest tests/e2e/`，详见 `tests/e2e/README.md`。本小节为该版本发布时的旧框架记录。
+
 - 8 类混沌工程测试矩阵：FUNC / BOUND / SEC / STATE / RES / CLI / CONC / INTER
 - NPU 真机适配：chip=0→2、IP 网段修正、grep 正则匹配 hccn_tool 真机输出
 - sweep 加 NPU stale state 条件清理（ip_rule/route/ip_route/link up）

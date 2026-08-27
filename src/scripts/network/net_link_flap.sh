@@ -8,6 +8,12 @@ case "${DCAT_OP:-inject}" in
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
         # Validate iface: alphanumeric, underscore, hyphen only
         case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
+        # 管理网卡防护：严禁对承载活跃默认路由的接口做 down/up 抖动（会断 SSH/CI 网络）。
+        # 用 ip route get 判定实际生效出接口，避免把 linkdown 备卡(metric 101)误拦。
+        if ip route get 8.8.8.8 2>/dev/null | grep -q "dev $iface"; then
+            echo "refused: $iface carries the active default route (management NIC), refusing to flap it" >&2
+            exit 1
+        fi
         cycle=${DCAT_PARAM_CYCLE_SEC:-2}
         count=${DCAT_PARAM_COUNT:-10}
         [ "$count" -ge 1 ] 2>/dev/null || { echo "count must be >= 1" >&2; exit 1; }

@@ -182,7 +182,12 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
     int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) {
         if (state_is_lost()) {
+            /* state 丢失时的 best-effort：跑一遍脚本清理 /tmp 工件。脚本真实失败时
+             * 必须透传其 code/msg（仍是 exit 1，与 DESIGN"无记录→1"对齐），否则用户的
+             * 诊断信息（setpci 缺失 / EPERM / 进程已不存在等）被 "no active injection
+             * found" 掩盖，无法区分"已清理"与"清理失败"。 */
             result_t *r = executor_run_fault(f, "clean", user_params, 0);
+            if (r && r->code != 0) return r;
             if (r) result_free(r);
         }
         return result_err("clean", f->uid, 1, "no active injection found");

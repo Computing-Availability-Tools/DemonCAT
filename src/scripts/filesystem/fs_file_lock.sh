@@ -41,7 +41,9 @@ case "${DCAT_OP:-inject}" in
                 ;;
             nowrite)
                 chmod a-w "$path" 2>/dev/null || { echo "chmod a-w failed" >&2; exit 1; }
-                chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod; chattr needs root + ext/xfs fs)" >&2; }
+                # root 可绕过 chmod，必须有 chattr +i 才对 root 生效；失败即拒绝
+                # （避免 tmpfs 等不支持 ext attrs 的 fs 上"报 OK 但实际没锁住 root"的误导）
+                chattr +i "$path" 2>/dev/null || { echo "chattr +i failed (root bypasses chmod; needs ext/xfs fs supporting immutable attr)" >&2; exit 1; }
                 ;;
             norw)
                 chmod a-rw "$path" 2>/dev/null || { echo "chmod a-rw failed" >&2; exit 1; }

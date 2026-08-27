@@ -344,8 +344,22 @@ static int parse_params_object(cJSON *pobj, params_t *out) {
     if (!pobj || !cJSON_IsObject(pobj)) return 0;
     cJSON *k;
     cJSON_ArrayForEach(k, pobj) {
-        if (cJSON_IsString(k))
+        if (cJSON_IsString(k)) {
             if (params_set(out, k->string, k->valuestring) != 0) return -1;
+        } else if (cJSON_IsNumber(k)) {
+            /* JSON 客户端常序列化数值参数（如 {"size_mb":64}）：转成十进制字符串，
+             * 避免静默丢弃后被 precheck 报 "missing required parameter" 误导。 */
+            char buf[32];
+            if (k->valuedouble == (double)(long long)k->valuedouble)
+                snprintf(buf, sizeof buf, "%lld", (long long)k->valuedouble);
+            else
+                snprintf(buf, sizeof buf, "%lld", (long long)k->valuedouble);
+            if (params_set(out, k->string, buf) != 0) return -1;
+        } else if (cJSON_IsTrue(k)) {
+            if (params_set(out, k->string, "true") != 0) return -1;
+        } else if (cJSON_IsFalse(k)) {
+            if (params_set(out, k->string, "false") != 0) return -1;
+        }
     }
     return 0;
 }

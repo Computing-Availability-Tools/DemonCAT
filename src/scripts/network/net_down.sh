@@ -8,6 +8,13 @@ case "${DCAT_OP:-inject}" in
         iface=${DCAT_PARAM_IFACE:?missing required param: iface}
         # Validate iface: alphanumeric, underscore, hyphen only
         case "$iface" in ''|*[!a-zA-Z0-9_-]*) echo "invalid iface: '$iface'" >&2; exit 1 ;; esac
+        # 管理网卡防护：拒绝 down 承载活跃默认路由的接口（避免远程连接丢失）。
+        # 用 `ip route get` 定位实际生效的出接口；`ip route show default` 会列出
+        # 多条（含 linkdown 的备路由 metric 101），把非活跃备卡也误拦了。
+        if ip route get 8.8.8.8 2>/dev/null | grep -q "dev $iface"; then
+            echo "refused: $iface carries the active default route (management NIC), refusing to bring it down" >&2
+            exit 1
+        fi
         SIDECAR="/tmp/dcat-rNET_down-${iface}.sidecar"
         ip link set dev "$iface" down || { echo "ip link set down failed (need root?)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"

@@ -259,12 +259,16 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
             and "tcp_loss" not in setup_argv[2].lower() \
             and not any(a.startswith("--iface=") for a in setup_argv):
         setup_argv.append(f"--iface={net_iface}")
-    # setup 缺参数时从 cmds 提取（xlsx "已注入" setup 不带参数）
+    # setup 缺参数时从 cmds 提取 DA: 只抄同 uid 的 inject 命令参数（xlsx "已注入"
+    # setup 常不带参数）。绝不从不同 uid 的命令抄——TC-157 前置注入 rNET_loss(占
+    # qdisc)，step 是 rNET_jitter --delay_ms；把 jitter 参数塞给 rNET_loss 会报
+    # unknown parameter 'delay_ms'。
     if setup_argv and len(setup_argv) > 2 and setup_argv[1] == "inject":
+        setup_uid = setup_argv[2]
         setup_keys = {a.split("=")[0] for a in setup_argv if a.startswith("--")}
         for argv in case.cmds:
-            if len(argv) > 2 and argv[0] == "dcat" and argv[1] in ("inject", "clean", "query"):
-                for arg in argv[2:]:
+            if len(argv) > 2 and argv[0] == "dcat" and argv[1] == "inject" and argv[2] == setup_uid:
+                for arg in argv[3:]:
                     key = arg.split("=")[0]
                     if arg.startswith("--") and key not in setup_keys and key != "--force":
                         setup_argv.append(arg)

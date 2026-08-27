@@ -113,26 +113,33 @@ def _indicates_prior_inject(pre):
 def _parse_setup(precondition, cmds=None, fallback_uid=None):
     """前置条件指示需前序注入 → 解析 setup inject argv。无/解析不出 → None。
 
-    uid 优先取 steps 中第一条 dcat inject 命令的真实 uid 与参数（precondition 常为
-    描述性文本，用 r\w+ 乱抓会得到 'res' 之类残词 → 注入 'res' 不存在 → setup 失败
-    → 整条用例 SKIP。例 TC-597 前置 '已注入 --cores=0,1' 无 uid，但步骤里有
-    'dcat clean rCPU_overload ...'，可从标题 module 兜底注入该 uid）。
-    """
+    uid 解析优先级（TC-157 前置 'eth0 已注入 rNET_loss' 必须先注入 rNET_loss 占住
+    root qdisc，步骤才是注入 rNET_jitter——若误用 steps 命令的 uid(jitter) 会把
+    "已有 qdisc 注入失败" 用例变成 "同资源重注入 exit5"）：
+      1. precondition 里的显式真实 uid（r(CPU|MEM|... )_X 形态）
+      2. steps 首条 dcat inject 命令的 uid（precondition 仅描述性文本如
+         '已注入 --cores' 无 uid 时 — 例 TC-597）
+      3. 标题 module 兜底
+    参数：优先带同 uid 的 steps inject 命令参数；否则 pre 的 --flags。"""
     if not _indicates_prior_inject(precondition):
         return None
+    pre_flags = _FLAG_RE.findall(precondition)
+    # 1) precondition 显式 uid（不匹配描述性中文，精准抓真实 r<模块>_<名>）
+    m = re.search(r'\br(?:CPU|MEM|NET|PROC|DISK|FS|SYS|DOCKER|NPU)_[A-Za-z0-9_]+', precondition)
+    if m:
+        uid = m.group(0)
+        # 同 uid 的 steps inject 命令参数更完整（含 --iface 等 pre 文本没有的）
+        for argv in cmds or []:
+            if len(argv) >= 3 and argv[0] == "dcat" and argv[1] == "inject" and argv[2] == uid:
+                return ["dcat", "inject", uid] + list(argv[3:])
+        return ["dcat", "inject", uid, *pre_flags]
+    # 2) pre 无显式 uid：取 steps 首条 inject（例 TC-597 无 uid 但有 clean<uid>；标题兜底）
     for argv in cmds or []:
         if len(argv) >= 3 and argv[0] == "dcat" and argv[1] == "inject":
             return ["dcat", "inject", argv[2]] + list(argv[3:])
-    # 无步骤 inject 命令时回退 precondition 文本解析（限 r[P][A-Z]\w+ 形态的真实 uid）
-    m = re.search(r'\br(?:CPU|MEM|NET|PROC|DISK|FS|SYS|DOCKER|NPU)_[A-Za-z0-9_]+', precondition)
-    if m:
-        module = m.group(0)
-        flags = _FLAG_RE.findall(precondition)
-        return ["dcat", "inject", module, *flags]
-    # precondition 无显式 uid（如 '已注入 --cores=0,1'）→ 用标题 module 兜底
+    # 3) 标题 module（ID 用）
     if fallback_uid:
-        flags = _FLAG_RE.findall(precondition)
-        return ["dcat", "inject", fallback_uid, *flags]
+        return ["dcat", "inject", fallback_uid, *pre_flags]
     return None
 
 

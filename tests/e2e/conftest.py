@@ -24,10 +24,12 @@ from e2e_helpers import (
 )
 
 ROOT = HERE.parent.parent
+_wid = os.environ.get("PYTEST_XDIST_WORKER", "")
+_suffix = f"_{_wid}" if _wid else ""
 _TS = datetime.now().strftime("%Y%m%d_%H%M%S")
-_FAIL_LOG = HERE / f"failures_{_TS}.log"
-_RESULTS_CSV = HERE / f"results_{_TS}.csv"
-_REPORT_MD = HERE / "report.md"
+_FAIL_LOG = HERE / f"failures_{_TS}{_suffix}.log"
+_RESULTS_CSV = HERE / f"results_{_TS}{_suffix}.csv"
+_REPORT_MD = HERE / f"report{_suffix}.md"
 _RESULTS = []
 _NA_MARKERS = ("注入未执行", "无系统断言", "或非故障", "clean后观测")
 
@@ -133,16 +135,62 @@ def tracked():
     yield pids
 
 
-@pytest.fixture(autouse=True)
-def autouse_sweep(e2e_env, tracked):
+@pytest.fixture(scope="session", autouse=True)
+def session_init_sweep(e2e_env):
+    """session 开始时 sweep 一次，清除上次运行/崩溃残留。"""
+    tracked = []
     sweep(E2E_HOME, TEST_IFACE, tracked)
     phy = e2e_env.get("phy_iface", "")
     if phy:
         sweep(E2E_HOME, phy, tracked)
     yield
-    sweep(E2E_HOME, TEST_IFACE, tracked)
-    if phy:
-        sweep(E2E_HOME, phy, tracked)
+
+
+_prev_module = None
+
+@pytest.fixture(autouse=True)
+def autouse_sweep(e2e_env, tracked, request):
+    global _prev_module
+    callspec = getattr(request.node, "callspec", None)
+    case = callspec.params.get("case") if callspec else None
+    cur_mod = case.module if case else ""
+
+    # 判断是否 inject-only（有 inject 无 clean，会残留故障状态）
+    has_inject = has_clean = False
+    if case:
+        for cmd in case.cmds:
+            if len(cmd) > 1 and cmd[1] == "inject":
+                has_inject = True
+            if len(cmd) > 1 and cmd[1] == "clean":
+                has_clean = True
+        if case.setup_argv and len(case.setup_argv) > 1 and case.setup_argv[1] == "inject":
+            has_inject = True
+
+    # 切换模块时 sweep（清除上个模块残留）
+    if _prev_module is None or _prev_module != cur_mod:
+        sweep(E2E_HOME, TEST_IFACE, tracked)
+        phy = e2e_env.get("phy_iface", "")
+        if phy:
+            sweep(E2E_HOME, phy, tracked)
+    _prev_module = cur_mod
+
+    yield
+
+    # kill tracked PIDs（快速）
+    for p in tracked:
+        try:
+            os.kill(p, 9)
+        except OSError:
+            pass
+
+    # inject-only 测试会残留 → 必须 sweep 清理
+    # 测试失败也必须 sweep（clean 可能未执行）
+    rep = getattr(request.node, "rep_call", None)
+    if (has_inject and not has_clean) or (rep is not None and rep.failed):
+        sweep(E2E_HOME, TEST_IFACE, tracked)
+        phy = e2e_env.get("phy_iface", "")
+        if phy:
+            sweep(E2E_HOME, phy, tracked)
 
 
 @pytest.fixture
@@ -157,6 +205,8 @@ def recorder(request):
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
+    if report.when == "call":
+        item.rep_call = report
     if report.when != "call":
         return
     rec = getattr(item, "_e2e_rec", None)
@@ -206,9 +256,11 @@ def _write_failure(rec, report):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    _is_worker = hasattr(session.config, "workerinput")
     _write_results_csv()
     _write_report_md(session)
-    _emit_gha_summary(session)
+    if not _is_worker:
+        _emit_gha_summary(session)
 
 
 def _write_results_csv():

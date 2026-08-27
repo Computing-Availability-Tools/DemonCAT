@@ -212,6 +212,35 @@ def _marks_for(case):
         marks.append(pytest.mark.smoke)
     marks.append(getattr(pytest.mark, case.module_slug))
     marks.append(getattr(pytest.mark, _req_slug(case.req)))
+    # xdist_group: 同故障模块的测试在同一 worker 串行, 避免网络/进程状态冲突
+    mod_lower = case.module.lower()
+    if mod_lower.startswith("rnet"):
+        # tc qdisc 操作物理网卡的模块必须同组串行 (共用 eth0 qdisc)
+        _qdisc_mods = {"rnet_bw_limit", "rnet_degrade", "rnet_jitter",
+                       "rnet_reorder", "rnet_delay", "rnet_loss"}
+        if mod_lower in _qdisc_mods:
+            grp = "rnet_qdisc"
+        elif mod_lower in ("rnet_down", "rnet_link_flap"):
+            grp = "rnet_link"
+        elif mod_lower == "rnet_port_occupy":
+            grp = "rnet_proc"
+        else:
+            grp = "rnet_other"
+    elif mod_lower.startswith("rproc"):
+        grp = "rproc"
+    elif mod_lower.startswith("rcpu"):
+        grp = "rcpu"
+    elif mod_lower.startswith("rmem"):
+        grp = "rmem"
+    elif mod_lower.startswith("rsys"):
+        grp = "rsys"
+    elif mod_lower.startswith("rfs"):
+        grp = "rfs"
+    elif mod_lower.startswith("rnpu"):
+        grp = "rnpu"
+    else:
+        grp = "misc"
+    marks.append(pytest.mark.xdist_group(grp))
     return marks
 
 

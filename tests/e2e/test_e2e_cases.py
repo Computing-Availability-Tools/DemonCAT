@@ -5,6 +5,7 @@
 →每条命令后验证观测命令→eval_assert（任一通过即 PASS）。
 """
 import copy
+import os
 import re
 import subprocess
 import sys
@@ -79,6 +80,10 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
             vcmd = substitute(case.vcmd, ctx)
             if vcmd.startswith("dcat "):
                 vcmd = f"{dcat} {vcmd[5:]}"
+            # verify 命令需 root 权限时（iptables/cat /sys 等），auto_sudo 加 sudo
+            _auto_sudo = hasattr(os, "geteuid") and os.geteuid() != 0 and os.environ.get("DCAT_AUTO_SUDO") == "1"
+            if _auto_sudo and not vcmd.startswith("sudo"):
+                vcmd = f"sudo -n -E {vcmd}"
             recorder.verify_cmd = case.vcmd
             verify_out = sh(vcmd, env=env, timeout=30)[1]
             recorder.verify_out = verify_out
@@ -105,7 +110,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     pre = case.precondition or ""
     if pre in ("none", "roce_link_up"):
         coded_pre = pre
-    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock", "serve", "非 tmpfs")):
+    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock", "serve", "非 tmpfs", "SSH", "管理网卡", "iptables", "service_stop")):
         coded_pre = pre
     else:
         coded_pre = "none"
@@ -150,12 +155,13 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
         ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "",
                "phy_iface": phy}
 
-    # extract --service=X from cmds to fill {svc} in vcmd
+    # extract --service=X and --port=X from cmds to fill {svc}/{port} in vcmd
     for argv in case.cmds:
         for a in argv:
             if a.startswith("--service="):
                 ctx["svc"] = a.split("=", 1)[1]
-                break
+            elif a.startswith("--port="):
+                ctx["port"] = a.split("=", 1)[1]
 
     t0 = time.time()
 

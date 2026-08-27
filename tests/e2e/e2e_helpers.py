@@ -25,8 +25,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))   # tests/e2e
 ROOT = os.path.dirname(os.path.dirname(HERE))        # project root
 DCAT = os.path.join(ROOT, "build", "dcat")
 CASES = os.path.join(HERE, "cases.csv")
-TEST_IFACE = "dcat-e2e0"
-E2E_HOME = "/tmp/dcat_e2e_home"
+_worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
+if _worker_id:
+    _wn = _worker_id.replace("gw", "")
+    TEST_IFACE = f"dcat-e2e{_wn}"
+    E2E_HOME = f"/tmp/dcat_e2e_home_{_worker_id}"
+else:
+    TEST_IFACE = "dcat-e2e0"
+    E2E_HOME = "/tmp/dcat_e2e_home"
 PWN = "/tmp/dcat_pwned"
 
 # 测试分类说明（分类→测试目的概述），供 report.md / test_report.md 复用
@@ -101,7 +107,11 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
                     return 1, "", "[runuser 未安装，无法降权验证非 root 拒绝]"
                 argv = ["runuser", "-u", priv_user, "--"] + argv
             elif auto_sudo:
-                argv = ["sudo", "-n", "-E"] + argv
+                # sudo 默认 env_reset + always_set_home 会把 HOME 重置为 /root，
+                # 导致 dcat 的 state.json 写进 /root/.demoncat，而 sweep 只清 E2E_HOME
+                # → 前序用例状态残留 → 重注入返回 exit 5（resource already injected）。
+                # 显式 HOME=E2E_HOME 让 state 落在 sweep 能清理的隔离目录。
+                argv = ["sudo", "-n", "-E", "env", f"HOME={E2E_HOME}"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
             return p.returncode, (p.stdout or ""), (p.stderr or "")
@@ -109,6 +119,10 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
             return 124, "", "[timeout]"
         except Exception as e:
             return 1, "", f"[exception {e}]"
+    # 非 dcat 命令（verify 等）：auto_sudo 时加 sudo 前缀
+    # iptables -L / cat /sys/... 等 verify 命令需要 root 权限
+    if auto_sudo and not (cs.startswith(DCAT) or cs.startswith(dcat_rel)):
+        cs = f"sudo -n -E {cs}"
     return sh_sep(cs, env=env, timeout=timeout)
 
 
@@ -143,6 +157,9 @@ rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/d
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
 rm -f "{home}/.demoncat/state.json" 2>/dev/null
+# sudo env_reset/always_set_home 会把 HOME 变 /root：旧版/残留 dcat state 可能在 /root，
+# 一并删掉避免重注入返回 exit 5（resource already injected）误判 FAIL
+rm -f /root/.demoncat/state.json 2>/dev/null
 dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 losetup -D 2>/dev/null
@@ -368,14 +385,21 @@ def check_precondition(precond):
         rc, out = sh("hccn_tool -i 2 -link -g 2>/dev/null")
         if rc != 0 or "up" not in (out or "").lower():
             return "RoCE 链路物理 DOWN（无网线/对端），RoCE 配置类用例无法生效"
-    if "sysfs_writable" in precond:
-        # rCPU_core_offline 专用：需 sysfs 可写（WSL2 不支持 cpu offline）
+    if "sysfs_writable" in precond or ("sysfs" in precond and ("写" in precond or "writable" in precond.lower())):
+        # rCPU_core_offline 专用：需 sysfs 可写 + CPU hotplug 支持
         rc, out = sh("cat /sys/devices/system/cpu/cpu1/online 2>/dev/null")
         if rc != 0:
-            return "sysfs 不可读或 cpu1 不存在（WSL2 不支持 cpu offline）"
-        rc, out = sh("test -w /sys/devices/system/cpu/cpu1/online && echo writable || echo readonly")
-        if "readonly" in out.lower():
-            return "sysfs 只读（WSL2 不支持 cpu offline）"
+            return "sysfs 不可读或 cpu1 不存在（VM/WSL2 不支持 cpu offline）"
+        sudo_pfx = "sudo -n -E " if os.environ.get("DCAT_AUTO_SUDO") == "1" else ""
+        # 先检查 cpu1（存在性+可写）
+        rc, out = sh("cat /sys/devices/system/cpu/cpu1/online 2>/dev/null")
+        if rc != 0:
+            return "sysfs 不可读或 cpu1 不存在（VM/WSL2 不支持 cpu offline）"
+        # 再试 cpu0（boot CPU，很多 VM 不允许 offline cpu0）
+        rc0, out0 = sh(f"{sudo_pfx}sh -c 'echo 0 > /sys/devices/system/cpu/cpu0/online' 2>/dev/null && echo ok || echo fail")
+        sh(f"{sudo_pfx}sh -c 'echo 1 > /sys/devices/system/cpu/cpu0/online' 2>/dev/null")
+        if "fail" in (out0 or "").lower():
+            return "CPU0 不可 offline（VM boot CPU 限制）"
     if "tc_qdisc" in precond or "sch_tbf" in precond:
         # rNET_bw_limit 专用：需 tc 命令和 sch_tbf 模块
         rc, out = sh("command -v tc >/dev/null 2>&1 && echo ok || echo missing")
@@ -384,6 +408,26 @@ def check_precondition(precond):
         rc, out = sh("modprobe sch_tbf 2>/dev/null; lsmod | grep -q sch_tbf && echo ok || echo missing")
         if "missing" in out.lower():
             return "sch_tbf 模块不可用（内核不支持）"
+    if "iptables" in precond.lower() or "tcp_loss" in precond.lower():
+        # rNET_tcp_loss 专用：需 iptables 可用
+        rc, out = sh("command -v iptables >/dev/null 2>&1 && echo ok || echo missing")
+        if "missing" in out.lower():
+            return "iptables 不可用"
+        # 验证 iptables 真的可操作（需要 root 或 sudo）
+        sudo_pfx = "sudo -n -E " if os.environ.get("DCAT_AUTO_SUDO") == "1" else ""
+        rc, out = sh(f"{sudo_pfx}iptables -C INPUT -p tcp --dport 1 -j DROP 2>/dev/null && echo ok || {sudo_pfx}iptables -A INPUT -p tcp --dport 1 -j DROP 2>/dev/null && {sudo_pfx}iptables -D INPUT -p tcp --dport 1 -j DROP 2>/dev/null && echo ok || echo fail")
+        if "fail" in (out or "").lower():
+            return "iptables 规则操作失败（权限或内核模块问题）"
+    if "SSH" in precond and "管理" in precond:
+        # rNET_down 安全防护用例：验证对"管理/SSH 网卡"注入应被拒绝。
+        # 该用例假设 eth0 在测试环境不存在（脚本对不存在网卡注入失败 exit 1）。
+        # 若环境中真实存在 eth0（如 runner 主网卡），注入会真的 down 管理网卡：
+        #   - 会断掉 runner 与 GitHub 的网络（之前 CI 反复断连/重试即此因）
+        #   - 注入实际成功 exit 0，与预期 exit 1 冲突
+        # => 环境存在 eth0 时 SKIP（安全校验场景不成立，且不可真实演练）。
+        rc, out = sh("ip -o link show eth0 2>/dev/null && echo exists || echo missing")
+        if "exists" in (out or "").lower():
+            return "测试环境存在 eth0 网卡；注入会 down 管理网卡断 runner 网络，安全防护用例需在无 eth0 环境验证"
     if "npu_hardware" in precond:
         # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
         rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
@@ -405,9 +449,23 @@ def check_precondition(precond):
         rc, out = sh("df -t tmpfs /tmp 2>/dev/null | grep -q tmpfs && echo yes || echo no")
         if "yes" in out.lower():
             return "/tmp 是 tmpfs（dd 写入导致 OOM，需真实磁盘目录如 /data）"
+    if "service_stop" in precond.lower() or ("service" in precond.lower() and "stop" in precond.lower()):
+        # rNET_service_stop 专用：需目标 service 存在
+        import re as _re2
+        m2 = _re2.search(r'--service=(\S+)', precond)
+        if not m2:
+            # 从 cmds 里找 service 名
+            pass
+        # 默认检查 nginx
+        svc = "nginx"
+        rc, out = sh(f"command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q '^{svc}\\.' && echo ok || echo missing")
+        if "missing" in out.lower():
+            return f"{svc} 服务未安装"
     if "non-root" in precond:
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             return "当前为 root，非 root 权限测试需降权运行"
+        if os.environ.get("DCAT_AUTO_SUDO") == "1":
+            return "DCAT_AUTO_SUDO=1（CI 非 root + sudo），非 root 拒绝测试无法验证"
     if "配置文件" in precond and "存在" in precond:
         import re as _re
         m = _re.search(r'(/[\S]+\.conf)', precond)

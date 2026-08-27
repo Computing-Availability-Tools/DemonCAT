@@ -19,7 +19,7 @@ gen_speed() { case "$1" in 1) echo "2.5";; 2) echo "5";; 3) echo "8";; *) echo "
 
 # Find NPU PCIe BDF from npu-smi
 get_npu_bdf() {
-    npu-smi info -t board -i "$1" 2>/dev/null | grep 'PCIe Bus Info' | awk -F': ' '{print $2}' | tr -d ' '
+    npu-smi info -t board -i "$1" 2>/dev/null | grep 'PCIe Bus Info' | awk -F': ' '{print $2}' | tr -d ' ' | tr '[:upper:]' '[:lower:]'
 }
 
 # Find upstream root port BDF (parent in sysfs)

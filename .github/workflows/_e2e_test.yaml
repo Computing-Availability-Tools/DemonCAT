@@ -22,6 +22,10 @@ on:
         description: "Artifact name suffix; empty = auto by arch (arm64/x86)"
         type: string
         default: ""
+      xdist:
+        description: "Enable pytest-xdist parallel execution (-n auto)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -90,6 +94,7 @@ jobs:
         env:
           MARK_EXPR: ${{ inputs.mark }}
           AS_ROOT: ${{ inputs.run-as-root }}
+          XDIST: ${{ inputs.xdist }}
         run: |
           # 清除 self-hosted runner 残留 __pycache__（sudo find 确保删 root 拥有的 stale .pyc）
           sudo find tests/e2e -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
@@ -97,24 +102,39 @@ jobs:
           if [ -n "$MARK_EXPR" ]; then
             MARK=(-m "$MARK_EXPR")
           fi
+          XDIST_FLAG=()
+          if [ "$XDIST" = "true" ]; then
+            XDIST_FLAG=(-n 2 --dist loadgroup)
+          fi
+          set +e
           if [ "$AS_ROOT" = "true" ]; then
             # shellcheck disable=SC2024
-            sudo -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
-            sudo chown "$(id -un):$(id -gn)" tests/e2e/e2e_run.log tests/e2e/report.md tests/e2e/results_*.csv tests/e2e/e2e_junit.xml 2>/dev/null || true
+            sudo -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
+            sudo chown "$(id -un):$(id -gn)" tests/e2e/report*.md tests/e2e/results_*.csv tests/e2e/e2e_junit.xml 2>/dev/null || true
           else
-            DCAT_AUTO_SUDO=1 PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
+            DCAT_AUTO_SUDO=1 PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
           fi
+          TEST_RC=$?
+          set -e
           cat tests/e2e/e2e_run.log
+          exit "$TEST_RC"
 
       - name: E2E summary
         if: always()
         run: |
           if [ -f tests/e2e/report.md ]; then
             cat tests/e2e/report.md >> "$GITHUB_STEP_SUMMARY"
+          elif compgen -G "tests/e2e/report_gw*.md" > /dev/null 2>&1; then
+            echo "## E2E 摘要 (pytest-xdist 并行)" >> "$GITHUB_STEP_SUMMARY"
+            for f in tests/e2e/report_gw*.md; do
+              [ -e "$f" ] || continue
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            done
           else
             {
               echo "## E2E 摘要"
-              echo "_(report.md 未生成: pytest 可能未运行或异常退出)_"
+              echo "_(report 未生成: pytest 可能未运行或异常退出)_"
               echo ""
               echo "**日志见 artifact e2e-run.log**"
             } >> "$GITHUB_STEP_SUMMARY"

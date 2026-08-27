@@ -107,7 +107,11 @@ def run_step_cmd(cmd, env, dcat_bin, timeout=120, priv_user=None):
                     return 1, "", "[runuser 未安装，无法降权验证非 root 拒绝]"
                 argv = ["runuser", "-u", priv_user, "--"] + argv
             elif auto_sudo:
-                argv = ["sudo", "-n", "-E"] + argv
+                # sudo 默认 env_reset + always_set_home 会把 HOME 重置为 /root，
+                # 导致 dcat 的 state.json 写进 /root/.demoncat，而 sweep 只清 E2E_HOME
+                # → 前序用例状态残留 → 重注入返回 exit 5（resource already injected）。
+                # 显式 HOME=E2E_HOME 让 state 落在 sweep 能清理的隔离目录。
+                argv = ["sudo", "-n", "-E", "env", f"HOME={E2E_HOME}"] + argv
             p = subprocess.run(argv, capture_output=True, text=True, env=env,
                                timeout=timeout, cwd=ROOT)
             return p.returncode, (p.stdout or ""), (p.stderr or "")
@@ -153,6 +157,9 @@ rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/d
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
 rm -f "{home}/.demoncat/state.json" 2>/dev/null
+# sudo env_reset/always_set_home 会把 HOME 变 /root：旧版/残留 dcat state 可能在 /root，
+# 一并删掉避免重注入返回 exit 5（resource already injected）误判 FAIL
+rm -f /root/.demoncat/state.json 2>/dev/null
 dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 losetup -D 2>/dev/null

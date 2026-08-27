@@ -110,7 +110,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     pre = case.precondition or ""
     if pre in ("none", "roce_link_up"):
         coded_pre = pre
-    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock", "serve", "非 tmpfs")):
+    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock", "serve", "非 tmpfs", "SSH", "管理网卡", "iptables", "service_stop")):
         coded_pre = pre
     else:
         coded_pre = "none"

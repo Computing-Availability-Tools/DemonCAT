@@ -157,6 +157,14 @@ for pf in /tmp/dcat-rNET_link_flap-*.pid; do
 done
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
+# rNPU compute load: kill _npu_stress processes (pidfiles deleted below, processes survive)
+for pf in /tmp/dcat-rNPU_aic_load-*.pid /tmp/dcat-rNPU_aicpu_load-*.pid /tmp/dcat-rNPU_aiv_load-*.pid /tmp/dcat-rNPU_hbm_load-*.pid; do
+    [ -f "$pf" ] || continue
+    while read -r p; do
+        [ -n "$p" ] && kill -9 "$p" 2>/dev/null
+    done < "$pf"
+done
+pkill -9 -f '_npu_stress' 2>/dev/null
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
@@ -286,7 +294,7 @@ def provision(provs, ctx, iface):
 def substitute(s, ctx):
     if not s:
         return s
-    for k in ("pid", "port", "iface", "svc"):
+    for k in ("pid", "port", "iface", "svc", "chip"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
     phy = ctx.get("phy_iface", "")
     if phy:

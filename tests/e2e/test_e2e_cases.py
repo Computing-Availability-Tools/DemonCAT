@@ -196,7 +196,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
         # hardware marker + npu_hardware: eth2 不存在等环境缺失 → SKIP（非 NPU CI server）
         # hardware marker + sysfs/tc_qdisc: 在 root 机器上应有 → FAIL（快速暴露问题）
         has_hw_marker = bool(list(request.node.iter_markers("hardware")))
-        if has_hw_marker and "npu_hardware" not in (case.precondition or ""):
+        if has_hw_marker and "npu_hardware" not in (case.precondition or "") and "npu_compute" not in (case.precondition or ""):
             assert False, f"{case.id}: 环境预检失败: {pre_skip}"
         pytest.skip(pre_skip)
 
@@ -209,10 +209,16 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     if is_link_down:
         # down/flap 测试：eth1 → dummy 接口，eth0 不替换（留给安全防护测试 TC-105）
         ctx = {"iface": e2e_env["iface"], "pid": "", "port": "", "svc": "",
-               "phy_iface": "", "down_safe": True}
+               "chip": "", "phy_iface": "", "down_safe": True}
     else:
         ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "",
-               "phy_iface": phy}
+               "chip": "", "phy_iface": phy}
+
+    # NPU compute tests: dynamically detect first available chip (Phy-ID)
+    if mod_lower.startswith("rnpu") and "npu_compute" in (case.precondition or ""):
+        _rc, _out = sh("ls /dev/davinci* 2>/dev/null | sort -V | head -1 | grep -oE '[0-9]+'")
+        _chip = _out.strip().splitlines()[0] if _out.strip() else "0"
+        ctx["chip"] = _chip
 
     # extract --service=X and --port=X from cmds to fill {svc}/{port} in vcmd
     for argv in case.cmds:

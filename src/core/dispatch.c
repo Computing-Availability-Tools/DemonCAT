@@ -178,8 +178,24 @@ static result_t *cnf_clean(const fault_def_t *f, const params_t *user_params) {
         if (r && r->code == 0) reconcile_uid_state(f->uid);
         return r;
     }
+    /* clean 匹配参数只取 resource key（clear_required 声明的必填参数），忽略
+     * optional 参数。否则 `clean rNET_link_flap --iface=X --cycle_sec=2 --count=5`
+     * 会因 cycle_sec/count 不在注入记录里匹配失败 → 误报 "no active injection found"
+     * （TC-131）—— params_match_subset 要求 query 每个 key 都在 record 中。 */
+    params_t match_params;
+    params_init(&match_params);
+    const char *req = f->clean_required;
+    char reqbuf[128];
+    if (req && req[0]) {
+        snprintf(reqbuf, sizeof reqbuf, "%s", req);
+        char *save = NULL;
+        for (char *tok = strtok_r(reqbuf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+            const char *v = params_find(user_params, tok);
+            if (v) params_set(&match_params, tok, v);
+        }
+    }
     long long ids[DCAT_MAX_RECORDS];
-    int n = state_find_by_params(f->uid, user_params, ids, DCAT_MAX_RECORDS);
+    int n = state_find_by_params(f->uid, &match_params, ids, DCAT_MAX_RECORDS);
     if (n == 0) {
         if (state_is_lost()) {
             /* state 丢失时的 best-effort：跑一遍脚本清理 /tmp 工件。脚本真实失败时

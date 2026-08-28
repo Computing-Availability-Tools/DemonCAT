@@ -3,7 +3,7 @@
 > **项目**: DemonCAT (dcat) — Linux 计算故障注入工具
 > **版本**: v0.1.1
 > **日期**: 2026-08-14
-> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E 468 步骤 / 249 流程
+> **测试执行**: CTest 自动化 + Atlas 910B4 真机验证 + E2E（pytest + testcases.xlsx，633 用例，618 条含 dcat 命令）
 
 ---
 
@@ -28,12 +28,10 @@
 | CTest 通过 | **27** |
 | CTest 失败 | **0** |
 | CTest 通过率 | **100%** |
-| E2E 用例总数 | **468 步骤 / 249 流程** |
-| E2E PASS | **247** |
-| E2E FAIL（硬件限制） | **3** |
-| E2E 通过率 | **99%** |
+| E2E 用例总数 | **633**（618 含 dcat 命令，pytest + testcases.xlsx 驱动，详见 §12） |
+| E2E 优先级分布 | P0 151 / P1 380 / P2 102 |
 | 手动故障测试 | **58 条全覆盖** |
-| 手动 PASS | **57** |
+| 手动 PASS | **58** |
 | 手动 FAIL（硬件限制） | **0** |
 | 发现并修复的 Bug | **8** |
 | 已知限制（非 Bug） | **1** |
@@ -55,7 +53,7 @@
 | hccn_tool | /usr/bin/hccn_tool (v25.5.0.b060) |
 | NPU ACL 工具 | build/_npu_stress（CANN ACL, aicore/aivector/hbm 压力） |
 | Docker | docker 24.0+（容器故障注入：docker_kill / docker_mem_overload） |
-| root 权限 | 本地: root；CI non-NPU: 非 root (DCAT_AUTO_SUDO=1) |
+| root 权限 | 本地: root；CI non-NPU: 非 root（`DCAT_AUTO_SUDO=1` 自动 `sudo -n -E` 提权，并注入 `HOME=/tmp/dcat_e2e_home` 隔离 dcat state，防止写入 /root/.demoncat 造成跨用例残留） |
 | 网络接口 | docker0, enp125s0f1-3, ksdev0 |
 | /tmp | tmpfs 191G |
 | systemctl | degraded（可用） |
@@ -344,11 +342,11 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 468 步骤 / 249 流程，**247 PASS / 3 FAIL**（910B4 无交换机环境限制，910C 已验证通过）。**58 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 用例 **633** 条（pytest + testcases.xlsx 驱动，其中 618 条含 dcat 命令），每次运行统计见 `tests/e2e/report.md`（PASS/FAIL/SKIP/通过率随运行更新）。**58 条故障真机手动测试全覆盖**：
 
 - **58 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
-**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 468 步骤 E2E 用例无回归。
+**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 633 条 E2E 用例（pytest 驱动）无回归。
 
 **测试结论：代码逻辑正确，v0.1.1 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
 
@@ -414,44 +412,56 @@ DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 468 步�
 *测试执行人: Automated (CTest) + Manual*
 *总耗时: 13.85 秒 (v0.1 CTest) / 32.84 秒 (增量后 CTest 24 项) / 批次2 后 CTest 27 项 + 手动验证*
 
-## 12. E2E 测试（CSV 驱动，468 步骤 / 249 流程）
+## 12. E2E 测试（pytest + testcases.xlsx 驱动）
 
-> 由 `tests/e2e/run_e2e.py` 生成。串行执行，每例前后幂等清扫环境（dcat 命名空间）。用例见 `tests/e2e/cases.csv`（`gen_cases.py` 自动生成，468 步骤 / 249 流程），结果见 `tests/e2e/results_*.csv`。
+> 由 `python3 -m pytest tests/e2e/` 驱动（取代旧 CSV 框架 `run_e2e.py` + `gen_cases.py` + `cases.csv`）。用例源 `tests/e2e/testcases.xlsx`，由 `tests/e2e/e2e_loader.py` 加载并在 `tests/e2e/test_e2e_cases.py` 中参数化执行（每个 xlsx 用例 = 一个 pytest item，id=`TC-xxx_模块`）；断言 DSL 见 `tests/e2e/e2e_assert.py`；环境/清扫/前置处理见 `tests/e2e/e2e_helpers.py` + `tests/e2e/conftest.py`。
 
 - 执行环境: root=True, HOME 隔离=/tmp/dcat_e2e_home, 测试网卡=dcat-e2e0
-- NPU: Atlas 910B4 device 2 (RoCE link DOWN)
+- NPU: Atlas 910B4 / M910B 设备（本地 davinci5 + hccn_tool + npu-smi 25.5.2）
+- CI 非 root job: `DCAT_AUTO_SUDO=1`（非 root + `sudo -n -E` 自动提权并保留 `HOME=E2E_HOME`，防 state 残留 /root/.demoncat）
 
-> NPU 在 E2E FUNC 分类中占 79 步（20 条 NPU 故障 inject→verify→clean→query 全链路）。
+### 12.1 用例源（testcases.xlsx）
 
-### 12.1 结果汇总
+- 共 **633** 条用例，其中 **618** 条含 `dcat` 命令步骤（其余为框架/配置类纯验证）。
+- 表结构 11 列：用例编号/用例标题/前置条件/测试步骤/测试数据/预期结果/优先级/关联需求/补充标识/验证观测命令/验证断言。
+- 优先级分布：**P0 151 / P1 380 / P2 102**。
+- 模块分布：
 
-| 指标 | 值 |
-| ------ | ------ |
-| **步骤** | **468** |
-| **流程** | **249** |
-| **PASS** | **247** |
-| **FAIL（硬件限制）** | **3** |
-| **通过率** | **99%** |
+| 模块 | 用例数 |
+| --- | --- |
+| CPU | 48 |
+| 存储 | 15 |
+| 网络 | 183 |
+| 进程 | 44 |
+| NPU | 267 |
+| 框架/CLI/并发/安全等 | 76 |
 
-### 12.2 分类统计
+### 12.2 运行与产物
 
-| 分类 | 说明 | 步骤 | 流程 |
-| --- | --- | --- | --- |
-| FUNC | 58 故障 inject→verify→clean→query 全链路 + query<uid> confirmed + 插件 | 196 | 64 |
-| BOUND | 边界值（每参数类型系统覆盖，含 NPU bw_limit/size/port/dscp） | 98 | 95 |
-| SEC | 安全（命令注入+权限边界+主机安全+symlink） | 59 | 46 |
-| STATE | 状态一致性/幂等（含 NPU reinject 拒绝） | 37 | 10 |
-| RES | 韧性/自愈（含 NPU+CPU clean --all） | 27 | 7 |
-| CLI | CLI 接口（解析错误+帮助+退出码+--config+serve） | 28 | 21 |
-| CONC | 并发竞争（同时 inject+clean / 双进程写 state） | 9 | 3 |
-| INTER | 故障交互（多故障叠加 / clean 一个不影响其他） | 14 | 3 |
+```bash
+python3 -m pytest tests/e2e/                      # 全量
+python3 -m pytest tests/e2e/ -m P0                # 只跑 P0
+python3 -m pytest tests/e2e/ -n auto              # pytest-xdist 并行
+```
 
-### 12.3 失败用例（3 个，全部 910B4 硬件/环境限制）
+| 产物 | 说明 |
+| --- | --- |
+| `report.md` / `report_{worker}.md` | 汇总（用例总数 / PASS / FAIL / SKIP / 通过率）+ 失败/跳过用例（xdist 每 worker 一份） |
+| `results_<ts>.csv` | 逐用例 `actual_exit_code/actual_json/verify_actual/result/duration_ms` 等，含 `expected_behavior` 列（测试目的） |
+| `failures_<ts>.log` | 失败用例完整 stdout/stderr/verify 输出 + GHA `::error::` 注解 |
+| `$GITHUB_STEP_SUMMARY` | CI PR Checks 摘要（另含 `tests/e2e/e2e_junit.xml` / `e2e_run.log`） |
 
-| ID | 故障 | 原因 |
+每次运行的具体 PASS / FAIL / SKIP 与通过率随运行更新（见 `tests/e2e/report.md`）。
+
+### 12.3 CI 拆分（.github/workflows/pr_test.yaml）
+
+`pr_test.yaml` 为单一入口。Light 层（Lint / Unit / e2e-light）push/PR 全跑；Full 层仅源仓库 + push 或 PR 带 ready / ready-for-test 标签，非 NPU / NPU 并行：
+
+| Job | pytest `-m` 筛选 | runner |
 | --- | --- | --- |
-| E2E-081 | rNPU_iprule clean | 910B4 `hccn_tool -ip_rule` 驱动限制，clean 后规则仍存在 |
-| E2E-088 | rNPU_link_down clean | 910B4 无交换机 link 始终 DOWN（910C 已验证通过） |
-| E2E-272 | STATE-7 rNPU_mtu_mismatch inject | 910B4 `hccn_tool -mtu` 注入回读校验失败（驱动限制） |
+| e2e-full-ubuntu-nonnet | `not hardware and not net` | ubuntu-24.04-arm（非 root） |
+| e2e-full-ubuntu-qdisc | `not hardware and (rnet_bw_limit or rnet_degrade or rnet_jitter or rnet_reorder or rnet_delay or rnet_loss)` | ubuntu-24.04-arm（非 root） |
+| e2e-full-ubuntu-netother | `not hardware and net and not (rnet_bw_limit or rnet_degrade or rnet_jitter or rnet_reorder or rnet_delay or rnet_loss)` | ubuntu-24.04-arm（非 root） |
+| e2e-full-npu | `hardware` | self-hosted NPU（run-as-root） |
 
-> 以上失败均为 910B4 无交换机环境限制，910C 环境（link UP）已验证 link_down 完整通过。
+`ci-gate` 汇总各 job 结果：full ubuntu 三 job 若标失败，下载各自 `e2e_junit.xml` 按 `<failure>` / `<error>` 元素实际计数判定是否真失败（规避 ARM runner 断连伪失败）；`_e2e_test.yaml` 为 E2E 复用 workflow（inputs: runner / mark / run-as-root / ref / artifact-name / xdist）。

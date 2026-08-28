@@ -29,6 +29,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: read
+  actions: read   # download-artifact v5 走 actions artifacts 端点，需该 scope（否则 403 被吞→Gate 永远 PASS）
 
 # 源仓库全名（Full 仅在此 repo 跑：NPU runner + secrets 在此）
 # fork 仓库 push 时 github.repository != 此值 → Full 跳过（fork 无 NPU runner）。
@@ -64,15 +65,15 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["${{ matrix.runner }}"]'
-      # 轻量冒烟(marker 选择, 53 条): P0 非硬件非 root(用户态) + 精选 P1 smoke(22)。
+      # 轻量冒烟(marker 选择, 实际 39 条): P0 非硬件非 root(用户态) + 精选 P1 smoke。
       # NPU/rNET(eth0 硬编码会打断 GHA)/core_offline/边界/P2 留 full。非 root, ubuntu 安全。
       mark: "(P0 and not hardware and not root) or (P1 and smoke and not hardware and not root)"
       run-as-root: false
 
   # ───────── Full 层（仅源仓库 + push 或 PR+ready 标签）─────────
   # 拆分非 NPU / NPU 并行：非 NPU 跑 ubuntu-24.04-arm（快），NPU 跑 self-hosted（需硬件）。
-  e2e-full-ubuntu:
-    name: E2E full non-NPU (ubuntu-arm)
+  e2e-full-ubuntu-nonnet:
+    name: E2E full non-NPU non-net (ubuntu-arm)
     needs: lint
     if: >-
       ${{ always() && needs.lint.result == 'success'
@@ -84,9 +85,43 @@ jobs:
     uses: ./.github/workflows/_e2e_test.yaml
     with:
       runner: '["ubuntu-24.04-arm"]'
-      mark: "not hardware"
+      mark: "not hardware and not net"
       run-as-root: false
-      artifact-name: full-ubuntu
+      artifact-name: full-ubuntu-nonnet
+
+  e2e-full-ubuntu-qdisc:
+    name: E2E full non-NPU net-qdisc (ubuntu-arm)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: '["ubuntu-24.04-arm"]'
+      mark: "not hardware and (rnet_bw_limit or rnet_degrade or rnet_jitter or rnet_reorder or rnet_delay or rnet_loss)"
+      run-as-root: false
+      artifact-name: full-ubuntu-qdisc
+
+  e2e-full-ubuntu-netother:
+    name: E2E full non-NPU net-other (ubuntu-arm)
+    needs: lint
+    if: >-
+      ${{ always() && needs.lint.result == 'success'
+          && github.repository == 'Computing-Availability-Tools/DemonCAT'
+          && (github.event_name == 'push'
+              || (github.event_name == 'pull_request'
+                  && (contains(github.event.pull_request.labels.*.name, 'ready')
+                      || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
+    uses: ./.github/workflows/_e2e_test.yaml
+    with:
+      runner: '["ubuntu-24.04-arm"]'
+      mark: "not hardware and net and not (rnet_bw_limit or rnet_degrade or rnet_jitter or rnet_reorder or rnet_delay or rnet_loss)"
+      run-as-root: false
+      artifact-name: full-ubuntu-netother
 
   e2e-full-npu:
     name: E2E full NPU (self-hosted)
@@ -136,38 +171,41 @@ jobs:
 
   ci-gate:
     name: CI Gate
-    needs: [lint, unit-test, e2e-light, e2e-full-ubuntu, e2e-full-npu, clang-tidy, coverage]
+    needs: [lint, unit-test, e2e-light, e2e-full-ubuntu-nonnet, e2e-full-ubuntu-qdisc, e2e-full-ubuntu-netother, e2e-full-npu, clang-tidy, coverage]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Download e2e-full-ubuntu artifact (to check actual test results)
-        if: ${{ needs.e2e-full-ubuntu.result == 'failure' }}
+      - name: Download e2e artifacts (to check actual test results)
+        if: ${{ needs.e2e-full-ubuntu-nonnet.result == 'failure' || needs.e2e-full-ubuntu-qdisc.result == 'failure' || needs.e2e-full-ubuntu-netother.result == 'failure' }}
         uses: actions/download-artifact@v5
-        continue-on-error: true
         with:
-          name: e2e-full-ubuntu
-          if-no-files-found: ignore
+          pattern: e2e-full-ubuntu-*
+          path: e2e-artifacts
       - name: Check required jobs
         env:
           LINT: ${{ needs.lint.result }}
           UNIT: ${{ needs.unit-test.result }}
           E2EL: ${{ needs.e2e-light.result }}
-          E2EU: ${{ needs.e2e-full-ubuntu.result }}
+          E2UNN: ${{ needs.e2e-full-ubuntu-nonnet.result }}
+          E2UQ: ${{ needs.e2e-full-ubuntu-qdisc.result }}
+          E2UO: ${{ needs.e2e-full-ubuntu-netother.result }}
           E2EN: ${{ needs.e2e-full-npu.result }}
           CLANG: ${{ needs.clang-tidy.result }}
           COV: ${{ needs.coverage.result }}
         run: |
           set -eu
           echo "=== PR CI Gate Summary ==="
-          echo "lint:           ${LINT}"
-          echo "unit-test:      ${UNIT}"
-          echo "e2e-light:      ${E2EL}"
-          echo "e2e-full-ubuntu: ${E2EU}"
-          echo "e2e-full-npu:   ${E2EN}"
-          echo "clang-tidy:     ${CLANG} (advisory)"
-          echo "coverage:       ${COV} (advisory)"
-          # lint/unit/e2e-light：必须成功或跳过（labeled 非 ready 时全跳过）
+          echo "lint:               ${LINT}"
+          echo "unit-test:          ${UNIT}"
+          echo "e2e-light:          ${E2EL}"
+          echo "e2e-full-nonnet:    ${E2UNN}"
+          echo "e2e-full-qdisc:     ${E2UQ}"
+          echo "e2e-full-netother:  ${E2UO}"
+          echo "e2e-full-npu:      ${E2EN}"
+          echo "clang-tidy:        ${CLANG} (advisory)"
+          echo "coverage:          ${COV} (advisory)"
+          # lint/unit/e2e-light：必须成功或跳过
           for r in "${LINT}" "${UNIT}" "${E2EL}"; do
             case "$r" in
               success|skipped) ;;
@@ -179,24 +217,39 @@ jobs:
             success|skipped) ;;
             *) echo "::error::E2E full NPU did not succeed: ${E2EN}"; exit 1 ;;
           esac
-          # e2e-full-ubuntu：GitHub-hosted ARM runner 有 step conclusion 丢失 bug
-          # (runner agent 与 GitHub API 断连, 非代码问题, 测试实际 0 FAIL)
-          # 但如果 JUnit XML 显示真实 FAIL > 0, 则阻断
-          case "${E2EU}" in
-            success|skipped) ;;
-            failure)
-              if [ -f tests/e2e/e2e_junit.xml ]; then
-                FAIL_CNT=$(grep -c '<failure\|<error' tests/e2e/e2e_junit.xml 2>/dev/null || echo 0)
-                if [ "$FAIL_CNT" -gt 0 ]; then
-                  echo "::error::e2e-full-ubuntu: ${FAIL_CNT} actual test failures in JUnit XML"
+          # e2e-full-ubuntu-*：ARM runner 偶尔出现"step conclusion 丢失"伪失败
+          # （runner 与 GitHub 连接超时后 job 标失败，但 pytest 实际 0 FAIL）。
+          # 区分真实失败和伪失败：下载各 job 自己的 JUnit XML，逐个判定真实 FAIL > 0 才阻断。
+          for pair in "nonnet:${E2UNN}" "qdisc:${E2UQ}" "netother:${E2UO}"; do
+            label="${pair%%:*}"
+            r="${pair#*:}"
+            case "$r" in
+              success|skipped) ;;
+              failure)
+                xml="e2e-artifacts/e2e-full-ubuntu-${label}/tests/e2e/e2e_junit.xml"
+                if [ -f "$xml" ]; then
+                  # JUnit 的 <failure>/<error> 元素计数才是真实失败数（grep 行数会漏/误）
+                  FAIL_CNT=$(python3 -c "import sys,xml.etree.ElementTree as ET; root=ET.parse('$xml').getroot(); print(len(root.findall('.//failure'))+len(root.findall('.//error')))" 2>/dev/null)
+                  if [ -z "${FAIL_CNT:-}" ]; then
+                    # XML 存在但解析失败（runner 断连打断写入 = 截断/损坏的半文件）=
+                    # 最不可信的输入，绝不可按 0 放行
+                    echo "::error::e2e-full-ubuntu-${label}: JUnit exists but unparsable (truncated/corrupt)"
+                    exit 1
+                  fi
+                  if [ "${FAIL_CNT:-0}" -gt 0 ]; then
+                    echo "::error::e2e-full-ubuntu-${label}: ${FAIL_CNT} actual test failures in JUnit XML"
+                    exit 1
+                  fi
+                  echo "e2e-full-ubuntu-${label}: failure but 0 actual FAIL (ARM runner disconnect bug)"
+                else
+                  # job failure 却无 JUnit 产物 = pytest 根本未跑到（编译/依赖/checkout/runner 崩溃）。
+                  # 这类 infra 失败正是必须阻断的，不能当作"伪失败"放行。
+                  echo "::error::e2e-full-ubuntu-${label}: job failed with no JUnit artifact (never reached pytest)"
                   exit 1
                 fi
-                echo "e2e-full-ubuntu: failure but 0 actual FAIL (ARM runner disconnect bug)"
-              else
-                echo "e2e-full-ubuntu: failure, no JUnit artifact (runner never reached pytest)"
-              fi
-              ;;
-            *) echo "::error::E2E full ubuntu unexpected: ${E2EU}"; exit 1 ;;
-          esac
+                ;;
+              *) echo "::error::E2E full ubuntu-${label} unexpected: ${r}"; exit 1 ;;
+            esac
+          done
           # clang-tidy / coverage 为建议性，仅报告不阻断
           echo "=== CI Gate: PASSED ==="

@@ -13,6 +13,14 @@ case "${DCAT_OP:-inject}" in
             *[!0-9]*|"") echo "size_mb must be a positive integer, got: '$size'" >&2; exit 1;;
         esac
 
+        # 无 swap 的机器上本故障无法施加任何 swap 压力：分配必然落在物理内存/瞬时
+        # OOM，driver 却报"已启动"会误导混沌结果。显式前置检查并拒绝（exit 1）。
+        swap_total=$(awk '/^SwapTotal:/{print $2}' /proc/meminfo)
+        if [ -z "${swap_total:-}" ] || [ "${swap_total:-0}" -eq 0 ]; then
+            echo "system has no swap (SwapTotal=0); rMEM_swap_overload cannot apply swap pressure" >&2
+            exit 1
+        fi
+
         if command -v perl >/dev/null 2>&1; then
             # allocate in chunks and touch each page by writing
             perl -e 'my $s=shift; my @a; my $chunk=16; for(my $i=0;$i<$s;$i+=$chunk){ push @a,"x"x($chunk*1024*1024) } select(undef,undef,undef,undef)' "$size" >/dev/null 2>&1 &

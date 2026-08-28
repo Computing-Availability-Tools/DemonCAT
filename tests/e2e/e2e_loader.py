@@ -110,21 +110,37 @@ def _indicates_prior_inject(pre):
     return any(kw in pre for kw in _SETUP_KEYWORDS)
 
 
-def _parse_setup(precondition):
-    """前置条件指示需前序注入 → 解析 setup inject argv。无/解析不出 → None。"""
+def _parse_setup(precondition, cmds=None, fallback_uid=None):
+    """前置条件指示需前序注入 → 解析 setup inject argv。无/解析不出 → None。
+
+    uid 解析优先级（TC-157 前置 'eth0 已注入 rNET_loss' 必须先注入 rNET_loss 占住
+    root qdisc，步骤才是注入 rNET_jitter——若误用 steps 命令的 uid(jitter) 会把
+    "已有 qdisc 注入失败" 用例变成 "同资源重注入 exit5"）：
+      1. precondition 里的显式真实 uid（r(CPU|MEM|... )_X 形态）
+      2. steps 首条 dcat inject 命令的 uid（precondition 仅描述性文本如
+         '已注入 --cores' 无 uid 时 — 例 TC-597）
+      3. 标题 module 兜底
+    参数：优先带同 uid 的 steps inject 命令参数；否则 pre 的 --flags。"""
     if not _indicates_prior_inject(precondition):
         return None
-    m = re.search(r'dcat\s+inject\s+(\S+)', precondition)
+    pre_flags = _FLAG_RE.findall(precondition)
+    # 1) precondition 显式 uid（不匹配描述性中文，精准抓真实 r<模块>_<名>）
+    m = re.search(r'\br(?:CPU|MEM|NET|PROC|DISK|FS|SYS|DOCKER|NPU)_[A-Za-z0-9_]+', precondition)
     if m:
-        module = m.group(1)
-        flags = _FLAG_RE.findall(precondition)
-        return ["dcat", "inject", module, *flags]
-    mm = _MODULE_RE.search(precondition)
-    if not mm:
-        return None
-    module = mm.group(0)
-    flags = _FLAG_RE.findall(precondition)
-    return ["dcat", "inject", module, *flags]
+        uid = m.group(0)
+        # 同 uid 的 steps inject 命令参数更完整（含 --iface 等 pre 文本没有的）
+        for argv in cmds or []:
+            if len(argv) >= 3 and argv[0] == "dcat" and argv[1] == "inject" and argv[2] == uid:
+                return ["dcat", "inject", uid] + list(argv[3:])
+        return ["dcat", "inject", uid, *pre_flags]
+    # 2) pre 无显式 uid：取 steps 首条 inject（例 TC-597 无 uid 但有 clean<uid>；标题兜底）
+    for argv in cmds or []:
+        if len(argv) >= 3 and argv[0] == "dcat" and argv[1] == "inject":
+            return ["dcat", "inject", argv[2]] + list(argv[3:])
+    # 3) 标题 module（ID 用）
+    if fallback_uid:
+        return ["dcat", "inject", fallback_uid, *pre_flags]
+    return None
 
 
 def _load_rows():
@@ -155,7 +171,9 @@ def load_cases():
         steps = row.get(H_STEPS, "")
         cmds = _parse_cmds(steps)
         pre = row.get(H_PRE, "")
-        setup_argv = _parse_setup(pre)
+        title = row.get(H_TITLE, "")
+        module_raw = title.split("-")[0] if title else ""
+        setup_argv = _parse_setup(pre, cmds, fallback_uid=module_raw)
         needs_setup = _indicates_prior_inject(pre)
 
         skip_reason = ""
@@ -164,8 +182,6 @@ def load_cases():
         elif needs_setup and not setup_argv:
             skip_reason = f"setup unparsable from precondition: {pre!r}"
 
-        title = row.get(H_TITLE, "")
-        module_raw = title.split("-")[0] if title else ""
         cases.append(Case(
             id=str(row.get(H_ID, "")).strip(),
             title=title,
@@ -204,6 +220,7 @@ def _marks_for(case):
         marks.append(pytest.mark.net)
     if (mod.startswith("rnet") or mod == "rcpu_core_offline" or mod == "rcpu_overload"
             or mod.startswith("rmem") or mod.startswith("rsys") or mod.startswith("rfs")
+            or mod.startswith("rdis")
             or any(u.startswith("rnet") for u in uids)
             or any(u == "rcpu_core_offline" for u in uids)
             or any(u == "rcpu_overload" for u in uids)):
@@ -212,6 +229,35 @@ def _marks_for(case):
         marks.append(pytest.mark.smoke)
     marks.append(getattr(pytest.mark, case.module_slug))
     marks.append(getattr(pytest.mark, _req_slug(case.req)))
+    # xdist_group: 同故障模块的测试在同一 worker 串行, 避免网络/进程状态冲突
+    mod_lower = case.module.lower()
+    if mod_lower.startswith("rnet"):
+        # tc qdisc 操作物理网卡的模块必须同组串行 (共用 eth0 qdisc)
+        _qdisc_mods = {"rnet_bw_limit", "rnet_degrade", "rnet_jitter",
+                       "rnet_reorder", "rnet_delay", "rnet_loss"}
+        if mod_lower in _qdisc_mods:
+            grp = "rnet_qdisc"
+        elif mod_lower in ("rnet_down", "rnet_link_flap"):
+            grp = "rnet_link"
+        elif mod_lower == "rnet_port_occupy":
+            grp = "rnet_proc"
+        else:
+            grp = "rnet_other"
+    elif mod_lower.startswith("rproc"):
+        grp = "rproc"
+    elif mod_lower.startswith("rcpu"):
+        grp = "rcpu"
+    elif mod_lower.startswith("rmem"):
+        grp = "rmem"
+    elif mod_lower.startswith("rsys"):
+        grp = "rsys"
+    elif mod_lower.startswith("rfs"):
+        grp = "rfs"
+    elif mod_lower.startswith("rnpu"):
+        grp = "rnpu"
+    else:
+        grp = "misc"
+    marks.append(pytest.mark.xdist_group(grp))
     return marks
 
 

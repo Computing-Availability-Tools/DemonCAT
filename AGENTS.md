@@ -11,9 +11,9 @@ DemonCAT 是 C 语言故障注入工具(网络/NPU/CPU/存储/进程),用于混�
 - `src/injectors/`、`src/plugins/` — 注入器与插件管理
 - `config/` — 声明式故障配置(`demoncat.conf`)
 - `src/scripts/` — 故障外部脚本
-- `tests/` — 单测(ctest) + e2e(`cases.csv` + `run_e2e.py`)
+- `tests/` — 单测(ctest) + e2e(`tests/e2e/` 下 `testcases.xlsx` + pytest，核心为 conftest/e2e_loader/e2e_assert/e2e_helpers/test_e2e_cases)
 - `third_party/cjson/` — vendored(免审)
-- `.github/workflows/` — CI(pr_test/e2e/unit/clang-tidy/coverage/release)
+- `.github/workflows/` — CI(主入口 `pr_test.yaml` 串 Lint/Unit/E2E/CI Gate + 复用子 workflow `_e2e_test`/`_unit_test`/`_pre_commit`/`_clang_tidy` + 定时 `schedule_nightly_test`/`schedule_release_code_binary` + 评论触发 `e2e_command`)
 - `scripts/install_deps.sh` — 依赖安装
 
 ## 构建
@@ -93,4 +93,4 @@ ci: add problem matchers for actionlint/markdownlint
 1. 状态机幂等性与韧性(clean 幂等 / 孤儿恢复 / clean --all fan-out)。
 2. 退出码语义正确(预检拒绝走 `3`,未找到走 `4`,重注入走 `5`)。
 3. C 内存安全 + pthread 并发安全。
-4. PR 是否带对应单测(`tests/ut/` 下 ctest)或 E2E 用例(`tests/e2e/cases.csv`)。
+4. PR 是否带对应单测(`tests/ut/` 下 ctest)或 E2E 用例(`tests/e2e/testcases.xlsx`,pytest 驱动,`tests/e2e/test_e2e_cases.py` 参数化)。

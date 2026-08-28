@@ -44,6 +44,16 @@ npu_acl_dev_id() {
     awk -v phy="$1" '$1==phy{print $2; exit}' "$DEV_MAP_FILE" 2>/dev/null
 }
 
+# Report a missing ACL dev id with a non-misleading message.
+# "dev-map missing?" was wrong when the file exists but the chip is simply not in it.
+npu_acl_dev_id_err() {
+    if [ -f "$DEV_MAP_FILE" ]; then
+        echo "chip $1 not in /tmp/dcat-npu-dev-map (no ACL device for this Phy-ID)" >&2
+    else
+        echo "ACL dev map /tmp/dcat-npu-dev-map missing (run inject once to generate)" >&2
+    fi
+}
+
 # Get PCIe BDF from Phy-ID via devdrv driver sysfs.
 # devdrv driver's dev_id attribute = Phy-ID (exact mapping, no sorting needed).
 npu_phy_to_bdf() {

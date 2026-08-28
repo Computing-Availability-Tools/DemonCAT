@@ -154,7 +154,7 @@ dcat clean --all                      # 清全部故障（stateless，state.json
 
 - **inject**: 从 `DCAT_PARAM_CORES` 取必填的 cores 规格（支持 `0,2,4` / `0-3` / `0-3,7` 等混合格式，由 `parse_cores` 展开为单核号列表）。对每个核，用 `taskset -c <n>` 绑定启动 `perl -e '1 while 1'`（纯用户态死循环，无系统调用开销），后台运行并重定向到 `/dev/null`；若系统无 perl，自动回退为 `yes`（会引入约 60% 系统调用开销）。将所有子进程 pid 写入 pidfile `/tmp/dcat-rCPU_overload-${spec}.pid`（spec 为原始参数串），输出注入结果。
 - **clean**: 读取 pidfile，逐个 `kill` 进程并删除 pidfile；若 pidfile 不存在则报错并 `exit 1`。
-- **query**: 用 `pgrep -f 'perl -e'` 与 `pgrep -x yes` 统计系统中 burn 进程总数，打印 per-core CPU（mpstat）及匹配进程的 `pid/%cpu/psr/cmd` 详情；进程总数 > 0 时返回成功（exit 0），否则失败。**无 `--cores` 参数时查询全部在线核**（读 `/sys/devices/system/cpu/online`，形如 `0-27`）；带 `--cores=0,1` 则只查指定核。
+- **query**: 通过 `/proc/stat` 双采样 delta 计算指定核的用户态占比（`%us`），并列出各 burn 进程的 `pid/%cpu/psr/cmd` 明细。任一所查核占用率 > 0（或进程存活）时返回成功（exit 0），未找到任何活跃 burn 进程返回失败（exit 1）。**无 `--cores` 参数时查询全部已注入的核**（从 pidfile glob 探测）；带 `--cores=0,1` 则只查指定核。
 
 **使用示例**:
 
@@ -438,11 +438,11 @@ dcat clean  rDISK_inode_exhaust
 
 **UID**: `rDISK_io_delay`
 
-**描述**: 通过 device-mapper `delay` 目标在块设备上叠加读延迟，所有 IO 操作被延迟指定毫秒数。
+**描述**: 通过 device-mapper `delay` 目标在块设备上叠加**读与写延迟**，所有 IO 操作被延迟指定毫秒数。
 
 **实现原理**:
 
-- **inject**: 在块设备 `device` 上创建 dm-delay 设备 `dcat-delay-<devname>`，使用 `dmsetup create` 设置 `delay <delay_ms>`。dm 设备名存入 sidecar。
+- **inject**: 在块设备 `device` 上创建 dm-delay 设备 `dcat-delay-<devname>`，使用 `dmsetup create` 设置 `delay <delay_ms> <delay_ms>`（前为读延迟偏移、后为写延迟偏移，二者均赋值为 `delay_ms`）。dm 设备名存入 sidecar。
 - **clean**: `dmsetup remove` 删除 dm-delay 设备。
 - **query**: `dmsetup info/table` 检查 dm-delay 设备是否存在。
 
@@ -515,7 +515,7 @@ dcat clean  rDISK_io_error
 
 **描述**: 通过 `tc netem` 在指定网卡出向流量上注入固定网络延迟。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem delay <delay_ms>ms`，在网卡根队列上挂载 netem qdisc 并设置固定延迟；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_delay-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*delay` 匹配判断延迟规则是否生效，匹配则退出码 0，否则退出码 1。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem delay <delay_ms>ms`，在网卡根队列上挂载 netem qdisc 并设置固定延迟；将网卡名写入 sidecar 文件 `/tmp/dcat-rNET_delay-<iface>.sidecar`。`clean` 从 sidecar 读取网卡名，执行 `tc qdisc del dev <iface> root` 删除队列规则并删除 sidecar 文件。`query` 执行 `tc qdisc show dev <iface>`，通过正则 `netem.*delay` 匹配判断延迟规则是否生效，命中则退出码 0，未命中则退出码 1。`dcat query` 外层退出码透传脚本结果（0=故障生效，1=未生效），JSON 输出中的 `data.confirmed` 字段与此一致。
 
 **使用示例**:
 
@@ -834,7 +834,7 @@ dcat clean rNET_tcp_loss --port=8080 --direction=both
 
 **描述**: 通过 `tc netem corrupt` 在指定网卡出向流量上注入随机包损坏（比特翻转）。
 
-**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem corrupt <corrupt_pct>%`，在网卡根队列上挂载 netem qdisc 并设置随机包损坏百分比。`clean` 执行 `tc qdisc del dev <iface> root`。`query` 检查是否存在 `netem corrupt` 规则。
+**实现原理**: `inject` 执行 `tc qdisc add dev <iface> root netem corrupt <corrupt_pct>%`，在网卡根队列上挂载 netem qdisc 并设置随机包损坏百分比。**若该网卡已有 root qdisc（含手动配置的生产 qdisc/其他故障），注入会失败并被拒绝**，需先 `dcat clean` 或 `tc qdisc del dev <iface> root`，不会静默删除已有规则。`clean` 执行 `tc qdisc del dev <iface> root`。`query` 检查是否存在 `netem corrupt` 规则。
 
 **使用示例**:
 
@@ -1087,11 +1087,11 @@ dcat clean rMEM_leak
 
 **UID**: `rMEM_oom`
 
-**描述**: 以 `rate_mb`（MB/秒）的速率持续分配内存不释放，直到触发 OOM killer。
+**描述**: 以 `rate_mb` 的速率持续分配内存不释放，直到触发 OOM killer。
 
 **实现原理**:
 
-- **inject**: 使用 perl 或 Python 在循环中每 0.05 秒分配 `rate_mb` MB 内存，持续增长直到 OOM killer 触发杀掉进程。PID 写入 pidfile。
+- **inject**: 使用 perl 或 Python 在循环中**每 0.05 秒分配 `rate_mb` MB**（即约 `20 × rate_mb` MB/秒）内存，持续增长直到 OOM killer 触发杀掉进程。PID 写入 pidfile。
 - **clean**: kill 进程（可能已被 OOM killer 杀掉），删除 pidfile。
 - **query**: 检查进程存活，或在 `dmesg` 中搜索最近的 OOM-kill 事件。
 
@@ -1107,7 +1107,7 @@ dcat clean rMEM_oom
 
 | 参数 | 是否必填 | 类型 | 说明 |
 | --- | --- | --- | --- |
-| rate_mb | 可选 | 正整数 | 内存分配速率（MB/秒），默认 64 |
+| rate_mb | 可选 | 正整数 | 每 0.05 秒分配的 MB 数（约 `20 × rate_mb` MB/秒），默认 64 |
 
 **危险等级**: 高 — 持续内存分配会导致系统可用内存耗尽，触发 OOM killer 可能杀掉其他关键进程。
 
@@ -2137,10 +2137,11 @@ dcat inject rSYS_poweroff --mode=1
 ### 10.2 命令
 
 ```bash
-# 只读模式（默认），绑定 0.0.0.0（建议 --bind 127.0.0.1 限制本地）
+# 只读模式（默认），绑定 0.0.0.0（默认全网可访问，浏览器/远程访问即可用；
+# 如需仅本机访问，加 --bind 127.0.0.1）
 dcat serve --port 8080
 
-# 可写模式，绑定所有网卡
+# 可写模式（--allow-write 开启注入/清理），绑定所有网卡
 dcat serve --port 8080 --bind 0.0.0.0 --allow-write
 ```
 
@@ -2149,7 +2150,7 @@ dcat serve --port 8080 --bind 0.0.0.0 --allow-write
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `--port N` | 8080 | HTTP 监听端口 |
-| `--bind ADDR` | 0.0.0.0 | 绑定地址（默认 `0.0.0.0`，SSH 隧道访问可用 `127.0.0.1`） |
+| `--bind ADDR` | 0.0.0.0 | 绑定地址（默认 `0.0.0.0` 全网可访问；`--allow-write` 开启写接口后如需对外暴露请自行评估安全，仅需本机访问可用 `127.0.0.1`） |
 | `--webroot DIR` | 内置 | 自定义静态前端目录（覆盖内置 `src/web/`） |
 | `--allow-write` | 关闭 | 开启注入/清理写操作（默认只读） |
 

@@ -41,6 +41,11 @@ time.sleep(1e9)
         fi
         pid=$!
         echo "$pid" > "$PIDFILE"
+        sleep 1
+        if ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$PIDFILE"
+            echo "swap overload driver died immediately (allocation of ${size}MB failed / OOM-killed)" >&2; exit 1
+        fi
         echo "swap overload driver started (pid $pid, size=${size} MB)"
         ;;
     clean)

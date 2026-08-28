@@ -21,7 +21,7 @@ case "${DCAT_OP:-inject}" in
         dm="dcat-delay-${devname}"
         dmsetup info "$dm" >/dev/null 2>&1 && { echo "$dm already exists" >&2; exit 1; }
         size=$(blockdev --getsize "$dev" 2>/dev/null) || { echo "blockdev --getsize failed" >&2; exit 1; }
-        echo "0 $size delay $dev 0 $delay" | dmsetup create "$dm" 2>/dev/null || { echo "dmsetup create failed (need root? dm-delay module?)" >&2; exit 1; }
+        echo "0 $size delay $dev 0 $delay $dev 0 $delay" | dmsetup create "$dm" 2>/dev/null || { echo "dmsetup create failed (need root? dm-delay module?)" >&2; exit 1; }
         dmsetup mknodes "$dm" 2>/dev/null || true
         printf '%s\n' "$dm" > "$SIDECAR"
         echo "created dm-delay $dm over $dev (delay=${delay}ms, dev node /dev/mapper/$dm)"
@@ -74,7 +74,7 @@ case "${DCAT_OP:-inject}" in
             if [ -n "$dm" ] && dmsetup info "$dm" >/dev/null 2>&1; then
                 tbl=$(dmsetup table "$dm" 2>/dev/null)
                 delay_ms=$(echo "$tbl" | awk '{print $NF}')
-                echo "io_delay: ${delay_ms}ms delay active — every IO to /dev/mapper/$dm is delayed"
+                echo "io_delay: ${delay_ms}ms delay active — every read/write IO to /dev/mapper/$dm is delayed"
                 echo "  raw dm table: $tbl"
                 exit 0
             else

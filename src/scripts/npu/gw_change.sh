@@ -19,8 +19,15 @@ case "${DCAT_OP:-inject}" in
         npu_check_env
         orig=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway:[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+')
         sidecar_save rNPU_gw_change "$chip" "${orig:-none}"
-        $HCCN -gateway -s gateway "$gw" || { echo "gateway set failed" >&2; exit 1; }
-        fault_present || { echo "rNPU_gw_change 注入回读校验失败:动作未生效" >&2; exit 1; }
+        if ! $HCCN -gateway -s gateway "$gw"; then
+            sidecar_clear rNPU_gw_change "$chip"
+            echo "gateway set failed" >&2; exit 1
+        fi
+        if ! fault_present; then
+            # 注入回读校验失败：回滚网关并清 sidecar，避免残留 .bak 污染后续 clean --all
+            sidecar_clear rNPU_gw_change "$chip"
+            echo "rNPU_gw_change 注入回读校验失败:动作未生效" >&2; exit 1
+        fi
         echo "applied gateway $gw on chip $chip (was $orig)"
         ;;
     clean)

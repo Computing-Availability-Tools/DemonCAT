@@ -550,7 +550,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
             char *s = cJSON_PrintUnformatted(root);
             cJSON_Delete(root);
             result_t *r = malloc(sizeof(result_t));
-            r->code = 0;
+            r->code = rc == 0 ? 0 : 1;
             r->json = s;
             r->raw = 0;
             return r;

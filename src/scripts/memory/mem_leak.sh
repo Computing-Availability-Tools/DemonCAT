@@ -23,6 +23,11 @@ case "${DCAT_OP:-inject}" in
         fi
         pid=$!
         echo "$pid" > "$PIDFILE"
+        sleep 1
+        if ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$PIDFILE"
+            echo "memory leak driver died immediately (allocation of ${size}MB failed / OOM-killed)" >&2; exit 1
+        fi
         echo "leaked ${size} MB (pid $pid)"
         ;;
     clean)

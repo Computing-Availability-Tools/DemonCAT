@@ -3,7 +3,7 @@
  *
  * 单端口双职:静态前端 + /api 端点(包装 dispatch_route 与 state)。
  * MVP:单线程串行 accept,手写 HTTP/1.1(GET/POST + Content-Length),
- * 明文 + 默认监听 0.0.0.0(可远程访问;如需限制用 --bind 127.0.0.1)。 */
+ * 明文 + 默认监听 0.0.0.0(Web 面向浏览器默认全网可访问;如需仅本机用 --bind 127.0.0.1)。 */
 #include "serve.h"
 #include "dispatch.h"
 #include "registry.h"

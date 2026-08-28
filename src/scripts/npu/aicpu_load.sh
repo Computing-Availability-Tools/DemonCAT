@@ -25,7 +25,7 @@ case "${DCAT_OP:-inject}" in
             echo "ERROR: _npu_stress not built. Run: cd build && cmake .. && make _npu_stress" >&2; exit 1
         fi
         dev_id=$(npu_acl_dev_id "$chip")
-        [ -z "$dev_id" ] && { echo "cannot find ACL dev id for chip $chip (dev-map missing?)" >&2; exit 1; }
+        [ -z "$dev_id" ] && { npu_acl_dev_id_err "$chip"; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
 
         # Phase 1: probe with 1 process at 100% to detect hardware type
@@ -100,6 +100,20 @@ case "${DCAT_OP:-inject}" in
         fi
         ;;
     clean)
+        # stateless: chip 为空时遍历所有 sidecar（防假成功空操作留孤儿）
+        if [ -z "$chip" ]; then
+            cleaned=0
+            for f in /tmp/dcat-rNPU_aicpu_load-*.pid; do
+                [ -f "$f" ] || continue
+                c=$(echo "$f" | sed 's/.*-//;s/\.pid//')
+                for pid in $(cat "$f" 2>/dev/null); do npu_kill_stress "$pid"; done
+                rm -f "$f"
+                echo "AICpu stress stopped on chip $c"
+                cleaned=1
+            done
+            [ "$cleaned" = 1 ] || echo "no active AICpu stress"
+            exit 0
+        fi
         if [ -f "$SIDECAR" ]; then
             for pid in $(cat "$SIDECAR"); do
                 npu_kill_stress "$pid"

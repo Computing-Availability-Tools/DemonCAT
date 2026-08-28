@@ -30,6 +30,11 @@ while True:
         fi
         pid=$!
         echo "$pid" > "$PIDFILE"
+        sleep 1
+        if ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$PIDFILE"
+            echo "oom driver died immediately (startup failed / instantly OOM-killed)" >&2; exit 1
+        fi
         echo "oom driver started (pid $pid, rate ${rate} MB/step)"
         ;;
     clean)

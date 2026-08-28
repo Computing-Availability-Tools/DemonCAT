@@ -98,7 +98,7 @@ int main(void) {
         fprintf(stderr, "DCAT_SUBTEST|smoke|rCPU_overload setup|FAIL|\n");
         return 1;
     }
-    char cores2[16], cores_range[16], core1[16];
+    char cores2[24], cores_range[24], core1[16];
     snprintf(cores2, sizeof cores2, "%d,%d", base, base + 1);
     snprintf(cores_range, sizeof cores_range, "%d-%d", base, base + 1);
     snprintf(core1, sizeof core1, "%d", base);

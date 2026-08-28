@@ -36,6 +36,11 @@ time.sleep(1e9)
         fi
         pid=$!
         echo "$pid" > "$PIDFILE"
+        sleep 1
+        if ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$PIDFILE"
+            echo "fragmentation driver died immediately (allocation failed / OOM-killed)" >&2; exit 1
+        fi
         echo "fragmentation driver started (pid $pid, blocks=$blocks bk=$block_kb)"
         ;;
     clean)

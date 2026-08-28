@@ -13,8 +13,9 @@ case "${DCAT_OP:-inject}" in
         case "$pct" in *[!0-9]*|"") echo "corrupt_pct must be an integer" >&2; exit 1;; esac
         safe=$(echo "$iface" | tr -c 'a-zA-Z0-9' '_')
         SIDECAR="${SIDECAR_PFX}-${safe}.sidecar"
-        tc qdisc del dev "$iface" root 2>/dev/null || true
-        tc qdisc add dev "$iface" root netem corrupt "$pct"% 2>/dev/null || { echo "tc add failed (need root? iface valid?)" >&2; exit 1; }
+        # 与其他 net 脚本策略一致：已有 root qdisc 则拒绝注入，静默删除会破坏
+        # 网卡上生产配置的 qdisc
+        tc qdisc add dev "$iface" root netem corrupt "$pct"% 2>/dev/null || { echo "tc add failed (root qdisc already present or iface invalid)" >&2; exit 1; }
         echo "$iface" > "$SIDECAR"
         echo "injected packet corruption on $iface (${pct}%)"
         ;;

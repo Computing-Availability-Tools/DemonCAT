@@ -11,7 +11,8 @@ name: opencode-review
 #     故用 check-run)。race-prone(多 gate 同时数到 <3 可能都进),best-effort 上限。
 #
 # fork PR 安全:action 自带 checkoutForkBranch(用 OIDC 换取的 App token 配置 git remote+fetch),
-# 本 workflow 不做 fork checkout → 无 pwn 护栏问题。opencode.json 锁只读(bash/edit 全 deny)。
+# 本 workflow 不做 fork checkout → 无 pwn 护栏问题。CI 用配置在 .github/opencode-ci.json
+# (经 OPENCODE_CONFIG 显式加载,锁只读:bash/edit 全 deny);根目录不放 opencode.json,不影响本地。
 
 on:
   issue_comment:
@@ -110,6 +111,9 @@ jobs:
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # CI 专用 opencode 配置(模型/share/只读权限),仅本 job 经 OPENCODE_CONFIG 显式加载。
+          # 根目录不放 opencode.json,避免项目配置覆盖本地用户的全局配置。
+          OPENCODE_CONFIG: ${{ github.workspace }}/.github/opencode-ci.json
         with:
           model: opencode/nemotron-3-ultra-free
           use_github_token: true

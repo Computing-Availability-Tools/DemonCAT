@@ -238,7 +238,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     setup_argv = list(case.setup_argv) if case.setup_argv else None
     # substitute eth0→物理网卡 / eth1→dummy（down/flap 安全） in dcat commands
     phy = ctx.get("phy_iface", "")
-    if phy or ctx.get("down_safe"):
+    if phy or ctx.get("down_safe") or ctx.get("chip"):
         for argv in cmds:
             for i, arg in enumerate(argv):
                 argv[i] = substitute(arg, ctx)

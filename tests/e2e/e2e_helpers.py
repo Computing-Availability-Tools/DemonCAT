@@ -446,8 +446,8 @@ def check_precondition(precond):
         rc, out = sh("ip -o link show eth0 2>/dev/null && echo exists || echo missing")
         if "exists" in (out or "").lower():
             return "测试环境存在 eth0 网卡；注入会 down 管理网卡断 runner 网络，安全防护用例需在无 eth0 环境验证"
-    if "npu_hardware" in precond:
-        # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
+    if "npu_hardware" in precond or "npu_compute" in precond:
+        # rNPU_* 通用基础层：需 Atlas NPU 硬件 + hccn_tool
         rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
         if "missing" in out.lower():
             return "hccn_tool 不可用（非 Atlas NPU 机器）"
@@ -455,10 +455,11 @@ def check_precondition(precond):
         rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
         if not out.strip():
             return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
-        # 检测 NPU RoCE 接口（eth2 等），rNPU_arp/rNPU_bw_limit 等需要
-        rc, out = sh("ip link show eth2 2>/dev/null && echo ok || echo missing")
-        if "missing" in out.lower():
-            return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
+        # RoCE 层：仅网络类模块需要 eth2（计算类 aic/aicpu/aiv/hbm_load 不碰网络）
+        if "npu_hardware" in precond and "npu_compute" not in precond:
+            rc, out = sh("ip link show eth2 2>/dev/null && echo ok || echo missing")
+            if "missing" in out.lower():
+                return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
     if "mock" in precond.lower() and "可用" in precond:
         return "mock 环境不可用（需要 mock dcat 二进制）"
     if "serve" in precond and "长超时" in precond:

@@ -112,6 +112,11 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
         if _is_runnable_vcmd(case.vcmd):
             time.sleep(0.6)
             vcmd = substitute(case.vcmd, ctx)
+            # cmds 里 --pid=12345 占位在 test_case 中已被替换为真实 pid；verify 的 vcmd
+            # 同样要替换——否则 `dcat query rPROC_hang --pid=12345` 查不存在的 pid → 恒假
+            # FAIL（TC-622）。substitute 只处理 {pid}，需补 --pid=<n> 字面量替换。
+            if ctx.get("pid"):
+                vcmd = re.sub(r'--pid=\d+', f"--pid={ctx['pid']}", vcmd)
             # verify 的 dcat 命令也要走 run_step_cmd（argv 防注入 + auto_sudo 时
             # 注入 env HOME=E2E_HOME）。否则 sudo env_reset/always_set_home 把 HOME
             # 重置为 /root 时，verify 的 dcat query 会读 /root/.demoncat/state.json，

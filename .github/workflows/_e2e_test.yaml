@@ -26,6 +26,10 @@ on:
         description: "Enable pytest-xdist parallel execution (-n auto)"
         type: boolean
         default: false
+      timeout-minutes:
+        description: "Job timeout in minutes (E2E full NPU needs >60: 280 cases + shared-host hccn_tool contention)"
+        type: number
+        default: 60
 
 permissions:
   contents: read
@@ -34,7 +38,7 @@ jobs:
   e2e:
     name: E2E (${{ inputs.mark || 'ALL' }})
     runs-on: ${{ fromJSON(inputs.runner) }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout
         id: co1

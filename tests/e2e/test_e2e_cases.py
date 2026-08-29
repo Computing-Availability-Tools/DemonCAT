@@ -268,7 +268,9 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                "chip": "", "phy_iface": phy}
 
     # NPU tests: dynamically detect chip (Phy-ID) and RoCE port name
-    if mod_lower.startswith("rnpu"):
+    if mod_lower.startswith("rnpu") or any(
+        len(a) > 2 and a[1] in ("inject", "clean", "query") and a[2].lower().startswith("rnpu")
+        for a in case.cmds):
         _rc, _out = sh("ls /dev/davinci* 2>/dev/null | sort -V | head -1 | grep -oE '[0-9]+'")
         _chip = _out.strip().splitlines()[0] if _out.strip() else "0"
         ctx["chip"] = _chip

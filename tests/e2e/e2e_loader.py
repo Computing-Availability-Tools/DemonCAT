@@ -92,6 +92,9 @@ def _parse_cmds(steps):
     cmds = []
     for m in _DCMD_RE.finditer(steps or ""):
         cleaned = m.group(0).strip()
+        # 步骤里的 '|'（如 "1. dcat ... | 2. dcat ..."）会被 ASCII 正则吞进同一条命令，
+        # 去 CJK 后 shlex 会混入 '|'/'2.' 等非法 positional → parse error。截断到 '|' 前。
+        cleaned = cleaned.split("|")[0].strip()
         if not cleaned:
             continue
         try:

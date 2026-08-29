@@ -11,10 +11,15 @@ table=${DCAT_PARAM_TABLE:-}
 HCCN="$HCCN_TO hccn_tool -i $chip"
 SIDECAR="/tmp/dcat-rNPU_iproute-$chip.bak"
 
+# 0.0.0.0/0（默认路由）hccn 渲染为 "default"，grep 明文 ip 会回读失败 → 特殊符号等价匹配
+_match_ctx() {
+    if [ "$ip" = "0.0.0.0" ] && [ "$mask" = "0" ]; then grep -Fq "default"; else grep -Fq "$ip"; fi
+}
+
 fault_present() {
     case "${DCAT_OP:-inject}" in
-        clean) ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip" ;;
-        *)     $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip" ;;
+        clean) ! $HCCN -ip_route -g table "$table" 2>/dev/null | _match_ctx ;;
+        *)     $HCCN -ip_route -g table "$table" 2>/dev/null | _match_ctx ;;
     esac
 }
 

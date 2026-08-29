@@ -208,13 +208,16 @@ npu_del_retry() {
     _uid="$1"; shift
     _ok=1
     _n=0
-    while [ "$_n" -lt 3 ]; do
+    _sleep=1
+    while [ "$_n" -lt 5 ]; do
         _n=$((_n + 1))
         if $HCCN "$@" >/dev/null 2>&1; then _ok=0; break; fi
-        sleep 1
+        sleep "$_sleep"
+        # 指数退避应对 hccn_tool 瞬时 busy（外部监控进程并发争用）
+        _sleep=$((_sleep * 2))
     done
     if [ "$_ok" != 0 ]; then
-        echo "hccn_tool del ($_uid) failure after 3 tries (may already be deleted)" >&2
+        echo "hccn_tool del ($_uid) failure after 5 tries (may already be deleted)" >&2
     fi
     # 即使 del 返回失败, 交回调用方的 fault_present 以实际状态判成败
     return 0

@@ -169,7 +169,7 @@ sidecar_clear() {
 # 恒匹配 → clean 后误报 FAULT CONFIRMED 的系统性 bug。
 npu_sidecar_load() {
     _uid="$1"; _bak="$2"
-    ip= mac= dev= addr= mask= table= dir=
+    ip=''; mac=''; dev=''; addr=''; mask=''; table=''; dir=''
     case "$_uid" in
         rNPU_arp)     dev=$(awk -F= '/^dev=/{print $2}' "$_bak" 2>/dev/null); ip=$(awk -F= '/^ip=/{print $2}' "$_bak" 2>/dev/null) ;;
         rNPU_route)   addr=$(awk -F= '/^addr=/{print $2}' "$_bak" 2>/dev/null); mask=$(awk -F= '/^mask=/{print $2}' "$_bak" 2>/dev/null) ;;

@@ -18,6 +18,36 @@ npu_check_env() {
 # hccn_tool command prefix with timeout (prevents hang on offline/unbound chips)
 HCCN_TO="timeout 5"
 
+# Uniform hccn_tool invocation with busy-retry. Config writes/reads on a shared
+# NPU node often hit "hccn_tool is busy, please try again." (external monitor
+# processes concurrently driving hccn_tool). Retry with backoff so a transient
+# busy window does not turn a real inject/clean/query into a false failure.
+# Usage: hccn() <subcmd> [args...]   (assumes $chip set)
+# Returns stdout and exit code of the underlying hccn_tool.
+hccn() {
+    _n=0
+    _sleep=1
+    while :; do
+        _out=$($HCCN_TO hccn_tool -i "$chip" "$@" 2>&1)
+        _rc=$?
+        case "$_out" in
+            *"is busy"*|*"busy, please"*)
+                _n=$((_n + 1))
+                if [ "$_n" -ge 6 ]; then
+                    echo "$_out" >&2
+                    return 1
+                fi
+                sleep "$_sleep"
+                _sleep=$((_sleep * 2))
+                ;;
+            *)
+                printf '%s\n' "$_out"
+                return "$_rc"
+                ;;
+        esac
+    done
+}
+
 npu_validate_chip() {
     case "$1" in
         ''|*[!0-9]*) return 1 ;;
@@ -129,7 +159,7 @@ npu_foreach_chip() {
         for c in $(npu_list_chips); do
             echo "=== chip $c ==="
             _oc=$chip; _oh=$HCCN
-            chip=$c; HCCN="$HCCN_TO hccn_tool -i $c"
+            chip=$c; HCCN="hccn"
             eval "$1" && _rc=0
             chip=$_oc; HCCN=$_oh
         done
@@ -185,7 +215,7 @@ npu_query_noargs() {
     for c in $(npu_list_chips); do
         _bak="/tmp/dcat-$_uid-$c.bak"
         [ -f "$_bak" ] || continue
-        chip=$c; HCCN="$HCCN_TO hccn_tool -i $c"
+        chip=$c; HCCN="hccn"
         npu_sidecar_load "$_uid" "$_bak"
         eval "$_check"
         if [ $? = 0 ]; then

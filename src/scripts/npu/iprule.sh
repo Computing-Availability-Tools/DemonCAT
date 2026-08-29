@@ -6,7 +6,7 @@ if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation fai
 dir=${DCAT_PARAM_DIR:-}
 ip=${DCAT_PARAM_IP:-}
 table=${DCAT_PARAM_TABLE:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR="/tmp/dcat-rNPU_iprule-$chip.bak"
 
 fault_present() {

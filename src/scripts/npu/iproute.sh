@@ -8,7 +8,7 @@ mask=${DCAT_PARAM_IP_MASK:-}
 via=${DCAT_PARAM_VIA:-}
 dev=${DCAT_PARAM_DEV:-}
 table=${DCAT_PARAM_TABLE:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR="/tmp/dcat-rNPU_iproute-$chip.bak"
 
 # 0.0.0.0/0（默认路由）hccn 渲染为 "default"，grep 明文 ip 会回读失败 → 特殊符号等价匹配

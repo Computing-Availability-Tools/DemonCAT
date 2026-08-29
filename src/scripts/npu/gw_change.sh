@@ -4,7 +4,7 @@
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 gw=${DCAT_PARAM_GATEWAY:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 
 fault_present() {
     cur=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway:[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+')

@@ -5,7 +5,7 @@ chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 addr=${DCAT_PARAM_ADDRESS:-}
 mask=${DCAT_PARAM_NETMASK:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR_FN() { echo "/tmp/dcat-rNPU_ip_change-$chip.bak"; }
 
 fault_present() {

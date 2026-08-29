@@ -51,5 +51,11 @@ case "${DCAT_OP:-inject}" in
             echo "removed route $addr/$mask on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$addr$mask" ]; then
+            npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_route '$HCCN -route -g 2>/dev/null | grep -Fq "$addr"'
+        fi
+        ;;
 esac

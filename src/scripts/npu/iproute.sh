@@ -57,5 +57,11 @@ case "${DCAT_OP:-inject}" in
             echo "removed ip_route $ip/$mask table $table on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '[ -n "$table" ] && $HCCN -ip_route -g table "$table"; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$ip$table" ]; then
+            npu_foreach_chip '[ -n "$table" ] && $HCCN -ip_route -g table "$table"; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_iproute '$HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"'
+        fi
+        ;;
 esac

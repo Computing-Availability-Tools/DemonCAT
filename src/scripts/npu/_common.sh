@@ -163,3 +163,40 @@ sidecar_load() {
 sidecar_clear() {
     rm -f "/tmp/dcat-$1-$2.bak" 2>/dev/null
 }
+
+# 条目型 NPU 故障 query 无参（dcat query <uid>）：按 sidecar 记录的 spec 判定。
+# 若无 sidecar（从未注入或已 clean）→ 该 chip 非活跃。修复旧实现 `grep -F ""`
+# 恒匹配 → clean 后误报 FAULT CONFIRMED 的系统性 bug。
+npu_sidecar_load() {
+    _uid="$1"; _bak="$2"
+    ip= mac= dev= addr= mask= table= dir=
+    case "$_uid" in
+        rNPU_arp)     dev=$(awk -F= '/^dev=/{print $2}' "$_bak" 2>/dev/null); ip=$(awk -F= '/^ip=/{print $2}' "$_bak" 2>/dev/null) ;;
+        rNPU_route)   addr=$(awk -F= '/^addr=/{print $2}' "$_bak" 2>/dev/null); mask=$(awk -F= '/^mask=/{print $2}' "$_bak" 2>/dev/null) ;;
+        rNPU_iproute) ip=$(awk -F= '/^ip=/{print $2}' "$_bak" 2>/dev/null); table=$(awk -F= '/^table=/{print $2}' "$_bak" 2>/dev/null) ;;
+        rNPU_iprule)  dir=$(awk -F= '/^dir=/{print $2}' "$_bak" 2>/dev/null); ip=$(awk -F= '/^ip=/{print $2}' "$_bak" 2>/dev/null) ;;
+    esac
+}
+
+# npu_query_noargs <uid> '<presence_check using $HCCN/$ip/$table/...>'
+npu_query_noargs() {
+    _uid="$1"; _check="$2"
+    _any=0
+    for c in $(npu_list_chips); do
+        _bak="/tmp/dcat-$_uid-$c.bak"
+        [ -f "$_bak" ] || continue
+        chip=$c; HCCN="$HCCN_TO hccn_tool -i $c"
+        npu_sidecar_load "$_uid" "$_bak"
+        eval "$_check"
+        if [ $? = 0 ]; then
+            echo "=== chip $c ==="
+            echo "FAULT CONFIRMED"
+            _any=1
+        fi
+    done
+    if [ "$_any" = 0 ]; then
+        echo "FAULT NOT ACTIVE"
+        return 1
+    fi
+    return 0
+}

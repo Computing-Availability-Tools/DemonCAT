@@ -51,5 +51,11 @@ case "${DCAT_OP:-inject}" in
             echo "removed ip_rule $dir $ip on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$ip$dir" ]; then
+            npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_iprule '$HCCN -ip_rule -g 2>/dev/null | grep -Fq "$ip"'
+        fi
+        ;;
 esac

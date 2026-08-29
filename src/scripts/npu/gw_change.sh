@@ -9,7 +9,8 @@ HCCN="$HCCN_TO hccn_tool -i $chip"
 fault_present() {
     cur=$($HCCN -gateway -g 2>/dev/null | grep -oE 'gateway:[[:space:]]*[0-9.]+' | grep -oE '[0-9.]+')
     orig=$(sidecar_load rNPU_gw_change "$chip")
-    [ -n "$cur" ] && [ "$cur" != "$orig" ]
+    # 需 orig 非空（sidecar 存在=确曾注入）：clean 后 sidecar 被清, 否则 cur != "" 恒真 → 误报
+    [ -n "$cur" ] && [ -n "$orig" ] && [ "$cur" != "$orig" ]
 }
 
 case "${DCAT_OP:-inject}" in

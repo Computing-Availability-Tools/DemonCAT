@@ -51,5 +51,11 @@ case "${DCAT_OP:-inject}" in
             echo "removed arp $dev/$ip on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$ip$dev" ]; then
+            npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_arp '$HCCN -arp -g 2>/dev/null | grep -Fq "$ip"'
+        fi
+        ;;
 esac

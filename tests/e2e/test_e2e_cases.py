@@ -352,7 +352,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                 "rnpu_netdetect_change": ["--address=10.0.0.99"],
                 "rnpu_roce_port_change": ["--port=4792"],
                 "rnpu_gw_change": ["--gateway=10.0.0.1"],
-                "rnpu_ip_change": ["--address=192.168.1.100", "--netmask=255.255.255.0"],
+                "rnpu_ip_change": ["--address=10.0.0.50", "--netmask=255.255.255.0"],
                 "rnpu_iproute": ["--ip=10.30.50.0", "--ip_mask=24", "--via=10.0.0.254", "--dev={dev}", "--table=100"],
                 "rnpu_iprule": ["--dir=from", "--ip=10.30.12.210", "--table=150"],
                 "rnpu_route": ["--address=10.30.40.0", "--netmask=255.255.255.0", "--gateway=10.0.0.254"],

@@ -115,6 +115,9 @@ def e2e_env():
     if is_root or auto_sudo:
         e2e_helpers.sh(f"{sudo}ip link add {TEST_IFACE} type dummy 2>/dev/null")
         e2e_helpers.sh(f"{sudo}ip link set {TEST_IFACE} up 2>/dev/null")
+    # 会话级一次：改值型 NPU 参数归一化到确定性基线（网关/ip/bw/dscp/netdetect/roce/mtu）。
+    # 注入目标值≠基线 → 后续测试注入必然产生真实变更，可无限次重复执行。
+    e2e_helpers.npu_normalize_baseline()
     # detect real physical interface for rNET tests (xlsx hardcodes eth0)
     phy_iface = ""
     ok, out = e2e_helpers.sh(

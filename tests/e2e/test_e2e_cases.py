@@ -214,11 +214,16 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
         ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "",
                "chip": "", "phy_iface": phy}
 
-    # NPU compute tests: dynamically detect first available chip (Phy-ID)
-    if mod_lower.startswith("rnpu") and "npu_compute" in (case.precondition or ""):
+    # NPU tests: dynamically detect chip (Phy-ID) and RoCE port name
+    if mod_lower.startswith("rnpu"):
         _rc, _out = sh("ls /dev/davinci* 2>/dev/null | sort -V | head -1 | grep -oE '[0-9]+'")
         _chip = _out.strip().splitlines()[0] if _out.strip() else "0"
         ctx["chip"] = _chip
+        # Detect NPU RoCE port name (e.g. eth0) from hccn_tool -status -g
+        if "npu_hardware" in (case.precondition or ""):
+            _rc, _out = sh(f"hccn_tool -i {_chip} -status -g 2>/dev/null | grep -oE 'Settings for \\w+' | awk '{{print $3}}'")
+            _dev = _out.strip().splitlines()[0] if _out.strip() else "eth0"
+            ctx["dev"] = _dev
 
     # extract --service=X and --port=X from cmds to fill {svc}/{port} in vcmd
     for argv in case.cmds:
@@ -238,7 +243,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     setup_argv = list(case.setup_argv) if case.setup_argv else None
     # substitute eth0→物理网卡 / eth1→dummy（down/flap 安全） in dcat commands
     phy = ctx.get("phy_iface", "")
-    if phy or ctx.get("down_safe") or ctx.get("chip"):
+    if phy or ctx.get("down_safe") or ctx.get("chip") or ctx.get("dev"):
         for argv in cmds:
             for i, arg in enumerate(argv):
                 argv[i] = substitute(arg, ctx)

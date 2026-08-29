@@ -165,6 +165,22 @@ for pf in /tmp/dcat-rNPU_aic_load-*.pid /tmp/dcat-rNPU_aicpu_load-*.pid /tmp/dca
     done < "$pf"
 done
 pkill -9 -f '_npu_stress' 2>/dev/null
+# NPU stale state cleanup (before rm /tmp/dcat-* — guard checks sidecar files exist)
+if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
+  for c in 2 5; do
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.210 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.211 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -link -s up 2>/dev/null
+    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
+    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
+    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
+    hccn_tool -i $c -udp -s port 4791 2>/dev/null
+  done
+fi
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
@@ -200,22 +216,6 @@ for f in /tmp/dcat-rCPU_core_offline-c*; do
   n=${f##*/dcat-rCPU_core_offline-c}
   echo 1 > /sys/devices/system/cpu/cpu$n/online 2>/dev/null
 done
-# NPU stale state cleanup (only when NPU artifacts exist, to avoid 4s+ per sweep)
-if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
-  for c in 2 5; do
-    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.210 2>/dev/null
-    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.211 2>/dev/null
-    hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -link -s up 2>/dev/null
-    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
-    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
-    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
-    hccn_tool -i $c -udp -s port 4791 2>/dev/null
-  done
-fi
 true
 '''
 
@@ -294,7 +294,7 @@ def provision(provs, ctx, iface):
 def substitute(s, ctx):
     if not s:
         return s
-    for k in ("pid", "port", "iface", "svc", "chip"):
+    for k in ("pid", "port", "iface", "svc", "chip", "dev"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
     phy = ctx.get("phy_iface", "")
     if phy:
@@ -463,11 +463,13 @@ def check_precondition(precond):
         rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
         if not out.strip():
             return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
-        # RoCE 层：仅网络类模块需要 eth2（计算类 aic/aicpu/aiv/hbm_load 不碰网络）
+        # RoCE 层：网络类模块需 NPU RoCE 口（hccn_tool -status -g 报告，不在 host ip link 里）
         if "npu_hardware" in precond and "npu_compute" not in precond:
-            rc, out = sh("ip link show eth2 2>/dev/null && echo ok || echo missing")
+            _first = out.strip().splitlines()[-1] if out.strip() else "0"
+            _first = _first.replace("/dev/davinci", "")
+            rc, out = sh(f"hccn_tool -i {_first} -status -g 2>/dev/null | grep -q 'Settings for' && echo ok || echo missing")
             if "missing" in out.lower():
-                return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
+                return "NPU RoCE 口不可用（hccn_tool -status -g 无报告）"
     if "mock" in precond.lower() and "可用" in precond:
         return "mock 环境不可用（需要 mock dcat 二进制）"
     if "serve" in precond and "长超时" in precond:

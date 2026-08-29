@@ -138,10 +138,7 @@ def cmd_exists(c):
 SWEEP_SCRIPT = r'''
 set +e
 # dcat clean --all: 清除所有 dcat 管理的活跃故障（防前序测试残留 exit 5）
-DCAT_BIN=$(command -v dcat 2>/dev/null || echo "{home}/../build/dcat")
-[ -x "$DCAT_BIN" ] || DCAT_BIN="{home}/../../build/dcat"
-[ -x "$DCAT_BIN" ] || DCAT_BIN="/home/runner/work/DemonCAT/DemonCAT/build/dcat"
-[ -x "$DCAT_BIN" ] && HOME={home} "$DCAT_BIN" clean --all >/dev/null 2>&1
+[ -x "{dcat}" ] && HOME={home} "{dcat}" clean --all >/dev/null 2>&1
 # Kill dcat-spawned processes (child processes survive parent shell kill)
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null
@@ -233,7 +230,7 @@ def sweep(home, iface, tracked_pids):
             pass
     # 写到临时脚本文件再 sh 执行：避免 pkill -f 'PATTERN' 匹配到执行 sweep 的
     # sh -c "...PATTERN..." 自身 cmdline（会自杀，导致 rm state.json 等后续命令不执行）。
-    script = SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface)
+    script = SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface).replace("{dcat}", DCAT)
     import tempfile
     fd, path = tempfile.mkstemp(suffix=".sh", prefix="dcat_e2e_sweep_")
     try:

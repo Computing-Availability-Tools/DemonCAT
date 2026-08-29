@@ -24,6 +24,13 @@ from datetime import datetime
 HERE = os.path.dirname(os.path.abspath(__file__))   # tests/e2e
 ROOT = os.path.dirname(os.path.dirname(HERE))        # project root
 DCAT = os.path.join(ROOT, "build", "dcat")
+
+# 改值型 NPU 故障的确定性基线（可重复执行的生命周期保障）：clean 后/崩溃后机器回到
+# 这些基线值，下一轮注入"目标值≠基线值"必然产生真实变更。基线须是可还原的具体值
+# ——hccn_tool 无法把网关设回"未设置"，因此网关基线不能是 none。可用环境变量覆盖。
+NPU_BASELINE_GW = os.environ.get("DCAT_NPU_BASELINE_GW", "10.0.0.254")
+NPU_BASELINE_IP = os.environ.get("DCAT_NPU_BASELINE_IP", "10.0.0.99")
+NPU_BASELINE_NETMASK = os.environ.get("DCAT_NPU_BASELINE_NETMASK", "255.255.255.0")
 CASES = os.path.join(HERE, "cases.csv")
 _worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
 if _worker_id:
@@ -167,20 +174,28 @@ for pf in /tmp/dcat-rNPU_aic_load-*.pid /tmp/dcat-rNPU_aicpu_load-*.pid /tmp/dca
     done < "$pf"
 done
 pkill -9 -f '_npu_stress' 2>/dev/null
-# NPU stale state cleanup (before rm /tmp/dcat-* — guard checks sidecar files exist)
-if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
-  for c in 2 5; do
+# NPU 状态基线还原：改值型故障 clean 后必须回到确定性基线，否则机器漂移导致
+# 下一轮"注入目标==当前值" hccn 回读校验 no-op 失败。hccn_tool 无法把网关设回
+# "未设置"，故基线一律用可还原的具体值（改值型可重复执行的生命周期保障）。
+if command -v hccn_tool >/dev/null 2>&1 && ls /dev/davinci[0-9]* >/dev/null 2>&1; then
+  _CHIPS=$(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||;s/[^0-9].*//')
+  for c in $_CHIPS; do
+    hccn_tool -i $c -gateway -s gateway {npu_gw_base} 2>/dev/null
+    hccn_tool -i $c -ip -s address {npu_ip_base} netmask {npu_mask_base} 2>/dev/null
+    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
+    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
+    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
+    hccn_tool -i $c -udp -s port 4791 2>/dev/null
+    hccn_tool -i $c -mtu -s size 1500 2>/dev/null
+    hccn_tool -i $c -link -s up 2>/dev/null
+  done
+  for c in $_CHIPS; do
     hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.210 2>/dev/null
     hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.211 2>/dev/null
     hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
     hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
     hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
     hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -link -s up 2>/dev/null
-    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
-    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
-    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
-    hccn_tool -i $c -udp -s port 4791 2>/dev/null
   done
 fi
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
@@ -230,7 +245,12 @@ def sweep(home, iface, tracked_pids):
             pass
     # 写到临时脚本文件再 sh 执行：避免 pkill -f 'PATTERN' 匹配到执行 sweep 的
     # sh -c "...PATTERN..." 自身 cmdline（会自杀，导致 rm state.json 等后续命令不执行）。
-    script = SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface).replace("{dcat}", DCAT)
+    script = (
+        SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface).replace("{dcat}", DCAT)
+        .replace("{npu_gw_base}", NPU_BASELINE_GW)
+        .replace("{npu_ip_base}", NPU_BASELINE_IP)
+        .replace("{npu_mask_base}", NPU_BASELINE_NETMASK)
+    )
     import tempfile
     fd, path = tempfile.mkstemp(suffix=".sh", prefix="dcat_e2e_sweep_")
     try:

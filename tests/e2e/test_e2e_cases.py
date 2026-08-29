@@ -55,6 +55,63 @@ def _is_runnable_vcmd(vcmd):
     return bool(vcmd) and any(k in vcmd for k in _RUNKW) and not any(m in vcmd for m in _NA_MARKERS)
 
 
+# 改值型 NPU 故障的生命周期前置：注入目标必须产生真实变更（目标值≠中途机器当前值），
+# 否则 hccn 回读校验 no-op → "注入回读校验失败:动作未生效"。前置原则=注入值≠当前值；
+# 若相等（机器漂移/崩溃残留/基线异常）→ SKIP 并明确提示，而非注入阶段失败。
+# 条目增删型（arp/route/iproute/iprule）无此约束（add/del 幂等）。
+_NPU_PARAM_READ = {
+    "rNPU_gw_change":         ("-gateway -g",  "gateway", r'([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'),
+    "rNPU_ip_change":         ("-ip -g",       "address", r'ipaddr:([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'),
+    "rNPU_netdetect_change":  ("-netdetect -g", "address", r'address:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'),
+    "rNPU_mtu_mismatch":      ("-mtu -g",      "size",    r'mtu:([0-9]+)'),
+    "rNPU_bw_limit":          ("-shaping -g",  "bw_limit", r'bw_limit\[([0-9]+)'),
+    "rNPU_roce_port_change":  ("-udp -g",      "port",    r'udp_port:([0-9]+)'),
+}
+
+
+def _npu_target_collisions(ctx, all_injects):
+    """返回与当前机器值冲突的 (uid, target, current) 列表；无冲突返回 []。
+
+    all_injects: 注入命令 argv 列表（setup 前置注入 + 步骤注入均检查）。
+    """
+    chip = ctx.get("chip", "")
+    if not chip:
+        return []
+    try:
+        import shutil
+        if not shutil.which("hccn_tool"):
+            return []
+    except Exception:
+        return []
+    hits = []
+    seen = set()
+    for argv in all_injects:
+        if len(argv) < 4 or argv[0] != "dcat" or argv[1] != "inject":
+            continue
+        uid = argv[2]
+        if uid not in _NPU_PARAM_READ:
+            continue
+        readopt, key, pat = _NPU_PARAM_READ[uid]
+        target = None
+        for a in argv[3:]:
+            if a.startswith("--") and "=" in a:
+                k, v = a[2:].split("=", 1)
+                if k == key:
+                    target = v
+        if target is None:
+            continue
+        sig = (uid, target)
+        if sig in seen:
+            continue
+        seen.add(sig)
+        rc, out = sh(f"timeout 8 hccn_tool -i {chip} {readopt} 2>/dev/null", timeout=15)
+        m = re.search(pat, out or "")
+        cur = m.group(1) if m else ""
+        if cur and cur == target:
+            hits.append((uid, target, cur))
+    return hits
+
+
 def _provision_pid(tracked):
     """Provision a sleep process as inject target; return its pid string.
 
@@ -294,7 +351,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                 "rnpu_mtu_mismatch": ["--size=1280"],
                 "rnpu_netdetect_change": ["--address=10.0.0.99"],
                 "rnpu_roce_port_change": ["--port=4792"],
-                "rnpu_gw_change": ["--gateway=10.0.0.200"],
+                "rnpu_gw_change": ["--gateway=10.0.0.1"],
                 "rnpu_ip_change": ["--address=192.168.1.100", "--netmask=255.255.255.0"],
                 "rnpu_iproute": ["--ip=10.30.50.0", "--ip_mask=24", "--via=10.0.0.254", "--dev={dev}", "--table=100"],
                 "rnpu_iprule": ["--dir=from", "--ip=10.30.12.210", "--table=150"],
@@ -312,6 +369,18 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     # 最后做 substitute（eth0→ksdev0, {chip}→动态探测 等）
     if setup_argv:
         setup_argv = [substitute(a, ctx) for a in setup_argv]
+
+    # 3b. 改值型 NPU 前置守卫：注入目标==当前机器值 → 该用例此时无法产生真实变更
+    # （下轮会在注入阶段报"注入回读校验失败"），SKIP 并提示（机器漂移时先 dcat clean / 复位基线）。
+    try:
+        coll = _npu_target_collisions(ctx, [setup_argv] + cmds)
+    except Exception:
+        coll = []
+    if coll:
+        uid, target, cur = coll[0]
+        msg = f"{case.id}: 注入值 {uid} --{_NPU_PARAM_READ[uid][1]}={target} == 当前机器值 {cur}，无法产生真实变更（机器漂移？）"
+        recorder.detail = msg
+        pytest.skip(msg)
 
     # 4. 前序注入 setup
     if setup_argv:

@@ -45,7 +45,7 @@ case "${DCAT_OP:-inject}" in
         else
             : ${dir:?missing required param: dir}
             : ${ip:?missing required param: ip}
-            $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
+            npu_del_retry rNPU_iprule -ip_rule -d dir "$dir" ip "$ip"
             fault_present || { echo "rNPU_iprule 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed ip_rule $dir $ip on chip $chip"

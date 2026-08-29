@@ -45,7 +45,7 @@ case "${DCAT_OP:-inject}" in
         else
             : ${dev:?missing required param: dev}
             : ${ip:?missing required param: ip}
-            $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
+            npu_del_retry rNPU_arp -arp -d dev "$dev" ip "$ip"
             fault_present || { echo "rNPU_arp 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed arp $dev/$ip on chip $chip"

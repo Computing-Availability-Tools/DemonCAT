@@ -45,7 +45,7 @@ case "${DCAT_OP:-inject}" in
         else
             : ${addr:?missing required param: address}
             : ${mask:?missing required param: netmask}
-            $HCCN -route -d address "$addr" netmask "$mask" || { echo "route del failed" >&2; exit 1; }
+            npu_del_retry rNPU_route -route -d address "$addr" netmask "$mask"
             fault_present || { echo "rNPU_route 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed route $addr/$mask on chip $chip"

@@ -200,3 +200,22 @@ npu_query_noargs() {
     fi
     return 0
 }
+
+# 条目型 del 重试：hccn_tool 在并发/瞬时 busy 时 del 偶发失败, 但实际条目已删。
+# 以"del 成功 或 回读确认条目不存在"为成功（fault_present clean 语义：!grep ip）。
+# Usage: npu_del_retry <uid> <-subcmd> [params...]（如：npu_del_retry rNPU_iprule -ip_rule dir from ip x）
+npu_del_retry() {
+    _uid="$1"; shift
+    _ok=1
+    _n=0
+    while [ "$_n" -lt 3 ]; do
+        _n=$((_n + 1))
+        if $HCCN "$@" >/dev/null 2>&1; then _ok=0; break; fi
+        sleep 1
+    done
+    if [ "$_ok" != 0 ]; then
+        echo "hccn_tool del ($_uid) failure after 3 tries (may already be deleted)" >&2
+    fi
+    # 即使 del 返回失败, 交回调用方的 fault_present 以实际状态判成败
+    return 0
+}

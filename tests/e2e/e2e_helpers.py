@@ -137,6 +137,11 @@ def cmd_exists(c):
 # ---------------- 环境清扫（dcat 命名空间内，对宿主安全） ----------------
 SWEEP_SCRIPT = r'''
 set +e
+# dcat clean --all: 清除所有 dcat 管理的活跃故障（防前序测试残留 exit 5）
+DCAT_BIN=$(command -v dcat 2>/dev/null || echo "{home}/../build/dcat")
+[ -x "$DCAT_BIN" ] || DCAT_BIN="{home}/../../build/dcat"
+[ -x "$DCAT_BIN" ] || DCAT_BIN="/home/runner/work/DemonCAT/DemonCAT/build/dcat"
+[ -x "$DCAT_BIN" ] && HOME={home} "$DCAT_BIN" clean --all >/dev/null 2>&1
 # Kill dcat-spawned processes (child processes survive parent shell kill)
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null

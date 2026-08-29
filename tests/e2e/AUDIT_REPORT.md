@@ -20,6 +20,7 @@
 | 已有 ip_rule | `add from 10.20.10.50 table 150`（解释了 xlsx 里幽灵 10.20.10.x 来源） |
 | 退出码 | 3=dcat precheck(缺必填/非法格式/未知uid)；1=脚本级校验(范围/hccn拒绝)；5=已注入；0=成功 |
 | 网段规则 | route/gw 的 gateway **必须与 NPU 自身 IP 同网段 (10.0.0.0/24)**，否则 hccn "segment doesn't match" |
+| ip 冲突 | NPU 自身 IP 不能与宿主/自身 ARP 邻居同段（如 192.168.1.1）；ip_change 测试用 10.0.0.50 |
 
 ---
 

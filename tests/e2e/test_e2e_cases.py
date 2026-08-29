@@ -47,10 +47,6 @@ def _path_from_vcmd(vcmd):
     return None
 
 SKIP_MODULES = {
-    "rNPU_gw_change", "rNPU_ip_change",
-    "rNPU_iproute_add", "rNPU_iproute_del",
-    "rNPU_iprule_add", "rNPU_iprule_del",
-    "rNPU_route_add", "rNPU_route_del",
     "rNPU_link_down",
 }
 
@@ -295,9 +291,14 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
                 "rnpu_arp": ["--dev={dev}", "--ip=10.30.12.200", "--mac=00:11:22:33:44:55"],
                 "rnpu_bw_limit": ["--bw_limit=50000"],
                 "rnpu_dscp_tc_change": ["--dscp=46", "--tc=3"],
-                "rnpu_mtu_mismatch": ["--size=1500"],
-                "rnpu_netdetect_change": ["--address=192.168.1.1"],
-                "rnpu_roce_port_change": ["--port=4791"],
+                "rnpu_mtu_mismatch": ["--size=1280"],
+                "rnpu_netdetect_change": ["--address=10.0.0.99"],
+                "rnpu_roce_port_change": ["--port=4792"],
+                "rnpu_gw_change": ["--gateway=10.0.0.200"],
+                "rnpu_ip_change": ["--address=192.168.1.100", "--netmask=255.255.255.0"],
+                "rnpu_iproute": ["--ip=10.30.50.0", "--ip_mask=24", "--via=10.0.0.254", "--dev={dev}", "--table=100"],
+                "rnpu_iprule": ["--dir=from", "--ip=10.30.12.210", "--table=150"],
+                "rnpu_route": ["--address=10.30.40.0", "--netmask=255.255.255.0", "--gateway=10.0.0.254"],
             }
             _uid_l = setup_uid.lower()
             if "--chip" not in setup_keys:

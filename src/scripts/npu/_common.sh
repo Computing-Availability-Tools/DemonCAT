@@ -25,24 +25,27 @@ HCCN_TO="timeout 5"
 # Usage: hccn() <subcmd> [args...]   (assumes $chip set)
 # Returns stdout and exit code of the underlying hccn_tool.
 hccn() {
-    _n=0
-    _sleep=1
+    # 局部变量加 _h_ 前缀：hccn() 会被 npu_foreach_chip/npu_query_noargs
+    # 在 eval 中调用，若复用裸 _rc/_out/_n/_sleep 会把调用方的同名全局变量
+    # 冲掉 → npu_foreach_chip "全 NOT ACTIVE" 也误报 rc=0 → confirmed 假 true。
+    _h_n=0
+    _h_sleep=1
     while :; do
-        _out=$($HCCN_TO hccn_tool -i "$chip" "$@" 2>&1)
-        _rc=$?
-        case "$_out" in
+        _h_out=$($HCCN_TO hccn_tool -i "$chip" "$@" 2>&1)
+        _h_rc=$?
+        case "$_h_out" in
             *"is busy"*|*"busy, please"*)
-                _n=$((_n + 1))
-                if [ "$_n" -ge 6 ]; then
-                    echo "$_out" >&2
+                _h_n=$((_h_n + 1))
+                if [ "$_h_n" -ge 6 ]; then
+                    echo "$_h_out" >&2
                     return 1
                 fi
-                sleep "$_sleep"
-                _sleep=$((_sleep * 2))
+                sleep "$_h_sleep"
+                _h_sleep=$((_h_sleep * 2))
                 ;;
             *)
-                printf '%s\n' "$_out"
-                return "$_rc"
+                printf '%s\n' "$_h_out"
+                return "$_h_rc"
                 ;;
         esac
     done

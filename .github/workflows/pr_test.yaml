@@ -181,7 +181,7 @@ jobs:
     steps:
       - name: Download e2e artifacts (to check actual test results)
         if: ${{ needs.e2e-full-ubuntu-nonnet.result == 'failure' || needs.e2e-full-ubuntu-qdisc.result == 'failure' || needs.e2e-full-ubuntu-netother.result == 'failure' }}
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: e2e-full-ubuntu-*
           path: e2e-artifacts

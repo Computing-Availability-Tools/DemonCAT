@@ -56,8 +56,8 @@ case "${DCAT_OP:-inject}" in
             : ${ip:?missing required param: ip}
             : ${mask:?missing required param: ip_mask}
             : ${table:?missing required param: table}
-            npu_del_retry rNPU_iproute -ip_route -d ip "$ip" ip_mask "$mask" table "$table"
-            fault_present || { echo "rNPU_iproute 清除回读校验失败:动作未生效" >&2; exit 1; }
+            npu_clean_verify rNPU_iproute 'fault_present' -ip_route -d ip "$ip" ip_mask "$mask" table "$table" \
+                || { echo "rNPU_iproute 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed ip_route $ip/$mask table $table on chip $chip"
         fi

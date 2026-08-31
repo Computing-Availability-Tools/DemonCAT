@@ -255,3 +255,24 @@ npu_del_retry() {
     # 即使 del 返回失败, 交回调用方的 fault_present 以实际状态判成败
     return 0
 }
+
+# 条目型 clean 组合重试：del + fault_present 读回，两者在共享节点的
+# busy 风暴中偶发"del 命令返回 OK 但条目仍在/或读回瞬时查不到"。
+# 以 fault_present(clean 语义=条目已不在) 为唯一判据，失败则再 del 一轮。
+# Usage: npu_clean_verify <uid> <fault_present-cmd> <del 参数...>
+#   <fault_present-cmd> 用 <模块fault_present> （在 clean 上下文中由调用方 eval）。
+npu_clean_verify() {
+    _uid="$1"; _chk="$2"; shift 2
+    _n=0
+    _sleep=1
+    while [ "$_n" -lt 6 ]; do
+        _n=$((_n + 1))
+        # 先查是否已清除（前序 del 可能已生效）
+        if eval "$_chk"; then return 0; fi
+        $HCCN "$@" >/dev/null 2>&1
+        sleep "$_sleep"
+        _sleep=$((_sleep * 2))
+    done
+    # 最后一轮仍失败才判失败（交回调用方 fault_present 给出错误详情）
+    eval "$_chk"
+}

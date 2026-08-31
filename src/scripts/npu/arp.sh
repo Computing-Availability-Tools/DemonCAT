@@ -6,7 +6,7 @@ if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation fai
 dev=${DCAT_PARAM_DEV:-}
 ip=${DCAT_PARAM_IP:-}
 mac=${DCAT_PARAM_MAC:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR="/tmp/dcat-rNPU_arp-$chip.bak"
 
 fault_present() {
@@ -45,11 +45,17 @@ case "${DCAT_OP:-inject}" in
         else
             : ${dev:?missing required param: dev}
             : ${ip:?missing required param: ip}
-            $HCCN -arp -d dev "$dev" ip "$ip" || { echo "arp del failed" >&2; exit 1; }
-            fault_present || { echo "rNPU_arp 清除回读校验失败:动作未生效" >&2; exit 1; }
+            npu_clean_verify rNPU_arp 'fault_present' -arp -d dev "$dev" ip "$ip" \
+                || { echo "rNPU_arp 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed arp $dev/$ip on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$ip$dev" ]; then
+            npu_foreach_chip '$HCCN -arp -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_arp '$HCCN -arp -g 2>/dev/null | grep -Fq "$ip"'
+        fi
+        ;;
 esac

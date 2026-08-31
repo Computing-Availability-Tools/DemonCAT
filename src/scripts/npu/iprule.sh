@@ -6,7 +6,7 @@ if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation fai
 dir=${DCAT_PARAM_DIR:-}
 ip=${DCAT_PARAM_IP:-}
 table=${DCAT_PARAM_TABLE:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR="/tmp/dcat-rNPU_iprule-$chip.bak"
 
 fault_present() {
@@ -45,11 +45,17 @@ case "${DCAT_OP:-inject}" in
         else
             : ${dir:?missing required param: dir}
             : ${ip:?missing required param: ip}
-            $HCCN -ip_rule -d dir "$dir" ip "$ip" || { echo "ip_rule del failed" >&2; exit 1; }
-            fault_present || { echo "rNPU_iprule 清除回读校验失败:动作未生效" >&2; exit 1; }
+            npu_clean_verify rNPU_iprule 'fault_present' -ip_rule -d dir "$dir" ip "$ip" \
+                || { echo "rNPU_iprule 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed ip_rule $dir $ip on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$ip$dir" ]; then
+            npu_foreach_chip '$HCCN -ip_rule -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_iprule '$HCCN -ip_rule -g 2>/dev/null | grep -Fq "$ip"'
+        fi
+        ;;
 esac

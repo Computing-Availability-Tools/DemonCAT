@@ -3,7 +3,7 @@
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 
 fault_present() { $HCCN -link -g 2>/dev/null | grep -qi 'down'; }
 
@@ -21,7 +21,7 @@ case "${DCAT_OP:-inject}" in
             failed=0
             for c in $(npu_list_chips); do
                 _oc=$chip; _oh=$HCCN
-                chip=$c; HCCN="$HCCN_TO hccn_tool -i $c"
+                chip=$c; HCCN="hccn"
                 if fault_present; then
                     if DCAT_OP=clean DCAT_PARAM_CHIP="$c" "$0" >/dev/null 2>&1; then
                         cleaned=1

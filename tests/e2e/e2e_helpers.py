@@ -24,6 +24,40 @@ from datetime import datetime
 HERE = os.path.dirname(os.path.abspath(__file__))   # tests/e2e
 ROOT = os.path.dirname(os.path.dirname(HERE))        # project root
 DCAT = os.path.join(ROOT, "build", "dcat")
+
+# 改值型 NPU 故障的确定性基线（可重复执行的生命周期保障）：clean 后/崩溃后机器回到
+# 这些基线值，下一轮注入"目标值≠基线值"必然产生真实变更。基线须是可还原的具体值
+# ——hccn_tool 无法把网关设回"未设置"，因此网关基线不能是 none。可用环境变量覆盖。
+NPU_BASELINE_GW = os.environ.get("DCAT_NPU_BASELINE_GW", "10.0.0.254")
+NPU_BASELINE_IP = os.environ.get("DCAT_NPU_BASELINE_IP", "10.0.0.99")
+NPU_BASELINE_NETMASK = os.environ.get("DCAT_NPU_BASELINE_NETMASK", "255.255.255.0")
+
+
+def npu_normalize_baseline():
+    """会话级一次：将改值型 NPU 参数归一化到确定性基线。
+
+    每个参数注入目标值都≠基线值，因此后续测试注入必然产生真实变更
+    （可重复执行生命周期）。hccn_tool 无法把网关设回"未设置"，故网关基
+    线必须是可还原的具体值。无 NPU 环境直接跳过。
+    """
+    has_npu = sh("command -v hccn_tool >/dev/null 2>&1 && ls /dev/davinci[0-9]* >/dev/null 2>&1")[0] == 0
+    if not has_npu:
+        return False
+    script = (
+        "set +e\n"
+        "for c in $(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||;s/[^0-9].*//'); do\n"
+        f"  hccn_tool -i $c -gateway -s gateway {NPU_BASELINE_GW} 2>/dev/null\n"
+        f"  hccn_tool -i $c -ip -s address {NPU_BASELINE_IP} netmask {NPU_BASELINE_NETMASK} 2>/dev/null\n"
+        "  hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null\n"
+        "  hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null\n"
+        "  hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null\n"
+        "  hccn_tool -i $c -udp -s port 4791 2>/dev/null\n"
+        "  hccn_tool -i $c -mtu -s size 1500 2>/dev/null\n"
+        "done\n"
+        "true\n"
+    )
+    sh(script, timeout=30)
+    return True
 CASES = os.path.join(HERE, "cases.csv")
 _worker_id = os.environ.get("PYTEST_XDIST_WORKER", "")
 if _worker_id:
@@ -137,6 +171,8 @@ def cmd_exists(c):
 # ---------------- 环境清扫（dcat 命名空间内，对宿主安全） ----------------
 SWEEP_SCRIPT = r'''
 set +e
+# dcat clean --all: 清除所有 dcat 管理的活跃故障（防前序测试残留 exit 5）
+[ -x "{dcat}" ] && HOME={home} "{dcat}" clean --all >/dev/null 2>&1
 # Kill dcat-spawned processes (child processes survive parent shell kill)
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null
@@ -157,6 +193,33 @@ for pf in /tmp/dcat-rNET_link_flap-*.pid; do
 done
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
+# rNPU compute load: kill _npu_stress processes (pidfiles deleted below, processes survive)
+for pf in /tmp/dcat-rNPU_aic_load-*.pid /tmp/dcat-rNPU_aicpu_load-*.pid /tmp/dcat-rNPU_aiv_load-*.pid /tmp/dcat-rNPU_hbm_load-*.pid; do
+    [ -f "$pf" ] || continue
+    while read -r p; do
+        [ -n "$p" ] && kill -9 "$p" 2>/dev/null
+    done < "$pf"
+done
+pkill -9 -f '_npu_stress' 2>/dev/null
+# NPU 残留清理 (before rm /tmp/dcat-* — guard checks sidecar files exist;
+# 会话级基线归一化在 e2e_env 启动时已完成, 此处只处理 crash/滞留 sidecar):
+# 基线归一化已覆盖 gateway/ip/bw/dscp/netdetect/roce/mtu (改值型生命周期)。
+if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
+  for c in $(ls /dev/davinci[0-9]* 2>/dev/null | sed 's|/dev/davinci||;s/[^0-9].*//'); do
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.210 2>/dev/null
+    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.211 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
+    hccn_tool -i $c -link -s up 2>/dev/null
+    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
+    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
+    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
+    hccn_tool -i $c -udp -s port 4791 2>/dev/null
+    hccn_tool -i $c -mtu -s size 1500 2>/dev/null
+  done
+fi
 rm -f /tmp/dcat-* /tmp/dcat.dstate.* /tmp/dcat.write.* /tmp/dcat.stress.* /tmp/dcat_pwned 2>/dev/null
 rm -f /etc/dcat.stress.* /etc/dcat.write.* 2>/dev/null
 rm -f /data/dcat.stress.* /data/dcat.write.* /data/dcat-* 2>/dev/null
@@ -192,22 +255,6 @@ for f in /tmp/dcat-rCPU_core_offline-c*; do
   n=${f##*/dcat-rCPU_core_offline-c}
   echo 1 > /sys/devices/system/cpu/cpu$n/online 2>/dev/null
 done
-# NPU stale state cleanup (only when NPU artifacts exist, to avoid 4s+ per sweep)
-if command -v hccn_tool >/dev/null 2>&1 && ls /tmp/dcat-rNPU_* >/dev/null 2>&1; then
-  for c in 2 5; do
-    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.210 2>/dev/null
-    hccn_tool -i $c -ip_rule -d dir from ip 10.20.10.211 2>/dev/null
-    hccn_tool -i $c -route -d address 10.30.40.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -route -d address 10.30.41.0 netmask 255.255.255.0 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.30.50.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -ip_route -d ip 10.30.51.0 ip_mask 24 table 100 2>/dev/null
-    hccn_tool -i $c -link -s up 2>/dev/null
-    hccn_tool -i $c -shaping -s bw_limit 200000 2>/dev/null
-    hccn_tool -i $c -dscp_to_tc -s dscp 46 tc 0 2>/dev/null
-    hccn_tool -i $c -netdetect -s address 0.0.0.0 2>/dev/null
-    hccn_tool -i $c -udp -s port 4791 2>/dev/null
-  done
-fi
 true
 '''
 
@@ -220,7 +267,9 @@ def sweep(home, iface, tracked_pids):
             pass
     # 写到临时脚本文件再 sh 执行：避免 pkill -f 'PATTERN' 匹配到执行 sweep 的
     # sh -c "...PATTERN..." 自身 cmdline（会自杀，导致 rm state.json 等后续命令不执行）。
-    script = SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface)
+    script = (
+        SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface).replace("{dcat}", DCAT)
+    )
     import tempfile
     fd, path = tempfile.mkstemp(suffix=".sh", prefix="dcat_e2e_sweep_")
     try:
@@ -286,7 +335,7 @@ def provision(provs, ctx, iface):
 def substitute(s, ctx):
     if not s:
         return s
-    for k in ("pid", "port", "iface", "svc"):
+    for k in ("pid", "port", "iface", "svc", "chip", "dev"):
         s = s.replace("{" + k + "}", ctx.get(k, ""))
     phy = ctx.get("phy_iface", "")
     if phy:
@@ -446,8 +495,8 @@ def check_precondition(precond):
         rc, out = sh("ip -o link show eth0 2>/dev/null && echo exists || echo missing")
         if "exists" in (out or "").lower():
             return "测试环境存在 eth0 网卡；注入会 down 管理网卡断 runner 网络，安全防护用例需在无 eth0 环境验证"
-    if "npu_hardware" in precond:
-        # rNPU_* 专用：需 Atlas NPU 硬件 + hccn_tool
+    if "npu_hardware" in precond or "npu_compute" in precond:
+        # rNPU_* 通用基础层：需 Atlas NPU 硬件 + hccn_tool
         rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
         if "missing" in out.lower():
             return "hccn_tool 不可用（非 Atlas NPU 机器）"
@@ -455,10 +504,13 @@ def check_precondition(precond):
         rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
         if not out.strip():
             return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
-        # 检测 NPU RoCE 接口（eth2 等），rNPU_arp/rNPU_bw_limit 等需要
-        rc, out = sh("ip link show eth2 2>/dev/null && echo ok || echo missing")
-        if "missing" in out.lower():
-            return "NPU RoCE 接口 eth2 不可用（rNPU 网络测试需 NPU 原生网卡）"
+        # RoCE 层：网络类模块需 NPU RoCE 口（hccn_tool -status -g 报告，不在 host ip link 里）
+        if "npu_hardware" in precond and "npu_compute" not in precond:
+            _first = out.strip().splitlines()[-1] if out.strip() else "0"
+            _first = _first.replace("/dev/davinci", "")
+            rc, out = sh(f"hccn_tool -i {_first} -status -g 2>/dev/null | grep -q 'Settings for' && echo ok || echo missing")
+            if "missing" in out.lower():
+                return "NPU RoCE 口不可用（hccn_tool -status -g 无报告）"
     if "mock" in precond.lower() and "可用" in precond:
         return "mock 环境不可用（需要 mock dcat 二进制）"
     if "serve" in precond and "长超时" in precond:

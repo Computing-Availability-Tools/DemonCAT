@@ -4,7 +4,7 @@
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
 port=${DCAT_PARAM_PORT:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 
 fault_present() {
     cur=$($HCCN -udp -g 2>/dev/null | grep -oE 'udp_port:[0-9]+' | grep -oE '[0-9]+')

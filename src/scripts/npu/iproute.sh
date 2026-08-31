@@ -8,13 +8,18 @@ mask=${DCAT_PARAM_IP_MASK:-}
 via=${DCAT_PARAM_VIA:-}
 dev=${DCAT_PARAM_DEV:-}
 table=${DCAT_PARAM_TABLE:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR="/tmp/dcat-rNPU_iproute-$chip.bak"
+
+# 0.0.0.0/0（默认路由）hccn 渲染为 "default"，grep 明文 ip 会回读失败 → 特殊符号等价匹配
+_match_ctx() {
+    if [ "$ip" = "0.0.0.0" ] && [ "$mask" = "0" ]; then grep -Fq "default"; else grep -Fq "$ip"; fi
+}
 
 fault_present() {
     case "${DCAT_OP:-inject}" in
-        clean) ! $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip" ;;
-        *)     $HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip" ;;
+        clean) ! $HCCN -ip_route -g table "$table" 2>/dev/null | _match_ctx ;;
+        *)     $HCCN -ip_route -g table "$table" 2>/dev/null | _match_ctx ;;
     esac
 }
 
@@ -51,11 +56,17 @@ case "${DCAT_OP:-inject}" in
             : ${ip:?missing required param: ip}
             : ${mask:?missing required param: ip_mask}
             : ${table:?missing required param: table}
-            $HCCN -ip_route -d ip "$ip" ip_mask "$mask" table "$table" || { echo "ip_route del failed" >&2; exit 1; }
-            fault_present || { echo "rNPU_iproute 清除回读校验失败:动作未生效" >&2; exit 1; }
+            npu_clean_verify rNPU_iproute 'fault_present' -ip_route -d ip "$ip" ip_mask "$mask" table "$table" \
+                || { echo "rNPU_iproute 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed ip_route $ip/$mask table $table on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '[ -n "$table" ] && $HCCN -ip_route -g table "$table"; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$ip$table" ]; then
+            npu_foreach_chip '[ -n "$table" ] && $HCCN -ip_route -g table "$table"; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_iproute '$HCCN -ip_route -g table "$table" 2>/dev/null | grep -Fq "$ip"'
+        fi
+        ;;
 esac

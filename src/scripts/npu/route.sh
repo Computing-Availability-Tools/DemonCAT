@@ -6,7 +6,7 @@ if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation fai
 addr=${DCAT_PARAM_ADDRESS:-}
 mask=${DCAT_PARAM_NETMASK:-}
 gw=${DCAT_PARAM_GATEWAY:-}
-HCCN="$HCCN_TO hccn_tool -i $chip"
+HCCN="hccn"
 SIDECAR="/tmp/dcat-rNPU_route-$chip.bak"
 
 fault_present() {
@@ -45,11 +45,17 @@ case "${DCAT_OP:-inject}" in
         else
             : ${addr:?missing required param: address}
             : ${mask:?missing required param: netmask}
-            $HCCN -route -d address "$addr" netmask "$mask" || { echo "route del failed" >&2; exit 1; }
-            fault_present || { echo "rNPU_route 清除回读校验失败:动作未生效" >&2; exit 1; }
+            npu_clean_verify rNPU_route 'fault_present' -route -d address "$addr" netmask "$mask" \
+                || { echo "rNPU_route 清除回读校验失败:动作未生效" >&2; exit 1; }
             rm -f "$SIDECAR"
             echo "removed route $addr/$mask on chip $chip"
         fi
         ;;
-    query) npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }' ;;
+    query)
+        if [ -n "$addr$mask" ]; then
+            npu_foreach_chip '$HCCN -route -g; fault_present && echo "FAULT CONFIRMED" || { echo "FAULT NOT ACTIVE"; false; }'
+        else
+            npu_query_noargs rNPU_route '$HCCN -route -g 2>/dev/null | grep -Fq "$addr"'
+        fi
+        ;;
 esac

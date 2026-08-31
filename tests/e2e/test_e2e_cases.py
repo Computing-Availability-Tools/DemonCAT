@@ -47,16 +47,69 @@ def _path_from_vcmd(vcmd):
     return None
 
 SKIP_MODULES = {
-    "rNPU_gw_change", "rNPU_ip_change",
-    "rNPU_iproute_add", "rNPU_iproute_del",
-    "rNPU_iprule_add", "rNPU_iprule_del",
-    "rNPU_route_add", "rNPU_route_del",
     "rNPU_link_down",
 }
 
 
 def _is_runnable_vcmd(vcmd):
     return bool(vcmd) and any(k in vcmd for k in _RUNKW) and not any(m in vcmd for m in _NA_MARKERS)
+
+
+# 改值型 NPU 故障的生命周期前置：注入目标必须产生真实变更（目标值≠中途机器当前值），
+# 否则 hccn 回读校验 no-op → "注入回读校验失败:动作未生效"。前置原则=注入值≠当前值；
+# 若相等（机器漂移/崩溃残留/基线异常）→ SKIP 并明确提示，而非注入阶段失败。
+# 条目增删型（arp/route/iproute/iprule）无此约束（add/del 幂等）。
+_NPU_PARAM_READ = {
+    "rNPU_gw_change":         ("-gateway -g",  "gateway", r'([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'),
+    "rNPU_ip_change":         ("-ip -g",       "address", r'ipaddr:([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'),
+    "rNPU_netdetect_change":  ("-netdetect -g", "address", r'address:\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)'),
+    "rNPU_mtu_mismatch":      ("-mtu -g",      "size",    r'mtu:([0-9]+)'),
+    "rNPU_bw_limit":          ("-shaping -g",  "bw_limit", r'bw_limit\[([0-9]+)'),
+    "rNPU_roce_port_change":  ("-udp -g",      "port",    r'udp_port:([0-9]+)'),
+}
+
+
+def _npu_target_collisions(ctx, all_injects):
+    """返回与当前机器值冲突的 (uid, target, current) 列表；无冲突返回 []。
+
+    all_injects: 注入命令 argv 列表（setup 前置注入 + 步骤注入均检查）。
+    """
+    chip = ctx.get("chip", "")
+    if not chip:
+        return []
+    try:
+        import shutil
+        if not shutil.which("hccn_tool"):
+            return []
+    except Exception:
+        return []
+    hits = []
+    seen = set()
+    for argv in all_injects:
+        if len(argv) < 4 or argv[0] != "dcat" or argv[1] != "inject":
+            continue
+        uid = argv[2]
+        if uid not in _NPU_PARAM_READ:
+            continue
+        readopt, key, pat = _NPU_PARAM_READ[uid]
+        target = None
+        for a in argv[3:]:
+            if a.startswith("--") and "=" in a:
+                k, v = a[2:].split("=", 1)
+                if k == key:
+                    target = v
+        if target is None:
+            continue
+        sig = (uid, target)
+        if sig in seen:
+            continue
+        seen.add(sig)
+        rc, out = sh(f"timeout 8 hccn_tool -i {chip} {readopt} 2>/dev/null", timeout=15)
+        m = re.search(pat, out or "")
+        cur = m.group(1) if m else ""
+        if cur and cur == target:
+            hits.append((uid, target, cur))
+    return hits
 
 
 def _provision_pid(tracked):
@@ -169,7 +222,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
         pre = pre.replace("SSH", "").replace("管理网卡", "")
     if pre in ("none", "roce_link_up"):
         coded_pre = pre
-    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "non-root", "配置文件", "mock", "serve", "非 tmpfs", "SSH", "管理网卡", "iptables", "service_stop")):
+    elif any(kw in pre for kw in ("sysfs_writable", "tc_qdisc", "sch_tbf", "npu_hardware", "npu_compute", "non-root", "配置文件", "mock", "serve", "非 tmpfs", "SSH", "管理网卡", "iptables", "service_stop")):
         coded_pre = pre
     else:
         coded_pre = "none"
@@ -196,7 +249,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
         # hardware marker + npu_hardware: eth2 不存在等环境缺失 → SKIP（非 NPU CI server）
         # hardware marker + sysfs/tc_qdisc: 在 root 机器上应有 → FAIL（快速暴露问题）
         has_hw_marker = bool(list(request.node.iter_markers("hardware")))
-        if has_hw_marker and "npu_hardware" not in (case.precondition or ""):
+        if has_hw_marker and "npu_hardware" not in (case.precondition or "") and "npu_compute" not in (case.precondition or ""):
             assert False, f"{case.id}: 环境预检失败: {pre_skip}"
         pytest.skip(pre_skip)
 
@@ -209,10 +262,23 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     if is_link_down:
         # down/flap 测试：eth1 → dummy 接口，eth0 不替换（留给安全防护测试 TC-105）
         ctx = {"iface": e2e_env["iface"], "pid": "", "port": "", "svc": "",
-               "phy_iface": "", "down_safe": True}
+               "chip": "", "phy_iface": "", "down_safe": True}
     else:
         ctx = {"iface": phy or e2e_env["iface"], "pid": "", "port": "", "svc": "",
-               "phy_iface": phy}
+               "chip": "", "phy_iface": phy}
+
+    # NPU tests: dynamically detect chip (Phy-ID) and RoCE port name
+    if mod_lower.startswith("rnpu") or any(
+        len(a) > 2 and a[1] in ("inject", "clean", "query") and a[2].lower().startswith("rnpu")
+        for a in case.cmds):
+        _rc, _out = sh("ls /dev/davinci* 2>/dev/null | sort -V | head -1 | grep -oE '[0-9]+'")
+        _chip = _out.strip().splitlines()[0] if _out.strip() else "0"
+        ctx["chip"] = _chip
+        # Detect NPU RoCE port name (e.g. eth0) from hccn_tool -status -g
+        if "npu_hardware" in (case.precondition or ""):
+            _rc, _out = sh(f"hccn_tool -i {_chip} -status -g 2>/dev/null | grep -oE 'Settings for \\w+' | awk '{{print $3}}'")
+            _dev = _out.strip().splitlines()[0] if _out.strip() else "eth0"
+            ctx["dev"] = _dev
 
     # extract --service=X and --port=X from cmds to fill {svc}/{port} in vcmd
     for argv in case.cmds:
@@ -232,7 +298,7 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     setup_argv = list(case.setup_argv) if case.setup_argv else None
     # substitute eth0→物理网卡 / eth1→dummy（down/flap 安全） in dcat commands
     phy = ctx.get("phy_iface", "")
-    if phy or ctx.get("down_safe"):
+    if phy or ctx.get("down_safe") or ctx.get("chip") or ctx.get("dev"):
         for argv in cmds:
             for i, arg in enumerate(argv):
                 argv[i] = substitute(arg, ctx)
@@ -264,24 +330,59 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
             and "tcp_loss" not in setup_argv[2].lower() \
             and not any(a.startswith("--iface=") for a in setup_argv):
         setup_argv.append(f"--iface={net_iface}")
-    # setup 缺参数时从 cmds 提取 DA: 只抄同 uid 的 inject 命令参数（xlsx "已注入"
-    # setup 常不带参数）。绝不从不同 uid 的命令抄——TC-157 前置注入 rNET_loss(占
-    # qdisc)，step 是 rNET_jitter --delay_ms；把 jitter 参数塞给 rNET_loss 会报
-    # unknown parameter 'delay_ms'。
+    # setup 缺参数时从 cmds 提取 DA: 抄同 uid 的 inject/clean/query 命令参数
+    # （xlsx "已注入" setup 常不带参数）。绝不从不同 uid 的命令抄——TC-157 前置注入
+    # rNET_loss(占 qdisc)，step 是 rNET_jitter --delay_ms；把 jitter 参数塞给
+    # rNET_loss 会报 unknown parameter 'delay_ms'。
     if setup_argv and len(setup_argv) > 2 and setup_argv[1] == "inject":
         setup_uid = setup_argv[2]
         setup_keys = {a.split("=")[0] for a in setup_argv if a.startswith("--")}
         for argv in case.cmds:
-            if len(argv) > 2 and argv[0] == "dcat" and argv[1] == "inject" and argv[2] == setup_uid:
+            if len(argv) > 2 and argv[0] == "dcat" and argv[1] in ("inject", "clean", "query") and argv[2] == setup_uid:
                 for arg in argv[3:]:
                     key = arg.split("=")[0]
                     if arg.startswith("--") and key not in setup_keys and key != "--force":
                         setup_argv.append(arg)
                         setup_keys.add(key)
-                break
-    # 最后做 substitute（eth0→ksdev0 等）
-    if phy and setup_argv:
+        # rNPU 默认补 chip/dev + 各模块必填参数（setup 无 inject 命令可抄时）
+        if setup_uid.lower().startswith("rnpu"):
+            _npu_defaults = {
+                "rnpu_arp": ["--dev={dev}", "--ip=10.30.12.200", "--mac=00:11:22:33:44:55"],
+                "rnpu_bw_limit": ["--bw_limit=50000"],
+                "rnpu_dscp_tc_change": ["--dscp=46", "--tc=3"],
+                "rnpu_mtu_mismatch": ["--size=1280"],
+                "rnpu_netdetect_change": ["--address=10.0.0.99"],
+                "rnpu_roce_port_change": ["--port=4792"],
+                "rnpu_gw_change": ["--gateway=10.0.0.1"],
+                "rnpu_ip_change": ["--address=10.0.0.50", "--netmask=255.255.255.0"],
+                "rnpu_iproute": ["--ip=10.30.50.0", "--ip_mask=24", "--via=10.0.0.254", "--dev={dev}", "--table=100"],
+                "rnpu_iprule": ["--dir=from", "--ip=10.30.12.210", "--table=150"],
+                "rnpu_route": ["--address=10.30.40.0", "--netmask=255.255.255.0", "--gateway=10.0.0.254"],
+            }
+            _uid_l = setup_uid.lower()
+            if "--chip" not in setup_keys:
+                setup_argv.append("--chip={chip}")
+                setup_keys.add("--chip")
+            for d in _npu_defaults.get(_uid_l, []):
+                key = d.split("=")[0]
+                if key not in setup_keys:
+                    setup_argv.append(d)
+                    setup_keys.add(key)
+    # 最后做 substitute（eth0→ksdev0, {chip}→动态探测 等）
+    if setup_argv:
         setup_argv = [substitute(a, ctx) for a in setup_argv]
+
+    # 3b. 改值型 NPU 前置守卫：注入目标==当前机器值 → 该用例此时无法产生真实变更
+    # （下轮会在注入阶段报"注入回读校验失败"），SKIP 并提示（机器漂移时先 dcat clean / 复位基线）。
+    try:
+        coll = _npu_target_collisions(ctx, [setup_argv] + cmds)
+    except Exception:
+        coll = []
+    if coll:
+        uid, target, cur = coll[0]
+        msg = f"{case.id}: 注入值 {uid} --{_NPU_PARAM_READ[uid][1]}={target} == 当前机器值 {cur}，无法产生真实变更（机器漂移？）"
+        recorder.detail = msg
+        pytest.skip(msg)
 
     # 4. 前序注入 setup
     if setup_argv:

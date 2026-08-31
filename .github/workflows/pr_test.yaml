@@ -135,11 +135,14 @@ jobs:
                       || contains(github.event.pull_request.labels.*.name, 'ready-for-test')))) }}
     uses: ./.github/workflows/_e2e_test.yaml
     with:
-      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），仅跑 NPU 用例
+      # 自托管 NPU runner（含 hccn_tool/真实 NPU 硬件），仅跑 NPU 用例。
+      # 280 条 + 共享节点 hccn_tool 并发争用(busy 重试退避) 实测可 >60min，
+      # 60 默认超时会误 cancel 未跑完的套件 → 显式放宽到 120。
       runner: '["self-hosted", "npu-server", "ARM64"]'
       mark: "hardware"
       run-as-root: true
       artifact-name: full-npu
+      timeout-minutes: 120
 
   clang-tidy:
     name: clang-tidy (advisory)

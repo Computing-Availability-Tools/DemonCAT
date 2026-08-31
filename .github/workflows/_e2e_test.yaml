@@ -26,6 +26,10 @@ on:
         description: "Enable pytest-xdist parallel execution (-n auto)"
         type: boolean
         default: false
+      timeout-minutes:
+        description: "Job timeout in minutes (E2E full NPU needs >60: 280 cases + shared-host hccn_tool contention)"
+        type: number
+        default: 60
 
 permissions:
   contents: read
@@ -34,7 +38,7 @@ jobs:
   e2e:
     name: E2E (${{ inputs.mark || 'ALL' }})
     runs-on: ${{ fromJSON(inputs.runner) }}
-    timeout-minutes: 60
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout
         id: co1
@@ -111,11 +115,14 @@ jobs:
             # shellcheck disable=SC2024
             # sudo -n: 自托管 runner 未配 passwordless sudo 时立即失败, 而非卡死拖到 60min 超时
             sudo -n -E env PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
+            # 必须在 chown 前捕获 pytest 退出码！此前 TEST_RC 取的是
+            # `sudo chown ... || true`（恒 0），把 NPU 真实测试失败吞掉 → 门禁假绿。
+            TEST_RC=$?
             sudo chown "$(id -un):$(id -gn)" tests/e2e/report*.md tests/e2e/results_*.csv tests/e2e/e2e_junit.xml 2>/dev/null || true
           else
             DCAT_AUTO_SUDO=1 PYTHONDONTWRITEBYTECODE=1 GITHUB_STEP_SUMMARY="$GITHUB_STEP_SUMMARY" python3 -m pytest tests/e2e/ "${XDIST_FLAG[@]}" --junitxml=tests/e2e/e2e_junit.xml "${MARK[@]}" > tests/e2e/e2e_run.log 2>&1
+            TEST_RC=$?
           fi
-          TEST_RC=$?
           set -e
           cat tests/e2e/e2e_run.log
           # GHA 只解析 step 实时 stdout 中的 ::error:: 注解；pytest 输出进了 log，

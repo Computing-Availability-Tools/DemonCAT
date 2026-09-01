@@ -150,10 +150,10 @@ dcat list
 | `rNPU_ip_change` | npu | inject,clean,query | chip,address,netmask | — |
 | `rNPU_gw_change` | npu | inject,clean,query | chip,gateway | — |
 | `rNPU_netdetect_change` | npu | inject,clean,query | chip,address | — |
-| `rNPU_arp` | npu | inject,clean,query | chip,dev,ip | mac |
-| `rNPU_route` | npu | inject,clean,query | chip,address,netmask | gateway |
-| `rNPU_iprule` | npu | inject,clean,query | chip,dir,ip | table |
-| `rNPU_iproute` | npu | inject,clean,query | chip,ip,ip_mask,table | via,dev |
+| `rNPU_arp` | npu | inject,clean,query | chip,dev,ip,mac | — |
+| `rNPU_route` | npu | inject,clean,query | chip,address,netmask,gateway | — |
+| `rNPU_iprule` | npu | inject,clean,query | chip,dir,ip,table | — |
+| `rNPU_iproute` | npu | inject,clean,query | chip,ip,ip_mask,table,via,dev | — |
 | `rNPU_bw_limit` | npu | inject,clean,query | chip,bw_limit | — |
 | `rNPU_mtu_mismatch` | npu | inject,clean,query | chip,size | — |
 | `rNPU_dscp_tc_change` | npu | inject,clean,query | chip,dscp,tc | — |
@@ -168,9 +168,9 @@ dcat list
 | `rNET_corrupt` | network | inject,clean,query | iface,corrupt_pct | — |
 | `rNET_conn_exhaust` | network | inject,clean,query | target | count |
 | `rPROC_fork_bomb` | process | inject,clean,query | count | — |
-| `rPROC_fd_exhaust` | process | inject,clean,query | count | — |
+| `rPROC_fd_exhaust` | process | inject,clean,query | — | count |
 | `rMEM_leak` | memory | inject,clean,query | size_mb | — |
-| `rMEM_oom` | memory | inject,clean,query | rate_mb | — |
+| `rMEM_oom` | memory | inject,clean,query | — | rate_mb |
 | `rMEM_fragment` | memory | inject,clean,query | — | blocks,block_kb |
 | `rMEM_swap_overload` | memory | inject,clean,query | size_mb | — |
 | `rFS_file_lock` | filesystem | inject,clean,query | path,mode | — |

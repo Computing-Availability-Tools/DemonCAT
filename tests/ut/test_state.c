@@ -2,6 +2,7 @@
 #include "state.h"
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 int test_add_find_by_params_list_inactive(void) {
     state_reset();
@@ -218,6 +219,78 @@ int test_state_for_each_all(void) {
     return 0;
 }
 
+/* C1 回归：跨进程并发 inject → state.json 丢记录。
+ * 两进程必须都先把空文件 load 进内存（各自 next_id=1），再加各自记录后 save。
+ * 屏障保证 load 全部完成后再放行 save：无文件锁时后写者覆盖先写者 → 丢 1 条。 */
+int test_cross_process_concurrent_save_no_loss(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-cf.json";
+    state_set_file(fp);
+    unlink(fp);
+
+    int ready_fds[2], go_fds[2]; /* ready: 子→父报"已load"; go: 父→子放行 save */
+    ASSERT_INT_EQ(pipe(ready_fds), 0);
+    ASSERT_INT_EQ(pipe(go_fds), 0);
+
+    pid_t a = fork();
+    ASSERT_TRUE(a >= 0);
+    if (a == 0) {
+        params_t pa;
+        params_init(&pa);
+        params_set(&pa, "iface", "eth0");
+        state_load();
+        char one = 'x';
+        (void)write(ready_fds[1], &one, 1);
+        (void)read(go_fds[0], &one, 1); /* 等父进程放行 */
+        state_add("rNET_loss", &pa);
+        state_save();
+        _exit(0);
+    }
+    pid_t b = fork();
+    ASSERT_TRUE(b >= 0);
+    if (b == 0) {
+        params_t pb;
+        params_init(&pb);
+        params_set(&pb, "iface", "eth1");
+        state_load();
+        char one = 'x';
+        (void)write(ready_fds[1], &one, 1);
+        (void)read(go_fds[0], &one, 1);
+        state_add("rNET_delay", &pb);
+        state_save();
+        _exit(0);
+    }
+    close(ready_fds[1]);
+    close(go_fds[0]);
+    char c;
+    (void)read(ready_fds[0], &c, 1); /* A 已 load */
+    (void)read(ready_fds[0], &c, 1); /* B 已 load */
+    char two[2] = {'g', 'g'};
+    (void)write(go_fds[1], two, 2); /* 同时放行 A、B */
+    close(ready_fds[0]);
+    close(go_fds[1]);
+    int st;
+    waitpid(a, &st, 0);
+    waitpid(b, &st, 0);
+
+    /* 父进程恢复读盘：应同时看到 A、B 两条注入 */
+    state_reset();
+    state_load();
+    params_t qa;
+    params_init(&qa);
+    params_set(&qa, "iface", "eth0");
+    params_t qb;
+    params_init(&qb);
+    params_set(&qb, "iface", "eth1");
+    long long ids[DCAT_MAX_RECORDS];
+    int na = state_find_by_params("rNET_loss", &qa, ids, DCAT_MAX_RECORDS);
+    int nb = state_find_by_params("rNET_delay", &qb, ids, DCAT_MAX_RECORDS);
+    ASSERT_INT_EQ(na, 1);
+    ASSERT_INT_EQ(nb, 1);
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -229,5 +302,6 @@ int main(void) {
     RUN_TEST(test_state_snapshot_by_uid);
     RUN_TEST(test_state_for_each_active);
     RUN_TEST(test_state_for_each_all);
+    RUN_TEST(test_cross_process_concurrent_save_no_loss);
     return TEST_MAIN_RETURN();
 }

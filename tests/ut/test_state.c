@@ -319,6 +319,30 @@ static void visit_count_delay(const injection_record_t *r, void *ctx) {
     }
 }
 
+/* W3 visitor：统计 rNET_delay 各 delay_ms 计数的 active/inactive */
+struct w3_ctx {
+    int cnt50, act50, cnt80, act80;
+    long long found_id;
+};
+
+static void visit_w3(const injection_record_t *r, void *ctx) {
+    struct w3_ctx *w = (struct w3_ctx *)ctx;
+    if (strcmp(r->uid, "rNET_delay") != 0) return;
+    const char *iface = params_find(&r->params, "iface");
+    if (!iface || strcmp(iface, "eth9") != 0) return;
+    const char *dm = params_find(&r->params, "delay_ms");
+    if (dm && strcmp(dm, "50") == 0) {
+        w->cnt50++;
+        if (r->active) {
+            w->act50++;
+            if (r->record_id > w->found_id) w->found_id = r->record_id;
+        }
+    } else if (dm && strcmp(dm, "80") == 0) {
+        w->cnt80++;
+        if (r->active) w->act80++;
+    }
+}
+
 int test_clean_after_renumber_no_ghost(void) {
     state_reset();
     const char *fp = "/tmp/dcat-test-state-w1.json";
@@ -433,6 +457,68 @@ int test_clean_after_renumber_no_ghost(void) {
     return 0;
 }
 
+/* W3 回归：force 重注入同参数序列中，"新注入"不得被 merge 第 2 段(uid+params 忽略
+ * active 匹配)写进磁盘同参数但 inactive 的历史记录（复活历史），必须追加新 id。
+ * 序列（真实 dcat force 语义，state 层模拟）：
+ *   1. inject delay50        → 快照 A：id=1 active (delay50)
+ *   2. force inject delay80  → mark_inactive(id1); add → id=2 active (delay80)
+ *   3. force inject delay50  → mark_inactive(id2); add → id=3 active (delay50)
+ * 修复前：第 3 步 save 时 merge 对 mem.ad(delay50,active) 匹配磁盘 id=1(delay50,inactive)
+ *         同 uid+params → 覆盖 id1 active（复活历史）、id3 不落盘 → 盘上 id1 active + id2
+ *         inactive，返回的 id3 无处可查，物理 qdisc 仍是 delay50。
+ * 修复后：第 2 段仅匹配磁盘 active 目标，delay50 的 inactive 历史不命中 → 追加 id3 active。 */
+static int force_round(const char *fp, const char *uid, params_t *p, long long *out_id) {
+    state_reset();
+    state_set_file(fp);
+    state_load();
+    /* clean 全部该 uid 活跃记录（force 语义：先清后注） */
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        if (state_find_by_id((long long)(i + 1)) && strcmp(state_find_by_id((long long)(i + 1))->uid, uid) == 0)
+            state_mark_inactive((long long)(i + 1));
+    }
+    long long id = state_add(uid, p);
+    if (id < 1) return 1;
+    state_save();
+    if (out_id) *out_id = id;
+    return 0;
+}
+
+int test_reinject_same_params_no_history_revival(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-w3.json";
+    state_set_file(fp);
+    unlink(fp);
+
+    params_t p50, p80;
+    params_init(&p50);
+    params_set(&p50, "iface", "eth9");
+    params_set(&p50, "delay_ms", "50");
+    params_init(&p80);
+    params_set(&p80, "iface", "eth9");
+    params_set(&p80, "delay_ms", "80");
+
+    long long id1 = 0, id2 = 0, id3 = 0;
+    ASSERT_INT_EQ(force_round(fp, "rNET_delay", &p50, &id1), 0);
+    ASSERT_INT_EQ(force_round(fp, "rNET_delay", &p80, &id2), 0);
+    ASSERT_TRUE(id1 >= 1 && id2 >= 1 && id2 > id1);
+    ASSERT_INT_EQ(force_round(fp, "rNET_delay", &p50, &id3), 0);
+    ASSERT_TRUE(id3 > id2); /* 新 id 递增 */
+
+    /* 读盘验证：最终应只有延迟 50 的 active(id3)，且无 ghost/复活(id1 保持 inactive) */
+    state_reset();
+    state_load();
+    struct w3_ctx w = {0, 0, 0, 0, -1};
+    state_for_each_all(visit_w3, &w);
+    /* 历史保留：id1(50, inactive) + id2(80, inactive) + id3(50, active) */
+    ASSERT_INT_EQ(w.cnt50, 2);      /* 历史 delay50 + 新 delay50 */
+    ASSERT_INT_EQ(w.act50, 1);      /* 只有一条 delay50 active(新注入 id3) */
+    ASSERT_INT_EQ(w.cnt80, 1);      /* delay80 历史 */
+    ASSERT_INT_EQ(w.act80, 0);      /* delay80 已被 force 清 */
+    ASSERT_INT_EQ(w.found_id, id3); /* 盘上 active delay50 必须是 id3，不是复活的 id1 */
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -446,5 +532,6 @@ int main(void) {
     RUN_TEST(test_state_for_each_all);
     RUN_TEST(test_cross_process_concurrent_save_no_loss);
     RUN_TEST(test_clean_after_renumber_no_ghost);
+    RUN_TEST(test_reinject_same_params_no_history_revival);
     return TEST_MAIN_RETURN();
 }

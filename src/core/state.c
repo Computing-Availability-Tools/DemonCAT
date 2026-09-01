@@ -318,11 +318,13 @@ static int merge_records(const injection_record_t *mem, int mem_n,
             }
         }
         /* 2) 逻辑匹配：忽略 id，按 uid+params 找磁盘上同逻辑记录（并发重编号后
-         *    内存持旧 id，record_id 已对不上）。clean 回写 inactive 须命中磁盘那条
-         *    active 目标；重复 save 命中磁盘同逻辑记录同步 started_at。 */
+         *    内存持旧 id，record_id 已对不上）。仅匹配磁盘上 active 的目标记录：
+         *    - W1 clean 回写 inactive：命中磁盘那条 active 记录 → 置 inactive；
+         *    - 新注入(active)：绝不匹配磁盘上同 uid+params 但 inactive 的历史记录，
+         *      （否则会"复活"历史并把新 id 挤掉 → W3 ghost/id 错位），走追加分支。 */
         if (!matched) {
             for (j = 0; j < n; j++) {
-                if (record_same_params(m, &out[j])) {
+                if (record_same_params(m, &out[j]) && out[j].active) {
                     out[j].active = m->active;
                     strncpy(out[j].started_at, m->started_at, sizeof(out[j].started_at) - 1);
                     out[j].started_at[sizeof(out[j].started_at) - 1] = '\0';

@@ -298,6 +298,141 @@ int test_cross_process_concurrent_save_no_loss(void) {
     return 0;
 }
 
+/* W1 回归：并发注入重编号后，内存持旧 id 的记录执行 clean+save 不得产生 ghost，
+ * 且真实磁盘记录应被清 inactive。
+ * 序列：A、B 都从空盘 load(next=1)→add（均得 id=1）；A 先 save 落盘 loss@1；
+ *       B save 时 delay@1 与 loss@1 撞 id → 重编号 delay@2 写盘，但 B 内存仍 delay@1；
+ *       B 再 mark_inactive(1)+save。
+ * 修复前：merge 用 record_id+uid+params 匹配，delay@1(磁盘是 delay@2)匹配不上
+ *         → 当新记录 id@3 追加(ghost)，磁盘 delay@2 仍 active → clean 失效。
+ * 修复后：按 uid+params 且磁盘 active 匹配 → delay@1 命中磁盘 delay@2，只置 inactive。 */
+struct delay_count_ctx {
+    int cnt;
+    int active_cnt;
+};
+
+static void visit_count_delay(const injection_record_t *r, void *ctx) {
+    struct delay_count_ctx *v = (struct delay_count_ctx *)ctx;
+    if (strcmp(r->uid, "rNET_delay") == 0) {
+        v->cnt++;
+        if (r->active) v->active_cnt++;
+    }
+}
+
+int test_clean_after_renumber_no_ghost(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-w1.json";
+    state_set_file(fp);
+    unlink(fp);
+
+    /* 每进程独立 go/ack 管道：共享管道会让两个子进程竞争同一字节 → waitpid 挂死 */
+    int ready_fds[2], goa[2], gob1[2], gob2[2], acka[2], ackb[2];
+    ASSERT_INT_EQ(pipe(ready_fds), 0);
+    ASSERT_INT_EQ(pipe(goa), 0);
+    ASSERT_INT_EQ(pipe(gob1), 0);
+    ASSERT_INT_EQ(pipe(gob2), 0);
+    ASSERT_INT_EQ(pipe(acka), 0);
+    ASSERT_INT_EQ(pipe(ackb), 0);
+
+    pid_t a = fork();
+    ASSERT_TRUE(a >= 0);
+    if (a == 0) {
+        params_t pa;
+        params_init(&pa);
+        params_set(&pa, "iface", "eth0");
+        close(ready_fds[0]);
+        close(goa[1]);
+        close(gob1[0]);
+        close(gob1[1]);
+        close(gob2[0]);
+        close(gob2[1]);
+        close(acka[0]);
+        close(ackb[0]);
+        close(ackb[1]);
+        state_load();
+        state_add("rNET_loss", &pa); /* id=1 */
+        char one = 'x';
+        ssize_t w1 = write(ready_fds[1], &one, 1);
+        ssize_t r1 = read(goa[0], &one, 1); /* 放行 A save */
+        (void)w1;
+        (void)r1;
+        state_save();
+        ssize_t w2 = write(acka[1], &one, 1);
+        (void)w2;
+        _exit(0);
+    }
+    pid_t b = fork();
+    ASSERT_TRUE(b >= 0);
+    if (b == 0) {
+        params_t pb;
+        params_init(&pb);
+        params_set(&pb, "iface", "eth1");
+        close(ready_fds[0]);
+        close(goa[0]);
+        close(goa[1]);
+        close(gob1[1]);
+        close(gob2[1]);
+        close(acka[0]);
+        close(acka[1]);
+        close(ackb[0]);
+        state_load();
+        long long bid = state_add("rNET_delay", &pb); /* id=1 */
+        char one = 'x';
+        ssize_t w1 = write(ready_fds[1], &one, 1);
+        ssize_t r1 = read(gob1[0], &one, 1); /* 放行 B save */
+        (void)w1;
+        (void)r1;
+        state_save(); /* delay@1 与磁盘 loss@1 撞 id → 重编号 delay@2 写盘 */
+        ssize_t w2 = write(ackb[1], &one, 1);
+        (void)w2;
+        ssize_t r2 = read(gob2[0], &one, 1); /* 放行 B clean */
+        (void)r2;
+        state_mark_inactive(bid); /* 内存仍持旧 id=1 */
+        state_save();
+        _exit(0);
+    }
+    close(ready_fds[1]);
+    close(goa[0]);
+    close(gob1[0]);
+    close(gob2[0]);
+    close(acka[1]);
+    close(ackb[1]);
+    char c;
+    ssize_t ra = read(ready_fds[0], &c, 1); /* A 已 load */
+    ssize_t rb = read(ready_fds[0], &c, 1); /* B 已 load */
+    (void)ra;
+    (void)rb;
+    int st;
+    ssize_t ga = write(goa[1], "g", 1); /* 放行 A save */
+    (void)ga;
+    waitpid(a, &st, 0);
+    ssize_t sca = read(acka[0], &c, 1); /* A saved */
+    (void)sca;
+    ssize_t gb = write(gob1[1], "g", 1); /* 放行 B save */
+    (void)gb;
+    ssize_t scb = read(ackb[0], &c, 1); /* B saved */
+    (void)scb;
+    ssize_t gc = write(gob2[1], "g", 1); /* 放行 B clean */
+    (void)gc;
+    waitpid(b, &st, 0);
+    close(ready_fds[0]);
+    close(goa[1]);
+    close(gob1[1]);
+    close(gob2[1]);
+    close(acka[0]);
+    close(ackb[0]);
+
+    /* 父进程读盘验证：rNET_delay 恰 1 条且 inactive（无 ghost、clean 生效） */
+    state_reset();
+    state_load();
+    struct delay_count_ctx v = {0, 0};
+    state_for_each_all(visit_count_delay, &v);
+    ASSERT_INT_EQ(v.cnt, 1);        /* 修复前=2: delay@2 active + delay@3 ghost */
+    ASSERT_INT_EQ(v.active_cnt, 0); /* 修复前=1: delay@2 未被清 */
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -310,5 +445,6 @@ int main(void) {
     RUN_TEST(test_state_for_each_active);
     RUN_TEST(test_state_for_each_all);
     RUN_TEST(test_cross_process_concurrent_save_no_loss);
+    RUN_TEST(test_clean_after_renumber_no_ghost);
     return TEST_MAIN_RETURN();
 }

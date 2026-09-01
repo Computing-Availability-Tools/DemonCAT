@@ -277,8 +277,23 @@ static int record_identical(const injection_record_t *a, const injection_record_
     return 1;
 }
 
+/* 同逻辑记录（忽略 record_id）：uid+params 全等即视为同一条注入。
+ * 并发注入重编号后内存 record_id 与磁盘不一致（W1），id 只是序号，不能作匹配键。 */
+static int record_same_params(const injection_record_t *a, const injection_record_t *b) {
+    if (strcmp(a->uid, b->uid) != 0) return 0;
+    if (a->params.count != b->params.count) return 0;
+    for (int i = 0; i < a->params.count; i++) {
+        const char *v = params_find(&b->params, a->params.items[i].key);
+        if (!v || strcmp(v, a->params.items[i].value) != 0) return 0;
+    }
+    return 1;
+}
+
 /* 把 mem 记录并入 disk 记录：保留磁盘上他人新增的记录，id 撞车时给本地新记录
- * 分配新 id（两进程各自从 next_id=1 起步时都会拿到 record_id=1）。 */
+ * 分配新 id（两进程各自从 next_id=1 起步时都会拿到 record_id=1）。
+ * 匹配键：先按 record_id+uid+params（重复 save / clean 回写精确命中），再按
+ * uid+params 忽略 id 匹配磁盘上同逻辑记录（并发重编号后内存 id 已失真，找磁盘
+ * active 的目标记录，只覆盖 active/started_at，避免产生 ghost 且 clean 失效）。 */
 static int merge_records(const injection_record_t *mem, int mem_n,
                          const injection_record_t *disk, int disk_n,
                          injection_record_t out[DCAT_MAX_RECORDS], long long *next_id_out) {
@@ -291,8 +306,10 @@ static int merge_records(const injection_record_t *mem, int mem_n,
     for (int i = 0; i < mem_n && n < DCAT_MAX_RECORDS; i++) {
         const injection_record_t *m = &mem[i];
         int matched = 0;
-        for (int j = 0; j < n; j++) {
-            if (record_identical(m, &out[j])) { /* 本进程重复 save / clean 后回写 */
+        int j;
+        /* 1) 精确匹配：record_id+uid+params 全等（本进程重复 save / clean 后回写） */
+        for (j = 0; j < n; j++) {
+            if (record_identical(m, &out[j])) {
                 out[j].active = m->active;
                 strncpy(out[j].started_at, m->started_at, sizeof(out[j].started_at) - 1);
                 out[j].started_at[sizeof(out[j].started_at) - 1] = '\0';
@@ -300,9 +317,23 @@ static int merge_records(const injection_record_t *mem, int mem_n,
                 break;
             }
         }
+        /* 2) 逻辑匹配：忽略 id，按 uid+params 找磁盘上同逻辑记录（并发重编号后
+         *    内存持旧 id，record_id 已对不上）。clean 回写 inactive 须命中磁盘那条
+         *    active 目标；重复 save 命中磁盘同逻辑记录同步 started_at。 */
+        if (!matched) {
+            for (j = 0; j < n; j++) {
+                if (record_same_params(m, &out[j])) {
+                    out[j].active = m->active;
+                    strncpy(out[j].started_at, m->started_at, sizeof(out[j].started_at) - 1);
+                    out[j].started_at[sizeof(out[j].started_at) - 1] = '\0';
+                    matched = 1;
+                    break;
+                }
+            }
+        }
         if (matched) continue;
         int id_taken = 0;
-        for (int j = 0; j < n; j++) {
+        for (j = 0; j < n; j++) {
             if (out[j].record_id == m->record_id) {
                 id_taken = 1;
                 break;

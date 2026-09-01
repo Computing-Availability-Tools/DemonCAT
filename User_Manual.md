@@ -1856,9 +1856,9 @@ dcat clean rNPU_aic_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：每批次提交 100 次算子后同步等待 NPU 完成，测量实际计算耗时，再按 `sleep = compute × (1 - duty) / duty` 休眠。校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~98%，因 API 调用开销无法达到 100%）。
+**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~84%，因 API 调用开销无法达到 100%）。
 
-> **精度说明**：实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。`load_pct=100` 时 AICore 实际约 96%、AIVector 约 98%。
+> **精度说明**：实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。`load_pct=100` 时 AICore 实际约 96%、AIVector 约 84%。
 
 **危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。持续运行直到 clean。
 
@@ -1868,11 +1868,11 @@ dcat clean rNPU_aic_load --chip=2
 
 **UID**: `rNPU_aicpu_load`
 
-**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP16 Top-K 排序（2000×2000），持续施压 AICpu 计算单元，拉高 AICpu 使用率。
+**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP64 Top-K 排序（500×500），持续施压 AICpu 计算单元，拉高 AICpu 使用率。
 
 **实现原理**:
 
-- **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.90），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
+- **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.94），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicpu Usage Rate。
 
@@ -1892,7 +1892,7 @@ dcat clean rNPU_aicpu_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AICpu 满载上限约 90%（Topk 算子特性）。
+**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AICpu 满载上限约 94%（Topk 算子特性）。
 
 **危险等级**: 中 — AICpu 持续高负载，影响同芯片上其他任务的 AICpu 计算性能。持续运行直到 clean。
 
@@ -1906,7 +1906,7 @@ dcat clean rNPU_aicpu_load --chip=2
 
 **实现原理**:
 
-- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.98），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
+- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.84），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
 
@@ -1926,7 +1926,7 @@ dcat clean rNPU_aiv_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AIVector 满载上限约 98%（Add 算子带宽受限）。
+**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AIVector 满载上限约 84%（API 调用开销实测校准）。
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 
@@ -2029,7 +2029,7 @@ dcat query rNPU_driver_unbind --chip=2
 
 **危险等级**: 高 — 驱动解绑后该芯片不可用，所有 NPU 操作失败。
 
-**补充说明**: 需要 root。PCIe 地址通过 `npu-smi info` 输出中的 `0000:xx:xx.x` 格式获取，或通过 `lspci -D` + `/dev/davinci*` 映射回退。脚本内含防御性 clean 分支（rebind + FLR）但非官方支持操作。
+**补充说明**: 需要 root。PCIe 地址通过 `npu-smi info` 输出中的 `0000:xx:xx.x` 格式获取，或通过 `lspci -D` + `/dev/davinci*` 映射回退。脚本仅支持 `inject,query`，无 clean 分支（910B4 上驱动重绑定后固件不完全恢复，clean 无意义）。
 
 ---
 
@@ -2062,7 +2062,7 @@ dcat query rNPU_pcie_remove --chip=2
 
 **危险等级**: 高 — PCIe 设备移除后该芯片完全消失，所有 NPU 操作失败。
 
-**补充说明**: 需要 root。**910B4 恢复行为**：PCIe rescan 恢复设备条目但 NPU 固件不会重新初始化，**需要冷启动（关机再开机）**才能完全恢复 NPU。温重启（reboot）可能不够。与 `rNPU_driver_unbind` 的区别：driver_unbind 仅断开驱动绑定（软件层），pcie_remove 从 PCIe 总线移除设备（更接近物理拔卡）。脚本内含防御性 clean 分支（rescan + FLR）但非官方支持操作。
+**补充说明**: 需要 root。**910B4 恢复行为**：PCIe rescan 恢复设备条目但 NPU 固件不会重新初始化，**需要冷启动（关机再开机）**才能完全恢复 NPU。温重启（reboot）可能不够。与 `rNPU_driver_unbind` 的区别：driver_unbind 仅断开驱动绑定（软件层），pcie_remove 从 PCIe 总线移除设备（更接近物理拔卡）。脚本仅支持 `inject,query`，无 clean 分支（rescan 后固件不恢复，clean 无意义）。
 
 ---
 

@@ -7,7 +7,7 @@
  *   hbm:      aclrtMalloc + memset (HBM memory stress)
  * duration 0 = run forever (until killed)
  * load_pct 1-100 (default 100): fixed 50ms PWM duty-cycle.
- *   duty = load_pct / max_achievable (aicore 0.96, aicpu 0.90, aivector 0.98)
+ *   duty = load_pct / max_achievable (aicore 0.96, aicpu 0.94, aivector 0.84)
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"

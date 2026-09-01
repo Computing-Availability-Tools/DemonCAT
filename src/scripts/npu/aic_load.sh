@@ -1,6 +1,9 @@
 #!/bin/sh
-# rNPU_aic_load: AICore stress via torch_npu matmul.
-# inject: run _npu_stress aicore in background, write pidfile
+# rNPU_aic_load: AICore stress via _npu_stress aclnnMatmul.
+# inject: run _npu_stress aicore in background, write pidfile.
+#   load_pct 未填或 =100(满血): FP32 matmul 5120 直跑, 实测 AICore ≈99%
+#     (FP16 5120 带宽受限仅 96%, 故满血换 FP32)。
+#   load_pct<100(PWM): FP16 matmul 5120 + 50ms 占空比, duty=load_pct/0.96。
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aicore Usage Rate)
 . "$(dirname "$0")/_common.sh"

@@ -14,3 +14,4 @@ tests/e2e/e2e_run.log
 tests/e2e/e2e_junit.xml
 tests/e2e/failures_*.log
 build/ctest_run.log
+docs/superpowers/

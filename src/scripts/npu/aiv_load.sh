@@ -1,6 +1,9 @@
 #!/bin/sh
-# rNPU_aiv_load: AIVector stress via aclnnExp (compute-bound, ~84% peak).
-# inject: run _npu_stress aivector in background, write pidfile
+# rNPU_aiv_load: AIVector stress via _npu_stress.
+# inject: run _npu_stress aivector in background, write pidfile.
+#   load_pct 未填或 =100(满血): FP32 add 8500 直跑, 实测 AIVector ≈98%
+#     (贴近 Python 参考脚本; PWM 用 exp 8192 仅 84%)。
+#   load_pct<100(PWM): FP16 exp 8192 + 50ms 占空比, duty=load_pct/0.84。
 # clean:  kill stress process
 # query:  npu-smi info -t usages (check Aivector Usage Rate)
 . "$(dirname "$0")/_common.sh"

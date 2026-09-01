@@ -86,6 +86,9 @@ def _npu_target_collisions(ctx, all_injects):
     hits = []
     seen = set()
     for argv in all_injects:
+        # setup_argv 可为 None（无前置注入）——跳过，绝不能让 len(None) 炸掉整个守卫
+        if not argv:
+            continue
         if len(argv) < 4 or argv[0] != "dcat" or argv[1] != "inject":
             continue
         uid = argv[2]

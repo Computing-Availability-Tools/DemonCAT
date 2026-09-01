@@ -56,7 +56,7 @@
 | --- | --- | --- | --- |
 | `rMEM_leak` | size_mb | — | Memory leak (progressive allocation) |
 | `rMEM_oom` | — | rate_mb | OOM pressure (rapid allocation) |
-| `rMEM_fragment` | blocks | block_kb | Memory fragmentation (scatter allocation) |
+| `rMEM_fragment` | — | blocks,block_kb | Memory fragmentation (scatter allocation) |
 | `rMEM_swap_overload` | size_mb | — | Swap overload (force swapping) |
 
 ## 文件系统模块（2 条）

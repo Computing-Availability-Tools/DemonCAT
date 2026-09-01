@@ -457,7 +457,7 @@ clean = dcat 重跑脚本 `DCAT_OP=clean`（传记录存储的 inject 参数）�
 | --- | --- | --- |
 | 反向操作 | arp, route, iprule, iproute | inject=add / clean=del 简化设计（inject 只 add, clean 只 del） |
 | sidecar 回放 | ip_change, gw_change, netdetect_change, mtu, dscp_tc, roce_port | inject 前 -g 存原值；clean 回放 |
-| 设回 max | bw_limit | clean = -shaping -s bw_limit 100000 |
+| sidecar 回放 | ip_change, gw_change, netdetect_change, mtu, dscp_tc, roce_port, **bw_limit** | inject 前 -g 存原值；clean 精确还原原值（原实现"设回 max 100000"改为 sidecar 记录原值回放，bw 可重复注入/还原） |
 | -cfg recovery | link_down | hccn_tool 内置恢复 |
 
 #### 4.5.2 故障差异表

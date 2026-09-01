@@ -47,12 +47,20 @@ case "${DCAT_OP:-inject}" in
         pids=""
         i=0
         while [ "$i" -lt "$workers" ]; do
-            dd if=/dev/zero of="${target}.${i}" bs=1M 2>/dev/null &
+            # 每个 worker：后台常驻 sh -c 循环，每轮执行限量 dd（count=$size）。
+            # C2 修复：size_mb 此前被校验但从未生效（dd 无限写满磁盘）；现在每轮限 size
+            # MB 且 of= 默认先截断旧文件 → 磁盘占用被钳制在 size。cmdline 含 'dd
+            # if=/dev/zero' + 'dcat.stress'，使 query / TC-607 的 pgrep 能持续命中（循环
+            # 常驻，sh -c 包装进程 cmdline 即含这些字样）。
+            loop="while :; do dd if=/dev/zero of=${target}.${i} bs=1M count=$size conv=fdatasync 2>/dev/null; sleep 1; done"
+            # 后台 worker 必须脱离 dcat executor 的 stdout/stderr 管道并断开 stdin：
+            # 否则它们继承 pipefd 写端，executor 的 read() 永不遇 EOF → 挂满 60s。
+            sh -c "$loop" </dev/null >/dev/null 2>&1 &
             pids="$pids $!"
             i=$((i + 1))
         done
         { echo "$pids"; echo "$dev"; } > "$PIDFILE"
-        echo "injected disk write overload: $workers workers on $dev (pids:$pids)"
+        echo "injected disk write overload: $workers workers on $dev size_mb=$size (pids:$pids)"
         ;;
 
     clean)

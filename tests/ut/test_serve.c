@@ -14,6 +14,8 @@
 #define _GNU_SOURCE
 #include "test.h"
 #include "../../src/core/serve.c" /* 引入 static 函数与全部依赖 */
+#include "registry.h"
+#include "executor.h"
 #include <cJSON.h>
 
 /* ---- status_text:每个 code + default 分支 ---- */
@@ -172,6 +174,58 @@ int test_handle_api_403_write_disabled(void) {
     return 0;
 }
 
+/* ---- D12 回归：CLI 进程注入后，web /api/inject 同资源必须被拒（reinject 冲突）。
+ * serve 内存态是启动时快照；api_inject 必须在 dispatch 前 state_load() 重读磁盘，
+ * 否则冲突检测查不到 CLI 刚写入的记录 → 同资源被静默放行（破坏"同资源默认拒绝"）。 */
+static result_t *mock_cap_addonly(const char *cmd, const char *const *env) {
+    (void)cmd;
+    (void)env;
+    return result_ok("inject", "rNET_delay", 0, "ok");
+}
+
+int test_api_inject_reloads_disk_state_before_dispatch(void) {
+    static config_t cfg;
+    config_load("config/demoncat.conf", &cfg);
+    registry_init(&cfg);
+    executor_set_mock(mock_cap_addonly);
+    const char *fp = "/tmp/dcat-test-serve-inject.json";
+    state_reset();
+    unlink(fp);
+    state_set_file(fp);
+
+    /* 1. 以 CLI 进程身份：注入 rNET_delay iface=eth0 → 落盘 */
+    params_t p0;
+    params_init(&p0);
+    params_set(&p0, "iface", "eth0");
+    params_set(&p0, "delay_ms", "100");
+    ASSERT_TRUE(state_add("rNET_delay", &p0) > 0);
+    state_save();
+
+    /* 2. 模拟 serve 新启动：内存态重建为空（不含磁盘记录） */
+    state_reset();
+
+    /* 3. web POST /api/inject 同资源 → 修复前放行(mock 注入成功)、修复后拒绝(业务 code 5) */
+    g_allow_write = 1;
+    resp_t resp = handle_api("POST", "/api/inject",
+                             "{\"uid\":\"rNET_delay\",\"params\":{\"iface\":\"eth0\",\"delay_ms\":\"100\"}}");
+    ASSERT_INT_EQ(resp.code, 200); /* HTTP 层恒 200，业务码在 body */
+    cJSON *root = cJSON_Parse(resp.body);
+    ASSERT_TRUE(root != NULL);
+    cJSON *st = cJSON_GetObjectItem(root, "status");
+    ASSERT_STREQ(st ? st->valuestring : "", "error");
+    cJSON *err = cJSON_GetObjectItem(root, "error");
+    ASSERT_INT_EQ(err ? (int)cJSON_GetObjectItem(err, "code")->valuedouble : -1, 5);
+    cJSON *msg = err ? cJSON_GetObjectItem(err, "message") : NULL;
+    ASSERT_STR_CONTAINS(msg ? msg->valuestring : "", "already injected");
+    cJSON_Delete(root);
+    resp_free(&resp);
+    g_allow_write = 0;
+    unlink(fp);
+    unlink("/tmp/dcat-test-serve-inject.json.lck");
+    executor_set_mock(NULL);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_status_text);
     RUN_TEST(test_content_type);
@@ -184,5 +238,6 @@ int main(void) {
     RUN_TEST(test_handle_api_405_post_on_get_only);
     RUN_TEST(test_handle_api_405_unknown_method);
     RUN_TEST(test_handle_api_403_write_disabled);
+    RUN_TEST(test_api_inject_reloads_disk_state_before_dispatch);
     return TEST_MAIN_RETURN();
 }

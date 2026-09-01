@@ -380,6 +380,7 @@ static resp_t api_inject(const char *body) {
     int force = 0;
     cJSON *fj = cJSON_GetObjectItem(root, "force");
     if (fj && cJSON_IsBool(fj)) force = cJSON_IsTrue(fj) ? 1 : 0;
+    state_load(); /* 重读磁盘，感知 CLI 进程的 inject/clean 变更，reinject 冲突检测才真实 */
     result_t *r = dispatch_route_force(uid_j->valuestring, "inject", &params, force);
     cJSON_Delete(root);
     resp_t resp = resp_from_result(r);
@@ -396,6 +397,7 @@ static resp_t api_clean(const char *body) {
         return resp_err(400, "too many params");
     }
     cJSON *uid_j = cJSON_GetObjectItem(root, "uid");
+    state_load(); /* 重读磁盘：clean 须感知 CLI 进程的注入记录，否则 state 匹配不到 */
     result_t *r;
     if (!uid_j || !cJSON_IsString(uid_j) || !uid_j->valuestring[0])
         r = dispatch_clean_all(); /* 无 uid = clean --all */

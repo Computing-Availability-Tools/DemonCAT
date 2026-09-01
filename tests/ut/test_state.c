@@ -240,8 +240,10 @@ int test_cross_process_concurrent_save_no_loss(void) {
         params_set(&pa, "iface", "eth0");
         state_load();
         char one = 'x';
-        (void)write(ready_fds[1], &one, 1);
-        (void)read(go_fds[0], &one, 1); /* 等父进程放行 */
+        ssize_t w1 = write(ready_fds[1], &one, 1);
+        ssize_t r1 = read(go_fds[0], &one, 1); /* 等父进程放行 */
+        (void)w1;
+        (void)r1;
         state_add("rNET_loss", &pa);
         state_save();
         _exit(0);
@@ -254,8 +256,10 @@ int test_cross_process_concurrent_save_no_loss(void) {
         params_set(&pb, "iface", "eth1");
         state_load();
         char one = 'x';
-        (void)write(ready_fds[1], &one, 1);
-        (void)read(go_fds[0], &one, 1);
+        ssize_t w1 = write(ready_fds[1], &one, 1);
+        ssize_t r1 = read(go_fds[0], &one, 1);
+        (void)w1;
+        (void)r1;
         state_add("rNET_delay", &pb);
         state_save();
         _exit(0);
@@ -263,10 +267,13 @@ int test_cross_process_concurrent_save_no_loss(void) {
     close(ready_fds[1]);
     close(go_fds[0]);
     char c;
-    (void)read(ready_fds[0], &c, 1); /* A 已 load */
-    (void)read(ready_fds[0], &c, 1); /* B 已 load */
+    ssize_t rr1 = read(ready_fds[0], &c, 1); /* A 已 load */
+    ssize_t rr2 = read(ready_fds[0], &c, 1); /* B 已 load */
+    (void)rr1;
+    (void)rr2;
     char two[2] = {'g', 'g'};
-    (void)write(go_fds[1], two, 2); /* 同时放行 A、B */
+    ssize_t wg = write(go_fds[1], two, 2); /* 同时放行 A、B */
+    (void)wg;
     close(ready_fds[0]);
     close(go_fds[1]);
     int st;

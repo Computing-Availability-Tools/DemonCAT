@@ -26,10 +26,11 @@ enum npu_stress_dtype {
 };
 
 struct npu_stress_cfg {
-    int op;        /* npu_stress_op    */
-    int dtype;     /* npu_stress_dtype */
-    int shape;     /* N×N 矩阵维度        */
-    int fullpower; /* 1=满血直跑(无 PWM), 0=PWM */
+    int op;         /* npu_stress_op    */
+    int dtype;      /* npu_stress_dtype */
+    int shape;      /* N×N 矩阵维度        */
+    int fullpower;  /* 1=满血直跑(无 PWM), 0=PWM */
+    float max_achievable; /* PWM 校准系数(满血路径不用): aicore 0.96, aicpu 0.94, aivector 0.84 */
 };
 
 /* 根据 mode("aicore"/"aicpu"/"aivector")、load_pct、size(=0 用默认) 返回算子配置 */

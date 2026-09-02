@@ -228,7 +228,7 @@ int main(int argc, char **argv) {
         struct npu_stress_cfg cfg = npu_stress_cfg(mode, load_pct, size);
         int op_mode = cfg.op;
         int shape = cfg.shape;
-        float max_achievable = 0.96f; /* PWM 校准，满血路径不用 */
+        float max_achievable = cfg.max_achievable; /* PWM 校准: aicore 0.96, aicpu 0.94, aivector 0.84 */
 
         if (op_mode < 0) {
             fprintf(stderr, "unknown mode: %s\n%s", mode, usage);

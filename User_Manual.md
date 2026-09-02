@@ -1833,8 +1833,8 @@ dcat clean rNPU_pcie_down --npu_id=2
 **实现原理**:
 
 - **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id>` 后台进程。
-  - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 matmul 5120 直跑。换 FP32 是因为 FP16 5120 受内存带宽限制仅能达约 96%。实测 ≈99%。
-  - **PWM**（`load_pct<100`）：FP16 matmul 5120，固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.96），满负荷跑 compute 阶段后休眠剩余时间。
+    - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 matmul 5120 直跑。换 FP32 是因为 FP16 5120 受内存带宽限制仅能达约 96%。实测 ≈99%。
+    - **PWM**（`load_pct<100`）：FP16 matmul 5120，固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.96），满负荷跑 compute 阶段后休眠剩余时间。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。优先查 `Aicore`，无则查 `Aicube`。
 
@@ -1875,8 +1875,8 @@ dcat clean rNPU_aic_load --chip=2
 **实现原理**:
 
 - **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。
-  - **满血**（未填 `load_pct` 或 `=100`，默认）：固定启动 6 个进程 × FP64 topk 2000×2000 直跑。topk 是 AICPU 算子，910B4 该配置实测上限约 94-95%。
-  - **PWM**（`load_pct<100`）：FP64 topk 500×500，先单进程 100% 探测硬件（910B 单 proc 即可填满；910C 需并行），按 `load_pct` 计算占空比（duty = load_pct / 0.94）或进程数扩展。
+    - **满血**（未填 `load_pct` 或 `=100`，默认）：固定启动 6 个进程 × FP64 topk 2000×2000 直跑。topk 是 AICPU 算子，910B4 该配置实测上限约 94-95%。
+    - **PWM**（`load_pct<100`）：FP64 topk 500×500，先单进程 100% 探测硬件（910B 单 proc 即可填满；910C 需并行），按 `load_pct` 计算占空比（duty = load_pct / 0.94）或进程数扩展。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicpu Usage Rate。
 
@@ -1911,8 +1911,8 @@ dcat clean rNPU_aicpu_load --chip=2
 **实现原理**:
 
 - **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。
-  - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 add 8500×8500 直跑。FP32 大 shape 填满 Vector 数据通路，实测 ≈98%（旧 FP16 exp 8192 仅 84%）。
-  - **PWM**（`load_pct<100`）：FP16 exp 8192×8192（128MB），固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.84），满负荷跑 compute 阶段后休眠剩余时间。
+    - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 add 8500×8500 直跑。FP32 大 shape 填满 Vector 数据通路，实测 ≈98%（旧 FP16 exp 8192 仅 84%）。
+    - **PWM**（`load_pct<100`）：FP16 exp 8192×8192（128MB），固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.84），满负荷跑 compute 阶段后休眠剩余时间。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
 

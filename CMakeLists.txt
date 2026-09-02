@@ -85,6 +85,13 @@ dcat_test(test_cli          tests/ut/test_cli.c)
 dcat_test(test_faults       tests/ut/test_faults.c)
 dcat_test(test_help        tests/ut/test_help.c)
 
+# ---- Tier 0: _npu_stress 满血/PWM 配置决策(纯 C 模块, 独立于 DCAT_CORE) ----
+add_executable(test_npu_stress_cfg tests/ut/test_npu_stress_cfg.c src/scripts/npu/npu_stress_cfg.c)
+target_include_directories(test_npu_stress_cfg PRIVATE src src/scripts/npu tests/ut)
+target_link_libraries(test_npu_stress_cfg PRIVATE cjson Threads::Threads ${CMAKE_DL_LIBS})
+add_test(NAME test_npu_stress_cfg COMMAND test_npu_stress_cfg)
+set_tests_properties(test_npu_stress_cfg PROPERTIES WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+
 # ---- Tier 0c: serve.c static 纯函数(直接 #include serve.c;不复用 dcat_test 宏防重复定义) ----
 add_executable(test_serve tests/ut/test_serve.c ${DCAT_CORE_NO_SERVE})
 target_include_directories(test_serve PRIVATE src src/core src/injectors src/plugins third_party/cjson tests/ut)
@@ -139,8 +146,8 @@ else()
     set(ASCEND_TOOLKIT "/usr/local/Ascend/ascend-toolkit/latest")
 endif()
 if(EXISTS "${ASCEND_TOOLKIT}/aarch64-linux/include/acl/acl.h")
-    add_executable(_npu_stress src/scripts/npu/_npu_stress.cpp)
-    target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include")
+    add_executable(_npu_stress src/scripts/npu/_npu_stress.cpp src/scripts/npu/npu_stress_cfg.c)
+    target_include_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/include" src/scripts/npu)
     target_link_directories(_npu_stress PRIVATE "${ASCEND_TOOLKIT}/aarch64-linux/lib64")
     target_link_libraries(_npu_stress PRIVATE ascendcl opapi nnopbase)
     set_target_properties(_npu_stress PROPERTIES

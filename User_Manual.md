@@ -1828,17 +1828,19 @@ dcat clean rNPU_pcie_down --npu_id=2
 
 **UID**: `rNPU_aic_load`
 
-**描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行 FP16 矩阵乘法（5120×5120），持续施压 Cube 计算单元，拉高 AICore 使用率。
+**描述**: 通过 CANN 算子 API `aclnnMatmul` 对指定芯片执行矩阵乘法，持续施压 Cube 计算单元，拉高 AICore 使用率。满血模式（`load_pct` 未指定或 `=100`）使用 FP32 matmul 5120×5120，实测 AICore 使用率约 **99%**；PWM 模式（`load_pct<100`）使用 FP16 matmul 5120×5120 加占空比控制。
 
 **实现原理**:
 
-- **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.96），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
+- **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id>` 后台进程。
+    - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 matmul 5120 直跑。换 FP32 是因为 FP16 5120 受内存带宽限制仅能达约 96%。实测 ≈99%。
+    - **PWM**（`load_pct<100`）：FP16 matmul 5120，固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.96），满负荷跑 compute 阶段后休眠剩余时间。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。优先查 `Aicore`，无则查 `Aicube`。
 
 > **Aicore vs Aicube 指标差异**：910B4（npu-smi 25.x）的 `Aicore Usage Rate` 即 Cube 单元；910C（npu-smi 26+）的 `Aicore` 是整个 AI Core 流水线的聚合占用率，Cube 专用指标改名为 `Aicube`。query 优先查 `Aicore`，无则查 `Aicube`，适配两个平台。
 
-**负载率原理**：固定 50ms PWM 窗口占空比。`duty = load_pct / 0.96`（满负荷上限约 96%）。每 50ms 窗口内满负荷跑 `duty%` 时间，休眠剩余时间。npu-smi 采样窗口（~1s）内看到 20 个周期，平均值平滑且贴近目标值。
+**负载率原理**：`load_pct=100`（未指定默认）时满血直跑（FP32 matmul 5120，实测 ≈99%），无 PWM；`load_pct<100` 时固定 50ms PWM 窗口占空比，`duty = load_pct / 0.96`（FP16 满载上限约 96%）。npu-smi 采样窗口（~1s）内看到 20 个周期，平均值平滑且贴近目标值。
 
 **使用示例**:
 
@@ -1856,9 +1858,9 @@ dcat clean rNPU_aic_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。内部实现为自适应占空比：校准系数补偿了 NPU 满载上限（AICore ~96%、AIVector ~84%，因 API 调用开销无法达到 100%）。
+**负载率原理**：`load_pct` 控制对 NPU 计算单元的占用率。`load_pct<100` 时内部实现为自适应占空比，校准系数补偿了 PWM 模式算子满载上限（AICore FP16 ~96%、AIVector FP16 ~84%，因 API 调用开销无法达到 100%）。`load_pct=100`（未指定，默认）走满血路径，直接以 FP32 matmul 5120 直跑，实测 AICore ≈99%。
 
-> **精度说明**：实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。`load_pct=100` 时 AICore 实际约 96%、AIVector 约 84%。
+> **精度说明**：PWM 模式（`load_pct<100`）实测值与设定值的误差通常在 ±2% 以内（中高档 30-90%）。低档（10%）可能因 npu-smi 采样窗口短而产生较大波动；高档（90%+）可能因 usleep 精度限制略低于设定值。
 
 **危险等级**: 中 — AICore 持续高负载，影响同芯片上其他训练/推理任务的计算性能。持续运行直到 clean。
 
@@ -1868,11 +1870,13 @@ dcat clean rNPU_aic_load --chip=2
 
 **UID**: `rNPU_aicpu_load`
 
-**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP64 Top-K 排序（500×500），持续施压 AICpu 计算单元，拉高 AICpu 使用率。
+**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP64 Top-K 排序，持续施压 AICpu 计算单元，拉高 AICpu 使用率。满血模式（`load_pct` 未指定或 `=100`）固定 6 进程 × shape 2000 直跑，实测 AICpu 约 94-95%；PWM 模式（`load_pct<100`）使用 FP64 topk 500×500 加占空比控制。
 
 **实现原理**:
 
-- **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.94），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
+- **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。
+    - **满血**（未填 `load_pct` 或 `=100`，默认）：固定启动 6 个进程 × FP64 topk 2000×2000 直跑。topk 是 AICPU 算子，910B4 该配置实测上限约 94-95%。
+    - **PWM**（`load_pct<100`）：FP64 topk 500×500，先单进程 100% 探测硬件（910B 单 proc 即可填满；910C 需并行），按 `load_pct` 计算占空比（duty = load_pct / 0.94）或进程数扩展。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicpu Usage Rate。
 
@@ -1892,7 +1896,7 @@ dcat clean rNPU_aicpu_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AICpu 满载上限约 94%（Topk 算子特性）。
+**负载率原理**：`load_pct=100`（未指定默认）满血直跑，固定 6 进程 × shape 2000，AICpu 实测约 94-95%（topk 算子在该平台的上限）。`load_pct<100` 时固定周期 PWM 占空比（duty = load_pct / 0.94，PWM 模式 FP64 topk 500 满载上限约 94%）。
 
 **危险等级**: 中 — AICpu 持续高负载，影响同芯片上其他任务的 AICpu 计算性能。持续运行直到 clean。
 
@@ -1902,11 +1906,13 @@ dcat clean rNPU_aicpu_load --chip=2
 
 **UID**: `rNPU_aiv_load`
 
-**描述**: 通过 CANN 算子 API `aclnnExp` 对指定芯片执行 FP16 元素级指数运算（8192×8192 = 128MB），持续施压 Vector 计算单元，拉高 AIVector 使用率。exp 是计算型算子（多项式逼近），算术强度高于带宽型算子（如 add），能更充分地压满 Vector 单元。
+**描述**: 通过 CANN 算子 API 对指定芯片执行元素级运算，持续施压 Vector 计算单元，拉高 AIVector 使用率。满血模式（`load_pct` 未指定或 `=100`）使用 FP32 add 8500×8500 直跑，实测 AIVector 约 **98%**；PWM 模式（`load_pct<100`）使用 FP16 exp 8192×8192 加占空比控制。
 
 **实现原理**:
 
-- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.84），满负荷跑 compute 阶段后休眠剩余时间。PID 写入 pidfile。
+- **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。
+    - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 add 8500×8500 直跑。FP32 大 shape 填满 Vector 数据通路，实测 ≈98%（旧 FP16 exp 8192 仅 84%）。
+    - **PWM**（`load_pct<100`）：FP16 exp 8192×8192（128MB），固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.84），满负荷跑 compute 阶段后休眠剩余时间。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
 
@@ -1926,7 +1932,7 @@ dcat clean rNPU_aiv_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：同 `rNPU_aic_load`，固定周期 PWM 占空比。AIVector 满载上限约 84%（API 调用开销实测校准）。
+**负载率原理**：`load_pct=100`（未指定默认）满血直跑（FP32 add 8500，实测 ≈98%）；`load_pct<100` 时固定周期 PWM 占空比，duty = load_pct / 0.84（FP16 exp 8192 满载上限约 84%）。
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 

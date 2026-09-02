@@ -1,11 +1,13 @@
 #!/bin/sh
 # rNPU_aicpu_load: AICpu stress via aclnnTopk FP64.
-# inject: run _npu_stress aicpu in background, write pidfile
+# inject: run _npu_stress aicpu in background, write pidfile.
 # clean:  kill stress process(es)
 # query:  npu-smi info -t usages (check Aicpu Usage Rate)
 #
-# Adaptive: 910B single topk fills AICPU (~94%); 910C needs 6 parallel.
-# Probe with 1 process at 100%, check npu-smi; if <50% → 910C mode (6 procs).
+# 满血(load_pct 默认 100 或 >=100): 固定 6 进程 × shape 2000 直跑。
+#   topk 为 AICPU 算子, 该平台实测上限约 94-95%。
+# PWM(load_pct<100): probe 单进程 100% 探测硬件, 910B 单 proc + PWM 调占空比,
+#   910C 并行进程数扩展。
 . "$(dirname "$0")/_common.sh"
 chip=${DCAT_PARAM_CHIP:-}
 if [ -n "$chip" ]; then npu_validate_chip "$chip" || { echo "chip validation failed" >&2; exit 1; }; fi
@@ -28,7 +30,29 @@ case "${DCAT_OP:-inject}" in
         [ -z "$dev_id" ] && { npu_acl_dev_id_err "$chip"; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
 
-        # Phase 1: probe with 1 process at 100% to detect hardware type
+        # 满血模式(默认/100%): 固定 6 进程 × shape 2000, 跳过 probe()。
+        if [ "$load_pct" -ge 100 ]; then
+            pids=""
+            i=0
+            while [ "$i" -lt 6 ]; do
+                "$STRESS_BIN" aicpu "$dev_id" 2000 100 0 > /dev/null 2>&1 &
+                pids="$pids $!"
+                i=$((i + 1))
+            done
+            echo "$pids" > "$SIDECAR"
+            sleep 5
+            alive=0
+            for p in $pids; do kill -0 "$p" 2>/dev/null && alive=$((alive+1)); done
+            if [ "$alive" -eq 0 ]; then
+                rm -f "$SIDECAR"
+                echo "AICpu stress failed on chip $chip (all 6 procs died)" >&2
+                exit 1
+            fi
+            echo "AICpu stress started on chip $chip (dev $dev_id, procs=6, load=100% fullpower)"
+            exit 0
+        fi
+
+        # PWM 模式: probe 单进程 100% 探测硬件类型, 选择 910B(单proc)/910C(并行) 路径
         LOG="/tmp/dcat-rNPU_aicpu_load-$chip.log"
         "$STRESS_BIN" aicpu "$dev_id" 0 100 0 > "$LOG" 2>&1 &
         probe_pid=$!

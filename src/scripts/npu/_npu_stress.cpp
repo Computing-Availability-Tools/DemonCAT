@@ -1,13 +1,21 @@
 /*
  * _npu_stress.cpp — NPU stress tool using aclnn operators (no torch_npu required).
  * Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]
- *   aicore:   aclnnMatmul 5120 FP16 (Cube units → AICore Usage)
- *   aicpu:    aclnnTopk 500 FP64 (AICpu units → AICpu Usage)
- *   aivector: aclnnExp 8192 FP16 (Vector units → AIVector Usage)
+ *   aicore:   aclnnMatmul (Cube units → AICore Usage)
+ *   aicpu:    aclnnTopk FP64 (AICpu units → AICpu Usage)
+ *   aivector: aclnnExp / aclnnAdd (Vector units → AIVector Usage)
  *   hbm:      aclrtMalloc + memset (HBM memory stress)
  * duration 0 = run forever (until killed)
- * load_pct 1-100 (default 100): fixed 50ms PWM duty-cycle.
- *   duty = load_pct / max_achievable (aicore 0.96, aicpu 0.94, aivector 0.84)
+ * load_pct 1-100 (default 100). 满血/PWM 两套配置(见 npu_stress_cfg.h):
+ *   load_pct>=100 (默认): 满血直跑 — 无 PWM, 全速连续下发算子(batch=100
+ *       amortize sync 开销), 大算子配置, 实测饱和度:
+ *       aicore aclnnMatmul FP32 5120 → ~99% (FP16 带宽受限仅 96%)
+ *       aivector aclnnAdd FP32 8500  → ~98% (PWM 用 exp 8192 仅 84%)
+ *       aicpu aclnnTopk FP64 2000    → ~94-95% (topk 算子上限, )
+ *       注: aicpu 满血由 aicpu_load.sh 启动固定 6 进程, 单进程其余单元各 1 进程
+ *   load_pct<100: 固定 50ms PWM 占空比, duty = load_pct / max_achievable
+ *       (aicore 0.96, aicpu 0.94, aivector 0.84), 每 50ms 窗口满载跑 duty%
+ *       时间、休眠剩余时间
  * Monitor: npu-smi info -t usages -i <card> -c 0
  */
 #include "acl/acl.h"
@@ -16,6 +24,8 @@
 #include "aclnnop/aclnn_matmul.h"
 #include "aclnnop/aclnn_topk.h"
 #include "aclnnop/aclnn_exp.h"
+#include "aclnnop/aclnn_add.h"
+#include "npu_stress_cfg.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +34,7 @@
 
 static const char *usage = "Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]\n"
                            "  duration 0 = run forever (until killed)\n"
-                           "  load_pct 1-100 (default 100): fixed-period PWM duty-cycle\n";
+                           "  load_pct 1-100 (default 100): =100 满血直跑(无PWM), <100 PWM duty-cycle\n";
 
 /* Ensure ASCEND_OPP_PATH matches the toolkit we're linked against.
  * _npu_stress RPATH = ascend-toolkit/lib64, so OPP must be from the same toolkit.
@@ -87,15 +97,19 @@ struct OpCtx {
 static void run_batch(aclrtStream stream, struct OpCtx *ctx) {
     aclnnStatus s;
     switch (ctx->mode) {
-    case 0: /* matmul */
+    case NPU_STRESS_MATMUL: /* matmul */
         s = aclnnMatmulGetWorkspaceSize(ctx->tA, ctx->tB, ctx->tC, 0, &ctx->ws_size, &ctx->exec);
         if (s == 0 && ctx->exec) aclnnMatmul(ctx->ws, ctx->ws_size, ctx->exec, stream);
         break;
-    case 1: /* topk */
+    case NPU_STRESS_TOPK: /* topk */
         s = aclnnTopkGetWorkspaceSize(ctx->tA, ctx->k, 1, true, true, ctx->tC, ctx->tD, &ctx->ws_size, &ctx->exec);
         if (s == 0 && ctx->exec) aclnnTopk(ctx->ws, ctx->ws_size, ctx->exec, stream);
         break;
-    case 2: /* exp */
+    case NPU_STRESS_ADD: /* add: C = A + B */
+        s = aclnnAddGetWorkspaceSize(ctx->tA, ctx->tB, ctx->alpha, ctx->tC, &ctx->ws_size, &ctx->exec);
+        if (s == 0 && ctx->exec) aclnnAdd(ctx->ws, ctx->ws_size, ctx->exec, stream);
+        break;
+    case NPU_STRESS_EXP: /* exp */
         s = aclnnExpGetWorkspaceSize(ctx->tA, ctx->tC, &ctx->ws_size, &ctx->exec);
         if (s == 0 && ctx->exec) aclnnExp(ctx->ws, ctx->ws_size, ctx->exec, stream);
         break;
@@ -214,31 +228,22 @@ int main(int argc, char **argv) {
         aclrtFree(d_ptr);
 
     } else {
-        int base_shape;
-        float max_achievable;
-        int op_mode;
+        struct npu_stress_cfg cfg = npu_stress_cfg(mode, load_pct, size);
+        int op_mode = cfg.op;
+        int shape = cfg.shape;
+        float max_achievable = cfg.max_achievable; /* PWM 校准: aicore 0.96, aicpu 0.94, aivector 0.84 */
 
-        if (strcmp(mode, "aicore") == 0) {
-            base_shape = 5120;
-            max_achievable = 0.96f;
-            op_mode = 0;
-        } else if (strcmp(mode, "aicpu") == 0) {
-            base_shape = 500;
-            max_achievable = 0.94f;
-            op_mode = 1;
-        } else if (strcmp(mode, "aivector") == 0) {
-            base_shape = 8192;
-            max_achievable = 0.84f;
-            op_mode = 2;
-        } else {
+        if (op_mode < 0) {
             fprintf(stderr, "unknown mode: %s\n%s", mode, usage);
             goto fail;
         }
 
-        int shape = size > 0 ? size : base_shape;
-
-        /* Element size: FP16=2 bytes, DOUBLE=8 bytes */
-        int elem_sz = (op_mode == 1) ? 8 : 2;
+        /* Element size: FP16/FP32=2/4 bytes, DOUBLE=8 bytes */
+        int elem_sz = 2;
+        if (cfg.dtype == NPU_STRESS_FP32)
+            elem_sz = 4;
+        else if (cfg.dtype == NPU_STRESS_FP64)
+            elem_sz = 8;
         size_t sz = (size_t)shape * shape * elem_sz;
 
         struct OpCtx ctx;
@@ -256,7 +261,11 @@ int main(int argc, char **argv) {
         aclrtMemset(dA, sz, 0x00, sz);
         aclrtMemset(dB, sz, 0x00, sz);
 
-        aclDataType in_dtype = (op_mode == 1) ? ACL_DOUBLE : ACL_FLOAT16;
+        aclDataType in_dtype = ACL_FLOAT16;
+        if (cfg.dtype == NPU_STRESS_FP32)
+            in_dtype = ACL_FLOAT;
+        else if (cfg.dtype == NPU_STRESS_FP64)
+            in_dtype = ACL_DOUBLE;
         ctx.tA = make_tensor(dA, shape, shape, in_dtype);
         ctx.tB = make_tensor(dB, shape, shape, in_dtype);
         ctx.tC = make_tensor(dC, shape, shape, in_dtype);
@@ -282,6 +291,11 @@ int main(int argc, char **argv) {
             ctx.tC = aclCreateTensor(out_dims, 2, ACL_DOUBLE, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dC);
             ctx.tD = aclCreateTensor(out_dims, 2, ACL_INT64, out_stride, 0, ACL_FORMAT_ND, out_dims, 2, dD);
             s = aclnnTopkGetWorkspaceSize(ctx.tA, k, 1, true, true, ctx.tC, ctx.tD, &ctx.ws_size, &ctx.exec);
+        } else if (op_mode == 2) {
+            /* add: C = A + alpha*B, alpha=1.0 (FP32, 满血) */
+            float one = 1.0f;
+            ctx.alpha = aclCreateScalar(&one, ACL_FLOAT);
+            s = aclnnAddGetWorkspaceSize(ctx.tA, ctx.tB, ctx.alpha, ctx.tC, &ctx.ws_size, &ctx.exec);
         } else {
             /* exp: C = exp(A), input=0.0 → exp(0)=1.0, no overflow */
             s = aclnnExpGetWorkspaceSize(ctx.tA, ctx.tC, &ctx.ws_size, &ctx.exec);
@@ -293,11 +307,14 @@ int main(int argc, char **argv) {
         }
         if (ctx.ws_size > 0) aclrtMalloc(&ctx.ws, ctx.ws_size, ACL_MEM_MALLOC_HUGE_FIRST);
 
-        const char *dtype_str = (op_mode == 1) ? "FP64" : "FP16";
+        const char *dtype_str = cfg.dtype == NPU_STRESS_FP32   ? "FP32"
+                                : cfg.dtype == NPU_STRESS_FP64 ? "FP64"
+                                                               : "FP16";
         const char *label = op_mode == 0 ? "AICore(matmul)" : op_mode == 1 ? "AICpu(topk)"
+                                                          : op_mode == 2   ? "AIVector(add)"
                                                                            : "AIVector(exp)";
-        printf("%s: %dx%d %s on dev %d load=%d%% %s\n", label, shape, shape, dtype_str, dev_id, load_pct,
-               duration > 0 ? "" : "forever");
+        printf("%s: %dx%d %s on dev %d load=%d%% %s%s\n", label, shape, shape, dtype_str, dev_id, load_pct,
+               cfg.fullpower ? "(fullpower) " : "", duration > 0 ? "" : "forever");
         fflush(stdout);
 
         run_loop(load_pct, duration, max_achievable, stream, &ctx);

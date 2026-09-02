@@ -1,7 +1,7 @@
 /* npu_stress_cfg.h — _npu_stress 满血/PWM 两套算子配置决策（纯 C，无 ACL 依赖）
  *
  * mode 字符串映射 aicore/aicpu/aivector 到算子类型与数据类型；
- * load_pct>=100（含未指定默认）走满血模式（对齐华为 Python 参考脚本的大算子），
+ * load_pct>=100（含未指定默认）走满血模式（大算子配置），
  * load_pct<100 走 PWM 占空比模式（现有行为）。
  * 本模块可被 C++ (ACL) 主程序 include，也可被 UT (C) 直接编译测试。
  */

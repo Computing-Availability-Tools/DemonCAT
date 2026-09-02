@@ -24,11 +24,11 @@ struct npu_stress_cfg npu_stress_cfg(const char *mode, int load_pct, int size) {
     } else if (strcmp(mode, "aicpu") == 0) {
         c.op = NPU_STRESS_TOPK;
         c.dtype = NPU_STRESS_FP64;
-        c.shape = size > 0 ? size : (fullpower ? 2000 : 500); /* 满血 shape 2000(Python 参考) */
+        c.shape = size > 0 ? size : (fullpower ? 2000 : 500); /* 满血 shape 2000 */
         c.max_achievable = 0.94f;
     } else if (strcmp(mode, "aivector") == 0) {
         if (fullpower) {
-            c.op = NPU_STRESS_ADD; /* 满血改 add(Python 参考) */
+            c.op = NPU_STRESS_ADD; /* 满血改 add */
             c.dtype = NPU_STRESS_FP32;
             c.shape = size > 0 ? size : 8500;
         } else {

@@ -4,9 +4,8 @@
 # clean:  kill stress process(es)
 # query:  npu-smi info -t usages (check Aicpu Usage Rate)
 #
-# 满血(PWM_PCT 默认 100 或 >=100): 固定 6 进程 × shape 2000 直跑, 对齐华为
-#   Python 参考脚本(static_call_main.py aicpu topk 2000 top_k=1000 6 进程)。
-#   topk 为 AICPU 算子, 该平台实测上限约 94-95%(与参考脚本同配置同水平)。
+# 满血(load_pct 默认 100 或 >=100): 固定 6 进程 × shape 2000 直跑。
+#   topk 为 AICPU 算子, 该平台实测上限约 94-95%。
 # PWM(load_pct<100): probe 单进程 100% 探测硬件, 910B 单 proc + PWM 调占空比,
 #   910C 并行进程数扩展。
 . "$(dirname "$0")/_common.sh"
@@ -31,7 +30,7 @@ case "${DCAT_OP:-inject}" in
         [ -z "$dev_id" ] && { npu_acl_dev_id_err "$chip"; exit 1; }
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
 
-        # 满血模式(默认/100%): 固定 6 进程 × shape 2000, 跳过 probe(对齐 Python 参考)。
+        # 满血模式(默认/100%): 固定 6 进程 × shape 2000, 跳过 probe()。
         if [ "$load_pct" -ge 100 ]; then
             pids=""
             i=0

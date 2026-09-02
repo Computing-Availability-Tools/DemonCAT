@@ -8,10 +8,10 @@
  * duration 0 = run forever (until killed)
  * load_pct 1-100 (default 100). 满血/PWM 两套配置(见 npu_stress_cfg.h):
  *   load_pct>=100 (默认): 满血直跑 — 无 PWM, 全速连续下发算子(batch=100
- *       amortize sync 开销), 对齐华为 Python 参考脚本大算子, 实测饱和度:
+ *       amortize sync 开销), 大算子配置, 实测饱和度:
  *       aicore aclnnMatmul FP32 5120 → ~99% (FP16 带宽受限仅 96%)
  *       aivector aclnnAdd FP32 8500  → ~98% (PWM 用 exp 8192 仅 84%)
- *       aicpu aclnnTopk FP64 2000    → ~94-95% (topk 算子上限, 同 Python 参考)
+ *       aicpu aclnnTopk FP64 2000    → ~94-95% (topk 算子上限, )
  *       注: aicpu 满血由 aicpu_load.sh 启动固定 6 进程, 单进程其余单元各 1 进程
  *   load_pct<100: 固定 50ms PWM 占空比, duty = load_pct / max_achievable
  *       (aicore 0.96, aicpu 0.94, aivector 0.84), 每 50ms 窗口满载跑 duty%

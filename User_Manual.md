@@ -1833,7 +1833,7 @@ dcat clean rNPU_pcie_down --npu_id=2
 **实现原理**:
 
 - **inject**: 查找 Phy-ID→ACL device 映射（`/tmp/dcat-npu-dev-map`，自动生成），运行 `build/_npu_stress aicore <dev_id>` 后台进程。
-  - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 matmul 5120 直跑。对齐华为 Python 参考脚本（`static_call_main.py` aicore 亦为 FP32 matmul 5120）；换 FP32 是因为 FP16 5120 受内存带宽限制仅能达约 96%。实测 ≈99%。
+  - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 matmul 5120 直跑。换 FP32 是因为 FP16 5120 受内存带宽限制仅能达约 96%。实测 ≈99%。
   - **PWM**（`load_pct<100`）：FP16 matmul 5120，固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.96），满负荷跑 compute 阶段后休眠剩余时间。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicore Usage Rate。优先查 `Aicore`，无则查 `Aicube`。
@@ -1870,12 +1870,12 @@ dcat clean rNPU_aic_load --chip=2
 
 **UID**: `rNPU_aicpu_load`
 
-**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP64 Top-K 排序，持续施压 AICpu 计算单元，拉高 AICpu 使用率。满血模式（`load_pct` 未指定或 `=100`）固定 6 进程 × shape 2000 直跑（对齐华为 Python 参考脚本），实测 AICpu 约 94-95%；PWM 模式（`load_pct<100`）使用 FP64 topk 500×500 加占空比控制。
+**描述**: 通过 CANN 算子 API `aclnnTopk` 对指定芯片执行 FP64 Top-K 排序，持续施压 AICpu 计算单元，拉高 AICpu 使用率。满血模式（`load_pct` 未指定或 `=100`）固定 6 进程 × shape 2000 直跑，实测 AICpu 约 94-95%；PWM 模式（`load_pct<100`）使用 FP64 topk 500×500 加占空比控制。
 
 **实现原理**:
 
 - **inject**: 运行 `build/_npu_stress aicpu <dev_id>` 后台进程。
-  - **满血**（未填 `load_pct` 或 `=100`，默认）：固定启动 6 个进程 × FP64 topk 2000×2000 直跑。与华为 Python 参考脚本（`static_call_main.py` aicpu 为 FP64 topk 2000、top_k=1000、6 进程）同配置；topk 是 AICPU 算子，910B4 该配置实测上限约 94-95%。
+  - **满血**（未填 `load_pct` 或 `=100`，默认）：固定启动 6 个进程 × FP64 topk 2000×2000 直跑。topk 是 AICPU 算子，910B4 该配置实测上限约 94-95%。
   - **PWM**（`load_pct<100`）：FP64 topk 500×500，先单进程 100% 探测硬件（910B 单 proc 即可填满；910C 需并行），按 `load_pct` 计算占空比（duty = load_pct / 0.94）或进程数扩展。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 Aicpu Usage Rate。
@@ -1896,7 +1896,7 @@ dcat clean rNPU_aicpu_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：`load_pct=100`（未指定默认）满血直跑，固定 6 进程 × shape 2000，AICpu 实测约 94-95%（topk 算子在该平台的上限，与 Python 参考同配置同水平）。`load_pct<100` 时固定周期 PWM 占空比（duty = load_pct / 0.94，PWM 模式 FP64 topk 500 满载上限约 94%）。
+**负载率原理**：`load_pct=100`（未指定默认）满血直跑，固定 6 进程 × shape 2000，AICpu 实测约 94-95%（topk 算子在该平台的上限）。`load_pct<100` 时固定周期 PWM 占空比（duty = load_pct / 0.94，PWM 模式 FP64 topk 500 满载上限约 94%）。
 
 **危险等级**: 中 — AICpu 持续高负载，影响同芯片上其他任务的 AICpu 计算性能。持续运行直到 clean。
 
@@ -1906,12 +1906,12 @@ dcat clean rNPU_aicpu_load --chip=2
 
 **UID**: `rNPU_aiv_load`
 
-**描述**: 通过 CANN 算子 API 对指定芯片执行元素级运算，持续施压 Vector 计算单元，拉高 AIVector 使用率。满血模式（`load_pct` 未指定或 `=100`）使用 FP32 add 8500×8500 直跑（对齐华为 Python 参考脚本），实测 AIVector 约 **98%**；PWM 模式（`load_pct<100`）使用 FP16 exp 8192×8192 加占空比控制。
+**描述**: 通过 CANN 算子 API 对指定芯片执行元素级运算，持续施压 Vector 计算单元，拉高 AIVector 使用率。满血模式（`load_pct` 未指定或 `=100`）使用 FP32 add 8500×8500 直跑，实测 AIVector 约 **98%**；PWM 模式（`load_pct<100`）使用 FP16 exp 8192×8192 加占空比控制。
 
 **实现原理**:
 
 - **inject**: 运行 `build/_npu_stress aivector <dev_id>` 后台进程。
-  - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 add 8500×8500 直跑。与华为 Python 参考脚本（`static_call_main.py` aivector 为 FP32 add 8500）同配置；FP32 大 shape 填满 Vector 数据通路，实测 ≈98%（旧 FP16 exp 8192 仅 84%）。
+  - **满血**（未填 `load_pct` 或 `=100`，默认）：FP32 add 8500×8500 直跑。FP32 大 shape 填满 Vector 数据通路，实测 ≈98%（旧 FP16 exp 8192 仅 84%）。
   - **PWM**（`load_pct<100`）：FP16 exp 8192×8192（128MB），固定 50ms PWM 窗口，按 `load_pct` 计算占空比（duty = load_pct / 0.84），满负荷跑 compute 阶段后休眠剩余时间。
 - **clean**: kill stress 进程。
 - **query**: `npu-smi info -t usages` 检查 AIVector Usage Rate。
@@ -1932,7 +1932,7 @@ dcat clean rNPU_aiv_load --chip=2
 | chip | 必填 | 0-15 | 物理芯片号，`ls /dev/davinci*` 中 davinci 后的数字 |
 | load_pct | 可选 | 1-100 | 目标负载率百分比，默认 100（满载） |
 
-**负载率原理**：`load_pct=100`（未指定默认）满血直跑（FP32 add 8500，实测 ≈98%，贴近 Python 参考）；`load_pct<100` 时固定周期 PWM 占空比，duty = load_pct / 0.84（FP16 exp 8192 满载上限约 84%）。
+**负载率原理**：`load_pct=100`（未指定默认）满血直跑（FP32 add 8500，实测 ≈98%）；`load_pct<100` 时固定周期 PWM 占空比，duty = load_pct / 0.84（FP16 exp 8192 满载上限约 84%）。
 
 **危险等级**: 中 — AIVector 持续高负载，影响同芯片上其他任务的 vector 计算性能。持续运行直到 clean。
 

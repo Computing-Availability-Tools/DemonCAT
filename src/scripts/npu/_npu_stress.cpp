@@ -34,7 +34,7 @@
 
 static const char *usage = "Usage: _npu_stress <aicore|aicpu|aivector|hbm> <dev_id> [size] [load_pct] [duration_sec]\n"
                            "  duration 0 = run forever (until killed)\n"
-                           "  load_pct 1-100 (default 100): fixed-period PWM duty-cycle\n";
+                           "  load_pct 1-100 (default 100): =100 满血直跑(无PWM), <100 PWM duty-cycle\n";
 
 /* Ensure ASCEND_OPP_PATH matches the toolkit we're linked against.
  * _npu_stress RPATH = ascend-toolkit/lib64, so OPP must be from the same toolkit.

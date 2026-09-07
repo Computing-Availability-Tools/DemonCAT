@@ -29,7 +29,7 @@ hccn() {
     # 在 eval 中调用，若复用裸 _rc/_out/_n/_sleep 会把调用方的同名全局变量
     # 冲掉 → npu_foreach_chip "全 NOT ACTIVE" 也误报 rc=0 → confirmed 假 true。
     _h_n=0
-    _h_sleep=1
+    _h_sleep=0.5
     while :; do
         _h_out=$($HCCN_TO hccn_tool -i "$chip" "$@" 2>&1)
         _h_rc=$?
@@ -182,6 +182,27 @@ npu_kill_stress() {
         # PID doesn't exist or isn't ours — safe to ignore
         :
     fi
+}
+
+# Poll stress process(es) for readiness, replacing a blind `sleep 5` + single
+# liveness check. 0.5s interval: fail-fast as soon as ALL pids die (~0.5s, was
+# 5s for insta-crash), succeed after ~1.5s of continued liveness.
+# Returns 0 if >=1 pid stays alive for 1.5s, 1 if all died at any poll.
+# Usage: npu_wait_stress_alive <pid> [pid...]  (word-split $pids is intended)
+npu_wait_stress_alive() {
+    _w_i=0
+    while [ "$_w_i" -lt 3 ]; do
+        sleep 0.5
+        _w_alive=0
+        for _w_p in "$@"; do
+            kill -0 "$_w_p" 2>/dev/null && _w_alive=$((_w_alive + 1))
+        done
+        if [ "$_w_alive" -eq 0 ]; then
+            return 1
+        fi
+        _w_i=$((_w_i + 1))
+    done
+    return 0
 }
 
 # sidecar_save <uid> <chip> <value>

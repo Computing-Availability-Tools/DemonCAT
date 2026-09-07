@@ -212,5 +212,6 @@ jobs:
             tests/e2e/results_*.csv
             tests/e2e/report.md
             tests/e2e/e2e_junit.xml
+            tests/e2e/sweep_events*.log
           if-no-files-found: ignore
           retention-days: 7

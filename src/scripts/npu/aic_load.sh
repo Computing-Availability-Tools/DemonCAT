@@ -29,9 +29,9 @@ case "${DCAT_OP:-inject}" in
         load_pct=${DCAT_PARAM_LOAD_PCT:-100}
         LOG="/tmp/dcat-rNPU_aic_load-$chip.log"
         "$STRESS_BIN" aicore "$dev_id" 0 "$load_pct" 0 > "$LOG" 2>&1 &
-        echo $! > "$SIDECAR"
-        sleep 5
-        if ! kill -0 "$(cat "$SIDECAR")" 2>/dev/null; then
+        pid=$!
+        echo "$pid" > "$SIDECAR"
+        if ! npu_wait_stress_alive "$pid"; then
             rm -f "$SIDECAR"
             echo "AICore stress failed on chip $chip:" >&2
             tail -3 "$LOG" >&2
@@ -39,7 +39,7 @@ case "${DCAT_OP:-inject}" in
             exit 1
         fi
         rm -f "$LOG"
-        echo "AICore stress started on chip $chip (dev $dev_id, pid $!, load=${load_pct}%)"
+        echo "AICore stress started on chip $chip (dev $dev_id, pid $pid, load=${load_pct}%)"
         ;;
     clean)
         # stateless: chip 为空时遍历所有 sidecar（防假成功空操作留孤儿）

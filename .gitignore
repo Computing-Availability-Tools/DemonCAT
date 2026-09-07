@@ -13,5 +13,6 @@ tests/e2e/report.md
 tests/e2e/e2e_run.log
 tests/e2e/e2e_junit.xml
 tests/e2e/failures_*.log
+tests/e2e/sweep_events*.log
 build/ctest_run.log
 docs/superpowers/

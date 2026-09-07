@@ -333,10 +333,14 @@ def _sweep_script(home, iface, scope):
     )
 
 
-def sweep(home, iface, tracked_pids, scope=None):
+SWEEP_LOG = []
+
+
+def sweep(home, iface, tracked_pids, scope=None, trigger=""):
     scope = scope or os.environ.get("DCAT_E2E_SWEEP_SCOPE", "full")
     if scope not in ("full", "npu"):
         scope = "full"
+    _t0 = time.time()
     for p in tracked_pids:
         try:
             os.kill(p, 9)
@@ -358,6 +362,12 @@ def sweep(home, iface, tracked_pids, scope=None):
             os.unlink(path)
         except OSError:
             pass
+    SWEEP_LOG.append({
+        "ts": datetime.now().strftime("%H:%M:%S"),
+        "trigger": trigger or "sweep",
+        "scope": scope,
+        "dur_ms": int((time.time() - _t0) * 1000),
+    })
 
 
 # ---------------- provision（不再 skip：资源就绪则用，不就绪则用例自然 FAIL） ----------------

@@ -20,7 +20,7 @@ if str(HERE) not in sys.path:
 import e2e_helpers
 from e2e_helpers import (
     sweep, substitute, check_precondition, run_step_cmd, sh,
-    npu_residue_present, DCAT, TEST_IFACE, E2E_HOME, RESULT_COLS,
+    npu_residue_present, SWEEP_LOG, DCAT, TEST_IFACE, E2E_HOME, RESULT_COLS,
 )
 
 ROOT = HERE.parent.parent
@@ -139,17 +139,22 @@ def tracked():
     yield pids
 
 
-def _do_sweep(tracked, e2e_env):
-    sweep(E2E_HOME, TEST_IFACE, tracked)
+def _do_sweep(tracked, e2e_env, trigger="sweep"):
+    # npu scope：硬件用例不操作主机接口，phy 第二次 sweep（再跑一遍 dcat clean --all）
+    # 是纯浪费，单遍即可。full scope 保持双遍（dummy + 物理网卡）不变。
+    if _SWEEP_SCOPE == "npu":
+        sweep(E2E_HOME, TEST_IFACE, tracked, trigger=trigger)
+        return
+    sweep(E2E_HOME, TEST_IFACE, tracked, trigger=trigger)
     phy = e2e_env.get("phy_iface", "")
     if phy:
-        sweep(E2E_HOME, phy, tracked)
+        sweep(E2E_HOME, phy, tracked, trigger=trigger)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def session_init_sweep(e2e_env):
     """session 开始时 sweep 一次，清除上次运行/崩溃残留。"""
-    _do_sweep([], e2e_env)
+    _do_sweep([], e2e_env, trigger="session-init")
     yield
 
 
@@ -175,7 +180,7 @@ def autouse_sweep(e2e_env, tracked, request):
 
     # 切换模块时 sweep（清除上个模块残留）
     if _prev_module is None or _prev_module != cur_mod:
-        _do_sweep(tracked, e2e_env)
+        _do_sweep(tracked, e2e_env, trigger="module-switch")
     _prev_module = cur_mod
 
     yield
@@ -197,7 +202,7 @@ def autouse_sweep(e2e_env, tracked, request):
                 and not (rep is not None and rep.failed)
                 and not npu_residue_present(E2E_HOME)):
             return
-        _do_sweep(tracked, e2e_env)
+        _do_sweep(tracked, e2e_env, trigger="teardown")
 
 
 @pytest.fixture
@@ -266,8 +271,28 @@ def pytest_sessionfinish(session, exitstatus):
     _is_worker = hasattr(session.config, "workerinput")
     _write_results_csv()
     _write_report_md(session)
+    _write_sweep_events()
     if not _is_worker:
         _emit_gha_summary(session)
+
+
+def _write_sweep_events():
+    """写出 sweep 事件计时日志 + 汇总，用于定位 sweep 开销（fixture 层、不计入 duration_ms）。"""
+    if not SWEEP_LOG:
+        return
+    path = HERE / f"sweep_events{_suffix}.log"
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            for e in SWEEP_LOG:
+                f.write(f"{e['ts']}\t{e['trigger']}\t{e['scope']}\t{e['dur_ms']}ms\n")
+    except Exception as ex:
+        print(f"[warn] write sweep_events.log failed: {ex}")
+        return
+    total = sum(e["dur_ms"] for e in SWEEP_LOG)
+    n = len(SWEEP_LOG)
+    print(f"[sweep] events={n} total={total}ms avg={total // max(1, n)}ms")
+    for e in sorted(SWEEP_LOG, key=lambda x: -x["dur_ms"])[:10]:
+        print(f"[sweep] top: {e['ts']} {e['trigger']} {e['scope']} {e['dur_ms']}ms")
 
 
 def _write_results_csv():

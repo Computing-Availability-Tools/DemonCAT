@@ -59,7 +59,7 @@ case "${DCAT_OP:-inject}" in
         "$STRESS_BIN" hbm "$dev_id" "$size_mb" 0 0 >/dev/null 2>&1 &
         pid=$!
         echo "$pid" > "$SIDECAR"
-        sleep 2
+        sleep 1
         if ! kill -0 "$pid" 2>/dev/null; then
             rm -f "$SIDECAR"
             echo "HBM stress failed: cannot allocate ${size_mb}MB on chip $chip (HBM insufficient?)" >&2

@@ -40,10 +40,7 @@ case "${DCAT_OP:-inject}" in
                 i=$((i + 1))
             done
             echo "$pids" > "$SIDECAR"
-            sleep 5
-            alive=0
-            for p in $pids; do kill -0 "$p" 2>/dev/null && alive=$((alive+1)); done
-            if [ "$alive" -eq 0 ]; then
+            if ! npu_wait_stress_alive $pids; then
                 rm -f "$SIDECAR"
                 echo "AICpu stress failed on chip $chip (all 6 procs died)" >&2
                 exit 1
@@ -57,8 +54,7 @@ case "${DCAT_OP:-inject}" in
         "$STRESS_BIN" aicpu "$dev_id" 0 100 0 > "$LOG" 2>&1 &
         probe_pid=$!
         echo "$probe_pid" > "$SIDECAR"
-        sleep 5
-        if ! kill -0 "$probe_pid" 2>/dev/null; then
+        if ! npu_wait_stress_alive "$probe_pid"; then
             rm -f "$SIDECAR"
             echo "AICpu stress failed on chip $chip:" >&2
             tail -3 "$LOG" >&2
@@ -85,7 +81,7 @@ case "${DCAT_OP:-inject}" in
                 rm -f "$SIDECAR"
                 "$STRESS_BIN" aicpu "$dev_id" 0 "$load_pct" 0 > /dev/null 2>&1 &
                 echo $! > "$SIDECAR"
-                sleep 3
+                sleep 1
             fi
             echo "AICpu stress started on chip $chip (dev $dev_id, pid $(cat "$SIDECAR"), load=${load_pct}%, 1 proc)"
         else
@@ -110,17 +106,12 @@ case "${DCAT_OP:-inject}" in
                 i=$((i + 1))
             done
             echo "$pids" > "$SIDECAR"
-            sleep 5
-
-            # Verify at least one process alive
-            alive=0
-            for p in $pids; do kill -0 "$p" 2>/dev/null && alive=$((alive+1)); done
-            if [ "$alive" -eq 0 ]; then
+            if ! npu_wait_stress_alive $pids; then
                 rm -f "$SIDECAR"
                 echo "AICpu stress failed on chip $chip (all $nprocs procs died)" >&2
                 exit 1
             fi
-            echo "AICpu stress started on chip $chip (dev $dev_id, procs=$nprocs alive=$alive, load~${load_pct}%)"
+            echo "AICpu stress started on chip $chip (dev $dev_id, procs=$nprocs, load~${load_pct}%)"
         fi
         ;;
     clean)

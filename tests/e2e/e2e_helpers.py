@@ -9,6 +9,7 @@ JSON 状态解析（json_state_data）、基础断言算子（apply_assert）。
 """
 import argparse
 import csv
+import glob
 import json
 import os
 import re
@@ -33,6 +34,68 @@ NPU_BASELINE_IP = os.environ.get("DCAT_NPU_BASELINE_IP", "10.0.0.99")
 NPU_BASELINE_NETMASK = os.environ.get("DCAT_NPU_BASELINE_NETMASK", "255.255.255.0")
 
 
+_NPU_INFO = None
+
+
+def npu_info():
+    """会话级一次探测 NPU 环境，供 check_precondition 与 test_case 复用。
+
+    此前每用例重复 `hccn_tool -status -g` 探测（check_precondition 的 RoCE 前置 +
+    test_case 的 ctx.dev 探测是同一信息的两份重复调用），279 条 NPU 用例放大为
+    数百次 hccn_tool 子进程开销。硬件会话内不变（套件无 driver_unbind/pcie_remove
+    用例），缓存一次即可；xdist 下每 worker 进程独立缓存，语义不变。
+
+    返回 dict: has_npu(有 hccn_tool + /dev/davinci*) / hccn_ok / chip(首个 Phy-ID)
+              dev(RoCE 口名) / roce_ok(-status -g 报告 Settings for)。
+    """
+    global _NPU_INFO
+    if _NPU_INFO is not None:
+        return _NPU_INFO
+    info = {"has_npu": False, "hccn_ok": False, "chip": "", "dev": "", "roce_ok": False}
+    if sh("command -v hccn_tool >/dev/null 2>&1")[0] != 0:
+        _NPU_INFO = info
+        return info
+    info["hccn_ok"] = True
+    _rc, out = sh("ls /dev/davinci* 2>/dev/null | sort -V | head -1 | grep -oE '[0-9]+'")
+    chip = (out or "").strip().splitlines()[0] if (out or "").strip() else ""
+    if not chip:
+        _NPU_INFO = info
+        return info
+    info["chip"] = chip
+    info["has_npu"] = True
+    _rc, out = sh(f"hccn_tool -i {chip} -status -g 2>/dev/null")
+    if "Settings for" in (out or ""):
+        info["roce_ok"] = True
+        m = re.search(r"Settings for\s+(\w+)", out or "")
+        info["dev"] = m.group(1) if m else "eth0"
+    _NPU_INFO = info
+    return info
+
+
+def npu_residue_present(home, tmp_root="/tmp"):
+    """NPU 腿 inject-only 用例结束后的残留门控。
+
+    仅当存在真实需要 sweep 的残留时返回 True，否则跳过 sweep（省 3-5s/用例）：
+      1) state.json 有活跃记录（data[] 非空）
+      2) /tmp/dcat-rNPU_* sidecar 工件存在（sweep 的 NPU 清理块也以此为前置）
+      3) _npu_stress 压测进程残留
+    RES 类"删 sidecar 模拟孤儿"用例：hccn 值漂移无 sidecar 时既有 sweep 同样无法清，
+    靠会话级 baseline 归一化兜底，门控不引入新回归。
+    """
+    sp = os.path.join(home, ".demoncat", "state.json")
+    if os.path.exists(sp):
+        try:
+            with open(sp, encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict) and d.get("data"):
+                return True
+        except Exception:
+            return True  # state.json 存在但损坏 → 保守 sweep
+    if glob.glob(os.path.join(tmp_root, "dcat-rNPU_*")):
+        return True
+    return sh("pgrep -f _npu_stress >/dev/null 2>&1")[0] == 0
+
+
 def npu_normalize_baseline():
     """会话级一次：将改值型 NPU 参数归一化到确定性基线。
 
@@ -40,8 +103,7 @@ def npu_normalize_baseline():
     （可重复执行生命周期）。hccn_tool 无法把网关设回"未设置"，故网关基
     线必须是可还原的具体值。无 NPU 环境直接跳过。
     """
-    has_npu = sh("command -v hccn_tool >/dev/null 2>&1 && ls /dev/davinci[0-9]* >/dev/null 2>&1")[0] == 0
-    if not has_npu:
+    if not npu_info()["has_npu"]:
         return False
     script = (
         "set +e\n"
@@ -171,8 +233,10 @@ def cmd_exists(c):
 # ---------------- 环境清扫（dcat 命名空间内，对宿主安全） ----------------
 SWEEP_SCRIPT = r'''
 set +e
+SCOPE="{scope}"
 # dcat clean --all: 清除所有 dcat 管理的活跃故障（防前序测试残留 exit 5）
 [ -x "{dcat}" ] && HOME={home} "{dcat}" clean --all >/dev/null 2>&1
+if [ "$SCOPE" = full ]; then
 # Kill dcat-spawned processes (child processes survive parent shell kill)
 pkill -f 'perl -e' 2>/dev/null
 pkill -x yes 2>/dev/null
@@ -193,6 +257,7 @@ for pf in /tmp/dcat-rNET_link_flap-*.pid; do
 done
 pkill -f 'ip link set.*down' 2>/dev/null
 pkill -f 'ip link set.*up' 2>/dev/null
+fi
 # rNPU compute load: kill _npu_stress processes (pidfiles deleted below, processes survive)
 for pf in /tmp/dcat-rNPU_aic_load-*.pid /tmp/dcat-rNPU_aicpu_load-*.pid /tmp/dcat-rNPU_aiv_load-*.pid /tmp/dcat-rNPU_hbm_load-*.pid; do
     [ -f "$pf" ] || continue
@@ -227,6 +292,7 @@ rm -f "{home}/.demoncat/state.json" 2>/dev/null
 # sudo env_reset/always_set_home 会把 HOME 变 /root：旧版/残留 dcat state 可能在 /root，
 # 一并删掉避免重注入返回 exit 5（resource already injected）误判 FAIL
 rm -f /root/.demoncat/state.json 2>/dev/null
+if [ "$SCOPE" = full ]; then
 dmsetup ls --target error 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 dmsetup ls --target delay 2>/dev/null | awk '/^dcat-/{print $1}' | xargs -r -n1 dmsetup remove -f 2>/dev/null
 # losetup: 只清理 dcat 命名空间的 loop（-D 全清会动到 snap/squashfs 等宿主挂载）, 对
@@ -255,11 +321,22 @@ for f in /tmp/dcat-rCPU_core_offline-c*; do
   n=${f##*/dcat-rCPU_core_offline-c}
   echo 1 > /sys/devices/system/cpu/cpu$n/online 2>/dev/null
 done
+fi
 true
 '''
 
 
-def sweep(home, iface, tracked_pids):
+def _sweep_script(home, iface, scope):
+    return (
+        SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface)
+        .replace("{dcat}", DCAT).replace("{scope}", scope)
+    )
+
+
+def sweep(home, iface, tracked_pids, scope=None):
+    scope = scope or os.environ.get("DCAT_E2E_SWEEP_SCOPE", "full")
+    if scope not in ("full", "npu"):
+        scope = "full"
     for p in tracked_pids:
         try:
             os.kill(p, 9)
@@ -267,9 +344,7 @@ def sweep(home, iface, tracked_pids):
             pass
     # 写到临时脚本文件再 sh 执行：避免 pkill -f 'PATTERN' 匹配到执行 sweep 的
     # sh -c "...PATTERN..." 自身 cmdline（会自杀，导致 rm state.json 等后续命令不执行）。
-    script = (
-        SWEEP_SCRIPT.replace("{home}", home).replace("{iface}", iface).replace("{dcat}", DCAT)
-    )
+    script = _sweep_script(home, iface, scope)
     import tempfile
     fd, path = tempfile.mkstemp(suffix=".sh", prefix="dcat_e2e_sweep_")
     try:
@@ -497,19 +572,15 @@ def check_precondition(precond):
             return "测试环境存在 eth0 网卡；注入会 down 管理网卡断 runner 网络，安全防护用例需在无 eth0 环境验证"
     if "npu_hardware" in precond or "npu_compute" in precond:
         # rNPU_* 通用基础层：需 Atlas NPU 硬件 + hccn_tool
-        rc, out = sh("command -v hccn_tool >/dev/null 2>&1 && echo ok || echo missing")
-        if "missing" in out.lower():
+        ni = npu_info()
+        if not ni["hccn_ok"]:
             return "hccn_tool 不可用（非 Atlas NPU 机器）"
         # 检测 /dev/davinci* 设备文件（NPU 硬件存在的标志）
-        rc, out = sh("ls /dev/davinci* 2>/dev/null | head -1")
-        if not out.strip():
+        if not ni["chip"]:
             return "NPU 设备不可用（无 /dev/davinci* 设备文件）"
         # RoCE 层：网络类模块需 NPU RoCE 口（hccn_tool -status -g 报告，不在 host ip link 里）
         if "npu_hardware" in precond and "npu_compute" not in precond:
-            _first = out.strip().splitlines()[-1] if out.strip() else "0"
-            _first = _first.replace("/dev/davinci", "")
-            rc, out = sh(f"hccn_tool -i {_first} -status -g 2>/dev/null | grep -q 'Settings for' && echo ok || echo missing")
-            if "missing" in out.lower():
+            if not ni["roce_ok"]:
                 return "NPU RoCE 口不可用（hccn_tool -status -g 无报告）"
     if "mock" in precond.lower() and "可用" in precond:
         return "mock 环境不可用（需要 mock dcat 二进制）"

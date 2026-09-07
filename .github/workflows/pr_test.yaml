@@ -142,6 +142,7 @@ jobs:
       mark: "hardware"
       run-as-root: true
       artifact-name: full-npu
+      sweep-scope: npu
       timeout-minutes: 120
 
   clang-tidy:

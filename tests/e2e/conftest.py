@@ -20,11 +20,12 @@ if str(HERE) not in sys.path:
 import e2e_helpers
 from e2e_helpers import (
     sweep, substitute, check_precondition, run_step_cmd, sh,
-    DCAT, TEST_IFACE, E2E_HOME, RESULT_COLS,
+    npu_residue_present, DCAT, TEST_IFACE, E2E_HOME, RESULT_COLS,
 )
 
 ROOT = HERE.parent.parent
 _wid = os.environ.get("PYTEST_XDIST_WORKER", "")
+_SWEEP_SCOPE = os.environ.get("DCAT_E2E_SWEEP_SCOPE", "full")
 _suffix = f"_{_wid}" if _wid else ""
 _TS = datetime.now().strftime("%Y%m%d_%H%M%S")
 _FAIL_LOG = HERE / f"failures_{_TS}{_suffix}.log"
@@ -138,14 +139,17 @@ def tracked():
     yield pids
 
 
-@pytest.fixture(scope="session", autouse=True)
-def session_init_sweep(e2e_env):
-    """session 开始时 sweep 一次，清除上次运行/崩溃残留。"""
-    tracked = []
+def _do_sweep(tracked, e2e_env):
     sweep(E2E_HOME, TEST_IFACE, tracked)
     phy = e2e_env.get("phy_iface", "")
     if phy:
         sweep(E2E_HOME, phy, tracked)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def session_init_sweep(e2e_env):
+    """session 开始时 sweep 一次，清除上次运行/崩溃残留。"""
+    _do_sweep([], e2e_env)
     yield
 
 
@@ -171,10 +175,7 @@ def autouse_sweep(e2e_env, tracked, request):
 
     # 切换模块时 sweep（清除上个模块残留）
     if _prev_module is None or _prev_module != cur_mod:
-        sweep(E2E_HOME, TEST_IFACE, tracked)
-        phy = e2e_env.get("phy_iface", "")
-        if phy:
-            sweep(E2E_HOME, phy, tracked)
+        _do_sweep(tracked, e2e_env)
     _prev_module = cur_mod
 
     yield
@@ -190,10 +191,13 @@ def autouse_sweep(e2e_env, tracked, request):
     # 测试失败也必须 sweep（clean 可能未执行）
     rep = getattr(request.node, "rep_call", None)
     if (has_inject and not has_clean) or (rep is not None and rep.failed):
-        sweep(E2E_HOME, TEST_IFACE, tracked)
-        phy = e2e_env.get("phy_iface", "")
-        if phy:
-            sweep(E2E_HOME, phy, tracked)
+        # NPU scope 下，inject-only 且用例通过时先门控：无残留（inject 被 precheck 拒绝等）
+        # 则跳过 sweep，省 3-5s/用例。失败用例仍无条件 sweep（正确性优先）。
+        if (_SWEEP_SCOPE == "npu" and has_inject and not has_clean
+                and not (rep is not None and rep.failed)
+                and not npu_residue_present(E2E_HOME)):
+            return
+        _do_sweep(tracked, e2e_env)
 
 
 @pytest.fixture

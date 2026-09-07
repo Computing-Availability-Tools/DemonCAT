@@ -21,7 +21,7 @@ if str(HERE) not in sys.path:
 from e2e_loader import parametrized_cases
 from e2e_assert import eval_assert
 from e2e_state import query_state, state_data_of, confirmed_of
-from e2e_helpers import run_step_cmd, sh, substitute, check_precondition
+from e2e_helpers import run_step_cmd, sh, substitute, check_precondition, npu_info
 
 _NA_MARKERS = ("注入未执行", "无系统断言", "或非故障", "clean后观测")
 _RUNKW = ("dcat", "tc ", "pgrep", "ip ", "ls ", "cat ", "grep", "wc",
@@ -107,7 +107,7 @@ def _npu_target_collisions(ctx, all_injects):
         if sig in seen:
             continue
         seen.add(sig)
-        rc, out = sh(f"timeout 8 hccn_tool -i {chip} {readopt} 2>/dev/null", timeout=15)
+        rc, out = sh(f"timeout 3 hccn_tool -i {chip} {readopt} 2>/dev/null", timeout=8)
         m = re.search(pat, out or "")
         cur = m.group(1) if m else ""
         if cur and cur == target:
@@ -166,7 +166,7 @@ def _eval_step(vassert, cmd_rc, cmd_out, case, verb, ctx, env, dcat, recorder):
             recorder.verify_out = qout
     else:
         if _is_runnable_vcmd(case.vcmd):
-            time.sleep(0.6)
+            time.sleep(0.2 if case.module.lower().startswith("rnpu") else 0.6)
             vcmd = substitute(case.vcmd, ctx)
             # cmds 里 --pid=12345 占位在 test_case 中已被替换为真实 pid；verify 的 vcmd
             # 同样要替换——否则 `dcat query rPROC_hang --pid=12345` 查不存在的 pid → 恒假
@@ -274,14 +274,12 @@ def test_case(case, dcat, e2e_env, autouse_sweep, recorder, tracked, request):
     if mod_lower.startswith("rnpu") or any(
         len(a) > 2 and a[1] in ("inject", "clean", "query") and a[2].lower().startswith("rnpu")
         for a in case.cmds):
-        _rc, _out = sh("ls /dev/davinci* 2>/dev/null | sort -V | head -1 | grep -oE '[0-9]+'")
-        _chip = _out.strip().splitlines()[0] if _out.strip() else "0"
-        ctx["chip"] = _chip
-        # Detect NPU RoCE port name (e.g. eth0) from hccn_tool -status -g
+        # 会话级缓存探测（npu_info）：chip/dev 会话内不变，此前每用例重复 hccn_tool
+        # -status -g 探测是数百次冗余子进程开销
+        _ni = npu_info()
+        ctx["chip"] = _ni["chip"] or "0"
         if "npu_hardware" in (case.precondition or ""):
-            _rc, _out = sh(f"hccn_tool -i {_chip} -status -g 2>/dev/null | grep -oE 'Settings for \\w+' | awk '{{print $3}}'")
-            _dev = _out.strip().splitlines()[0] if _out.strip() else "eth0"
-            ctx["dev"] = _dev
+            ctx["dev"] = _ni["dev"] or "eth0"
 
     # extract --service=X and --port=X from cmds to fill {svc}/{port} in vcmd
     for argv in case.cmds:

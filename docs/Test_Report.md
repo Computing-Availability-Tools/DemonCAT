@@ -24,8 +24,8 @@
 
 | 指标 | 结果 |
 | ------ | ------ |
-| CTest 测试总数 | **27** |
-| CTest 通过 | **27** |
+| CTest 测试总数 | **28** |
+| CTest 通过 | **28** |
 | CTest 失败 | **0** |
 | CTest 通过率 | **100%** |
 | E2E 用例总数 | **633**（618 含 dcat 命令，pytest + testcases.xlsx 驱动，详见 §12） |
@@ -72,9 +72,9 @@
 
 ---
 
-## 4. CTest 自动化测试 (27 项)
+## 4. CTest 自动化测试 (28 项)
 
-### 4.1 Tier 0: 核心单元测试 (14 个)
+### 4.1 Tier 0: 核心单元测试 (15 个)
 
 | 测试 | 覆盖范围 | 结果 | 耗时 |
 | ------ | --- | :----: | :----: |
@@ -91,6 +91,7 @@
 | test_cli | 子命令解析 + 全局选项 | PASS | 0.00s |
 | test_faults | 表驱动 3 条示例 | PASS | 0.00s |
 | test_help | --help 系统 | PASS | 0.00s |
+| test_npu_stress_cfg | _npu_stress 满血/PWM 配置决策 | PASS | 0.00s |
 | test_plugin_manager | dlopen + ABI 版本 | PASS | 0.00s |
 
 ### 4.1b Tier 0c: serve.c 静态函数测试 (1 个)
@@ -342,11 +343,11 @@
 
 ## 10. 结论
 
-DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 用例 **633** 条（pytest + testcases.xlsx 驱动，其中 618 条含 dcat 命令），每次运行统计见 `tests/e2e/report.md`（PASS/FAIL/SKIP/通过率随运行更新）。**58 条故障真机手动测试全覆盖**：
+DemonCAT v0.1.1 全部 **28** 个 CTest 测试通过，零失败。E2E 用例 **633** 条（pytest + testcases.xlsx 驱动，其中 618 条含 dcat 命令），每次运行统计见 `tests/e2e/report.md`（PASS/FAIL/SKIP/通过率随运行更新）。**58 条故障真机手动测试全覆盖**：
 
 - **58 条 PASS** — inject/query/clean 全流程验证通过（link_down 在 910C link UP 环境验证通过）
 
-**8 个 Bug 已全部修复并验证通过**，27 个 CTest 测试 + 633 条 E2E 用例（pytest 驱动）无回归。
+**8 个 Bug 已全部修复并验证通过**，28 个 CTest 测试 + 633 条 E2E 用例（pytest 驱动）无回归。
 
 **测试结论：代码逻辑正确，v0.1.1 可用。已知限制为 910B4 无交换机环境约束，910C 已验证通过。**
 
@@ -396,7 +397,7 @@ DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 用例 **
 | 手动 `dcat clean --all` | 58 条支持 clean 的故障 fan-out，聚合 status 全 `ok`（NPU 在无 hccn_tool 环境下脚本 fault_present 静默 no-op） | PASS |
 | 手动 `dcat inject <uid>`（无参） | 21 条新改脚本均拒绝并报 "missing required param"（强制未放松） | PASS |
 
-> CTest 当前共 **27** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost + test_serve + test_faults_batch2_ext + test_faults_batch2_newmods）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
+> CTest 当前共 **28** 项全通过（v0.1 的 22 项 + test_reinject + test_smoke_state_lost + test_serve + test_faults_batch2_ext + test_faults_batch2_newmods + test_npu_stress_cfg）。stateless clean 新增测试内嵌于 test_dispatch / test_state（dispatch/state 层）+ test_smoke_state_lost（端到端）。
 
 ### 11.5 已知限制
 
@@ -410,7 +411,7 @@ DemonCAT v0.1.1 全部 **27** 个 CTest 测试通过，零失败。E2E 用例 **
 
 *测试执行时间: 2026-07-25（v0.1 基线）/ 2026-07-30（stateless clean 增量）/ 2026-08-14（批次2 扩展）*
 *测试执行人: Automated (CTest) + Manual*
-*总耗时: 13.85 秒 (v0.1 CTest) / 32.84 秒 (增量后 CTest 24 项) / 批次2 后 CTest 27 项 + 手动验证*
+*总耗时: 13.85 秒 (v0.1 CTest) / 32.84 秒 (增量后 CTest 24 项) / 批次2 后 CTest 28 项 + 手动验证*
 
 ## 12. E2E 测试（pytest + testcases.xlsx 驱动）
 

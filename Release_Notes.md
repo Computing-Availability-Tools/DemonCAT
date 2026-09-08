@@ -39,9 +39,9 @@ CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 /
 - **文件系统 2 条**：文件锁 / IO 等待高负载
 - **Docker 2 条**：容器 kill / 容器内存过载
 - **系统 2 条**：内核 panic / 关机
-- **NPU 20 条**：rNPU_pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove + RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
+- **NPU 20 条**：rNPU_pcie_down/aic_load/aicpu_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove + RoCE 链路 / IP / 网关 / ARP / 路由 / 策略路由 / 带宽 / MTU / DSCP / RoCE 端口 等
 
-合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 58 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条后 batch2 新增 7 条（pcie_down/aic_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove）增至 20 条。
+合并上游 8→4 add/del 对后，故障目录从初版 37 条精简为 33 条后，batch2 扩充至 58 条：删除 `rNPU_fec_change`（910B4 硬件不支持）、`rNPU_pfc_change` / `rNPU_prio_tc_change` / `rNPU_route_clear`（910C 真机验证驱动不支持），NPU 模块由 20 条减至 16 条后 batch2 新增 8 条（pcie_down/aic_load/aicpu_load/aiv_load/hbm_load/chip_reset/driver_unbind/pcie_remove）增至 20 条。
 
 #### Web 控制台（dcat serve）
 
@@ -145,7 +145,7 @@ CPU 5 / 存储 5 / 网络 13 / 进程 5 / 内存 4 / 文件系统 2 / Docker 2 /
 
 ### 测试
 
-- **ctest：27/27 全通过
+- **ctest：28/28 全通过
     - Tier 0 核心单元测试（types / output / config / registry / executor / precheck / state / injectors / dispatch / reinject / cli / faults / help / plugin_manager + plugin_integration）
     - Tier 1 mock 表驱动故障测试（58 条全覆盖）
     - Tier 2 脚本语法检查（sh -n 全部 58 脚本 + _common.sh）

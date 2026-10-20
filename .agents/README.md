@@ -41,6 +41,7 @@
 | `references/fault-catalog.md` | 完整参数 + 危险标注（**生成物**） |
 | `references/safety.md` | 危险/不可逆故障的恢复流程与硬约束（稳定） |
 | `scripts/verify.sh` | 用 `dcat query` 判定故障是否生效的取证脚本 |
+| `scripts/gen-catalog.js` | 数据生成器：从 `config/demoncat.conf` + `User_Manual.md` 重新生成上面三份 references（Node） |
 
 ### 触发
 

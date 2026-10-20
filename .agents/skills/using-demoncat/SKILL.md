@@ -157,4 +157,5 @@ dcat serve  [--port 8080] [--allow-write]   # Web 控制台（默认只读）
 - 每个故障的命令示例：[references/quick-commands.md](references/quick-commands.md)
 - 完整参数 + 危险标注：[references/fault-catalog.md](references/fault-catalog.md)
 - 危险/不可逆故障的恢复流程（稳定，按类别）：[references/safety.md](references/safety.md)
+- 数据生成器（从工具重新生成以上三份）：[scripts/gen-catalog.js](scripts/gen-catalog.js)
 - DemonCAT 仓库手册（若可得）：`User_Manual.md`、`docs/DemonCAT_Error_List.md`、`SPEC.md`

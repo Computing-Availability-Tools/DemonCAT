@@ -1,0 +1,239 @@
+#!/usr/bin/env node
+'use strict';
+
+// gen-catalog.js — regenerate this skill's reference data from the tool's own
+// config/demoncat.conf (faults/params) and User_Manual.md (danger grades).
+// The skill body never hardcodes the fault list, so these references are the
+// only thing that goes stale — regenerate them when DemonCAT's fault set changes.
+//
+// Usage (from the DemonCAT repo root):
+//   node .agents/skills/using-demoncat/scripts/gen-catalog.js
+//   node .agents/skills/using-demoncat/scripts/gen-catalog.js --conf config/demoncat.conf [--manual User_Manual.md] [--out <fault-catalog.md>]
+
+const fs = require('fs');
+const path = require('path');
+
+// Default output dir is this skill's references/ (relative to the script).
+const DEFAULT_OUT = path.join(__dirname, '..', 'references', 'fault-catalog.md');
+const TOOL_VER = process.env.DEMONCAT_TOOL_VERSION || 'n/a';
+const REGEN_CMD = 'node .agents/skills/using-demoncat/scripts/gen-catalog.js';
+
+const MODULE_ORDER = ['cpu', 'storage', 'network', 'process', 'memory', 'filesystem', 'docker', 'npu', 'system'];
+const MODULE_CN = {
+  cpu: 'CPU', storage: '存储', network: '网络', process: '进程', memory: '内存',
+  filesystem: '文件系统', docker: 'Docker', npu: 'NPU', system: '系统',
+};
+
+// Example values for common parameter names, used to synthesize ready-to-run
+// command examples. Unknown params fall back to a `<name>` placeholder. This map
+// keys on *parameter names* (stable) — never on fault uids.
+const EXAMPLE = {
+  iface: 'eth0', cores: '0-3', device: '/dev/sdb', path: '/data',
+  port: '8080', delay_ms: '200', loss_pct: '10', reorder_pct: '20', corrupt_pct: '5',
+  jitter_ms: '50', dir: 'from',
+  rate_kbps: '1000', speed_mbps: '10', cycle_sec: '2', count: '10', protocol: 'tcp',
+  direction: 'in', service: 'nginx', target: '10.0.0.1', size_mb: '2048', rate_mb: '256',
+  block_kb: '4', blocks: '1000', freq_mhz: '800', quota_pct: '30', pid: '1234',
+  container: 'myct', size: '8G', chip: '0', npu_id: '0', gen: '1', core: '0',
+  address: '192.168.1.100', netmask: '255.255.255.0', gateway: '192.168.1.1',
+  mac: '00:11:22:33:44:55', dev: 'eth0', ip: '10.0.0.1', ip_mask: '24',
+  table: '100', via: '192.168.1.1', dscp: '46', tc: '0', workers: '4',
+  bw_limit: '100000',
+};
+function exampleFor(p) { return EXAMPLE[p] || ('<' + p + '>'); }
+function cmdExample(f) {
+  const req = csv(f.inject_required).map(p => `--${p}=${exampleFor(p)}`);
+  return ['dcat', 'inject', f.uid, ...req].join(' ');
+}
+
+function parseArgs(argv) {
+  const a = { conf: process.env.DEMONCAT_CONF || '', out: DEFAULT_OUT, manual: '' };
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--conf') a.conf = argv[++i];
+    else if (argv[i] === '--out') a.out = argv[++i];
+    else if (argv[i] === '--manual') a.manual = argv[++i];
+    else if (argv[i] === '--help') {
+      console.log('usage: gen-catalog [--conf <demoncat.conf>] [--manual <User_Manual.md>] [--out <fault-catalog.md>]');
+      process.exit(0);
+    }
+  }
+  if (!a.conf) a.conf = path.join(process.cwd(), 'config', 'demoncat.conf');
+  return a;
+}
+
+// Parse the tool's User_Manual: `**UID**: \`rXxx\`` + `**危险等级**: <grade>` per section.
+// Per-fault risk already lives there for humans, so we read it instead of inventing
+// a new field. Returns Map(uid -> grade 低/中/中高/高/极高).
+function parseManual(text) {
+  const m = new Map();
+  for (const block of text.split(/^###\s+/m).slice(1)) {
+    const uid = (block.match(/\*\*UID\*\*:\s*`([^`]+)`/) || [])[1];
+    const grade = (block.match(/\*\*危险等级\*\*:\s*([^\s—\n]+)/) || [])[1];
+    if (uid && grade) m.set(uid, grade);
+  }
+  return m;
+}
+
+// Parse the INI: sections are [fault.<uid>]; keys are lowercased attr names.
+function parseConf(text) {
+  const faults = [];
+  let cur = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line[0] === '#' || line[0] === ';') continue;
+    const sec = line.match(/^\[fault\.([A-Za-z0-9_]+)\]\s*$/);
+    if (sec) { cur = { uid: sec[1] }; faults.push(cur); continue; }
+    if (line[0] === '[') { cur = null; continue; }
+    if (!cur) continue;
+    const kv = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/);
+    if (kv) cur[kv[1].toLowerCase()] = kv[2].trim();
+  }
+  return faults;
+}
+
+function csv(s) { return s ? s.split(',').map(x => x.trim()).filter(Boolean) : []; }
+
+// Danger is a *property of the fault*, sourced from the tool's own docs/config —
+// never a curated list in this skill:
+//   ☠️ irreversible  <= the fault exposes no `clean` op (from demoncat.conf)
+//   ⚠️ high risk     <= User_Manual 危险等级 contains 高 (or conf `risk = high` overrides)
+function dangerMark(f, grades) {
+  const ops = csv(f.supported_ops);
+  if (!ops.includes('clean')) return '☠️';
+  const risk = (f.risk || f.danger || '').toLowerCase();
+  if (risk === 'high' || risk === 'critical' || risk === 'warn') return '⚠️';
+  const grade = grades.get(f.uid) || '';
+  if (grade.includes('高')) return '⚠️';
+  return '—';
+}
+
+function header(lines, n) {
+  lines.push('<!-- GENERATED by gen-catalog from DemonCAT config/demoncat.conf + User_Manual.md — DO NOT EDIT.');
+  lines.push(`     tool_version=${TOOL_VER}  faults=${n}  regenerate: ${REGEN_CMD} -->`);
+  lines.push('');
+}
+
+function render(faults, grades) {
+  const byMod = group(faults);
+  const lines = [];
+  header(lines, faults.length);
+  lines.push(`# DemonCAT 故障目录（${faults.length} 条）`);
+  lines.push('');
+  lines.push('> 本文件由 `gen-catalog` 从工具的 `demoncat.conf` + `User_Manual.md` **自动生成**，请勿手改。');
+  lines.push('> 危险标注全部来自工具：**☠️ = 该故障没有 `clean` 操作（自动推导）；⚠️ = User_Manual 危险等级为「高/极高」（或 conf `risk = high`）；— = 一般**。');
+  lines.push('> 参数以目标机 `dcat list`、`dcat <uid> --help` 为准（本表为快照）。');
+  lines.push('');
+  for (const m of byMod.mods) {
+    const list = byMod.map.get(m);
+    lines.push(`## ${MODULE_CN[m] || m}（${list.length}）`);
+    lines.push('');
+    lines.push('| uid | 必填 | 可选 | 危险 | 说明 |');
+    lines.push('|---|---|---|---|---|');
+    for (const f of list.sort((x, y) => x.uid.localeCompare(y.uid))) {
+      const req = csv(f.inject_required).join(',') || '—';
+      const opt = csv(f.inject_optional).join(',') || '—';
+      const d = dangerMark(f, grades);
+      const desc = (f.desc || '').replace(/\|/g, '\\|');
+      lines.push(`| \`${f.uid}\` | ${req} | ${opt} | ${d} | ${desc} |`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function renderQuick(faults) {
+  const byMod = group(faults);
+  const out = [];
+  header(out, faults.length);
+  out.push('# DemonCAT 常见命令示例（生成物）');
+  out.push('');
+  out.push('> 由 `gen-catalog` 从 `demoncat.conf` 生成；**参数为示例值，按实际替换**。完整参数与危险标注见 [fault-catalog.md](fault-catalog.md)。');
+  out.push('');
+  for (const m of byMod.mods) {
+    out.push(`## ${MODULE_CN[m] || m}`);
+    out.push('');
+    out.push('| 说明 | 示例命令 |');
+    out.push('|---|---|');
+    for (const f of byMod.map.get(m).sort((x, y) => x.uid.localeCompare(y.uid))) {
+      const desc = (f.desc || '').replace(/\|/g, '\\|');
+      out.push(`| ${desc} | \`${cmdExample(f)}\` |`);
+    }
+    out.push('');
+  }
+  return out.join('\n');
+}
+
+function uidPrefix(uids) {
+  let p = uids[0];
+  for (const u of uids) { while (!u.startsWith(p)) p = p.slice(0, -1); }
+  const i = p.lastIndexOf('_');
+  return i > 0 ? p.slice(0, i) : p;
+}
+
+function renderModules(faults) {
+  const byMod = group(faults);
+  const out = [];
+  header(out, faults.length);
+  out.push('# DemonCAT 模块与参数约定（生成物）');
+  out.push('');
+  out.push('> 由 `gen-catalog` 从 `demoncat.conf` 聚合。意图 → 模块用本表，模块内选准确 uid 用 `dcat list`。');
+  out.push('');
+  out.push('| 模块 | uid 前缀 | 故障数 | 常见参数 |');
+  out.push('|---|---|---|---|');
+  for (const m of byMod.mods) {
+    const list = byMod.map.get(m);
+    const prefix = uidPrefix(list.map(f => f.uid));
+    const freq = new Map();
+    for (const f of list) {
+      for (const p of [...csv(f.inject_required), ...csv(f.inject_optional)]) freq.set(p, (freq.get(p) || 0) + 1);
+    }
+    const params = [...freq.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(e => e[0]);
+    out.push(`| ${MODULE_CN[m] || m} | \`${prefix}_\` | ${list.length} | ${params.join('、')} |`);
+  }
+  out.push('');
+  return out.join('\n');
+}
+
+function group(faults) {
+  const map = new Map();
+  for (const f of faults) {
+    const m = (f.module || 'other').toLowerCase();
+    if (!map.has(m)) map.set(m, []);
+    map.get(m).push(f);
+  }
+  const mods = [
+    ...MODULE_ORDER.filter(m => map.has(m)),
+    ...[...map.keys()].filter(m => !MODULE_ORDER.includes(m)),
+  ];
+  return { map, mods };
+}
+
+const a = parseArgs(process.argv.slice(2));
+if (!fs.existsSync(a.conf)) {
+  console.error(`error: conf not found: ${a.conf}`);
+  console.error('hint: run from the DemonCAT repo root, or pass --conf <path> (or set DEMONCAT_CONF)');
+  process.exit(1);
+}
+const faults = parseConf(fs.readFileSync(a.conf, 'utf8'));
+if (!faults.length) { console.error('error: no [fault.*] sections parsed'); process.exit(1); }
+
+const manualPath = a.manual || path.join(path.dirname(a.conf), '..', 'User_Manual.md');
+let grades = new Map();
+if (fs.existsSync(manualPath)) {
+  grades = parseManual(fs.readFileSync(manualPath, 'utf8'));
+  console.log(`read ${grades.size} danger grades from ${manualPath}`);
+} else {
+  console.warn(`warn: manual not found (${manualPath}); danger ⚠️ column will be empty`);
+}
+
+fs.mkdirSync(path.dirname(a.out), { recursive: true });
+fs.writeFileSync(a.out, render(faults, grades));
+console.log(`wrote ${faults.length} faults -> ${a.out}`);
+const quickOut = path.join(path.dirname(a.out), 'quick-commands.md');
+fs.writeFileSync(quickOut, renderQuick(faults));
+console.log(`wrote quick commands  -> ${quickOut}`);
+const modOut = path.join(path.dirname(a.out), 'modules.md');
+fs.writeFileSync(modOut, renderModules(faults));
+console.log(`wrote modules         -> ${modOut}`);

@@ -106,7 +106,7 @@ dcat serve  [--port 8080] [--allow-write]   # Web 控制台（默认只读）
 
 1. **要 root**：多数故障需要；Ansible 加 `--become`（`-b`）。
 2. **看 `dcat` 的退出码，别只看 Ansible 的成败**：`dcat` 的 2/3/5（解析 / 预检 / 重注入）会被 Ansible **默认判为失败**——用 `shell:` + `register:` + `failed_when: false`，再按 `rc` 与 stdout 判断。
-3. **注入 / 验证 / 清理必须在同一次远程执行里完成** ⚠️：目标机常按 SSH 会话隔离临时状态（`PrivateTmp`；实测某些昇腾环境连 `tc` 状态都不跨会话保留）。`dcat` 写在 `/tmp` 的 sidecar 工件**跨会话不可见** → 换个 ssh 再 `query` 会**误报"未生效"**、`clean` 也可能清不掉。把 inject+query+clean 放进**同一个 ssh 会话 / 同一个 ansible task / 同一段脚本**（需观测一段时间时，保持同一会话开着）。
+3. **注入 / 验证 / 清理尽量放在同一次远程执行里完成**。`dcat` 的状态记录在 `~/.demoncat/state.json`，**跨会话可读、可 `clean`**；但两类东西会"丢"：① **进程类故障的效果**（如 `rCPU_overload` 的后台烧核进程，脚本用普通 `&` 启动）会随**注入会话结束**而终止——要长期观察就保持那条 ssh 会话开着；② 若目标机被巡检 / 测试框架共享，外部可能重置 state/qdisc。跨会话核对用 `dcat query`（读 state.json）。
 4. **验证必须在同一节点**：`dcat query` / `scripts/verify.sh` 也要在**那台计算节点**上跑，看 `confirmed:true`；**别在控制节点本地查**。
 
 ```bash

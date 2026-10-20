@@ -102,17 +102,20 @@ dcat serve  [--port 8080] [--allow-write]   # Web 控制台（默认只读）
 
 ## 远程执行（SSH / Ansible 式）
 
-`dcat` 命令都**在计算节点上执行**。若你从**控制 / agent 节点**远程下发（SSH / Ansible），命令本身不变，只是包一层，注意三点：
+`dcat` 命令都**在计算节点上执行**。若你从**控制 / agent 节点**远程下发（SSH / Ansible），命令本身不变，只是包一层，注意四点：
 
 1. **要 root**：多数故障需要；Ansible 加 `--become`（`-b`）。
-2. **看 `dcat` 的退出码，别只看 Ansible 的成败**：`dcat` 的 2/3/5（解析 / 预检 / 重注入）会被 Ansible **默认判为失败**——用 `shell:` + `register:` + `failed_when: false`，再按 `rc` 与 stdout 判断（ad-hoc 同理）。
-3. **验证必须在同一节点**：`dcat query` / `scripts/verify.sh` 也要在**那台计算节点**上跑，看 `confirmed:true`；**别在控制节点本地查**。
+2. **看 `dcat` 的退出码，别只看 Ansible 的成败**：`dcat` 的 2/3/5（解析 / 预检 / 重注入）会被 Ansible **默认判为失败**——用 `shell:` + `register:` + `failed_when: false`，再按 `rc` 与 stdout 判断。
+3. **注入 / 验证 / 清理必须在同一次远程执行里完成** ⚠️：目标机常按 SSH 会话隔离临时状态（`PrivateTmp`；实测某些昇腾环境连 `tc` 状态都不跨会话保留）。`dcat` 写在 `/tmp` 的 sidecar 工件**跨会话不可见** → 换个 ssh 再 `query` 会**误报"未生效"**、`clean` 也可能清不掉。把 inject+query+clean 放进**同一个 ssh 会话 / 同一个 ansible task / 同一段脚本**（需观测一段时间时，保持同一会话开着）。
+4. **验证必须在同一节点**：`dcat query` / `scripts/verify.sh` 也要在**那台计算节点**上跑，看 `confirmed:true`；**别在控制节点本地查**。
 
 ```bash
-# Ansible ad-hoc（command 模块默认把非零 rc 当失败，务必按第 2 点处理）
-ansible <host> -b -a "dcat inject rNET_delay --iface=eth0 --delay_ms=200"
-ansible <host> -b -a "dcat query  rNET_delay --iface=eth0"     # confirmed:true 才算生效
-ansible <host> -b -a "dcat clean  rNET_delay --iface=eth0"
+# 一次 ssh 会话内跑完（规避 /tmp 与状态跨会话不可见）
+ssh -p <port> <user>@<host> '
+  dcat inject rNET_delay --iface=eth0 --delay_ms=200
+  dcat query  rNET_delay --iface=eth0     # 期望 data.confirmed:true
+  dcat clean  rNET_delay --iface=eth0     # 观测结束后，仍在同会话内清理
+'
 ```
 
 ## 按模块找故障（**uid 与参数以 `dcat list` 为实时准**）

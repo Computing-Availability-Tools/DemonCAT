@@ -5,7 +5,7 @@
 > **如何使用**：`.agents/skills` 是工具中立的存放处——各 agent 运行时默认不会扫描它。把它下面的技能**拷贝或软链**到你所用运行时的目录即可：
 >
 > | 运行时 | 目标目录 |
-> |---|---|
+> | --- | --- |
 > | opencode | 项目 `.opencode/skill/`，或全局 `~/.config/opencode/skill/` |
 > | Claude Code | 项目 `.claude/skills/`，或全局 `~/.claude/skills/` |
 > | 通用别名 | `~/.agents/skills/` |
@@ -36,7 +36,7 @@
 ### 文件布局
 
 | 文件 | 作用 |
-|---|---|
+| --- | --- |
 | `SKILL.md` | 技能正文（**稳定**，不含会变的 uid/参数清单） |
 | `references/modules.md` | 模块 ↔ uid 前缀 ↔ 常见参数（**生成物**） |
 | `references/quick-commands.md` | 每个故障的命令示例（**生成物**） |

@@ -128,7 +128,7 @@ function render(faults, grades) {
     lines.push(`## ${MODULE_CN[m] || m}（${list.length}）`);
     lines.push('');
     lines.push('| uid | 必填 | 可选 | 危险 | 说明 |');
-    lines.push('|---|---|---|---|---|');
+    lines.push('| --- | --- | --- | --- | --- |');
     for (const f of list.sort((x, y) => x.uid.localeCompare(y.uid))) {
       const req = csv(f.inject_required).join(',') || '—';
       const opt = csv(f.inject_optional).join(',') || '—';
@@ -153,7 +153,7 @@ function renderQuick(faults) {
     out.push(`## ${MODULE_CN[m] || m}`);
     out.push('');
     out.push('| 说明 | 示例命令 |');
-    out.push('|---|---|');
+    out.push('| --- | --- |');
     for (const f of byMod.map.get(m).sort((x, y) => x.uid.localeCompare(y.uid))) {
       const desc = (f.desc || '').replace(/\|/g, '\\|');
       out.push(`| ${desc} | \`${cmdExample(f)}\` |`);
@@ -179,7 +179,7 @@ function renderModules(faults) {
   out.push('> 由 `gen-catalog` 从 `demoncat.conf` 聚合。意图 → 模块用本表，模块内选准确 uid 用 `dcat list`。');
   out.push('');
   out.push('| 模块 | uid 前缀 | 故障数 | 常见参数 |');
-  out.push('|---|---|---|---|');
+  out.push('| --- | --- | --- | --- |');
   for (const m of byMod.mods) {
     const list = byMod.map.get(m);
     const prefix = uidPrefix(list.map(f => f.uid));

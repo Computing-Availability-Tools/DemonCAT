@@ -8,7 +8,7 @@
 ## CPU
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | CPU core hang (RT-priority busy loop starves normal scheduling) | `dcat inject rCPU_core_hang --cores=0-3` |
 | CPU core offline via sysfs | `dcat inject rCPU_core_offline --cores=0-3` |
 | CPU scaling_max_freq underclock per core | `dcat inject rCPU_freq --cores=0-3 --freq_mhz=800` |
@@ -18,7 +18,7 @@
 ## 存储
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | Partition inode exhaustion (many tiny files) | `dcat inject rDISK_inode_exhaust --path=/data` |
 | Disk IO delay (device-mapper delay target) | `dcat inject rDISK_io_delay --device=/dev/sdb --delay_ms=200` |
 | Disk IO error (device-mapper error target) | `dcat inject rDISK_io_error --device=/dev/sdb` |
@@ -28,7 +28,7 @@
 ## 网络
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | Bandwidth limit (tc tbf) | `dcat inject rNET_bw_limit --iface=eth0 --rate_kbps=1000` |
 | Connection exhaustion (hold N outbound TCP connections) | `dcat inject rNET_conn_exhaust --target=10.0.0.1` |
 | Network packet corruption (tc netem corrupt) | `dcat inject rNET_corrupt --iface=eth0 --corrupt_pct=5` |
@@ -46,7 +46,7 @@
 ## 进程
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | Process exit (kill -9, irreversible) | `dcat inject rPROC_exit --pid=1234` |
 | Per-process fd exhaustion (open to RLIMIT_NOFILE) | `dcat inject rPROC_fd_exhaust` |
 | Process count flood (controlled fork bomb) | `dcat inject rPROC_fork_bomb --count=10` |
@@ -56,7 +56,7 @@
 ## 内存
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | Memory fragmentation (alloc N blocks, free every other) | `dcat inject rMEM_fragment` |
 | Memory leak (hold size_mb) | `dcat inject rMEM_leak --size_mb=2048` |
 | Memory OOM (unbounded allocation until OOM killer) | `dcat inject rMEM_oom` |
@@ -65,21 +65,21 @@
 ## 文件系统
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | File lock (noread/nowrite/norw/nodelete via chmod/chattr/mount) | `dcat inject rFS_file_lock --path=/data --mode=<mode>` |
 | High iowait on a mount point (multi-worker small-block sync dd into path) | `dcat inject rFS_iowait_high --path=/data` |
 
 ## Docker
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | Kill (stop) a docker container; clean restarts it | `dcat inject rDOCKER_kill --container=myct` |
 | Container memory overload (allocate size inside container; supports M/G) | `dcat inject rDOCKER_mem_overload --container=myct --size=8G` |
 
 ## NPU
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | NPU AICore stress (aclnnMatmul FP16) | `dcat inject rNPU_aic_load --chip=0` |
 | NPU AICpu stress (aclnnTopk FP64) | `dcat inject rNPU_aicpu_load --chip=0` |
 | NPU AIVector stress (aclnnExp FP16) | `dcat inject rNPU_aiv_load --chip=0` |
@@ -104,6 +104,6 @@
 ## 系统
 
 | 说明 | 示例命令 |
-|---|---|
+| --- | --- |
 | Kernel panic via sysrq 'c' (inject-only, irreversible) | `dcat inject rSYS_panic` |
 | Machine power off / reboot (inject-only, irreversible; mode=0 reboot, 1 poweroff) | `dcat inject rSYS_poweroff --mode=<mode>` |

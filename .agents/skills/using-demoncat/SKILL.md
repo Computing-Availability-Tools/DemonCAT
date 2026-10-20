@@ -48,6 +48,7 @@ sh <本 SKILL.md 所在目录>/scripts/verify.sh <uid> [--<参数>=<值> ...]
 ```
 
 首行是裁决（其后是 `dcat query` 原始输出，一并贴出）：
+
 - `CONFIRMED` = 已生效；`NOT_ACTIVE` = 未生效；
 - `NOT_VERIFIABLE` = inject-only（无 `query` op），**无法验证，别当成"未生效"**；
 - `NOT_FOUND` = uid 不存在（`dcat list` 核对）；`ERROR` = query 本身失败（如参数写错），看原始输出。
@@ -57,7 +58,7 @@ sh <本 SKILL.md 所在目录>/scripts/verify.sh <uid> [--<参数>=<值> ...]
 ### Red flags（出现即停，去核实）
 
 | 你正想说/想做 | 实际必须做 |
-|---|---|
+| --- | --- |
 | "我记得 uid 是 `rXXX`" | 先 `dcat list` 核对，别凭记忆 |
 | "inject 没报错，所以成功" | 跑 `dcat query` / `verify.sh` |
 | "这个能力应该有吧" | `dcat list` 查；没有就明确说**没有** |
@@ -68,7 +69,7 @@ sh <本 SKILL.md 所在目录>/scripts/verify.sh <uid> [--<参数>=<值> ...]
 ### 独立探针（工具之外的旁证，防"注入了别的故障"）
 
 | 域 | 旁证命令 | 期望 |
-|---|---|---|
+| --- | --- | --- |
 | 网络延迟/丢包/抖动 | `tc qdisc show dev <iface>` | 出现 `netem ...` |
 | 网卡 down | `ip -br link show <iface>` | 状态为 `DOWN` |
 | CPU 打满/下线/限频 | `nproc`、`cat /sys/devices/system/cpu/online` | 在线核数/清单发生变化 |
@@ -125,7 +126,7 @@ ssh -p <port> <user>@<host> '
 ## 退出码（据此判断结果）
 
 | 码 | 含义 | 怎么处理 |
-|---|---|---|
+| --- | --- | --- |
 | 0 | 成功 | 仍需 `query` 确认故障**生效** |
 | 1 | 运行错误（脚本失败） | 读 stdout/stderr 定位（缺 root？缺工具？） |
 | 2 | 命令格式不合法 | 检查子命令 / 参数格式 |
@@ -149,7 +150,7 @@ ssh -p <port> <user>@<host> '
 
 ## 标准工作流
 
-```
+```text
 - [ ] 1. 确认能力与参数：`dcat list`（uid 是否存在）/ `dcat inject <uid> --help`
 - [ ] 2. 注入：`dcat inject <uid> --参数=值`（危险故障先与用户确认 + 想好恢复手段）
 - [ ] 3. 验证：`sh <本 SKILL.md 所在目录>/scripts/verify.sh <uid> --参数`（或 `dcat query`）→ 要 `CONFIRMED` / `confirmed:true`（inject-only 故障走不了这步，见铁律 5）

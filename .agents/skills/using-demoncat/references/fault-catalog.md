@@ -10,7 +10,7 @@
 ## CPU（5）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rCPU_core_hang` | cores | — | ⚠️ | CPU core hang (RT-priority busy loop starves normal scheduling) |
 | `rCPU_core_offline` | cores | — | ⚠️ | CPU core offline via sysfs |
 | `rCPU_freq` | cores,freq_mhz | — | — | CPU scaling_max_freq underclock per core |
@@ -20,7 +20,7 @@
 ## 存储（5）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rDISK_inode_exhaust` | path | count | ⚠️ | Partition inode exhaustion (many tiny files) |
 | `rDISK_io_delay` | device,delay_ms | — | ⚠️ | Disk IO delay (device-mapper delay target) |
 | `rDISK_io_error` | device | — | ⚠️ | Disk IO error (device-mapper error target) |
@@ -30,7 +30,7 @@
 ## 网络（13）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rNET_bw_limit` | iface,rate_kbps | — | — | Bandwidth limit (tc tbf) |
 | `rNET_conn_exhaust` | target | count | — | Connection exhaustion (hold N outbound TCP connections) |
 | `rNET_corrupt` | iface,corrupt_pct | — | — | Network packet corruption (tc netem corrupt) |
@@ -48,7 +48,7 @@
 ## 进程（5）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rPROC_exit` | pid | — | ☠️ | Process exit (kill -9, irreversible) |
 | `rPROC_fd_exhaust` | — | count | — | Per-process fd exhaustion (open to RLIMIT_NOFILE) |
 | `rPROC_fork_bomb` | count | — | ⚠️ | Process count flood (controlled fork bomb) |
@@ -58,7 +58,7 @@
 ## 内存（4）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rMEM_fragment` | — | block_kb,blocks | — | Memory fragmentation (alloc N blocks, free every other) |
 | `rMEM_leak` | size_mb | — | — | Memory leak (hold size_mb) |
 | `rMEM_oom` | — | rate_mb | ⚠️ | Memory OOM (unbounded allocation until OOM killer) |
@@ -67,21 +67,21 @@
 ## 文件系统（2）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rFS_file_lock` | path,mode | — | — | File lock (noread/nowrite/norw/nodelete via chmod/chattr/mount) |
 | `rFS_iowait_high` | path | workers | — | High iowait on a mount point (multi-worker small-block sync dd into path) |
 
 ## Docker（2）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rDOCKER_kill` | container | — | ⚠️ | Kill (stop) a docker container; clean restarts it |
 | `rDOCKER_mem_overload` | container,size | — | ⚠️ | Container memory overload (allocate size inside container; supports M/G) |
 
 ## NPU（20）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rNPU_aic_load` | chip | load_pct | — | NPU AICore stress (aclnnMatmul FP16) |
 | `rNPU_aicpu_load` | chip | load_pct | — | NPU AICpu stress (aclnnTopk FP64) |
 | `rNPU_aiv_load` | chip | load_pct | — | NPU AIVector stress (aclnnExp FP16) |
@@ -106,6 +106,6 @@
 ## 系统（2）
 
 | uid | 必填 | 可选 | 危险 | 说明 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `rSYS_panic` | — | — | ☠️ | Kernel panic via sysrq 'c' (inject-only, irreversible) |
 | `rSYS_poweroff` | mode | — | ☠️ | Machine power off / reboot (inject-only, irreversible; mode=0 reboot, 1 poweroff) |

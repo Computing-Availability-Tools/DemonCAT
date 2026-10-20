@@ -6,7 +6,7 @@
 > 由 `gen-catalog` 从 `demoncat.conf` 聚合。意图 → 模块用本表，模块内选准确 uid 用 `dcat list`。
 
 | 模块 | uid 前缀 | 故障数 | 常见参数 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | CPU | `rCPU_` | 5 | cores、freq_mhz、load_pct、quota_pct |
 | 存储 | `rDISK_` | 5 | device、path、count、delay_ms、size、size_mb、workers |
 | 网络 | `rNET_` | 13 | iface、count、delay_ms、port、corrupt_pct、cycle_sec、direction、jitter_ms、loss_pct、protocol、rate_kbps、reorder_pct、service、speed_mbps、target |

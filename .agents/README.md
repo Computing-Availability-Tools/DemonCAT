@@ -2,21 +2,20 @@
 
 本目录存放 DemonCAT 的 **Agent Skill**。
 
-> **如何使用**：`.agents/skills` 是**工具中立的存放处**——各 agent 运行时默认不会扫描它。请把 `skills/` 下的技能**拷贝或软链**到你所用运行时的目录：
+> **安装**：`.agents/skills/` 是**工具中立的存放处**——各 agent 运行时默认不会扫描它。用下面**任一方式**装到运行时目录即可：
 >
-> | 运行时 | 目标目录 |
+> | 方式 | 命令 |
 > |---|---|
-> | opencode | 项目 `.opencode/skill/`，或全局 `~/.config/opencode/skill/` |
-> | Claude Code | 项目 `.claude/skills/`，或全局 `~/.claude/skills/` |
-> | 通用别名 | `~/.agents/skills/` |
+> | **仓库内一键（零额外依赖）** | `sh .agents/install.sh` |
+> | 指定目录 / 拷贝（非软链） | `sh .agents/install.sh --target ~/.config/opencode/skill [--copy]` |
+> | **npm**（内容与仓库同步） | `npx demoncat-skill install` |
+> | 手动 | 把 `.agents/skills/using-demoncat` 软链/拷贝到运行时目录 |
 >
-> 例（软链，随仓库更新）：
-> ```bash
-> ln -s "$(pwd)/.agents/skills/using-demoncat" ~/.config/opencode/skill/using-demoncat
-> ```
+> 运行时目录：opencode `~/.config/opencode/skill/`（或项目 `.opencode/skill/`）、Claude Code `~/.claude/skills/`、通用别名 `~/.agents/skills/`。
 
 ## 目录
 
+- `install.sh` — 一键把 `skills/` 装到各运行时目录（见上）。
 - `skills/` — 技能本体。每个子目录是一个**自洽子技能**（`SKILL.md` + `references/` + `scripts/`）。
 
 ## `using-demoncat` — DemonCAT 故障注入

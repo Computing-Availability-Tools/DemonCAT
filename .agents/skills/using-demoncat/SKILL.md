@@ -6,7 +6,8 @@ license: Apache-2.0
 compatibility: >-
   Target Linux host with the DemonCAT `dcat` CLI installed. NPU faults additionally
   require an Ascend host with hccl_tool / npu-smi; network, disk, filesystem, Docker
-  and system faults generally require root. The skill itself needs no network access.
+  and system faults generally require root. The `dcat` commands run on the compute
+  node; an agent node may drive them remotely over SSH / Ansible.
 metadata:
   author: Computing-Availability-Tools
   upstream: https://github.com/Computing-Availability-Tools/DemonCAT
@@ -98,6 +99,21 @@ dcat serve  [--port 8080] [--allow-write]   # Web 控制台（默认只读）
 ```
 
 > 未安装时用 `./build/dcat` 代替 `dcat`。多数网络/磁盘/NPU/系统故障需 **root**。
+
+## 远程执行（SSH / Ansible 式）
+
+`dcat` 命令都**在计算节点上执行**。若你从**控制 / agent 节点**远程下发（SSH / Ansible），命令本身不变，只是包一层，注意三点：
+
+1. **要 root**：多数故障需要；Ansible 加 `--become`（`-b`）。
+2. **看 `dcat` 的退出码，别只看 Ansible 的成败**：`dcat` 的 2/3/5（解析 / 预检 / 重注入）会被 Ansible **默认判为失败**——用 `shell:` + `register:` + `failed_when: false`，再按 `rc` 与 stdout 判断（ad-hoc 同理）。
+3. **验证必须在同一节点**：`dcat query` / `scripts/verify.sh` 也要在**那台计算节点**上跑，看 `confirmed:true`；**别在控制节点本地查**。
+
+```bash
+# Ansible ad-hoc（command 模块默认把非零 rc 当失败，务必按第 2 点处理）
+ansible <host> -b -a "dcat inject rNET_delay --iface=eth0 --delay_ms=200"
+ansible <host> -b -a "dcat query  rNET_delay --iface=eth0"     # confirmed:true 才算生效
+ansible <host> -b -a "dcat clean  rNET_delay --iface=eth0"
+```
 
 ## 按模块找故障（**uid 与参数以 `dcat list` 为实时准**）
 

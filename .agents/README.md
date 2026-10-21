@@ -6,13 +6,13 @@
 >
 > | 运行时 | 目标目录 |
 > | --- | --- |
-> | opencode | 项目 `.opencode/skill/`，或全局 `~/.config/opencode/skill/` |
+> | opencode | 项目 `.opencode/skills/`，或全局 `~/.config/opencode/skills/` |
 > | Claude Code | 项目 `.claude/skills/`，或全局 `~/.claude/skills/` |
 > | 通用别名 | `~/.agents/skills/` |
 >
 > ```bash
 > # 软链示例（随仓库更新）
-> ln -s "$(pwd)/.agents/skills/using-demoncat" ~/.config/opencode/skill/using-demoncat
+> ln -s "$(pwd)/.agents/skills/using-demoncat" ~/.config/opencode/skills/using-demoncat
 > ```
 >
 > 也可以走 npm（内容与仓库同源、单独发布）：`npx demoncat-skill install`

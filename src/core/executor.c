@@ -96,6 +96,7 @@ result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_
         return result_err(op, f->uid, 1, "fork failed");
     }
     if (pid == 0) {
+        (void)setsid();
         apply_env(env, nenv);
         /* stdin 从 /dev/null 读：脚本的参数经 env 传入，不应读 dcat 的 stdin；
          * 非交互场景（cron/ctest/管道）下 stdin 为空管道，脚本误 read 会永久阻塞。 */

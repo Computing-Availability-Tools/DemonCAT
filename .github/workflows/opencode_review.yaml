@@ -115,7 +115,7 @@ jobs:
           # 根目录不放 opencode.json,避免项目配置覆盖本地用户的全局配置。
           OPENCODE_CONFIG: ${{ github.workspace }}/.github/opencode-ci.json
         with:
-          model: opencode/nemotron-3-ultra-free
+          model: opencode/deepseek-v4.1-flash-free
           use_github_token: true
           # 不设 prompt:opencode 用 /opencode 评论内容作任务。
           # DemonCAT 审视规则全在仓库根 AGENTS.md(opencode 自动读取)。

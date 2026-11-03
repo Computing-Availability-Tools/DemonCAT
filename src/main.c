@@ -115,20 +115,24 @@ int main(int argc, char **argv) {
     } else {
         r = dispatch_route_force(pc.uid, pc.op, &pc.params, pc.force);
     }
-    output_print(r);
-    /* 第六步：输出结果、保存状态并卸载插件，按结果码返回 */
-    int code = r ? r->code : 1;
-    result_free(r);
+    /* 先落盘再输出：避免 stdout 已报成功、实际未记录 */
     if (state_save() < 0) {
+        result_free(r);
+        char msg[160];
         if (pc.op && strcmp(pc.op, "inject") == 0) {
             /* 未能落盘的注入已真实生效：用精确参数回滚，避免留下未跟踪故障。 */
             int rolled = dispatch_rollback_dropped();
-            fprintf(stderr, "dcat: inject state not persisted; rolled back %d untracked injection(s)\n", rolled);
+            snprintf(msg, sizeof msg, "state not persisted; rolled back %d untracked injection(s)", rolled);
+            r = result_err("inject", pc.uid, 1, msg);
         } else {
-            fprintf(stderr, "dcat: state save failed after %s; state may be stale\n", pc.op ? pc.op : "operation");
+            snprintf(msg, sizeof msg, "state save failed after %s; state may be stale",
+                     pc.op ? pc.op : "operation");
+            r = result_err(pc.op, pc.uid, 1, msg);
         }
-        if (code == 0) code = 1;
     }
+    output_print(r);
+    int code = r ? r->code : 1;
+    result_free(r);
     plugin_fini();
     return code;
 }

@@ -183,7 +183,7 @@ dispatch 按优先级回退查找故障实现，三层依次：
 /* params_t: 栈上, 承载 --key=value 参数 */
 #define DCAT_MAX_PARAMS 16
 #define DCAT_KEY_LEN    32
-#define DCAT_VAL_LEN    64
+#define DCAT_VAL_LEN    256
 typedef struct { char key[DCAT_KEY_LEN]; char value[DCAT_VAL_LEN]; } param_kv_t;
 typedef struct { param_kv_t items[DCAT_MAX_PARAMS]; int count; } params_t;
 
@@ -207,16 +207,17 @@ typedef struct {
 
 /* injection_record_t: state 持有, 固定数组 — 仅 inject,clean,query 故障创建 */
 typedef struct {
-    int  record_id;             /* 单调递增 */
+    long long record_id;        /* 单调递增 (64-bit) */
+    char token[48];             /* 注入唯一标识(pid+时间+序号)，区分并发同 uid+同参 */
     char uid[64];
     params_t params;            /* inject 时用户提供的参数, 用于 clean 时匹配记录 */
-    time_t started_at;
+    char started_at[20];        /* "YYYY-MM-DD HH:MM:SS" 本地时间 */
     int active;                 /* 1 活跃, 0 已清理 */
 } injection_record_t;
-#define DCAT_MAX_RECORDS 32
+#define DCAT_MAX_RECORDS 256    /* 记录总上限；表满淘汰最旧 inactive */
 ```
 
-> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
+> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。`token` 用于区分"从空盘并发注入同 uid+同参数"的两条真实记录；旧 state.json 无 token 时按 `record_id+uid+params` 兼容匹配。容量上限 256，表满时淘汰最旧 inactive 历史；落盘失败会回滚未记账的注入。
 >
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 

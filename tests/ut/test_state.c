@@ -765,7 +765,7 @@ int test_state_can_add(void) {
     return 0;
 }
 
-/* 回归：磁盘 256 条全 active、内存因刚 clean 出现过 inactive 槽 → state_add 成功，
+/* 回归：磁盘 256 条全 active，内存腾出空槽(如回滚移除)后 state_add 成功，
  * 但落盘时磁盘仍全 active，新记录无处可放。state_save 必须返回 -1（不得静默成功）。 */
 int test_save_reports_drop_when_disk_full(void) {
     state_reset();
@@ -785,13 +785,13 @@ int test_save_reports_drop_when_disk_full(void) {
 
     state_load();
     ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
-    state_mark_inactive(1); /* 内存出现 inactive 槽（磁盘仍全 active） */
+    state_remove(NULL, 1); /* 腾出空槽但不产生 inactive 标记（模拟回滚移除） */
 
     params_t p;
     params_init(&p);
     params_set(&p, "iface", "eth9");
     ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
-    ASSERT_INT_EQ(state_save(), -1); /* 新记录无法落盘：必须显式失败 */
+    ASSERT_INT_EQ(state_save(), -1); /* 磁盘全 active，新记录无法落盘：必须显式失败 */
 
     /* 未落盘记录须可取回，供 dispatch 用精确参数回滚。 */
     injection_record_t dr;

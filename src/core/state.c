@@ -20,6 +20,10 @@ static int g_dropped_head = 0;
  * 容量 DCAT_MAX_RECORDS；CLI/serve 每次注入后都会 save，正常不会溢出。 */
 static injection_record_t g_added[DCAT_MAX_RECORDS];
 static int g_added_n = 0;
+/* 已置 inactive 但尚未落盘的记录(按 token/id 去重)。state_add 可能复用其内存槽
+ * 导致标记丢失；merge 前据此把磁盘快照里的旧记录也置 inactive，避免 force+满表幽灵。 */
+static injection_record_t g_inactive[DCAT_MAX_RECORDS];
+static int g_inactive_n = 0;
 #define DCAT_MAX_ID ((long long)9000000000000000000LL)
 /* state.json 合理上限(256 条记录远小于此)；用于拒绝目录/设备/异常大文件。 */
 #define DCAT_STATE_MAX_BYTES (64ULL * 1024 * 1024)
@@ -38,6 +42,9 @@ void state_reset(void) {
     pthread_mutex_lock(&g_lock);
     memset(g_records, 0, sizeof(g_records));
     g_added_n = 0;
+    g_dropped_n = 0;
+    g_dropped_head = 0;
+    g_inactive_n = 0;
     g_next_id = 1;
     g_state_lost = 0;
     g_dirty = 1; /* 内存已清空，可能与磁盘不一致 → 下次 state_save 须落盘 */
@@ -214,6 +221,24 @@ void state_mark_inactive(long long id) {
         if (g_records[i].record_id == id) {
             g_records[i].active = 0;
             g_dirty = 1;
+            /* 记录待落盘 inactive 标记（去重），即使该内存槽随后被 state_add 复用，
+             * merge 仍能把磁盘上的旧记录置 inactive。 */
+            if (g_inactive_n < DCAT_MAX_RECORDS) {
+                int dup = 0;
+                for (int k = 0; k < g_inactive_n; k++) {
+                    if (g_records[i].token[0] && g_inactive[k].token[0] &&
+                        strcmp(g_inactive[k].token, g_records[i].token) == 0) {
+                        dup = 1;
+                        break;
+                    }
+                    if (!g_records[i].token[0] && !g_inactive[k].token[0] &&
+                        g_inactive[k].record_id == id) {
+                        dup = 1;
+                        break;
+                    }
+                }
+                if (!dup) g_inactive[g_inactive_n++] = g_records[i];
+            }
             break;
         }
     pthread_mutex_unlock(&g_lock);
@@ -494,6 +519,20 @@ static int merge_records(const injection_record_t *mem, int mem_n,
     return n;
 }
 
+/* 把待落盘的 inactive 标记套用到磁盘快照（merge 前调用）。 */
+static void apply_pending_inactive(injection_record_t *disk, int disk_n) {
+    for (int k = 0; k < g_inactive_n; k++) {
+        for (int i = 0; i < disk_n; i++) {
+            int match;
+            if (g_inactive[k].token[0])
+                match = (disk[i].token[0] && strcmp(disk[i].token, g_inactive[k].token) == 0);
+            else
+                match = (!disk[i].token[0] && disk[i].record_id == g_inactive[k].record_id);
+            if (match) disk[i].active = 0;
+        }
+    }
+}
+
 int state_save(void) {
     pthread_mutex_lock(&g_lock);
     if (!g_dirty) { /* 只读操作(查询/列表)不重写 state 文件 */
@@ -544,6 +583,7 @@ int state_save(void) {
         disk_next = 1;
     }
     if (disk_n > DCAT_MAX_RECORDS) disk_n = DCAT_MAX_RECORDS;
+    apply_pending_inactive(disk, disk_n); /* force/clean 的 inactive 标记先落到磁盘快照 */
 
     long long merged_next = disk_next > 1 ? disk_next : 1;
     if (next_seed > merged_next) merged_next = next_seed;
@@ -602,14 +642,15 @@ int state_save(void) {
             g_dirty = 1;
             rc = -1;
         }
-        g_added_n = 0; /* 已落盘(或已转入 g_dropped)，清空新增跟踪 */
+        g_added_n = 0;    /* 已落盘(或已转入 g_dropped)，清空新增跟踪 */
+        g_inactive_n = 0; /* inactive 标记已随本次写入落盘 */
     }
     pthread_mutex_unlock(&g_lock);
 
-    if (dropped > 0)
+    if (!saved)
+        fprintf(stderr, "dcat: state file write failed\n"); /* 写失败是根因，优先报 */
+    else if (dropped > 0)
         fprintf(stderr, "dcat: %d injection record(s) could not be persisted (state table full)\n", dropped);
-    else if (!saved)
-        fprintf(stderr, "dcat: state file write failed\n");
     free(pool);
     return rc;
 }
@@ -619,7 +660,8 @@ void state_load(void) {
     g_dirty = 0;
     memset(g_records, 0, sizeof(g_records)); /* clear stale records before loading */
     g_added_n = 0;
-    g_next_id = 1; /* 0 is the empty-slot sentinel; start at 1 */
+    g_inactive_n = 0; /* 磁盘是唯一真相，清空未落盘标记 */
+    g_next_id = 1;    /* 0 is the empty-slot sentinel; start at 1 */
     char path[256];
     expand_home_path(g_file, path, sizeof(path));
     FILE *fp = fopen(path, "r");

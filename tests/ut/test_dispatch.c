@@ -6,6 +6,7 @@
 #include "state.h"
 #include "config.h"
 #include "output.h"
+#include <cJSON.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -347,6 +348,57 @@ int test_rollback_dropped_clears_memory_no_ghost(void) {
     return 0;
 }
 
+/* 回归：256 条全 active 时 --force 替换，旧记录不得仍 active(ghost)，新记录须落盘。 */
+int test_force_replace_on_full_table_no_ghost(void) {
+    setup();
+    const char *fp = "/tmp/dcat-test-force-full.json";
+    unlink(fp);
+    state_set_file(fp);
+
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        params_t q;
+        params_init(&q);
+        char c[16];
+        snprintf(c, sizeof c, "%d", i + 1);
+        params_set(&q, "cores", c);
+        ASSERT_TRUE(state_add("rCPU_overload", &q) > 0);
+    }
+    ASSERT_INT_EQ(state_save(), 0);
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    result_t *r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 0);
+    long long new_id = -1;
+    cJSON *root = cJSON_Parse(r->json);
+    if (root) {
+        cJSON *data = cJSON_GetObjectItem(root, "data");
+        cJSON *rid = data ? cJSON_GetObjectItem(data, "record_id") : NULL;
+        if (rid) new_id = (long long)rid->valuedouble;
+        cJSON_Delete(root);
+    }
+    result_free(r);
+    ASSERT_TRUE(new_id > 0);
+
+    ASSERT_INT_EQ(state_save(), 0); /* 满表 force 替换必须能落盘 */
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    params_t q;
+    params_init(&q);
+    params_set(&q, "cores", "1");
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1);
+    ASSERT_INT_EQ(ids[0], new_id); /* 旧 core1 不得残留 active */
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -364,5 +416,6 @@ int main(void) {
     RUN_TEST(test_dispatch_inject_rejected_before_script_when_full);
     RUN_TEST(test_dispatch_rollback_record_runs_clean);
     RUN_TEST(test_rollback_dropped_clears_memory_no_ghost);
+    RUN_TEST(test_force_replace_on_full_table_no_ghost);
     return TEST_MAIN_RETURN();
 }

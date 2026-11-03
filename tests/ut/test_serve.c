@@ -249,7 +249,7 @@ int test_serve_save_failure_returns_500(void) {
     fclose(f);
 
     state_load();
-    state_mark_inactive(1); /* 内存出现 inactive 槽，磁盘仍全 active */
+    state_remove(NULL, 1); /* 腾出空槽但不产生 inactive 标记，磁盘仍全 active */
     params_t p;
     params_init(&p);
     params_set(&p, "iface", "eth9");

@@ -349,8 +349,10 @@ dcat inject rNET_delay --iface=eth1 --delay_ms=100   # OK (不同 iface)
 **`query`（无 uid，state 查询）**：
 
 ```json
-{"status":"ok","op":"query","data":[{"uid":"rCPU_overload","record_id":3,"started_at":1721000000,"active":true,"params":{"cores":"4"}}]}
+{"status":"ok","op":"query","data":[{"uid":"rCPU_overload","record_id":3,"started_at":"2026-11-03 12:00:00","active":true,"params":{"cores":"4"}}]}
 ```
+
+> `~/.demoncat/state.json` 文件为 `{"next_id":N,"records":[...]}`；每条记录含 `record_id`、`token`、`uid`、`params`、`started_at`（字符串）、`active`。`token` 用于区分并发同 uid+同参数的注入（旧文件缺省时按 `record_id+uid+params` 兼容）。总记录上限 256，表满淘汰最旧 inactive。
 
 **`query`（有 uid，故障验证 — 方案 A 输出）**：
 

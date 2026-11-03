@@ -519,18 +519,21 @@ static int merge_records(const injection_record_t *mem, int mem_n,
     return n;
 }
 
-/* 把待落盘的 inactive 标记套用到磁盘快照（merge 前调用）。 */
+/* 把待落盘的 inactive 标记套用到磁盘快照（merge 前调用；内部持 g_lock）。 */
 static void apply_pending_inactive(injection_record_t *disk, int disk_n) {
+    pthread_mutex_lock(&g_lock);
     for (int k = 0; k < g_inactive_n; k++) {
         for (int i = 0; i < disk_n; i++) {
             int match;
             if (g_inactive[k].token[0])
                 match = (disk[i].token[0] && strcmp(disk[i].token, g_inactive[k].token) == 0);
-            else
-                match = (!disk[i].token[0] && disk[i].record_id == g_inactive[k].record_id);
+            else /* 旧版无 token：id 相同且 uid+params 一致才算同一条 */
+                match = (!disk[i].token[0] && disk[i].record_id == g_inactive[k].record_id &&
+                         record_same_params(&disk[i], &g_inactive[k]));
             if (match) disk[i].active = 0;
         }
     }
+    pthread_mutex_unlock(&g_lock);
 }
 
 int state_save(void) {

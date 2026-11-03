@@ -10,6 +10,6 @@ result_t *dispatch_clean_all(void);
 /* 回滚一条"已执行但未能记账"的注入：用精确参数直接执行该故障的 clean。
  * 返回 1=已清理，0=失败/无处理器。 */
 int dispatch_rollback_record(const char *uid, const params_t *params);
-/* 回滚最近一次 state_save 所有未落盘记录，返回回滚条数。 */
+/* 回滚最近一次 state_save 所有未落盘记录，返回 clean 成功并已从内存移除的条数。 */
 int dispatch_rollback_dropped(void);
 #endif

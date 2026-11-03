@@ -593,10 +593,10 @@ int test_reinject_same_params_no_history_revival(void) {
     return 0;
 }
 
-/* 回归：state.json 已满 32 条(全 inactive)时，新 inject 记录必须落盘——
+/* 回归：state.json 已满 256 条(全 inactive)时，新 inject 记录必须落盘——
  * 淘汰最旧 inactive 历史记录腾位，而不是在 merge_records 里被静默丢弃。
  * 复现路径：load 满表 → state_add(内存复用 inactive 槽看似成功) → state_save
- * 第一段把 32 条磁盘记录全拷进 out，第二段因 n==MAX 恒假 → 新记录丢失。 */
+ * 第一段把 256 条磁盘记录全拷进 out，第二段因 n==MAX 恒假 → 新记录丢失。 */
 int test_save_full_disk_evicts_inactive(void) {
     state_reset();
     const char *fp = "/tmp/dcat-test-state-full.json";
@@ -654,7 +654,7 @@ int test_save_full_disk_evicts_inactive(void) {
     return 0;
 }
 
-/* 满表 31 active + 1 inactive：新注入落盘且只淘汰那条 inactive，active 达满 32。 */
+/* 满表 255 active + 1 inactive：新注入落盘且只淘汰那条 inactive，active 达满 256。 */
 int test_save_full_disk_evicts_inactive_keeps_active(void) {
     state_reset();
     const char *fp = "/tmp/dcat-test-state-full-active.json";
@@ -878,6 +878,57 @@ int test_remove_after_failed_save_no_ghost(void) {
     return 0;
 }
 
+/* 回归：tokenless 旧记录的 pending inactive 必须在 save 时套到磁盘快照(fallback 分支)。 */
+int test_pending_inactive_tokenless_applied(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-tokenless-inactive.json";
+    state_set_file(fp);
+    FILE *f = fopen(fp, "w");
+    ASSERT_TRUE(f != NULL);
+    fputs("{\"next_id\":2,\"records\":[{\"record_id\":1,\"uid\":\"rNET_delay\","
+          "\"params\":{\"iface\":\"eth0\"},\"started_at\":\"2026-01-01 00:00:01\","
+          "\"active\":true}]}",
+          f);
+    fclose(f);
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), 1);
+    state_mark_inactive(1); /* tokenless：写入 pending inactive */
+    ASSERT_INT_EQ(state_save(), 0);
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), 0); /* 磁盘旧记录被置 inactive */
+    unlink(fp);
+    return 0;
+}
+
+/* 回归：save 失败时保留 g_inactive，切到可写路径重试后 inactive 仍能落盘。 */
+int test_inactive_survives_failed_save_and_retries(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-retry-inactive.json";
+    unlink(fp);
+    state_set_file(fp);
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth0");
+    params_set(&p, "delay_ms", "100");
+    ASSERT_TRUE(state_add("rNET_delay", &p) > 0);
+    ASSERT_INT_EQ(state_save(), 0);
+
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), 1);
+    state_mark_inactive(1); /* pending inactive */
+    state_set_file("/proc/dcat-nonexistent/state.json");
+    ASSERT_INT_EQ(state_save(), -1); /* 失败：不得清掉 pending inactive */
+    state_set_file(fp);
+    ASSERT_INT_EQ(state_save(), 0); /* 重试成功 */
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), 0);
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -902,5 +953,7 @@ int main(void) {
     RUN_TEST(test_save_write_failure_rolls_back_added);
     RUN_TEST(test_save_lock_failure_rolls_back_added);
     RUN_TEST(test_remove_after_failed_save_no_ghost);
+    RUN_TEST(test_pending_inactive_tokenless_applied);
+    RUN_TEST(test_inactive_survives_failed_save_and_retries);
     return TEST_MAIN_RETURN();
 }

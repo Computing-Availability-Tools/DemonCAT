@@ -7,6 +7,7 @@
 #include "config.h"
 #include "output.h"
 #include <string.h>
+#include <unistd.h>
 
 static int g_called = 0;
 static const char *g_last_cmd = NULL;
@@ -320,6 +321,32 @@ int test_dispatch_rollback_record_runs_clean(void) {
     return 0;
 }
 
+/* 回滚后用 token 清理内存：失败保存 → 回滚 clean → 切可写路径再保存不得写回 ghost。 */
+int test_rollback_dropped_clears_memory_no_ghost(void) {
+    setup();
+    state_set_file("/proc/dcat-nonexistent/state.json");
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
+    ASSERT_INT_EQ(state_save(), -1); /* 不可创建路径 → lock 失败 */
+
+    g_called = 0;
+    ASSERT_INT_EQ(dispatch_rollback_dropped(), 1);
+    ASSERT_INT_EQ(g_called, 1); /* 真的执行了 clean */
+
+    const char *fp = "/tmp/dcat-test-dispatch-rollback.json";
+    unlink(fp);
+    state_set_file(fp);
+    ASSERT_INT_EQ(state_save(), 0); /* 切到可写路径重试 */
+    state_reset();
+    state_load();
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p, ids, DCAT_MAX_RECORDS), 0);
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -336,5 +363,6 @@ int main(void) {
     RUN_TEST(test_dispatch_clean_state_lost_fallback);
     RUN_TEST(test_dispatch_inject_rejected_before_script_when_full);
     RUN_TEST(test_dispatch_rollback_record_runs_clean);
+    RUN_TEST(test_rollback_dropped_clears_memory_no_ghost);
     return TEST_MAIN_RETURN();
 }

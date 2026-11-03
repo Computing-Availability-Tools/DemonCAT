@@ -120,9 +120,13 @@ int main(int argc, char **argv) {
     int code = r ? r->code : 1;
     result_free(r);
     if (state_save() < 0) {
-        /* 未能落盘的注入已真实生效：用精确参数回滚，避免留下未跟踪故障。 */
-        int rolled = dispatch_rollback_dropped();
-        fprintf(stderr, "dcat: state save failed; rolled back %d untracked injection(s)\n", rolled);
+        if (pc.op && strcmp(pc.op, "inject") == 0) {
+            /* 未能落盘的注入已真实生效：用精确参数回滚，避免留下未跟踪故障。 */
+            int rolled = dispatch_rollback_dropped();
+            fprintf(stderr, "dcat: inject state not persisted; rolled back %d untracked injection(s)\n", rolled);
+        } else {
+            fprintf(stderr, "dcat: state save failed after %s; state may be stale\n", pc.op ? pc.op : "operation");
+        }
         if (code == 0) code = 1;
     }
     plugin_fini();

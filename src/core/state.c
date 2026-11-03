@@ -130,6 +130,40 @@ int state_pop_dropped(injection_record_t *out) {
     return ok;
 }
 
+/* 调用方须持 g_lock：把前 n 条未落盘新增转入 g_dropped 并从 g_added 移除。 */
+static void queue_dropped_locked(int n) {
+    if (n > g_added_n) n = g_added_n;
+    if (n > DCAT_MAX_RECORDS) n = DCAT_MAX_RECORDS;
+    for (int i = 0; i < n; i++) g_dropped[i] = g_added[i];
+    g_dropped_n = n;
+    g_dropped_head = 0;
+    if (g_added_n > n) {
+        int remain = g_added_n - n;
+        memmove(g_added, g_added + n, (size_t)remain * sizeof(g_added[0]));
+        g_added_n = remain;
+    } else {
+        g_added_n = 0;
+    }
+}
+
+/* 从内存移除一条已回滚的注入（按 token 优先），避免后续 save 把幽灵写回。 */
+void state_remove(const char *token, long long record_id) {
+    pthread_mutex_lock(&g_lock);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        int match;
+        if (token && token[0])
+            match = (strcmp(g_records[i].token, token) == 0);
+        else
+            match = (record_id != 0 && g_records[i].record_id == record_id);
+        if (match) {
+            memset(&g_records[i], 0, sizeof(g_records[i]));
+            g_dirty = 1;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&g_lock);
+}
+
 int state_find_by_params(const char *uid, const params_t *query, long long *ids, int max_ids) {
     pthread_mutex_lock(&g_lock);
     int n = 0;
@@ -472,7 +506,9 @@ int state_save(void) {
     /* 记录约 4.6KB/条，256 条 × 4 份放栈上会溢出 → 一次堆分配切成四片。 */
     injection_record_t *pool = malloc(4 * DCAT_MAX_RECORDS * sizeof(injection_record_t));
     if (!pool) {
-        pthread_mutex_unlock(&g_lock); /* 仍脏，下次重试 */
+        queue_dropped_locked(g_added_n); /* 全部未落盘新增转入回滚 */
+        g_dirty = 1;
+        pthread_mutex_unlock(&g_lock);
         return -1;
     }
     injection_record_t *mem = pool;
@@ -495,8 +531,9 @@ int state_save(void) {
     expand_home_path(g_file, path, sizeof(path));
     ensure_parent_dir(path);
     int lfd = state_lock(path);
-    if (lfd < 0) { /* 锁失败仍尽力写（单进程场景不退化），不静默丢数据 */
+    if (lfd < 0) { /* 取不到写锁：放弃本次写入，新增注入转回滚并保留 dirty */
         pthread_mutex_lock(&g_lock);
+        queue_dropped_locked(added_at_start);
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
         free(pool);
@@ -554,31 +591,29 @@ int state_save(void) {
     pthread_mutex_lock(&g_lock);
     if (!saved) {
         /* 写盘失败(cJSON_Print/fopen/fputs/fclose)：本次新增的注入全部未落盘，
-         * 一并转为待回滚，避免"真实生效但既没记录也没回滚"。 */
-        int dn = added_at_start < DCAT_MAX_RECORDS ? added_at_start : DCAT_MAX_RECORDS;
-        for (int i = 0; i < dn; i++) g_dropped[i] = g_added[i];
-        g_dropped_n = dn;
-        g_dropped_head = 0;
+         * 一并转为待回滚(该辅助函数会同步移除 g_added 前缀)。 */
+        queue_dropped_locked(added_at_start);
         g_dirty = 1;
         rc = -1;
-    } else if (dropped > 0) {
-        /* 磁盘已被并发进程写满且全 active：这些已执行故障无法记账。不静默成功，
-         * 返回失败并暂存记录供调用方回滚。 */
-        int dn = dropped < DCAT_MAX_RECORDS ? dropped : DCAT_MAX_RECORDS;
-        for (int i = 0; i < dn; i++) g_dropped[i] = dropped_recs[i];
-        g_dropped_n = dn;
-        g_dropped_head = 0;
-        g_dirty = 1;
-        rc = -1;
-    }
-    /* 本次快照内的新增记录已处理完(落盘或转入 g_dropped)，移除该前缀；
-     * 保留快照之后并发新增的记录。 */
-    if (g_added_n > added_at_start) {
-        int remain = g_added_n - added_at_start;
-        memmove(g_added, g_added + added_at_start, (size_t)remain * sizeof(g_added[0]));
-        g_added_n = remain;
     } else {
-        g_added_n = 0;
+        if (dropped > 0) {
+            /* 磁盘已被并发进程写满且全 active：这些已执行故障无法记账。不静默成功，
+             * 返回失败并暂存记录供调用方回滚。 */
+            int dn = dropped < DCAT_MAX_RECORDS ? dropped : DCAT_MAX_RECORDS;
+            for (int i = 0; i < dn; i++) g_dropped[i] = dropped_recs[i];
+            g_dropped_n = dn;
+            g_dropped_head = 0;
+            g_dirty = 1;
+            rc = -1;
+        }
+        /* 已落盘的新增记录移除前缀；保留快照之后并发新增的记录。 */
+        if (g_added_n > added_at_start) {
+            int remain = g_added_n - added_at_start;
+            memmove(g_added, g_added + added_at_start, (size_t)remain * sizeof(g_added[0]));
+            g_added_n = remain;
+        } else {
+            g_added_n = 0;
+        }
     }
     pthread_mutex_unlock(&g_lock);
 

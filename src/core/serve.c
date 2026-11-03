@@ -105,12 +105,17 @@ static resp_t resp_err(int code, const char *msg) {
 
 /* 先落盘再构造响应：state_save 失败时回滚未记账注入并返回 500，避免 HTTP 报成功
  * 但故障未被记录。 */
-static resp_t resp_from_result_saving(result_t *r) {
+static resp_t resp_from_result_saving(result_t *r, const char *op) {
     if (state_save() < 0) {
-        int rolled = dispatch_rollback_dropped();
+        char msg[192];
+        if (op && strcmp(op, "inject") == 0) {
+            int rolled = dispatch_rollback_dropped();
+            snprintf(msg, sizeof msg, "state not persisted; rolled back %d untracked injection(s)", rolled);
+        } else {
+            snprintf(msg, sizeof msg, "%s applied but state not persisted; run 'dcat query' to reconcile",
+                     op ? op : "operation");
+        }
         if (r) result_free(r);
-        char msg[160];
-        snprintf(msg, sizeof msg, "state not persisted; rolled back %d untracked injection(s)", rolled);
         return resp_err(500, msg);
     }
     return resp_from_result(r);
@@ -398,7 +403,7 @@ static resp_t api_inject(const char *body) {
     state_load(); /* 重读磁盘，感知 CLI 进程的 inject/clean 变更，reinject 冲突检测才真实 */
     result_t *r = dispatch_route_force(uid_j->valuestring, "inject", &params, force);
     cJSON_Delete(root);
-    return resp_from_result_saving(r); /* 先落盘再构造响应,失败则回滚 */
+    return resp_from_result_saving(r, "inject"); /* 先落盘再构造响应,失败则回滚 */
 }
 
 static resp_t api_clean(const char *body) {
@@ -417,7 +422,7 @@ static resp_t api_clean(const char *body) {
     else
         r = dispatch_route(uid_j->valuestring, "clean", &params);
     cJSON_Delete(root);
-    return resp_from_result_saving(r);
+    return resp_from_result_saving(r, "clean");
 }
 
 /* ---------- 路由 ---------- */
@@ -585,7 +590,8 @@ int serve_run(int port, const char *bind_addr, const char *webroot_in, int allow
     close(sfd);
     if (state_save() < 0) {
         int rolled = dispatch_rollback_dropped();
-        fprintf(stderr, "dcat serve: state save failed on shutdown; rolled back %d untracked injection(s)\n", rolled);
+        fprintf(stderr, "dcat serve: state save failed on shutdown%s\n",
+                rolled ? " (untracked injections rolled back)" : "");
     }
     fprintf(stderr, "dcat serve: stopped\n");
     return 0;

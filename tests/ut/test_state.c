@@ -837,6 +837,47 @@ int test_save_write_failure_rolls_back_added(void) {
     return 0;
 }
 
+/* 回归：state_lock 失败(不可创建路径)属于早期失败，也必须把新增注入转入回滚队列。 */
+int test_save_lock_failure_rolls_back_added(void) {
+    state_reset();
+    state_set_file("/proc/dcat-nonexistent/state.json");
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
+    ASSERT_INT_EQ(state_save(), -1);
+    injection_record_t dr;
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 1);
+    ASSERT_STREQ(dr.uid, "rCPU_overload");
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 0);
+    return 0;
+}
+
+/* 回归：回滚后须从内存移除，否则后续成功 save 会把已回滚故障当 active 写回(ghost)。 */
+int test_remove_after_failed_save_no_ghost(void) {
+    state_reset();
+    state_set_file("/proc/dcat-nonexistent/state.json");
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
+    ASSERT_INT_EQ(state_save(), -1);
+    injection_record_t dr;
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 1);
+    state_remove(dr.token, dr.record_id); /* 模拟回滚后清理内存 */
+
+    const char *fp = "/tmp/dcat-test-state-recovered.json";
+    unlink(fp);
+    state_set_file(fp);
+    ASSERT_INT_EQ(state_save(), 0); /* 切到可写路径重试保存 */
+    state_reset();
+    state_load();
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p, ids, DCAT_MAX_RECORDS), 0);
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -859,5 +900,7 @@ int main(void) {
     RUN_TEST(test_state_can_add);
     RUN_TEST(test_save_reports_drop_when_disk_full);
     RUN_TEST(test_save_write_failure_rolls_back_added);
+    RUN_TEST(test_save_lock_failure_rolls_back_added);
+    RUN_TEST(test_remove_after_failed_save_no_ghost);
     return TEST_MAIN_RETURN();
 }

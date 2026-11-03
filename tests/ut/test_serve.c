@@ -255,7 +255,7 @@ int test_serve_save_failure_returns_500(void) {
     params_set(&p, "iface", "eth9");
     ASSERT_TRUE(state_add("rTEST_unknown", &p) > 0);
 
-    resp_t resp = resp_from_result_saving(NULL);
+    resp_t resp = resp_from_result_saving(NULL, "inject");
     ASSERT_INT_EQ(resp.code, 500);
     ASSERT_STR_CONTAINS(resp.body, "not persisted");
     resp_free(&resp);

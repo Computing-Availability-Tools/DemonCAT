@@ -22,7 +22,7 @@ static result_t *state_full_err(const char *op, const char *uid) {
                       "state table full, cannot track injection — run 'dcat query' and clean existing faults");
 }
 
-/* 返回 1=clean 成功(或无需清理)，0=失败/无法确认，调用方据此决定是否从内存移除。 */
+/* 返回 1=clean 成功，0=失败/无法确认，调用方据此决定是否从内存移除。 */
 static int finish_rollback(const char *uid, result_t *r) {
     if (!r) return 0;
     int ok = (r->code == 0);
@@ -45,16 +45,18 @@ int dispatch_rollback_record(const char *uid, const params_t *params) {
     return 0;
 }
 
-/* 回滚最近一次 state_save 所有未落盘记录，返回回滚条数。
- * 清理成功的同时把记录从内存移除，避免后续 save 把它当 active 写回(ghost)。 */
+/* 回滚最近一次 state_save 所有未落盘记录，返回 clean 成功并已从内存移除的条数
+ * (clean 失败的不计数，便于日志如实反映)。 */
 int dispatch_rollback_dropped(void) {
     injection_record_t rec;
-    int n = 0;
+    int ok_n = 0;
     while (state_pop_dropped(&rec)) {
-        if (dispatch_rollback_record(rec.uid, &rec.params)) state_remove(rec.token, rec.record_id);
-        n++;
+        if (dispatch_rollback_record(rec.uid, &rec.params)) {
+            state_remove(rec.token, rec.record_id);
+            ok_n++;
+        }
     }
-    return n;
+    return ok_n;
 }
 
 /* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非裸 JSON。 */

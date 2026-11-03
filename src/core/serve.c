@@ -112,7 +112,7 @@ static resp_t resp_from_result_saving(result_t *r, const char *op) {
             int rolled = dispatch_rollback_dropped();
             snprintf(msg, sizeof msg, "state not persisted; rolled back %d untracked injection(s)", rolled);
         } else {
-            snprintf(msg, sizeof msg, "%s applied but state not persisted; run 'dcat query' to reconcile",
+            snprintf(msg, sizeof msg, "%s applied but state not persisted; state may be stale",
                      op ? op : "operation");
         }
         if (r) result_free(r);

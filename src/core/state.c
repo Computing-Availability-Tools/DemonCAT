@@ -16,7 +16,8 @@ static long long g_next_id = 1;
 static injection_record_t g_dropped[DCAT_MAX_RECORDS];
 static int g_dropped_n = 0;
 static int g_dropped_head = 0;
-/* 自上次成功落盘以来 state_add 新增的记录：写盘失败(磁盘满/权限)时也需回滚。 */
+/* 自上次成功落盘以来 state_add 新增的记录：写盘失败(磁盘满/权限)时也需回滚。
+ * 容量 DCAT_MAX_RECORDS；CLI/serve 每次注入后都会 save，正常不会溢出。 */
 static injection_record_t g_added[DCAT_MAX_RECORDS];
 static int g_added_n = 0;
 #define DCAT_MAX_ID ((long long)9000000000000000000LL)
@@ -130,20 +131,16 @@ int state_pop_dropped(injection_record_t *out) {
     return ok;
 }
 
-/* 调用方须持 g_lock：把前 n 条未落盘新增转入 g_dropped 并从 g_added 移除。 */
+/* 调用方须持 g_lock：把未落盘新增转入 g_dropped。state_save 期间本进程不会并发
+ * state_add(CLI/serve 均为单线程)，故整批转入后直接清空 g_added。 */
 static void queue_dropped_locked(int n) {
+    if (g_added_n > DCAT_MAX_RECORDS) g_added_n = DCAT_MAX_RECORDS;
+    if (n < 0) n = 0;
     if (n > g_added_n) n = g_added_n;
-    if (n > DCAT_MAX_RECORDS) n = DCAT_MAX_RECORDS;
     for (int i = 0; i < n; i++) g_dropped[i] = g_added[i];
     g_dropped_n = n;
     g_dropped_head = 0;
-    if (g_added_n > n) {
-        int remain = g_added_n - n;
-        memmove(g_added, g_added + n, (size_t)remain * sizeof(g_added[0]));
-        g_added_n = remain;
-    } else {
-        g_added_n = 0;
-    }
+    g_added_n = 0;
 }
 
 /* 从内存移除一条已回滚的注入（按 token 优先），避免后续 save 把幽灵写回。 */
@@ -524,7 +521,6 @@ int state_save(void) {
     g_dirty = 0; /* 清脏标记在锁内：避免并发 state_add 的 dirty=1 被覆盖 */
     g_dropped_n = 0;
     g_dropped_head = 0;
-    int added_at_start = g_added_n; /* 本次快照包含的新增记录数 */
     pthread_mutex_unlock(&g_lock);
 
     char path[256];
@@ -533,7 +529,7 @@ int state_save(void) {
     int lfd = state_lock(path);
     if (lfd < 0) { /* 取不到写锁：放弃本次写入，新增注入转回滚并保留 dirty */
         pthread_mutex_lock(&g_lock);
-        queue_dropped_locked(added_at_start);
+        queue_dropped_locked(g_added_n);
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
         free(pool);
@@ -591,8 +587,8 @@ int state_save(void) {
     pthread_mutex_lock(&g_lock);
     if (!saved) {
         /* 写盘失败(cJSON_Print/fopen/fputs/fclose)：本次新增的注入全部未落盘，
-         * 一并转为待回滚(该辅助函数会同步移除 g_added 前缀)。 */
-        queue_dropped_locked(added_at_start);
+         * 一并转为待回滚。 */
+        queue_dropped_locked(g_added_n);
         g_dirty = 1;
         rc = -1;
     } else {
@@ -606,14 +602,7 @@ int state_save(void) {
             g_dirty = 1;
             rc = -1;
         }
-        /* 已落盘的新增记录移除前缀；保留快照之后并发新增的记录。 */
-        if (g_added_n > added_at_start) {
-            int remain = g_added_n - added_at_start;
-            memmove(g_added, g_added + added_at_start, (size_t)remain * sizeof(g_added[0]));
-            g_added_n = remain;
-        } else {
-            g_added_n = 0;
-        }
+        g_added_n = 0; /* 已落盘(或已转入 g_dropped)，清空新增跟踪 */
     }
     pthread_mutex_unlock(&g_lock);
 

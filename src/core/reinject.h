@@ -18,7 +18,8 @@ int cores_intersect(const unsigned char a[DCAT_CORES_BYTES], const unsigned char
 /* 判定 new inject 与已有活动记录的资源重叠。
  * 资源键 = clean_required 各参数；cores 走集合交集，其余精确等；
  * clean_required 为 NULL/空 → 保守策略：同 uid 任意活跃记录都算重叠。
- * out_ids[] 仅写入前 max_ids 个(按 max_ids 截断)；返回重叠总数(可能 > max_ids)。
+ * out_ids[] 仅写入前 max_ids 个(按 max_ids 截断)；返回重叠总数(可能 > max_ids)，
+ * 内存不足返回 -1(fail-closed，调用方应拒绝注入)。
  * 调用方循环须以 min(返回值, max_ids) 为上限；典型调用 max_ids=DCAT_MAX_RECORDS。 */
 int reinject_find_overlap(const fault_def_t *f, const params_t *new_params,
                           long long *out_ids, int max_ids);

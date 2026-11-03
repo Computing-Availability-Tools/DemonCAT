@@ -103,6 +103,24 @@ static resp_t resp_err(int code, const char *msg) {
     return resp_json(code, s);
 }
 
+/* 先落盘再构造响应：state_save 失败时回滚未记账注入并返回 500，避免 HTTP 报成功
+ * 但故障未被记录。 */
+static resp_t resp_from_result_saving(result_t *r, const char *op) {
+    if (state_save() < 0) {
+        char msg[192];
+        if (op && strcmp(op, "inject") == 0) {
+            int rolled = dispatch_rollback_dropped();
+            snprintf(msg, sizeof msg, "state not persisted; rolled back %d untracked injection(s)", rolled);
+        } else {
+            snprintf(msg, sizeof msg, "%s applied but state not persisted; state may be stale",
+                     op ? op : "operation");
+        }
+        if (r) result_free(r);
+        return resp_err(500, msg);
+    }
+    return resp_from_result(r);
+}
+
 static void resp_free(resp_t *r) {
     if (r->body) free(r->body);
     r->body = NULL;
@@ -323,19 +341,21 @@ static int cmp_record_desc(const void *a, const void *b) {
     return 0;
 }
 static resp_t api_history(void) {
-    state_load(); /* 从磁盘重新加载,反映命令行进程的修改 */
-    struct hist_ctx c;
-    c.n = 0;
-    state_for_each_all(collect_record, &c);
-    qsort(c.arr, (size_t)c.n, sizeof(injection_record_t), cmp_record_desc);
+    state_load();                           /* 从磁盘重新加载,反映命令行进程的修改 */
+    struct hist_ctx *c = malloc(sizeof *c); /* 256 条记录较大，避免占栈 */
+    if (!c) return resp_err(500, "out of memory");
+    c->n = 0;
+    state_for_each_all(collect_record, c);
+    qsort(c->arr, (size_t)c->n, sizeof(injection_record_t), cmp_record_desc);
     cJSON *arr = cJSON_CreateArray();
-    for (int i = 0; i < c.n; i++) append_record_json(&c.arr[i], arr);
+    for (int i = 0; i < c->n; i++) append_record_json(&c->arr[i], arr);
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
     cJSON_AddStringToObject(root, "op", "history");
     cJSON_AddItemToObject(root, "data", arr);
     char *s = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    free(c);
     return resp_json(200, s);
 }
 
@@ -383,9 +403,7 @@ static resp_t api_inject(const char *body) {
     state_load(); /* 重读磁盘，感知 CLI 进程的 inject/clean 变更，reinject 冲突检测才真实 */
     result_t *r = dispatch_route_force(uid_j->valuestring, "inject", &params, force);
     cJSON_Delete(root);
-    resp_t resp = resp_from_result(r);
-    state_save(); /* 持久化,崩溃恢复 */
-    return resp;
+    return resp_from_result_saving(r, "inject"); /* 先落盘再构造响应,失败则回滚 */
 }
 
 static resp_t api_clean(const char *body) {
@@ -404,9 +422,7 @@ static resp_t api_clean(const char *body) {
     else
         r = dispatch_route(uid_j->valuestring, "clean", &params);
     cJSON_Delete(root);
-    resp_t resp = resp_from_result(r);
-    state_save();
-    return resp;
+    return resp_from_result_saving(r, "clean");
 }
 
 /* ---------- 路由 ---------- */
@@ -572,7 +588,11 @@ int serve_run(int port, const char *bind_addr, const char *webroot_in, int allow
         close(cfd);
     }
     close(sfd);
-    state_save();
-    fprintf(stderr, "dcat serve: stopped (state saved)\n");
+    if (state_save() < 0) {
+        int rolled = dispatch_rollback_dropped();
+        fprintf(stderr, "dcat serve: state save failed on shutdown%s\n",
+                rolled ? " (untracked injections rolled back)" : "");
+    }
+    fprintf(stderr, "dcat serve: stopped\n");
     return 0;
 }

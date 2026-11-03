@@ -183,7 +183,7 @@ dispatch 按优先级回退查找故障实现，三层依次：
 /* params_t: 栈上, 承载 --key=value 参数 */
 #define DCAT_MAX_PARAMS 16
 #define DCAT_KEY_LEN    32
-#define DCAT_VAL_LEN    64
+#define DCAT_VAL_LEN    256
 typedef struct { char key[DCAT_KEY_LEN]; char value[DCAT_VAL_LEN]; } param_kv_t;
 typedef struct { param_kv_t items[DCAT_MAX_PARAMS]; int count; } params_t;
 
@@ -207,16 +207,17 @@ typedef struct {
 
 /* injection_record_t: state 持有, 固定数组 — 仅 inject,clean,query 故障创建 */
 typedef struct {
-    int  record_id;             /* 单调递增 */
+    long long record_id;        /* 单调递增 (64-bit) */
+    char token[48];             /* 注入唯一标识(pid+时间+序号)，区分并发同 uid+同参 */
     char uid[64];
     params_t params;            /* inject 时用户提供的参数, 用于 clean 时匹配记录 */
-    time_t started_at;
+    char started_at[20];        /* "YYYY-MM-DD HH:MM:SS" 本地时间 */
     int active;                 /* 1 活跃, 0 已清理 */
 } injection_record_t;
-#define DCAT_MAX_RECORDS 32
+#define DCAT_MAX_RECORDS 256    /* 记录总上限；表满淘汰最旧 inactive */
 ```
 
-> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。
+> `fault_def_t` 不含 `safety` / `timeout` 字段（本期不实现安全确认、超时自动恢复）。预检按 op 校验对应的 `*_required` 字段（inject 查 `inject_required`、clean 查 `clean_required`；**query 不强制必填**，无参时脚本展示全部），各 `*_optional` 缺省时不报错。`inject`-only 故障不创建 `injection_record_t`。`injection_record_t` 含 `params` 字段（存储 inject 时用户参数，用于 clean 时按参数匹配记录；同 uid 不同资源允许并发，同资源重注入默认拒绝见 §8）。`injection_record_t` 不含 `bg_pid`（统一同步执行，dcat 不托管子进程 pid）。`token` 用于区分"从空盘并发注入同 uid+同参数"的两条真实记录；旧 state.json 无 token 时按 `record_id+uid+params` 兼容匹配。容量上限 256，表满时淘汰最旧 inactive 历史；落盘失败会回滚未记账的注入。
 >
 > 高级扩展点：`injector_t { uid, 4 个函数指针 inject/clean/query/precheck }` 注册到 `builtin_injectors[]`，registry 未在 cnf 命中时回退查找。完整设计见 §7。
 
@@ -1115,6 +1116,7 @@ dcat serve --port 8080 --allow-write
 - **决策9（不实现超时自动恢复）**：本期不实现 `duration` 参数、reaper 子进程、`auto_clean_loop` 后台线程、`state_lazy_clean`、`expires_at` 字段。所有可恢复故障注入后需用户手动 `clean`。cnf 与注入器故障均如此。
 - **决策10（不实现安全确认）**：本期不实现 `safety` 字段、`safety_level_t` 枚举、`safety_confirm` 交互提示、`--yes` 全局 flag。预检只做静态校验。
 - **决策11（统一同步阻塞执行）**：本期不区分 background/sync 模式，不实现 `executor_spawn`、`executor_kill`、`injection_record_t.bg_pid`。所有故障 inject/clean/query 均同步阻塞执行：cnf 故障用 `executor_run` / `executor_run_raw`，注入器故障直接调函数指针。需要长驻的故障由脚本自行 spawn 子进程 + 写 pidfile/sidecar 后立即返回；clean 重跑脚本读取清理。
+    - 故障脚本在 `setsid()` 新会话中运行：调用方 SSH/agent 会话断开不会因 SIGHUP 终止已下发的故障；对应地，交互式 Ctrl-C / SIGTERM 也不会自动终止脚本，需要 `dcat clean` 清理。超时路径会向整个进程组发送 SIGKILL。
 - **决策12（注入器接口设计完成，实现留位）**：`injector_t` 接口（uid + 4 函数指针）、`builtin_injectors[]` 注册表、`injector_find` 查找、dispatch 回退路由均已设计（§7）。本期 `builtin_injectors[]` 为空数组，所有故障走 cnf+脚本路径；待出现脚本无法实现的需求（精确定时/二进制协议/进程内状态）时启用。
 - **决策13（参数匹配与 clean）**：`injection_record_t` 存储 inject 时的 `params`，clean 按用户参数匹配活跃记录，传记录存储的 inject 参数给脚本，逐条执行；某条失败时停止，剩余不清理。**clean 和 query（带 uid）各自有独立的 `clean_required` / `query_required`：precheck 按 op 校验对应 required 列表齐全，缺参数被拒绝（退出码 3）；该 op 无 required 参数时允许空参数。** 不再有"至少一个参数"硬编码检查——是否需要参数完全由各 op 的 `*_required` 列表决定（precheck 自然处理）。query（不带 uid）查全部活跃记录不受此限制。所有命令（inject / clean / query）均拒绝未在对应 op 的 `*_required` / `*_optional` 中声明的参数（退出码 3），不做透传。
 - **决策14（Reinject 默认拒绝 + --force 原子替换）**：对同一资源的重复注入默认拒绝（退出码 5），需 `--force` 才原子替换（逐条 clean 旧记录后重新 inject）。资源键 = `clean_required` 各参数值（`cores` 走集合交集，其余走精确串等，多参键取各参精确 AND）；inject-only 故障无 state 天然免检。CNF 路径覆盖 58 故障；插件 / legacy injector 路径 deferred。CPU `cores` 加法并集语义改为默认拒绝（有意 breaking）。详见 §8。

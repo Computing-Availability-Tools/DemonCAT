@@ -72,7 +72,12 @@ static void clear_stale_env_params(const fault_def_t *f) {
 static pid_t g_timed_pid = 0;
 static void on_timeout(union sigval sv) {
     (void)sv;
-    if (g_timed_pid > 0) kill(g_timed_pid, SIGKILL);
+    if (g_timed_pid > 0) {
+        /* setsid 后子进程是进程组首(pid==pgid)，先杀整组连同其子进程，
+         * 再兜底杀直接子进程(防 setsid 失败的情况)。 */
+        kill(-g_timed_pid, SIGKILL);
+        kill(g_timed_pid, SIGKILL);
+    }
 }
 
 result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_t *p, int timeout_ms) {
@@ -96,6 +101,7 @@ result_t *executor_run_fault(const fault_def_t *f, const char *op, const params_
         return result_err(op, f->uid, 1, "fork failed");
     }
     if (pid == 0) {
+        (void)setsid();
         apply_env(env, nenv);
         /* stdin 从 /dev/null 读：脚本的参数经 env 传入，不应读 dcat 的 stdin；
          * 非交互场景（cron/ctest/管道）下 stdin 为空管道，脚本误 read 会永久阻塞。 */

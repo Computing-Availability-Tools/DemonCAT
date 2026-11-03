@@ -3,6 +3,9 @@
 #include "types.h"
 void state_reset(void);
 long long state_add(const char *uid, const params_t *params); /* 返回 record_id；满返回 -1 */
+/* 是否还有位置记录下一条注入（空槽或可淘汰的 inactive）。用于注入前预检，
+ * 避免"故障已执行但 state_add 失败"的未跟踪故障。 */
+int state_can_add(void);
 int state_find_by_params(const char *uid, const params_t *query, long long *ids, int max_ids);
 const injection_record_t *state_find_by_id(long long id); /* 仅活跃记录 */
 /* 拷贝 uid 的活跃记录快照到 out（锁内拷贝，调用方无需持锁）；返回拷贝数(<=max)。 */
@@ -10,7 +13,11 @@ int state_snapshot_by_uid(const char *uid, injection_record_t *out, int max);
 int state_list_active(void);
 void state_mark_inactive(long long id);
 void state_set_file(const char *path);
-void state_save(void);
+int state_save(void); /* 0=已落盘/无变更；-1=有记录未能落盘或写盘失败 */
+/* 取出最近一次 state_save 未能落盘的记录（每次一条），无则返回 0。用于回滚。 */
+int state_pop_dropped(injection_record_t *out);
+/* 回滚后从内存移除对应记录（按 token 优先），避免后续 save 把它当 active 写回。 */
+void state_remove(const char *token, long long record_id);
 void state_load(void);
 typedef void (*state_visit_fn)(const injection_record_t *r, void *ctx);
 void state_for_each_active(state_visit_fn fn, void *ctx);

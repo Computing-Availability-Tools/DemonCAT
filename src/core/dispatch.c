@@ -17,6 +17,48 @@ static int is_inject_only(const fault_def_t *f) {
     return strcmp(f->supported_ops, "inject") == 0;
 }
 
+static result_t *state_full_err(const char *op, const char *uid) {
+    return result_err(op, uid, 1,
+                      "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+}
+
+/* 返回 1=clean 成功，0=失败/无法确认，调用方据此决定是否从内存移除。 */
+static int finish_rollback(const char *uid, result_t *r) {
+    if (!r) return 0;
+    int ok = (r->code == 0);
+    if (!ok) fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", uid, r->json ? r->json : "unknown");
+    result_free(r);
+    return ok;
+}
+
+/* 回滚一条"已执行但未能记账"的注入：用精确参数直接执行该故障的 clean，
+ * 不走 state 匹配（该记录从未落盘）。返回 1=已清理，0=失败/无处理器。 */
+int dispatch_rollback_record(const char *uid, const params_t *params) {
+    if (!uid || !params) return 0;
+    const fault_def_t *f = registry_find(uid);
+    if (f && op_in_supported(f->supported_ops, "clean"))
+        return finish_rollback(uid, executor_run_fault(f, "clean", params, 0));
+    const injector_t *inj = injector_find(uid);
+    if (inj && inj->clean) return finish_rollback(uid, inj->clean(params));
+    const dcat_plugin_t *plg = plugin_find(uid);
+    if (plg && plg->clean) return finish_rollback(uid, plg->clean(params));
+    return 0;
+}
+
+/* 回滚最近一次 state_save 所有未落盘记录，返回 clean 成功并已从内存移除的条数
+ * (clean 失败的不计数，便于日志如实反映)。 */
+int dispatch_rollback_dropped(void) {
+    injection_record_t rec;
+    int ok_n = 0;
+    while (state_pop_dropped(&rec)) {
+        if (dispatch_rollback_record(rec.uid, &rec.params)) {
+            state_remove(rec.token, rec.record_id);
+            ok_n++;
+        }
+    }
+    return ok_n;
+}
+
 /* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非裸 JSON。 */
 typedef struct {
     const char *uid;
@@ -108,13 +150,23 @@ static result_t *dispatch_list(void) {
 }
 
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
+    int track = !is_inject_only(f);
+    /* 预检：满了连脚本都不执行，避免"故障已生效但没记录"。 */
+    if (track && !state_can_add()) return state_full_err("inject", f->uid);
     result_t *r = executor_run_fault(f, "inject", params, 0);
-    if (r->code == 0 && !is_inject_only(f)) {
+    if (r->code == 0 && track) {
         long long id = state_add(f->uid, params);
         if (id < 0) {
+            /* 预检后并发抢占导致满表：回滚刚下的故障，绝不留下未跟踪注入。 */
+            result_t *rb = executor_run_fault(f, "clean", params, 0);
+            if (rb) {
+                if (rb->code != 0)
+                    fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", f->uid,
+                            rb->json ? rb->json : "unknown");
+                result_free(rb);
+            }
             result_free(r);
-            return result_err("inject", f->uid, 1,
-                              "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+            return state_full_err("inject", f->uid);
         }
         cJSON *root = cJSON_Parse(r->json);
         if (root) {
@@ -393,13 +445,21 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     }
     if (strcmp(op, "inject") == 0) {
         if (!p->inject) return result_err("inject", p->uid, 3, "inject declared in supported_ops but inject() not implemented");
+        int track = (p->clean != NULL);
+        if (track && !state_can_add()) return state_full_err("inject", p->uid);
         result_t *r = p->inject(params);
-        if (r->code == 0 && p->clean) {
+        if (r->code == 0 && track) {
             long long id = state_add(p->uid, params);
             if (id < 0) {
+                result_t *rb = p->clean(params);
+                if (rb) {
+                    if (rb->code != 0)
+                        fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", p->uid,
+                                rb->json ? rb->json : "unknown");
+                    result_free(rb);
+                }
                 result_free(r);
-                return result_err("inject", p->uid, 1,
-                                  "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                return state_full_err("inject", p->uid);
             }
             cJSON *root = cJSON_Parse(r->json);
             if (root) {
@@ -530,6 +590,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (strcmp(op, "inject") == 0) {
             long long ids[DCAT_MAX_RECORDS];
             int on = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);
+            if (on < 0) return result_err("inject", f->uid, 1, "reinject check failed (out of memory)");
             if (on > 0 && !force) return reinject_conflict_err(f->uid, ids, on);
             if (on > 0 && force) {
                 result_t *fc = force_clean_overlap(f->uid, (void *)f, ids, on, cnf_clean_ctx);
@@ -562,13 +623,21 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (pc && pc->code != 0) return pc;
         if (pc) result_free(pc);
         if (strcmp(op, "inject") == 0) {
+            int track = (inj->clean != NULL);
+            if (track && !state_can_add()) return state_full_err("inject", uid);
             result_t *r = inj->inject(params);
-            if (r->code == 0 && inj->clean) {
+            if (r->code == 0 && track) {
                 long long id = state_add(uid, params);
                 if (id < 0) {
+                    result_t *rb = inj->clean(params);
+                    if (rb) {
+                        if (rb->code != 0)
+                            fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", uid,
+                                    rb->json ? rb->json : "unknown");
+                        result_free(rb);
+                    }
                     result_free(r);
-                    return result_err("inject", uid, 1,
-                                      "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                    return state_full_err("inject", uid);
                 }
             }
             return r;

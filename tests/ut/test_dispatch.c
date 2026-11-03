@@ -6,7 +6,9 @@
 #include "state.h"
 #include "config.h"
 #include "output.h"
+#include <cJSON.h>
 #include <string.h>
+#include <unistd.h>
 
 static int g_called = 0;
 static const char *g_last_cmd = NULL;
@@ -278,6 +280,125 @@ int test_dispatch_clean_all_skips_reconcile_on_failure(void) {
     return 0;
 }
 
+/* 预检回归：state 已满(全 active)时，inject 必须在执行脚本前被拒绝，
+ * 避免"故障已执行但 state_add 失败"的未跟踪故障。 */
+int test_dispatch_inject_rejected_before_script_when_full(void) {
+    setup();
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        params_t fill;
+        params_init(&fill);
+        char v[16];
+        snprintf(v, sizeof v, "eth%d", i);
+        params_set(&fill, "iface", v);
+        ASSERT_TRUE(state_add("rNET_delay", &fill) > 0);
+    }
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    executor_set_mock(mock_ok);
+    g_called = 0;
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    result_t *r = dispatch_route("rCPU_overload", "inject", &p);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 1);
+    ASSERT_STR_CONTAINS(r->json, "state table full");
+    ASSERT_INT_EQ(g_called, 0); /* 预检拒绝：脚本未执行 */
+    result_free(r);
+    return 0;
+}
+
+/* 未记账注入的回滚：必须用精确参数执行该故障的 clean。 */
+int test_dispatch_rollback_record_runs_clean(void) {
+    setup();
+    executor_set_mock(mock_cap);
+    g_cap_calls = 0;
+    g_cap_op = NULL;
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    dispatch_rollback_record("rCPU_overload", &p);
+    ASSERT_INT_EQ(g_cap_calls, 1);
+    ASSERT_STREQ(g_cap_op, "clean");
+    return 0;
+}
+
+/* 回滚后用 token 清理内存：失败保存 → 回滚 clean → 切可写路径再保存不得写回 ghost。 */
+int test_rollback_dropped_clears_memory_no_ghost(void) {
+    setup();
+    state_set_file("/proc/dcat-nonexistent/state.json");
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
+    ASSERT_INT_EQ(state_save(), -1); /* 不可创建路径 → lock 失败 */
+
+    g_called = 0;
+    ASSERT_INT_EQ(dispatch_rollback_dropped(), 1);
+    ASSERT_INT_EQ(g_called, 1); /* 真的执行了 clean */
+
+    const char *fp = "/tmp/dcat-test-dispatch-rollback.json";
+    unlink(fp);
+    state_set_file(fp);
+    ASSERT_INT_EQ(state_save(), 0); /* 切到可写路径重试 */
+    state_reset();
+    state_load();
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p, ids, DCAT_MAX_RECORDS), 0);
+    unlink(fp);
+    return 0;
+}
+
+/* 回归：256 条全 active 时 --force 替换，旧记录不得仍 active(ghost)，新记录须落盘。 */
+int test_force_replace_on_full_table_no_ghost(void) {
+    setup();
+    const char *fp = "/tmp/dcat-test-force-full.json";
+    unlink(fp);
+    state_set_file(fp);
+
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        params_t q;
+        params_init(&q);
+        char c[16];
+        snprintf(c, sizeof c, "%d", i + 1);
+        params_set(&q, "cores", c);
+        ASSERT_TRUE(state_add("rCPU_overload", &q) > 0);
+    }
+    ASSERT_INT_EQ(state_save(), 0);
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    result_t *r = dispatch_route_force("rCPU_overload", "inject", &p, 1);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 0);
+    long long new_id = -1;
+    cJSON *root = cJSON_Parse(r->json);
+    if (root) {
+        cJSON *data = cJSON_GetObjectItem(root, "data");
+        cJSON *rid = data ? cJSON_GetObjectItem(data, "record_id") : NULL;
+        if (rid) new_id = (long long)rid->valuedouble;
+        cJSON_Delete(root);
+    }
+    result_free(r);
+    ASSERT_TRUE(new_id > 0);
+
+    ASSERT_INT_EQ(state_save(), 0); /* 满表 force 替换必须能落盘 */
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    params_t q;
+    params_init(&q);
+    params_set(&q, "cores", "1");
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1);
+    ASSERT_INT_EQ(ids[0], new_id); /* 旧 core1 不得残留 active */
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -292,5 +413,9 @@ int main(void) {
     RUN_TEST(test_dispatch_clean_all_marks_state_inactive);
     RUN_TEST(test_dispatch_clean_all_skips_reconcile_on_failure);
     RUN_TEST(test_dispatch_clean_state_lost_fallback);
+    RUN_TEST(test_dispatch_inject_rejected_before_script_when_full);
+    RUN_TEST(test_dispatch_rollback_record_runs_clean);
+    RUN_TEST(test_rollback_dropped_clears_memory_no_ghost);
+    RUN_TEST(test_force_replace_on_full_table_no_ghost);
     return TEST_MAIN_RETURN();
 }

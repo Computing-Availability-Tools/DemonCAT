@@ -17,6 +17,11 @@ static int is_inject_only(const fault_def_t *f) {
     return strcmp(f->supported_ops, "inject") == 0;
 }
 
+static result_t *state_full_err(const char *op, const char *uid) {
+    return result_err(op, uid, 1,
+                      "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+}
+
 /* 动态列表行：uid/module/ops/desc。收集后排版为文本表格，而非裸 JSON。 */
 typedef struct {
     const char *uid;
@@ -108,13 +113,18 @@ static result_t *dispatch_list(void) {
 }
 
 static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
+    int track = !is_inject_only(f);
+    /* 预检：满了连脚本都不执行，避免"故障已生效但没记录"。 */
+    if (track && !state_can_add()) return state_full_err("inject", f->uid);
     result_t *r = executor_run_fault(f, "inject", params, 0);
-    if (r->code == 0 && !is_inject_only(f)) {
+    if (r->code == 0 && track) {
         long long id = state_add(f->uid, params);
         if (id < 0) {
+            /* 预检后并发抢占导致满表：回滚刚下的故障，绝不留下未跟踪注入。 */
+            result_t *rb = executor_run_fault(f, "clean", params, 0);
+            if (rb) result_free(rb);
             result_free(r);
-            return result_err("inject", f->uid, 1,
-                              "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+            return state_full_err("inject", f->uid);
         }
         cJSON *root = cJSON_Parse(r->json);
         if (root) {
@@ -393,13 +403,16 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
     }
     if (strcmp(op, "inject") == 0) {
         if (!p->inject) return result_err("inject", p->uid, 3, "inject declared in supported_ops but inject() not implemented");
+        int track = (p->clean != NULL);
+        if (track && !state_can_add()) return state_full_err("inject", p->uid);
         result_t *r = p->inject(params);
-        if (r->code == 0 && p->clean) {
+        if (r->code == 0 && track) {
             long long id = state_add(p->uid, params);
             if (id < 0) {
+                result_t *rb = p->clean(params);
+                if (rb) result_free(rb);
                 result_free(r);
-                return result_err("inject", p->uid, 1,
-                                  "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                return state_full_err("inject", p->uid);
             }
             cJSON *root = cJSON_Parse(r->json);
             if (root) {
@@ -562,13 +575,16 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (pc && pc->code != 0) return pc;
         if (pc) result_free(pc);
         if (strcmp(op, "inject") == 0) {
+            int track = (inj->clean != NULL);
+            if (track && !state_can_add()) return state_full_err("inject", uid);
             result_t *r = inj->inject(params);
-            if (r->code == 0 && inj->clean) {
+            if (r->code == 0 && track) {
                 long long id = state_add(uid, params);
                 if (id < 0) {
+                    result_t *rb = inj->clean(params);
+                    if (rb) result_free(rb);
                     result_free(r);
-                    return result_err("inject", uid, 1,
-                                      "state table full, cannot track injection — run 'dcat query' and clean existing faults");
+                    return state_full_err("inject", uid);
                 }
             }
             return r;

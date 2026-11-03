@@ -278,6 +278,33 @@ int test_dispatch_clean_all_skips_reconcile_on_failure(void) {
     return 0;
 }
 
+/* 预检回归：state 已满(全 active)时，inject 必须在执行脚本前被拒绝，
+ * 避免"故障已执行但 state_add 失败"的未跟踪故障。 */
+int test_dispatch_inject_rejected_before_script_when_full(void) {
+    setup();
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        params_t fill;
+        params_init(&fill);
+        char v[16];
+        snprintf(v, sizeof v, "eth%d", i);
+        params_set(&fill, "iface", v);
+        ASSERT_TRUE(state_add("rNET_delay", &fill) > 0);
+    }
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    executor_set_mock(mock_ok);
+    g_called = 0;
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    result_t *r = dispatch_route("rCPU_overload", "inject", &p);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_INT_EQ(r->code, 1);
+    ASSERT_STR_CONTAINS(r->json, "state table full");
+    ASSERT_INT_EQ(g_called, 0); /* 预检拒绝：脚本未执行 */
+    result_free(r);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -292,5 +319,6 @@ int main(void) {
     RUN_TEST(test_dispatch_clean_all_marks_state_inactive);
     RUN_TEST(test_dispatch_clean_all_skips_reconcile_on_failure);
     RUN_TEST(test_dispatch_clean_state_lost_fallback);
+    RUN_TEST(test_dispatch_inject_rejected_before_script_when_full);
     return TEST_MAIN_RETURN();
 }

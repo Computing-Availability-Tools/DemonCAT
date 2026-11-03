@@ -90,7 +90,8 @@ static int resource_overlaps(const params_t *new_params, const params_t *rec_par
 int reinject_find_overlap_ops(const char *uid, const char *clean_required,
                               const params_t *new_params, long long *out_ids, int max_ids) {
     if (!uid || !new_params) return 0;
-    injection_record_t snap[DCAT_MAX_RECORDS];
+    injection_record_t *snap = malloc(DCAT_MAX_RECORDS * sizeof(*snap)); /* 避免大栈数组 */
+    if (!snap) return 0;
     int n = state_snapshot_by_uid(uid, snap, DCAT_MAX_RECORDS);
     int cnt = 0;
     for (int i = 0; i < n; i++) {
@@ -100,6 +101,7 @@ int reinject_find_overlap_ops(const char *uid, const char *clean_required,
             cnt++;
         }
     }
+    free(snap);
     return cnt;
 }
 

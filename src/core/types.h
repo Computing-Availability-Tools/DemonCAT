@@ -45,7 +45,9 @@ typedef struct {
     char started_at[20]; /* "YYYY-MM-DD HH:MM:SS" 本地时间 */
     int active;          /* 1 活跃，0 已清理 */
 } injection_record_t;
-#define DCAT_MAX_RECORDS 32
+/* 记录总上限。清理只置 inactive 不删记录，故历史与新注入共享此上限；
+ * 表满时淘汰最旧 inactive，因此活跃记录最多也可达该值。 */
+#define DCAT_MAX_RECORDS 256
 
 /* mock 钩子：捕获 (cmd, env) 不真正执行；返回伪造 result_t（堆分配，调用方 result_free） */
 typedef result_t *(*mock_fn)(const char *cmd, const char *const *env);

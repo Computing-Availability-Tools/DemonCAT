@@ -78,6 +78,21 @@ long long state_add(const char *uid, const params_t *params) {
     return id;
 }
 
+int state_can_add(void) {
+    pthread_mutex_lock(&g_lock);
+    int ok = 0;
+    if (g_next_id <= DCAT_MAX_ID) {
+        for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+            if (g_records[i].record_id == 0 || !g_records[i].active) {
+                ok = 1; /* 空槽，或可被 state_add 复用的 inactive 槽 */
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&g_lock);
+    return ok;
+}
+
 int state_find_by_params(const char *uid, const params_t *query, long long *ids, int max_ids) {
     pthread_mutex_lock(&g_lock);
     int n = 0;
@@ -289,65 +304,92 @@ static int record_same_params(const injection_record_t *a, const injection_recor
     return 1;
 }
 
+/* 返回 out 中最旧的 inactive 记录下标（started_at 字典序即时序，空串最旧），
+ * 全 active 时返回 -1。用于表满时淘汰历史记录给新注入腾位。 */
+static int find_oldest_inactive(const injection_record_t *out, int n) {
+    int victim = -1;
+    for (int i = 0; i < n; i++) {
+        if (out[i].active) continue;
+        if (victim < 0 || strcmp(out[i].started_at, out[victim].started_at) < 0) victim = i;
+    }
+    return victim;
+}
+
+static void apply_mem_record(const injection_record_t *m, injection_record_t *slot) {
+    slot->active = m->active;
+    strncpy(slot->started_at, m->started_at, sizeof(slot->started_at) - 1);
+    slot->started_at[sizeof(slot->started_at) - 1] = '\0';
+}
+
 /* 把 mem 记录并入 disk 记录：保留磁盘上他人新增的记录，id 撞车时给本地新记录
  * 分配新 id（两进程各自从 next_id=1 起步时都会拿到 record_id=1）。
- * 匹配键：先按 record_id+uid+params（重复 save / clean 回写精确命中），再按
- * uid+params 忽略 id 匹配磁盘上同逻辑记录（并发重编号后内存 id 已失真，找磁盘
- * active 的目标记录，只覆盖 active/started_at，避免产生 ghost 且 clean 失效）。 */
+ * 匹配分两遍，且一条磁盘记录最多绑定一条内存记录：
+ *   1) 精确匹配 record_id+uid+params（重复 save / clean 回写）；
+ *   2) 仅对未精确匹配的内存记录，按 uid+params 匹配磁盘上 active 且尚未绑定的
+ *      记录（并发重编号后内存 id 已失真 → 用于 clean 回写，避免 ghost）。
+ * 先做精确匹配，保证"同参但不同 id 的新注入"不会被当成旧记录合并（W3 / 重复注入）。
+ * 表满(disk 已占满 DCAT_MAX_RECORDS)时淘汰最旧 inactive 历史给新记录腾位，
+ * 绝不静默丢弃新注入；仅当全为 active 时才丢(此时 state_add 本应已拒绝)。 */
 static int merge_records(const injection_record_t *mem, int mem_n,
                          const injection_record_t *disk, int disk_n,
                          injection_record_t out[DCAT_MAX_RECORDS], long long *next_id_out) {
     int n = 0;
+    int bound[DCAT_MAX_RECORDS] = {0}; /* 已绑定到某条内存记录的磁盘槽位 */
+    int done[DCAT_MAX_RECORDS] = {0};  /* 已完成合并的内存记录 */
     long long maxid = *next_id_out > 1 ? *next_id_out - 1 : 0;
     for (int i = 0; i < disk_n && n < DCAT_MAX_RECORDS; i++) {
         out[n++] = disk[i];
         if (disk[i].record_id > maxid) maxid = disk[i].record_id;
     }
-    for (int i = 0; i < mem_n && n < DCAT_MAX_RECORDS; i++) {
-        const injection_record_t *m = &mem[i];
-        int matched = 0;
-        int j;
-        /* 1) 精确匹配：record_id+uid+params 全等（本进程重复 save / clean 后回写） */
-        for (j = 0; j < n; j++) {
-            if (record_identical(m, &out[j])) {
-                out[j].active = m->active;
-                strncpy(out[j].started_at, m->started_at, sizeof(out[j].started_at) - 1);
-                out[j].started_at[sizeof(out[j].started_at) - 1] = '\0';
-                matched = 1;
+    /* 第一遍：精确匹配（record_id+uid+params 全等），只绑定未占用的磁盘记录。 */
+    for (int i = 0; i < mem_n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (!bound[j] && record_identical(&mem[i], &out[j])) {
+                apply_mem_record(&mem[i], &out[j]);
+                bound[j] = 1;
+                done[i] = 1;
                 break;
             }
         }
-        /* 2) 逻辑匹配：忽略 id，按 uid+params 找磁盘上同逻辑记录（并发重编号后
-         *    内存持旧 id，record_id 已对不上）。仅匹配磁盘上 active 的目标记录：
-         *    - W1 clean 回写 inactive：命中磁盘那条 active 记录 → 置 inactive；
-         *    - 新注入(active)：绝不匹配磁盘上同 uid+params 但 inactive 的历史记录，
-         *      （否则会"复活"历史并把新 id 挤掉 → W3 ghost/id 错位），走追加分支。 */
-        if (!matched) {
-            for (j = 0; j < n; j++) {
-                if (record_same_params(m, &out[j]) && out[j].active) {
-                    out[j].active = m->active;
-                    strncpy(out[j].started_at, m->started_at, sizeof(out[j].started_at) - 1);
-                    out[j].started_at[sizeof(out[j].started_at) - 1] = '\0';
-                    matched = 1;
-                    break;
-                }
+    }
+    /* 第二遍：逻辑匹配，仅对未精确匹配的内存记录；只匹配磁盘上 active 且未绑定
+     * 的记录（W1 clean 回写；新 active 不复活 inactive 历史 → W3）。 */
+    for (int i = 0; i < mem_n; i++) {
+        if (done[i]) continue;
+        for (int j = 0; j < n; j++) {
+            if (!bound[j] && out[j].active && record_same_params(&mem[i], &out[j])) {
+                apply_mem_record(&mem[i], &out[j]);
+                bound[j] = 1;
+                done[i] = 1;
+                break;
             }
         }
-        if (matched) continue;
+    }
+    /* 第三遍：未绑定的内存记录追加；表满时淘汰最旧 inactive。 */
+    for (int i = 0; i < mem_n; i++) {
+        if (done[i]) continue;
+        const injection_record_t *m = &mem[i];
         int id_taken = 0;
-        for (j = 0; j < n; j++) {
+        for (int j = 0; j < n; j++) {
             if (out[j].record_id == m->record_id) {
                 id_taken = 1;
                 break;
             }
         }
+        injection_record_t rec = *m;
         if (id_taken) { /* 与其他进程注入撞 id → 分配全新 id，两条都保留 */
-            injection_record_t copy = *m;
-            copy.record_id = ++maxid;
-            out[n++] = copy;
+            rec.record_id = ++maxid;
+        } else if (rec.record_id > maxid) {
+            maxid = rec.record_id;
+        }
+        if (n < DCAT_MAX_RECORDS) {
+            out[n++] = rec;
         } else {
-            if (m->record_id > maxid) maxid = m->record_id;
-            out[n++] = *m;
+            /* 表满：淘汰最旧 inactive 历史给新记录腾位。全 active 时 state_add
+             * 已拒绝新增；此处防御并发写满，丢弃代替越界。 */
+            int victim = find_oldest_inactive(out, n);
+            if (victim < 0) continue;
+            out[victim] = rec;
         }
     }
     *next_id_out = maxid + 1;
@@ -360,7 +402,15 @@ void state_save(void) {
         pthread_mutex_unlock(&g_lock);
         return;
     }
-    injection_record_t mem[DCAT_MAX_RECORDS];
+    /* 记录约 4.6KB/条，256 条 × 3 份放栈上会溢出 → 一次堆分配切成三片。 */
+    injection_record_t *pool = malloc(3 * DCAT_MAX_RECORDS * sizeof(injection_record_t));
+    if (!pool) {
+        pthread_mutex_unlock(&g_lock); /* 仍脏，下次重试 */
+        return;
+    }
+    injection_record_t *mem = pool;
+    injection_record_t *disk = pool + DCAT_MAX_RECORDS;
+    injection_record_t *merged = pool + 2 * DCAT_MAX_RECORDS;
     int mem_n = 0;
     long long next_seed = g_next_id;
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
@@ -378,11 +428,11 @@ void state_save(void) {
         pthread_mutex_lock(&g_lock);
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
+        free(pool);
         return;
     }
 
     /* 持锁重读磁盘 → 与内存记录合并：保留并发进程刚写入的记录 */
-    injection_record_t disk[DCAT_MAX_RECORDS];
     long long disk_next = 1;
     int disk_n = parse_records_file(path, disk, &disk_next);
     if (disk_n < 0) {
@@ -391,7 +441,6 @@ void state_save(void) {
     }
     if (disk_n > DCAT_MAX_RECORDS) disk_n = DCAT_MAX_RECORDS;
 
-    injection_record_t merged[DCAT_MAX_RECORDS];
     long long merged_next = disk_next > 1 ? disk_next : 1;
     if (next_seed > merged_next) merged_next = next_seed;
     int mn = merge_records(mem, mem_n, disk, disk_n, merged, &merged_next);
@@ -435,6 +484,7 @@ void state_save(void) {
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
     }
+    free(pool);
 }
 
 void state_load(void) {

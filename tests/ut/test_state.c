@@ -519,6 +519,178 @@ int test_reinject_same_params_no_history_revival(void) {
     return 0;
 }
 
+/* 回归：state.json 已满 32 条(全 inactive)时，新 inject 记录必须落盘——
+ * 淘汰最旧 inactive 历史记录腾位，而不是在 merge_records 里被静默丢弃。
+ * 复现路径：load 满表 → state_add(内存复用 inactive 槽看似成功) → state_save
+ * 第一段把 32 条磁盘记录全拷进 out，第二段因 n==MAX 恒假 → 新记录丢失。 */
+int test_save_full_disk_evicts_inactive(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-full.json";
+    state_set_file(fp);
+    FILE *f = fopen(fp, "w");
+    ASSERT_TRUE(f != NULL);
+    fprintf(f, "{\"next_id\":%d,\"records\":[", DCAT_MAX_RECORDS + 1);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        fprintf(f,
+                "%s{\"record_id\":%d,\"uid\":\"rNET_delay\",\"params\":{\"iface\":\"old%d\"},"
+                "\"started_at\":\"2026-01-01 00:00:%02d\",\"active\":false}",
+                i ? "," : "", i + 1, i, i);
+    }
+    fputs("]}", f);
+    fclose(f);
+
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), 0);
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    long long id = state_add("rCPU_overload", &p);
+    ASSERT_TRUE(id > 0);
+    state_save();
+
+    state_reset();
+    state_load();
+    params_t q;
+    params_init(&q);
+    params_set(&q, "iface", "eth9");
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1);
+    ASSERT_INT_EQ(ids[0], id);
+    int cnt = 0;
+    state_for_each_all(visit_count, &cnt);
+    ASSERT_INT_EQ(cnt, DCAT_MAX_RECORDS); /* 仍受 32 上限约束，未越界 */
+
+    /* next_id 必须随满表注入落盘递增，否则反复注入复用同一 id 会再次丢失。 */
+    state_mark_inactive(id);
+    state_save();
+    state_reset();
+    state_load();
+    long long id2 = state_add("rCPU_overload", &p);
+    ASSERT_TRUE(id2 > id);
+    state_save();
+    state_reset();
+    state_load();
+    params_t q2;
+    params_init(&q2);
+    params_set(&q2, "iface", "eth9");
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q2, ids, DCAT_MAX_RECORDS), 1);
+    ASSERT_INT_EQ(ids[0], id2);
+    unlink(fp);
+    return 0;
+}
+
+/* 满表 31 active + 1 inactive：新注入落盘且只淘汰那条 inactive，active 达满 32。 */
+int test_save_full_disk_evicts_inactive_keeps_active(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-full-active.json";
+    state_set_file(fp);
+    FILE *f = fopen(fp, "w");
+    ASSERT_TRUE(f != NULL);
+    fprintf(f, "{\"next_id\":%d,\"records\":[", DCAT_MAX_RECORDS + 1);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        fprintf(f,
+                "%s{\"record_id\":%d,\"uid\":\"rNET_delay\",\"params\":{\"iface\":\"a%d\"},"
+                "\"started_at\":\"2026-01-01 00:00:%02d\",\"active\":%s}",
+                i ? "," : "", i + 1, i, i, i < DCAT_MAX_RECORDS - 1 ? "true" : "false");
+    }
+    fputs("]}", f);
+    fclose(f);
+
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS - 1);
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    long long id = state_add("rCPU_overload", &p);
+    ASSERT_TRUE(id > 0);
+    state_save();
+
+    state_reset();
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    params_t q;
+    params_init(&q);
+    params_set(&q, "iface", "eth9");
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &q, ids, DCAT_MAX_RECORDS), 1);
+    ASSERT_INT_EQ(ids[0], id);
+    unlink(fp);
+    return 0;
+}
+
+/* 回归：同 uid + 完全同参数的两次真实注入必须各自保留一条记录。
+ * 修复前"逻辑匹配"会把磁盘上同参 active 记录当成同一逻辑记录合并 → 只剩 1 条
+ * （插件类故障无 reinject 拦截时，注入了 N 次、只记 1 条、clean 也只清一份）。 */
+int test_save_keeps_duplicate_same_params(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-dup.json";
+    state_set_file(fp);
+    FILE *f = fopen(fp, "w");
+    ASSERT_TRUE(f != NULL);
+    fputs("{\"next_id\":2,\"records\":[{\"record_id\":1,\"uid\":\"rNET_delay\","
+          "\"params\":{\"iface\":\"eth0\"},\"started_at\":\"2026-01-01 00:00:01\","
+          "\"active\":true}]}",
+          f);
+    fclose(f);
+
+    state_load();
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth0");
+    long long id2 = state_add("rNET_delay", &p);
+    ASSERT_TRUE(id2 > 1);
+    state_save();
+
+    state_reset();
+    state_load();
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rNET_delay", &p, ids, DCAT_MAX_RECORDS), 2);
+    ASSERT_INT_EQ(state_list_active(), 2);
+    unlink(fp);
+    return 0;
+}
+
+/* 容量契约：活跃/总记录上限为 256；填满后追加必须失败（由 dispatch 预检拦截）。 */
+int test_state_capacity_is_256(void) {
+    ASSERT_INT_EQ(DCAT_MAX_RECORDS, 256);
+    state_reset();
+    params_t p;
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        params_init(&p);
+        char v[16];
+        snprintf(v, sizeof v, "eth%d", i);
+        params_set(&p, "iface", v);
+        ASSERT_TRUE(state_add("rNET_delay", &p) > 0);
+    }
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    params_init(&p);
+    params_set(&p, "iface", "overflow");
+    ASSERT_TRUE(state_add("rNET_delay", &p) == -1);
+    return 0;
+}
+
+int test_state_can_add(void) {
+    state_reset();
+    ASSERT_INT_EQ(state_can_add(), 1);
+    long long first = 0;
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        params_t p;
+        params_init(&p);
+        char v[16];
+        snprintf(v, sizeof v, "eth%d", i);
+        params_set(&p, "iface", v);
+        long long id = state_add("rNET_delay", &p);
+        ASSERT_TRUE(id > 0);
+        if (i == 0) first = id;
+    }
+    ASSERT_INT_EQ(state_can_add(), 0); /* 全 active：无位可加 */
+    state_mark_inactive(first);
+    ASSERT_INT_EQ(state_can_add(), 1); /* 有 inactive 可淘汰 */
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -533,5 +705,10 @@ int main(void) {
     RUN_TEST(test_cross_process_concurrent_save_no_loss);
     RUN_TEST(test_clean_after_renumber_no_ghost);
     RUN_TEST(test_reinject_same_params_no_history_revival);
+    RUN_TEST(test_save_full_disk_evicts_inactive);
+    RUN_TEST(test_save_full_disk_evicts_inactive_keeps_active);
+    RUN_TEST(test_save_keeps_duplicate_same_params);
+    RUN_TEST(test_state_capacity_is_256);
+    RUN_TEST(test_state_can_add);
     return TEST_MAIN_RETURN();
 }

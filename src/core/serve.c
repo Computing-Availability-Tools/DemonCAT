@@ -324,18 +324,20 @@ static int cmp_record_desc(const void *a, const void *b) {
 }
 static resp_t api_history(void) {
     state_load(); /* 从磁盘重新加载,反映命令行进程的修改 */
-    struct hist_ctx c;
-    c.n = 0;
-    state_for_each_all(collect_record, &c);
-    qsort(c.arr, (size_t)c.n, sizeof(injection_record_t), cmp_record_desc);
+    struct hist_ctx *c = malloc(sizeof *c); /* 256 条记录较大，避免占栈 */
+    if (!c) return resp_err(500, "out of memory");
+    c->n = 0;
+    state_for_each_all(collect_record, c);
+    qsort(c->arr, (size_t)c->n, sizeof(injection_record_t), cmp_record_desc);
     cJSON *arr = cJSON_CreateArray();
-    for (int i = 0; i < c.n; i++) append_record_json(&c.arr[i], arr);
+    for (int i = 0; i < c->n; i++) append_record_json(&c->arr[i], arr);
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "status", "ok");
     cJSON_AddStringToObject(root, "op", "history");
     cJSON_AddItemToObject(root, "data", arr);
     char *s = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
+    free(c);
     return resp_json(200, s);
 }
 

@@ -298,6 +298,78 @@ int test_cross_process_concurrent_save_no_loss(void) {
     return 0;
 }
 
+/* 回归：两个进程从空 state 并发注入【同 uid + 同参数】时，两条都必须保留。
+ * 修复前第一遍精确匹配只比 record_id+uid+params，B 的 id=1 会被 A 的 id=1 合并掉。 */
+int test_concurrent_same_params_no_loss(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-dup-conc.json";
+    state_set_file(fp);
+    unlink(fp);
+
+    int ready_fds[2], go_fds[2];
+    ASSERT_INT_EQ(pipe(ready_fds), 0);
+    ASSERT_INT_EQ(pipe(go_fds), 0);
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth0");
+    params_set(&p, "delay_ms", "100");
+
+    pid_t a = fork();
+    ASSERT_TRUE(a >= 0);
+    if (a == 0) {
+        close(ready_fds[0]);
+        close(go_fds[1]);
+        state_load();
+        state_add("rNET_delay", &p);
+        char c = 'x';
+        ssize_t w = write(ready_fds[1], &c, 1);
+        ssize_t r = read(go_fds[0], &c, 1);
+        (void)w;
+        (void)r;
+        state_save();
+        _exit(0);
+    }
+    pid_t b = fork();
+    ASSERT_TRUE(b >= 0);
+    if (b == 0) {
+        close(ready_fds[0]);
+        close(go_fds[1]);
+        state_load();
+        state_add("rNET_delay", &p);
+        char c = 'x';
+        ssize_t w = write(ready_fds[1], &c, 1);
+        ssize_t r = read(go_fds[0], &c, 1);
+        (void)w;
+        (void)r;
+        state_save();
+        _exit(0);
+    }
+    close(ready_fds[1]);
+    close(go_fds[0]);
+    char c;
+    ssize_t rr1 = read(ready_fds[0], &c, 1);
+    ssize_t rr2 = read(ready_fds[0], &c, 1);
+    (void)rr1;
+    (void)rr2;
+    char two[2] = {'g', 'g'};
+    ssize_t wg = write(go_fds[1], two, 2);
+    (void)wg;
+    close(ready_fds[0]);
+    close(go_fds[1]);
+    int st;
+    waitpid(a, &st, 0);
+    waitpid(b, &st, 0);
+
+    state_reset();
+    state_load();
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rNET_delay", &p, ids, DCAT_MAX_RECORDS), 2);
+    ASSERT_INT_EQ(state_list_active(), 2);
+    unlink(fp);
+    return 0;
+}
+
 /* W1 回归：并发注入重编号后，内存持旧 id 的记录执行 clean+save 不得产生 ghost，
  * 且真实磁盘记录应被清 inactive。
  * 序列：A、B 都从空盘 load(next=1)→add（均得 id=1）；A 先 save 落盘 loss@1；
@@ -559,7 +631,7 @@ int test_save_full_disk_evicts_inactive(void) {
     ASSERT_INT_EQ(ids[0], id);
     int cnt = 0;
     state_for_each_all(visit_count, &cnt);
-    ASSERT_INT_EQ(cnt, DCAT_MAX_RECORDS); /* 仍受 32 上限约束，未越界 */
+    ASSERT_INT_EQ(cnt, DCAT_MAX_RECORDS); /* 仍受 256 上限约束，未越界 */
 
     /* next_id 必须随满表注入落盘递增，否则反复注入复用同一 id 会再次丢失。 */
     state_mark_inactive(id);
@@ -691,6 +763,42 @@ int test_state_can_add(void) {
     return 0;
 }
 
+/* 回归：磁盘 256 条全 active、内存因刚 clean 出现过 inactive 槽 → state_add 成功，
+ * 但落盘时磁盘仍全 active，新记录无处可放。state_save 必须返回 -1（不得静默成功）。 */
+int test_save_reports_drop_when_disk_full(void) {
+    state_reset();
+    const char *fp = "/tmp/dcat-test-state-drop.json";
+    state_set_file(fp);
+    FILE *f = fopen(fp, "w");
+    ASSERT_TRUE(f != NULL);
+    fprintf(f, "{\"next_id\":%d,\"records\":[", DCAT_MAX_RECORDS + 1);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        fprintf(f,
+                "%s{\"record_id\":%d,\"uid\":\"rNET_delay\",\"params\":{\"iface\":\"a%d\"},"
+                "\"started_at\":\"2026-01-01 00:00:%02d\",\"active\":true}",
+                i ? "," : "", i + 1, i, i % 60);
+    }
+    fputs("]}", f);
+    fclose(f);
+
+    state_load();
+    ASSERT_INT_EQ(state_list_active(), DCAT_MAX_RECORDS);
+    state_mark_inactive(1); /* 内存出现 inactive 槽（磁盘仍全 active） */
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
+    ASSERT_INT_EQ(state_save(), -1); /* 新记录无法落盘：必须显式失败 */
+
+    state_reset();
+    state_load();
+    long long ids[DCAT_MAX_RECORDS];
+    ASSERT_INT_EQ(state_find_by_params("rCPU_overload", &p, ids, DCAT_MAX_RECORDS), 0);
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -703,6 +811,7 @@ int main(void) {
     RUN_TEST(test_state_for_each_active);
     RUN_TEST(test_state_for_each_all);
     RUN_TEST(test_cross_process_concurrent_save_no_loss);
+    RUN_TEST(test_concurrent_same_params_no_loss);
     RUN_TEST(test_clean_after_renumber_no_ghost);
     RUN_TEST(test_reinject_same_params_no_history_revival);
     RUN_TEST(test_save_full_disk_evicts_inactive);
@@ -710,5 +819,6 @@ int main(void) {
     RUN_TEST(test_save_keeps_duplicate_same_params);
     RUN_TEST(test_state_capacity_is_256);
     RUN_TEST(test_state_can_add);
+    RUN_TEST(test_save_reports_drop_when_disk_full);
     return TEST_MAIN_RETURN();
 }

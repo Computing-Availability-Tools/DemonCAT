@@ -40,6 +40,7 @@ typedef struct {
 /* injection_record_t: state 持有，固定数组 — 仅 inject,clean,query 故障创建 */
 typedef struct {
     long long record_id; /* 单调递增 (64-bit, 防溢出) */
+    char token[48];      /* 注入唯一标识(pid+时间+序号)：区分并发同 uid+同参数记录 */
     char uid[64];
     params_t params;     /* inject 时用户提供的参数，用于 clean 按参数匹配 */
     char started_at[20]; /* "YYYY-MM-DD HH:MM:SS" 本地时间 */

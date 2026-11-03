@@ -13,7 +13,7 @@ int state_snapshot_by_uid(const char *uid, injection_record_t *out, int max);
 int state_list_active(void);
 void state_mark_inactive(long long id);
 void state_set_file(const char *path);
-void state_save(void);
+int state_save(void); /* 0=已落盘/无变更；-1=有记录未能落盘或写盘失败 */
 void state_load(void);
 typedef void (*state_visit_fn)(const injection_record_t *r, void *ctx);
 void state_for_each_active(state_visit_fn fn, void *ctx);

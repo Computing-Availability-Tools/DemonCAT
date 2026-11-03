@@ -122,7 +122,12 @@ static result_t *cnf_inject(const fault_def_t *f, const params_t *params) {
         if (id < 0) {
             /* 预检后并发抢占导致满表：回滚刚下的故障，绝不留下未跟踪注入。 */
             result_t *rb = executor_run_fault(f, "clean", params, 0);
-            if (rb) result_free(rb);
+            if (rb) {
+                if (rb->code != 0)
+                    fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", f->uid,
+                            rb->json ? rb->json : "unknown");
+                result_free(rb);
+            }
             result_free(r);
             return state_full_err("inject", f->uid);
         }
@@ -410,7 +415,12 @@ static result_t *plugin_dispatch(const dcat_plugin_t *p, const char *op, const p
             long long id = state_add(p->uid, params);
             if (id < 0) {
                 result_t *rb = p->clean(params);
-                if (rb) result_free(rb);
+                if (rb) {
+                    if (rb->code != 0)
+                        fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", p->uid,
+                                rb->json ? rb->json : "unknown");
+                    result_free(rb);
+                }
                 result_free(r);
                 return state_full_err("inject", p->uid);
             }
@@ -543,6 +553,7 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
         if (strcmp(op, "inject") == 0) {
             long long ids[DCAT_MAX_RECORDS];
             int on = reinject_find_overlap(f, params, ids, DCAT_MAX_RECORDS);
+            if (on < 0) return result_err("inject", f->uid, 1, "reinject check failed (out of memory)");
             if (on > 0 && !force) return reinject_conflict_err(f->uid, ids, on);
             if (on > 0 && force) {
                 result_t *fc = force_clean_overlap(f->uid, (void *)f, ids, on, cnf_clean_ctx);
@@ -582,7 +593,12 @@ result_t *dispatch_route_force(const char *uid, const char *op, const params_t *
                 long long id = state_add(uid, params);
                 if (id < 0) {
                     result_t *rb = inj->clean(params);
-                    if (rb) result_free(rb);
+                    if (rb) {
+                        if (rb->code != 0)
+                            fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", uid,
+                                    rb->json ? rb->json : "unknown");
+                        result_free(rb);
+                    }
                     result_free(r);
                     return state_full_err("inject", uid);
                 }

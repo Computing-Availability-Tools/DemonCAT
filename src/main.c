@@ -119,7 +119,10 @@ int main(int argc, char **argv) {
     /* 第六步：输出结果、保存状态并卸载插件，按结果码返回 */
     int code = r ? r->code : 1;
     result_free(r);
-    state_save();
+    if (state_save() < 0 && code == 0) {
+        fprintf(stderr, "dcat: state save incomplete — an injected fault may be untracked; run 'dcat query'\n");
+        code = 1;
+    }
     plugin_fini();
     return code;
 }

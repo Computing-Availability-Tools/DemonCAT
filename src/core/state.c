@@ -39,6 +39,18 @@ void state_set_file(const char *path) {
     pthread_mutex_unlock(&g_lock);
 }
 
+/* 生成跨进程唯一的注入标识：时间纳秒 + pid + 进程内序号，用于区分
+ * "并发从空盘启动、同 uid 同参数"的两条真实注入。state_add 持 g_lock 调用。 */
+static void gen_token(char *buf, size_t cap) {
+    static unsigned seq = 0;
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+        ts.tv_sec = time(NULL);
+        ts.tv_nsec = 0;
+    }
+    snprintf(buf, cap, "%lld.%09ld-%d-%u", (long long)ts.tv_sec, (long)ts.tv_nsec, (int)getpid(), seq++);
+}
+
 long long state_add(const char *uid, const params_t *params) {
     pthread_mutex_lock(&g_lock);
     if (g_next_id > DCAT_MAX_ID) {
@@ -54,12 +66,12 @@ long long state_add(const char *uid, const params_t *params) {
         }
     }
     if (slot < 0) {
-        /* 空槽耗尽才回退到最旧的 inactive(已清理)槽 — 历史会被覆盖 */
+        /* 空槽耗尽才回退到最旧的 inactive(已清理)槽 — 历史会被覆盖。
+         * 与 merge_records 的淘汰策略一致：按 started_at 取最旧。 */
         for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
-            if (!g_records[i].active) {
+            if (g_records[i].active) continue;
+            if (slot < 0 || strcmp(g_records[i].started_at, g_records[slot].started_at) < 0)
                 slot = i;
-                break;
-            }
         }
     }
     if (slot < 0) {
@@ -70,6 +82,7 @@ long long state_add(const char *uid, const params_t *params) {
     strncpy(g_records[slot].uid, uid, sizeof(g_records[slot].uid) - 1);
     g_records[slot].uid[sizeof(g_records[slot].uid) - 1] = '\0';
     g_records[slot].params = *params;
+    gen_token(g_records[slot].token, sizeof(g_records[slot].token));
     fmt_started_at(time(NULL), g_records[slot].started_at, sizeof(g_records[slot].started_at));
     g_records[slot].active = 1;
     long long id = g_records[slot].record_id;
@@ -260,11 +273,16 @@ static int parse_records_file(const char *path, injection_record_t out[DCAT_MAX_
         if (i >= DCAT_MAX_RECORDS) break;
         memset(&out[i], 0, sizeof(out[i]));
         cJSON *rid = cJSON_GetObjectItem(o, "record_id");
+        cJSON *tok = cJSON_GetObjectItem(o, "token");
         cJSON *uid = cJSON_GetObjectItem(o, "uid");
         cJSON *prms = cJSON_GetObjectItem(o, "params");
         cJSON *sa = cJSON_GetObjectItem(o, "started_at");
         cJSON *ac = cJSON_GetObjectItem(o, "active");
         if (rid) out[i].record_id = (long long)rid->valuedouble;
+        if (tok && cJSON_IsString(tok)) {
+            strncpy(out[i].token, tok->valuestring, sizeof(out[i].token) - 1);
+            out[i].token[sizeof(out[i].token) - 1] = '\0';
+        }
         if (uid) {
             strncpy(out[i].uid, uid->valuestring, sizeof(out[i].uid) - 1);
             out[i].uid[sizeof(out[i].uid) - 1] = '\0';
@@ -282,7 +300,11 @@ static int parse_records_file(const char *path, injection_record_t out[DCAT_MAX_
 }
 
 static int record_identical(const injection_record_t *a, const injection_record_t *b) {
-    if (a->record_id != b->record_id) return 0;
+    if (a->token[0] && b->token[0]) {
+        if (strcmp(a->token, b->token) != 0) return 0; /* 同一条注入：token 唯一 */
+    } else if (a->record_id != b->record_id) {
+        return 0; /* 旧版文件无 token：退回按 record_id 精确匹配 */
+    }
     if (strcmp(a->uid, b->uid) != 0) return 0;
     if (a->params.count != b->params.count) return 0;
     for (int i = 0; i < a->params.count; i++) {
@@ -332,8 +354,10 @@ static void apply_mem_record(const injection_record_t *m, injection_record_t *sl
  * 绝不静默丢弃新注入；仅当全为 active 时才丢(此时 state_add 本应已拒绝)。 */
 static int merge_records(const injection_record_t *mem, int mem_n,
                          const injection_record_t *disk, int disk_n,
-                         injection_record_t out[DCAT_MAX_RECORDS], long long *next_id_out) {
+                         injection_record_t out[DCAT_MAX_RECORDS], long long *next_id_out,
+                         int *dropped_out) {
     int n = 0;
+    if (dropped_out) *dropped_out = 0;
     int bound[DCAT_MAX_RECORDS] = {0}; /* 已绑定到某条内存记录的磁盘槽位 */
     int done[DCAT_MAX_RECORDS] = {0};  /* 已完成合并的内存记录 */
     long long maxid = *next_id_out > 1 ? *next_id_out - 1 : 0;
@@ -352,12 +376,14 @@ static int merge_records(const injection_record_t *mem, int mem_n,
             }
         }
     }
-    /* 第二遍：逻辑匹配，仅对未精确匹配的内存记录；只匹配磁盘上 active 且未绑定
-     * 的记录（W1 clean 回写；新 active 不复活 inactive 历史 → W3）。 */
+    /* 第二遍：逻辑匹配，仅用于"无 token 的旧版记录"（重编号后 id 对不上，靠
+     * uid+params 找回，W1）。带 token 的记录身份已确定，不在此合并，避免把
+     * 并发同参注入误并（新 active 不复活 inactive 历史 → W3）。 */
     for (int i = 0; i < mem_n; i++) {
-        if (done[i]) continue;
+        if (done[i] || mem[i].token[0]) continue;
         for (int j = 0; j < n; j++) {
-            if (!bound[j] && out[j].active && record_same_params(&mem[i], &out[j])) {
+            if (!bound[j] && !out[j].token[0] && out[j].active &&
+                record_same_params(&mem[i], &out[j])) {
                 apply_mem_record(&mem[i], &out[j]);
                 bound[j] = 1;
                 done[i] = 1;
@@ -388,7 +414,10 @@ static int merge_records(const injection_record_t *mem, int mem_n,
             /* 表满：淘汰最旧 inactive 历史给新记录腾位。全 active 时 state_add
              * 已拒绝新增；此处防御并发写满，丢弃代替越界。 */
             int victim = find_oldest_inactive(out, n);
-            if (victim < 0) continue;
+            if (victim < 0) {
+                if (dropped_out) (*dropped_out)++; /* 磁盘全 active：记录无法落盘 */
+                continue;
+            }
             out[victim] = rec;
         }
     }
@@ -396,17 +425,17 @@ static int merge_records(const injection_record_t *mem, int mem_n,
     return n;
 }
 
-void state_save(void) {
+int state_save(void) {
     pthread_mutex_lock(&g_lock);
     if (!g_dirty) { /* 只读操作(查询/列表)不重写 state 文件 */
         pthread_mutex_unlock(&g_lock);
-        return;
+        return 0;
     }
     /* 记录约 4.6KB/条，256 条 × 3 份放栈上会溢出 → 一次堆分配切成三片。 */
     injection_record_t *pool = malloc(3 * DCAT_MAX_RECORDS * sizeof(injection_record_t));
     if (!pool) {
         pthread_mutex_unlock(&g_lock); /* 仍脏，下次重试 */
-        return;
+        return -1;
     }
     injection_record_t *mem = pool;
     injection_record_t *disk = pool + DCAT_MAX_RECORDS;
@@ -429,7 +458,7 @@ void state_save(void) {
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
         free(pool);
-        return;
+        return -1;
     }
 
     /* 持锁重读磁盘 → 与内存记录合并：保留并发进程刚写入的记录 */
@@ -443,12 +472,14 @@ void state_save(void) {
 
     long long merged_next = disk_next > 1 ? disk_next : 1;
     if (next_seed > merged_next) merged_next = next_seed;
-    int mn = merge_records(mem, mem_n, disk, disk_n, merged, &merged_next);
+    int dropped = 0;
+    int mn = merge_records(mem, mem_n, disk, disk_n, merged, &merged_next, &dropped);
 
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < mn; i++) {
         cJSON *o = cJSON_CreateObject();
         cJSON_AddNumberToObject(o, "record_id", (double)merged[i].record_id);
+        cJSON_AddStringToObject(o, "token", merged[i].token);
         cJSON_AddStringToObject(o, "uid", merged[i].uid);
         cJSON_AddItemToObject(o, "params", params_to_json(&merged[i].params));
         cJSON_AddStringToObject(o, "started_at", merged[i].started_at);
@@ -477,6 +508,7 @@ void state_save(void) {
         free(s);
     }
     close(lfd);
+    int rc = saved ? 0 : -1;
     if (!saved) {
         /* 写盘失败(cJSON_Print 返回 NULL / fopen 失败 / fputs 失败 / fclose 失败)：
          * 恢复脏标记，下次 state_save 重试，不静默丢失。 */
@@ -484,7 +516,17 @@ void state_save(void) {
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
     }
+    if (dropped > 0) {
+        /* 磁盘已被并发进程写满且全 active：这些已执行故障无法记账。不静默成功，
+         * 返回失败并保留脏标记，由调用方决定回滚/报错。 */
+        fprintf(stderr, "dcat: %d injection record(s) could not be persisted (state table full)\n", dropped);
+        pthread_mutex_lock(&g_lock);
+        g_dirty = 1;
+        pthread_mutex_unlock(&g_lock);
+        rc = -1;
+    }
     free(pool);
+    return rc;
 }
 
 void state_load(void) {
@@ -529,11 +571,16 @@ void state_load(void) {
         cJSON_ArrayForEach(o, arr) {
             if (i >= DCAT_MAX_RECORDS) break;
             cJSON *rid = cJSON_GetObjectItem(o, "record_id");
+            cJSON *tok = cJSON_GetObjectItem(o, "token");
             cJSON *uid = cJSON_GetObjectItem(o, "uid");
             cJSON *prms = cJSON_GetObjectItem(o, "params");
             cJSON *sa = cJSON_GetObjectItem(o, "started_at");
             cJSON *ac = cJSON_GetObjectItem(o, "active");
             if (rid) g_records[i].record_id = (long long)rid->valuedouble;
+            if (tok && cJSON_IsString(tok)) {
+                strncpy(g_records[i].token, tok->valuestring, sizeof(g_records[i].token) - 1);
+                g_records[i].token[sizeof(g_records[i].token) - 1] = '\0';
+            }
             if (uid) {
                 strncpy(g_records[i].uid, uid->valuestring, sizeof(g_records[i].uid) - 1);
                 g_records[i].uid[sizeof(g_records[i].uid) - 1] = '\0';

@@ -226,6 +226,43 @@ int test_api_inject_reloads_disk_state_before_dispatch(void) {
     return 0;
 }
 
+/* state 落盘失败(表满)时，serve 必须在构造响应前发现并返回 500，不能报成功。
+ * 用未注册的 uid 触发丢弃，使回滚为安全 no-op（不执行任何真实脚本）。 */
+int test_serve_save_failure_returns_500(void) {
+    static config_t cfg;
+    config_load("config/demoncat.conf", &cfg);
+    registry_init(&cfg);
+    const char *fp = "/tmp/dcat-test-serve-savefail.json";
+    state_reset();
+    unlink(fp);
+    state_set_file(fp);
+    FILE *f = fopen(fp, "w");
+    ASSERT_TRUE(f != NULL);
+    fprintf(f, "{\"next_id\":%d,\"records\":[", DCAT_MAX_RECORDS + 1);
+    for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
+        fprintf(f,
+                "%s{\"record_id\":%d,\"uid\":\"rTEST_fill\",\"params\":{\"iface\":\"a%d\"},"
+                "\"started_at\":\"2026-01-01 00:00:%02d\",\"active\":true}",
+                i ? "," : "", i + 1, i, i % 60);
+    }
+    fputs("]}", f);
+    fclose(f);
+
+    state_load();
+    state_mark_inactive(1); /* 内存出现 inactive 槽，磁盘仍全 active */
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    ASSERT_TRUE(state_add("rTEST_unknown", &p) > 0);
+
+    resp_t resp = resp_from_result_saving(NULL);
+    ASSERT_INT_EQ(resp.code, 500);
+    ASSERT_STR_CONTAINS(resp.body, "not persisted");
+    resp_free(&resp);
+    unlink(fp);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_status_text);
     RUN_TEST(test_content_type);
@@ -239,5 +276,6 @@ int main(void) {
     RUN_TEST(test_handle_api_405_unknown_method);
     RUN_TEST(test_handle_api_403_write_disabled);
     RUN_TEST(test_api_inject_reloads_disk_state_before_dispatch);
+    RUN_TEST(test_serve_save_failure_returns_500);
     return TEST_MAIN_RETURN();
 }

@@ -119,9 +119,11 @@ int main(int argc, char **argv) {
     /* 第六步：输出结果、保存状态并卸载插件，按结果码返回 */
     int code = r ? r->code : 1;
     result_free(r);
-    if (state_save() < 0 && code == 0) {
-        fprintf(stderr, "dcat: state save incomplete — an injected fault may be untracked; run 'dcat query'\n");
-        code = 1;
+    if (state_save() < 0) {
+        /* 未能落盘的注入已真实生效：用精确参数回滚，避免留下未跟踪故障。 */
+        int rolled = dispatch_rollback_dropped();
+        fprintf(stderr, "dcat: state save failed; rolled back %d untracked injection(s)\n", rolled);
+        if (code == 0) code = 1;
     }
     plugin_fini();
     return code;

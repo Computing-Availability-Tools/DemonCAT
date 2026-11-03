@@ -61,6 +61,7 @@ int test_concurrent_same_uid_diff_params(void) {
 int test_persistence_roundtrip(void) {
     state_reset();
     state_set_file("/tmp/dcat-test-state.json");
+    unlink("/tmp/dcat-test-state.json"); /* 独立用例：避免历史文件累积 */
     params_t p;
     params_init(&p);
     params_set(&p, "iface", "eth0");
@@ -790,6 +791,13 @@ int test_save_reports_drop_when_disk_full(void) {
     params_set(&p, "iface", "eth9");
     ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
     ASSERT_INT_EQ(state_save(), -1); /* 新记录无法落盘：必须显式失败 */
+
+    /* 未落盘记录须可取回，供 dispatch 用精确参数回滚。 */
+    injection_record_t dr;
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 1);
+    ASSERT_STREQ(dr.uid, "rCPU_overload");
+    ASSERT_STREQ(params_find(&dr.params, "iface"), "eth9");
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 0);
 
     state_reset();
     state_load();

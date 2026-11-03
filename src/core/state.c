@@ -12,6 +12,10 @@
 
 static injection_record_t g_records[DCAT_MAX_RECORDS];
 static long long g_next_id = 1;
+/* 最近一次 state_save 未能落盘的记录（磁盘全 active）。供 dispatch 回滚。 */
+static injection_record_t g_dropped[DCAT_MAX_RECORDS];
+static int g_dropped_n = 0;
+static int g_dropped_head = 0;
 #define DCAT_MAX_ID ((long long)9000000000000000000LL)
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_file[256] = "~/.demoncat/state.json";
@@ -101,6 +105,19 @@ int state_can_add(void) {
                 break;
             }
         }
+    }
+    pthread_mutex_unlock(&g_lock);
+    return ok;
+}
+
+int state_pop_dropped(injection_record_t *out) {
+    if (!out) return 0;
+    pthread_mutex_lock(&g_lock);
+    int ok = g_dropped_head < g_dropped_n;
+    if (ok) *out = g_dropped[g_dropped_head++];
+    if (g_dropped_head >= g_dropped_n) {
+        g_dropped_head = 0;
+        g_dropped_n = 0;
     }
     pthread_mutex_unlock(&g_lock);
     return ok;
@@ -300,10 +317,13 @@ static int parse_records_file(const char *path, injection_record_t out[DCAT_MAX_
 }
 
 static int record_identical(const injection_record_t *a, const injection_record_t *b) {
-    if (a->token[0] && b->token[0]) {
-        if (strcmp(a->token, b->token) != 0) return 0; /* 同一条注入：token 唯一 */
+    if (a->token[0] || b->token[0]) {
+        /* 任一方有 token：必须双方 token 相等才算同一条。混跑新旧版本时(一方无
+         * token)保守地视为不同记录，宁可重复也不误合并而丢记录。 */
+        if (!a->token[0] || !b->token[0]) return 0;
+        if (strcmp(a->token, b->token) != 0) return 0;
     } else if (a->record_id != b->record_id) {
-        return 0; /* 旧版文件无 token：退回按 record_id 精确匹配 */
+        return 0; /* 双方均为无 token 的旧记录：退回按 record_id 精确匹配 */
     }
     if (strcmp(a->uid, b->uid) != 0) return 0;
     if (a->params.count != b->params.count) return 0;
@@ -355,7 +375,7 @@ static void apply_mem_record(const injection_record_t *m, injection_record_t *sl
 static int merge_records(const injection_record_t *mem, int mem_n,
                          const injection_record_t *disk, int disk_n,
                          injection_record_t out[DCAT_MAX_RECORDS], long long *next_id_out,
-                         int *dropped_out) {
+                         int *dropped_out, injection_record_t dropped_recs[DCAT_MAX_RECORDS]) {
     int n = 0;
     if (dropped_out) *dropped_out = 0;
     int bound[DCAT_MAX_RECORDS] = {0}; /* 已绑定到某条内存记录的磁盘槽位 */
@@ -415,7 +435,12 @@ static int merge_records(const injection_record_t *mem, int mem_n,
              * 已拒绝新增；此处防御并发写满，丢弃代替越界。 */
             int victim = find_oldest_inactive(out, n);
             if (victim < 0) {
-                if (dropped_out) (*dropped_out)++; /* 磁盘全 active：记录无法落盘 */
+                /* 磁盘全 active：记录无法落盘。记下来供调用方回滚该故障。 */
+                if (dropped_out) {
+                    if (dropped_recs && *dropped_out < DCAT_MAX_RECORDS)
+                        dropped_recs[*dropped_out] = rec;
+                    (*dropped_out)++;
+                }
                 continue;
             }
             out[victim] = rec;
@@ -431,8 +456,8 @@ int state_save(void) {
         pthread_mutex_unlock(&g_lock);
         return 0;
     }
-    /* 记录约 4.6KB/条，256 条 × 3 份放栈上会溢出 → 一次堆分配切成三片。 */
-    injection_record_t *pool = malloc(3 * DCAT_MAX_RECORDS * sizeof(injection_record_t));
+    /* 记录约 4.6KB/条，256 条 × 4 份放栈上会溢出 → 一次堆分配切成四片。 */
+    injection_record_t *pool = malloc(4 * DCAT_MAX_RECORDS * sizeof(injection_record_t));
     if (!pool) {
         pthread_mutex_unlock(&g_lock); /* 仍脏，下次重试 */
         return -1;
@@ -440,6 +465,7 @@ int state_save(void) {
     injection_record_t *mem = pool;
     injection_record_t *disk = pool + DCAT_MAX_RECORDS;
     injection_record_t *merged = pool + 2 * DCAT_MAX_RECORDS;
+    injection_record_t *dropped_recs = pool + 3 * DCAT_MAX_RECORDS;
     int mem_n = 0;
     long long next_seed = g_next_id;
     for (int i = 0; i < DCAT_MAX_RECORDS; i++) {
@@ -447,6 +473,8 @@ int state_save(void) {
         mem[mem_n++] = g_records[i];
     }
     g_dirty = 0; /* 清脏标记在锁内：避免并发 state_add 的 dirty=1 被覆盖 */
+    g_dropped_n = 0;
+    g_dropped_head = 0;
     pthread_mutex_unlock(&g_lock);
 
     char path[256];
@@ -473,7 +501,7 @@ int state_save(void) {
     long long merged_next = disk_next > 1 ? disk_next : 1;
     if (next_seed > merged_next) merged_next = next_seed;
     int dropped = 0;
-    int mn = merge_records(mem, mem_n, disk, disk_n, merged, &merged_next, &dropped);
+    int mn = merge_records(mem, mem_n, disk, disk_n, merged, &merged_next, &dropped, dropped_recs);
 
     cJSON *arr = cJSON_CreateArray();
     for (int i = 0; i < mn; i++) {
@@ -518,11 +546,15 @@ int state_save(void) {
     }
     if (dropped > 0) {
         /* 磁盘已被并发进程写满且全 active：这些已执行故障无法记账。不静默成功，
-         * 返回失败并保留脏标记，由调用方决定回滚/报错。 */
-        fprintf(stderr, "dcat: %d injection record(s) could not be persisted (state table full)\n", dropped);
+         * 返回失败、保留脏标记，并暂存记录供调用方回滚对应故障。 */
+        int dn = dropped < DCAT_MAX_RECORDS ? dropped : DCAT_MAX_RECORDS;
         pthread_mutex_lock(&g_lock);
+        for (int i = 0; i < dn; i++) g_dropped[i] = dropped_recs[i];
+        g_dropped_n = dn;
+        g_dropped_head = 0;
         g_dirty = 1;
         pthread_mutex_unlock(&g_lock);
+        fprintf(stderr, "dcat: %d injection record(s) could not be persisted (state table full)\n", dropped);
         rc = -1;
     }
     free(pool);

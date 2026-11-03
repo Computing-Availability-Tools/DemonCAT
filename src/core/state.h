@@ -14,6 +14,8 @@ int state_list_active(void);
 void state_mark_inactive(long long id);
 void state_set_file(const char *path);
 int state_save(void); /* 0=已落盘/无变更；-1=有记录未能落盘或写盘失败 */
+/* 取出最近一次 state_save 未能落盘的记录（每次一条），无则返回 0。用于回滚。 */
+int state_pop_dropped(injection_record_t *out);
 void state_load(void);
 typedef void (*state_visit_fn)(const injection_record_t *r, void *ctx);
 void state_for_each_active(state_visit_fn fn, void *ctx);

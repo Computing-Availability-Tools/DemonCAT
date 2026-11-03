@@ -305,6 +305,21 @@ int test_dispatch_inject_rejected_before_script_when_full(void) {
     return 0;
 }
 
+/* 未记账注入的回滚：必须用精确参数执行该故障的 clean。 */
+int test_dispatch_rollback_record_runs_clean(void) {
+    setup();
+    executor_set_mock(mock_cap);
+    g_cap_calls = 0;
+    g_cap_op = NULL;
+    params_t p;
+    params_init(&p);
+    params_set(&p, "cores", "1");
+    dispatch_rollback_record("rCPU_overload", &p);
+    ASSERT_INT_EQ(g_cap_calls, 1);
+    ASSERT_STREQ(g_cap_op, "clean");
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_dispatch_inject_recoverable_writes_state);
     RUN_TEST(test_dispatch_clean_by_params_marks_inactive);
@@ -320,5 +335,6 @@ int main(void) {
     RUN_TEST(test_dispatch_clean_all_skips_reconcile_on_failure);
     RUN_TEST(test_dispatch_clean_state_lost_fallback);
     RUN_TEST(test_dispatch_inject_rejected_before_script_when_full);
+    RUN_TEST(test_dispatch_rollback_record_runs_clean);
     return TEST_MAIN_RETURN();
 }

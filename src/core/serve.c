@@ -336,7 +336,7 @@ static int cmp_record_desc(const void *a, const void *b) {
     return 0;
 }
 static resp_t api_history(void) {
-    state_load(); /* 从磁盘重新加载,反映命令行进程的修改 */
+    state_load();                           /* 从磁盘重新加载,反映命令行进程的修改 */
     struct hist_ctx *c = malloc(sizeof *c); /* 256 条记录较大，避免占栈 */
     if (!c) return resp_err(500, "out of memory");
     c->n = 0;

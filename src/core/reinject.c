@@ -91,7 +91,7 @@ int reinject_find_overlap_ops(const char *uid, const char *clean_required,
                               const params_t *new_params, long long *out_ids, int max_ids) {
     if (!uid || !new_params) return 0;
     injection_record_t *snap = malloc(DCAT_MAX_RECORDS * sizeof(*snap)); /* 避免大栈数组 */
-    if (!snap) return -1; /* fail-closed：OOM 时不能当作"无冲突"放过潜在重叠注入 */
+    if (!snap) return -1;                                                /* fail-closed：OOM 时不能当作"无冲突"放过潜在重叠注入 */
     int n = state_snapshot_by_uid(uid, snap, DCAT_MAX_RECORDS);
     int cnt = 0;
     for (int i = 0; i < n; i++) {

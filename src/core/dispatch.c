@@ -22,27 +22,29 @@ static result_t *state_full_err(const char *op, const char *uid) {
                       "state table full, cannot track injection — run 'dcat query' and clean existing faults");
 }
 
+static void finish_rollback(const char *uid, result_t *r) {
+    if (!r) return;
+    if (r->code != 0)
+        fprintf(stderr, "dcat: rollback clean for %s failed: %s\n", uid, r->json ? r->json : "unknown");
+    result_free(r);
+}
+
 /* 回滚一条"已执行但未能记账"的注入：用精确参数直接执行该故障的 clean，
  * 不走 state 匹配（该记录从未落盘）。 */
 void dispatch_rollback_record(const char *uid, const params_t *params) {
     if (!uid || !params) return;
     const fault_def_t *f = registry_find(uid);
     if (f && op_in_supported(f->supported_ops, "clean")) {
-        result_t *r = executor_run_fault(f, "clean", params, 0);
-        if (r) result_free(r);
+        finish_rollback(uid, executor_run_fault(f, "clean", params, 0));
         return;
     }
     const injector_t *inj = injector_find(uid);
     if (inj && inj->clean) {
-        result_t *r = inj->clean(params);
-        if (r) result_free(r);
+        finish_rollback(uid, inj->clean(params));
         return;
     }
     const dcat_plugin_t *plg = plugin_find(uid);
-    if (plg && plg->clean) {
-        result_t *r = plg->clean(params);
-        if (r) result_free(r);
-    }
+    if (plg && plg->clean) finish_rollback(uid, plg->clean(params));
 }
 
 /* 回滚最近一次 state_save 所有未落盘记录，返回回滚条数。 */

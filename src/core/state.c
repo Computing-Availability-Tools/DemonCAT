@@ -16,7 +16,12 @@ static long long g_next_id = 1;
 static injection_record_t g_dropped[DCAT_MAX_RECORDS];
 static int g_dropped_n = 0;
 static int g_dropped_head = 0;
+/* 自上次成功落盘以来 state_add 新增的记录：写盘失败(磁盘满/权限)时也需回滚。 */
+static injection_record_t g_added[DCAT_MAX_RECORDS];
+static int g_added_n = 0;
 #define DCAT_MAX_ID ((long long)9000000000000000000LL)
+/* state.json 合理上限(256 条记录远小于此)；用于拒绝目录/设备/异常大文件。 */
+#define DCAT_STATE_MAX_BYTES (64ULL * 1024 * 1024)
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static char g_file[256] = "~/.demoncat/state.json";
 static int g_state_lost = 0; /* 1=state 文件缺失或 JSON 解析失败(损坏/截断) */
@@ -31,6 +36,7 @@ static void fmt_started_at(time_t t, char *buf, size_t n) {
 void state_reset(void) {
     pthread_mutex_lock(&g_lock);
     memset(g_records, 0, sizeof(g_records));
+    g_added_n = 0;
     g_next_id = 1;
     g_state_lost = 0;
     g_dirty = 1; /* 内存已清空，可能与磁盘不一致 → 下次 state_save 须落盘 */
@@ -89,6 +95,7 @@ long long state_add(const char *uid, const params_t *params) {
     gen_token(g_records[slot].token, sizeof(g_records[slot].token));
     fmt_started_at(time(NULL), g_records[slot].started_at, sizeof(g_records[slot].started_at));
     g_records[slot].active = 1;
+    if (g_added_n < DCAT_MAX_RECORDS) g_added[g_added_n++] = g_records[slot];
     long long id = g_records[slot].record_id;
     g_dirty = 1;
     pthread_mutex_unlock(&g_lock);
@@ -261,6 +268,12 @@ static int parse_records_file(const char *path, injection_record_t out[DCAT_MAX_
                               long long *next_id_out) {
     FILE *fp = fopen(path, "r");
     if (!fp) return -1;
+    struct stat st;
+    if (fstat(fileno(fp), &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0 ||
+        (unsigned long long)st.st_size > DCAT_STATE_MAX_BYTES) {
+        fclose(fp); /* 目录/设备/超大文件：不是合法 state 文件 */
+        return -1;
+    }
     fseek(fp, 0, SEEK_END);
     long sz = ftell(fp);
     fseek(fp, 0, SEEK_SET);
@@ -475,6 +488,7 @@ int state_save(void) {
     g_dirty = 0; /* 清脏标记在锁内：避免并发 state_add 的 dirty=1 被覆盖 */
     g_dropped_n = 0;
     g_dropped_head = 0;
+    int added_at_start = g_added_n; /* 本次快照包含的新增记录数 */
     pthread_mutex_unlock(&g_lock);
 
     char path[256];
@@ -536,27 +550,42 @@ int state_save(void) {
         free(s);
     }
     close(lfd);
-    int rc = saved ? 0 : -1;
+    int rc = 0;
+    pthread_mutex_lock(&g_lock);
     if (!saved) {
-        /* 写盘失败(cJSON_Print 返回 NULL / fopen 失败 / fputs 失败 / fclose 失败)：
-         * 恢复脏标记，下次 state_save 重试，不静默丢失。 */
-        pthread_mutex_lock(&g_lock);
+        /* 写盘失败(cJSON_Print/fopen/fputs/fclose)：本次新增的注入全部未落盘，
+         * 一并转为待回滚，避免"真实生效但既没记录也没回滚"。 */
+        int dn = added_at_start < DCAT_MAX_RECORDS ? added_at_start : DCAT_MAX_RECORDS;
+        for (int i = 0; i < dn; i++) g_dropped[i] = g_added[i];
+        g_dropped_n = dn;
+        g_dropped_head = 0;
         g_dirty = 1;
-        pthread_mutex_unlock(&g_lock);
-    }
-    if (dropped > 0) {
+        rc = -1;
+    } else if (dropped > 0) {
         /* 磁盘已被并发进程写满且全 active：这些已执行故障无法记账。不静默成功，
-         * 返回失败、保留脏标记，并暂存记录供调用方回滚对应故障。 */
+         * 返回失败并暂存记录供调用方回滚。 */
         int dn = dropped < DCAT_MAX_RECORDS ? dropped : DCAT_MAX_RECORDS;
-        pthread_mutex_lock(&g_lock);
         for (int i = 0; i < dn; i++) g_dropped[i] = dropped_recs[i];
         g_dropped_n = dn;
         g_dropped_head = 0;
         g_dirty = 1;
-        pthread_mutex_unlock(&g_lock);
-        fprintf(stderr, "dcat: %d injection record(s) could not be persisted (state table full)\n", dropped);
         rc = -1;
     }
+    /* 本次快照内的新增记录已处理完(落盘或转入 g_dropped)，移除该前缀；
+     * 保留快照之后并发新增的记录。 */
+    if (g_added_n > added_at_start) {
+        int remain = g_added_n - added_at_start;
+        memmove(g_added, g_added + added_at_start, (size_t)remain * sizeof(g_added[0]));
+        g_added_n = remain;
+    } else {
+        g_added_n = 0;
+    }
+    pthread_mutex_unlock(&g_lock);
+
+    if (dropped > 0)
+        fprintf(stderr, "dcat: %d injection record(s) could not be persisted (state table full)\n", dropped);
+    else if (!saved)
+        fprintf(stderr, "dcat: state file write failed\n");
     free(pool);
     return rc;
 }
@@ -565,11 +594,20 @@ void state_load(void) {
     pthread_mutex_lock(&g_lock);
     g_dirty = 0;
     memset(g_records, 0, sizeof(g_records)); /* clear stale records before loading */
-    g_next_id = 1;                           /* 0 is the empty-slot sentinel; start at 1 */
+    g_added_n = 0;
+    g_next_id = 1; /* 0 is the empty-slot sentinel; start at 1 */
     char path[256];
     expand_home_path(g_file, path, sizeof(path));
     FILE *fp = fopen(path, "r");
     if (!fp) {
+        g_state_lost = 1;
+        pthread_mutex_unlock(&g_lock);
+        return;
+    }
+    struct stat st;
+    if (fstat(fileno(fp), &st) != 0 || !S_ISREG(st.st_mode) || st.st_size < 0 ||
+        (unsigned long long)st.st_size > DCAT_STATE_MAX_BYTES) {
+        fclose(fp); /* 目录/设备/超大文件：视为无效 state */
         g_state_lost = 1;
         pthread_mutex_unlock(&g_lock);
         return;

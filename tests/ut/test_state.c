@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 int test_add_find_by_params_list_inactive(void) {
     state_reset();
@@ -807,6 +808,35 @@ int test_save_reports_drop_when_disk_full(void) {
     return 0;
 }
 
+/* 回归：写盘失败(非表满，如磁盘满/权限)时，本次新增的注入同样要能取回并回滚，
+ * 不能只置 dirty 就把"已生效但没记录"的故障留在系统里。 */
+int test_save_write_failure_rolls_back_added(void) {
+    state_reset();
+    const char *dir = "/tmp/dcat-test-state-wfail";
+    unlink(dir);
+    rmdir(dir);
+    unlink("/tmp/dcat-test-state-wfail.lck");
+    unlink("/tmp/dcat-test-state-wfail.tmp");
+    ASSERT_INT_EQ(mkdir(dir, 0755), 0);
+    state_set_file(dir); /* 目标是目录 → 原子 rename 必然失败 */
+
+    params_t p;
+    params_init(&p);
+    params_set(&p, "iface", "eth9");
+    ASSERT_TRUE(state_add("rCPU_overload", &p) > 0);
+    ASSERT_INT_EQ(state_save(), -1); /* 写盘失败必须显式返回失败 */
+
+    injection_record_t dr;
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 1); /* 新增注入须可取回以回滚 */
+    ASSERT_STREQ(dr.uid, "rCPU_overload");
+    ASSERT_INT_EQ(state_pop_dropped(&dr), 0);
+
+    unlink("/tmp/dcat-test-state-wfail.lck");
+    unlink("/tmp/dcat-test-state-wfail.tmp");
+    rmdir(dir);
+    return 0;
+}
+
 int main(void) {
     RUN_TEST(test_add_find_by_params_list_inactive);
     RUN_TEST(test_concurrent_same_uid_diff_params);
@@ -828,5 +858,6 @@ int main(void) {
     RUN_TEST(test_state_capacity_is_256);
     RUN_TEST(test_state_can_add);
     RUN_TEST(test_save_reports_drop_when_disk_full);
+    RUN_TEST(test_save_write_failure_rolls_back_added);
     return TEST_MAIN_RETURN();
 }
